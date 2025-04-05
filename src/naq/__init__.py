@@ -1,20 +1,39 @@
 # src/naq/__init__.py
-import os
+import logging # Corrected import
 import asyncio
-
+from typing import Optional
 # Make key classes and functions available directly from the 'naq' package
-from .queue import Queue, enqueue
-from .job import Job
+from .queue import ( # Organize imports for readability
+    Queue,
+    enqueue,
+    enqueue_at,
+    enqueue_in,
+    schedule,
+    purge_queue,
+    enqueue_sync,
+    enqueue_at_sync,
+    enqueue_in_sync,
+    schedule_sync,
+    purge_queue_sync,
+)
+from .job import Job, RetryDelayType # Export RetryDelayType as well
 from .worker import Worker
+from .scheduler import Scheduler # Import Scheduler
 from .exceptions import NaqException, ConnectionError, ConfigurationError, SerializationError, JobExecutionError
 from .connection import get_nats_connection, get_jetstream_context, close_nats_connection
+from loguru import logger
 
-__version__ = "0.0.1"
+__version__ = "0.0.2" # Bump version slightly
 
 # Basic configuration/convenience
 def setup_logging(level=logging.INFO):
-    """Basic logging setup"""
-    logging.basicConfig(level=level, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    """Basic logging setup using loguru."""
+    logger.add(
+        "naq_{time}.log",  # File to log to (optional)
+        rotation="10 MB",  # Rotate log file every 10 MB (optional)
+        level=level,  # Set the logging level
+        format="{time} - {name} - {level} - {message}",  # Customize the format
+    )
 
 # Global connection management (optional convenience)
 _default_loop = None
