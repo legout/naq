@@ -4,7 +4,7 @@ import time
 import cloudpickle
 import json
 import traceback # Import traceback
-from typing import Optional, Any, Callable, Tuple, Dict, Union, Sequence
+from typing import Optional, Any, Callable, Tuple, Dict, Union, Sequence, List
 
 from .settings import JOB_SERIALIZER
 from .exceptions import SerializationError
@@ -27,6 +27,7 @@ class Job:
         max_retries: Optional[int] = 0, # Default: no retries
         retry_delay: RetryDelayType = 0, # Default: immediate retry (if max_retries > 0)
         queue_name: Optional[str] = None, # Store the original queue name
+        depends_on: Optional[Union[str, List[str], 'Job', List['Job']]] = None, # Job dependencies
     ):
         self.job_id: str = job_id or uuid.uuid4().hex
         self.function: Callable = function
@@ -36,6 +37,20 @@ class Job:
         self.max_retries: Optional[int] = max_retries
         self.retry_delay: RetryDelayType = retry_delay
         self.queue_name: Optional[str] = queue_name # Store the queue name
+
+        # Dependencies tracking
+        self.dependency_ids: List[str] = []
+        if depends_on is not None:
+            if isinstance(depends_on, (str, Job)):
+                depends_on = [depends_on]  # Convert single item to list
+            
+            for dep in depends_on:
+                if isinstance(dep, str):
+                    self.dependency_ids.append(dep)  # It's already a job_id
+                elif isinstance(dep, Job):
+                    self.dependency_ids.append(dep.job_id)  # Extract job_id from Job instance
+                else:
+                    raise ValueError(f"Invalid dependency type: {type(dep)}. Must be job_id string or Job instance.")
 
         # Execution result/error state
         self.result: Any = None
@@ -82,6 +97,7 @@ class Job:
                     'max_retries': self.max_retries,
                     'retry_delay': self.retry_delay,
                     'queue_name': self.queue_name,
+                    'dependency_ids': self.dependency_ids,  # Include dependencies
                     # Do not serialize result/error/traceback for initial enqueue
                 }
                 return cloudpickle.dumps(payload)
@@ -104,7 +120,9 @@ class Job:
                 function = cloudpickle.loads(payload['function'])
                 args = cloudpickle.loads(payload['args'])
                 kwargs = cloudpickle.loads(payload['kwargs'])
-                return cls(
+                
+                # Create the job with all the saved attributes, including dependencies
+                job = cls(
                     function=function,
                     args=args,
                     kwargs=kwargs,
@@ -114,6 +132,12 @@ class Job:
                     retry_delay=payload.get('retry_delay', 0),
                     queue_name=payload.get('queue_name'),
                 )
+                
+                # Restore dependency IDs if present
+                if 'dependency_ids' in payload:
+                    job.dependency_ids = payload['dependency_ids']
+                    
+                return job
             except Exception as e:
                 raise SerializationError(f"Failed to unpickle job: {e}") from e
         elif JOB_SERIALIZER == 'json':

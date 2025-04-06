@@ -1,29 +1,50 @@
 # src/naq/__init__.py
-import logging # Corrected import
+import logging
 import asyncio
 from typing import Optional
+
 # Make key classes and functions available directly from the 'naq' package
-from .queue import ( # Organize imports for readability
+from .queue import (
     Queue,
     enqueue,
     enqueue_at,
     enqueue_in,
     schedule,
     purge_queue,
+    cancel_scheduled_job,
+    pause_scheduled_job,
+    resume_scheduled_job,
+    modify_scheduled_job,
     enqueue_sync,
     enqueue_at_sync,
     enqueue_in_sync,
     schedule_sync,
     purge_queue_sync,
+    cancel_scheduled_job_sync,
+    pause_scheduled_job_sync,
+    resume_scheduled_job_sync,
+    modify_scheduled_job_sync,
 )
-from .job import Job, RetryDelayType # Export RetryDelayType as well
+from .job import Job, RetryDelayType
 from .worker import Worker
-from .scheduler import Scheduler # Import Scheduler
-from .exceptions import NaqException, ConnectionError, ConfigurationError, SerializationError, JobExecutionError
+from .scheduler import Scheduler
+from .exceptions import (
+    NaqException, 
+    ConnectionError, 
+    ConfigurationError, 
+    SerializationError, 
+    JobExecutionError,
+    JobNotFoundError,
+)
 from .connection import get_nats_connection, get_jetstream_context, close_nats_connection
+from .settings import (
+    SCHEDULED_JOB_STATUS_ACTIVE,
+    SCHEDULED_JOB_STATUS_PAUSED,
+    SCHEDULED_JOB_STATUS_FAILED,
+)
 from loguru import logger
 
-__version__ = "0.0.2" # Bump version slightly
+__version__ = "0.1.0"  # Bump version for scheduler HA and management features
 
 # Basic configuration/convenience
 def setup_logging(level=logging.INFO):

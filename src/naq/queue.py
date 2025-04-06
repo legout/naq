@@ -2,16 +2,22 @@
 import asyncio
 import time
 import datetime
+import cloudpickle # Ensure cloudpickle is imported
 from typing import Optional, Callable, Any, Tuple, Dict, Union
 from datetime import timedelta, timezone
 
 import nats
-from nats.js.kv import KeyValue
+from nats.js.kv import KeyValue, KeyValueEntry
+from nats.js.errors import KeyNotFoundError # Import KeyNotFoundError
 
-from .settings import DEFAULT_QUEUE_NAME, NAQ_PREFIX, JOB_SERIALIZER
+from .settings import (
+    DEFAULT_QUEUE_NAME, NAQ_PREFIX, JOB_SERIALIZER,
+    SCHEDULED_JOBS_KV_NAME, SCHEDULED_JOB_STATUS_ACTIVE,
+    SCHEDULED_JOB_STATUS_PAUSED, SCHEDULED_JOB_STATUS_FAILED, # Import statuses
+)
 from .job import Job, RetryDelayType
 from .connection import get_jetstream_context, ensure_stream, close_nats_connection, get_nats_connection
-from .exceptions import NaqException, ConnectionError as NaqConnectionError, ConfigurationError
+from .exceptions import NaqException, ConnectionError as NaqConnectionError, ConfigurationError, JobNotFoundError # Add JobNotFoundError
 from .utils import run_async_from_sync
 
 # Define KV bucket name for scheduled jobs
@@ -48,14 +54,24 @@ class Queue:
 
     async def _get_scheduled_kv(self) -> KeyValue:
         """Gets the KeyValue store for scheduled jobs."""
-        nc = await get_nats_connection(url=self._nats_url) # Need plain NATS connection for KV
-        js = await get_jetstream_context(nc=nc) # Get JS from the same connection
+        # Ensure the KV store is created if it doesn't exist
+        nc = await get_nats_connection(url=self._nats_url)
+        js = await get_jetstream_context(nc=nc)
         try:
-            # Create or bind to the KV store
+            # Create or bind to the KV store with a TTL (optional, but good practice)
+            # TTL here applies to the bucket itself, not individual keys
             kv = await js.key_value(bucket=SCHEDULED_JOBS_KV_NAME)
+            logger.debug(f"Connected to KV store '{SCHEDULED_JOBS_KV_NAME}'")
             return kv
         except Exception as e:
-            raise NaqConnectionError(f"Failed to access KV store '{SCHEDULED_JOBS_KV_NAME}': {e}") from e
+            # Attempt to create if not found (basic creation)
+            try:
+                 logger.info(f"KV store '{SCHEDULED_JOBS_KV_NAME}' not found, attempting creation...")
+                 kv = await js.create_key_value(bucket=SCHEDULED_JOBS_KV_NAME, description="Stores naq scheduled job details")
+                 logger.info(f"KV store '{SCHEDULED_JOBS_KV_NAME}' created.")
+                 return kv
+            except Exception as create_e:
+                 raise NaqConnectionError(f"Failed to access or create KV store '{SCHEDULED_JOBS_KV_NAME}': {create_e}") from create_e
 
     async def enqueue(
         self,
@@ -268,10 +284,8 @@ class Queue:
     ):
         """Internal helper to store job details in the KV store."""
         kv = await self._get_scheduled_kv()
-        # Serialize the original job payload separately
         original_job_payload = job.serialize()
 
-        # Store metadata alongside the original payload
         schedule_data = {
             'job_id': job.job_id,
             'scheduled_timestamp_utc': scheduled_timestamp,
@@ -279,18 +293,19 @@ class Queue:
             'cron': cron,
             'interval_seconds': interval_seconds,
             'repeat': repeat,
-            '_orig_job_payload': original_job_payload, # Store the bytes
-            '_serializer': JOB_SERIALIZER, # Store serializer used
+            '_orig_job_payload': original_job_payload,
+            '_serializer': JOB_SERIALIZER,
+            'status': SCHEDULED_JOB_STATUS_ACTIVE, # Initial status
+            'schedule_failure_count': 0, # Initial failure count
+            'last_enqueued_utc': None, # Track last enqueue time
+            'next_run_utc': scheduled_timestamp, # Explicitly store next run time
         }
 
         try:
-            # Use cloudpickle to serialize the schedule_data dictionary
             serialized_schedule_data = cloudpickle.dumps(schedule_data)
-            # Store using job_id as the key
             await kv.put(job.job_id.encode('utf-8'), serialized_schedule_data)
         except Exception as e:
             raise NaqException(f"Failed to store scheduled job {job.job_id} in KV store: {e}") from e
-
 
     async def purge(self) -> int:
         """
@@ -326,6 +341,180 @@ class Queue:
         except Exception as e:
             print(f"Error purging queue '{self.name}': {e}")
             raise NaqException(f"Failed to purge queue: {e}") from e
+
+    async def cancel_scheduled_job(self, job_id: str) -> bool:
+        """
+        Cancels a scheduled job by deleting it from the KV store.
+
+        Args:
+            job_id: The ID of the job to cancel.
+
+        Returns:
+            True if the job was found and deleted, False otherwise.
+
+        Raises:
+            NaqConnectionError: If connection to NATS fails.
+            NaqException: For other errors during deletion.
+        """
+        print(f"Attempting to cancel scheduled job '{job_id}'")
+        kv = await self._get_scheduled_kv()
+        try:
+            # Use delete with purge=True to ensure it's fully removed
+            await kv.delete(job_id.encode('utf-8'), purge=True)
+            print(f"Scheduled job '{job_id}' cancelled successfully.")
+            return True
+        except KeyNotFoundError:
+            print(f"Scheduled job '{job_id}' not found. Cannot cancel.")
+            return False
+        except Exception as e:
+            print(f"Error cancelling scheduled job '{job_id}': {e}")
+            raise NaqException(f"Failed to cancel scheduled job: {e}") from e
+
+    async def _update_scheduled_job_status(self, job_id: str, status: str) -> bool:
+        """Internal helper to update the status of a scheduled job."""
+        kv = await self._get_scheduled_kv()
+        try:
+            entry = await kv.get(job_id.encode('utf-8'))
+            if not entry:
+                 raise JobNotFoundError(f"Scheduled job '{job_id}' not found.")
+
+            schedule_data = cloudpickle.loads(entry.value)
+            if schedule_data.get('status') == status:
+                print(f"Scheduled job '{job_id}' already has status '{status}'.")
+                return True # No change needed
+
+            schedule_data['status'] = status
+            serialized_schedule_data = cloudpickle.dumps(schedule_data)
+
+            # Use update with revision check for optimistic concurrency control
+            await kv.update(entry.key, serialized_schedule_data, last=entry.revision)
+            print(f"Scheduled job '{job_id}' status updated to '{status}'.")
+            return True
+        except KeyNotFoundError:
+             raise JobNotFoundError(f"Scheduled job '{job_id}' not found.")
+        except nats.js.errors.APIError as e:
+            # Handle potential revision mismatch (another process updated it)
+            if "wrong last sequence" in str(e).lower():
+                 print(f"Warning: Concurrent modification detected for job '{job_id}'. Update failed. Please retry.")
+                 # Depending on requirements, could retry automatically here
+                 return False # Indicate update failed due to concurrency
+            else:
+                 print(f"NATS API error updating status for job '{job_id}': {e}")
+                 raise NaqException(f"Failed to update job status: {e}") from e
+        except Exception as e:
+            print(f"Error updating status for job '{job_id}': {e}")
+            raise NaqException(f"Failed to update job status: {e}") from e
+
+    async def pause_scheduled_job(self, job_id: str) -> bool:
+        """Pauses a scheduled job."""
+        print(f"Attempting to pause scheduled job '{job_id}'")
+        return await self._update_scheduled_job_status(job_id, SCHEDULED_JOB_STATUS_PAUSED)
+
+    async def resume_scheduled_job(self, job_id: str) -> bool:
+        """Resumes a paused scheduled job."""
+        print(f"Attempting to resume scheduled job '{job_id}'")
+        return await self._update_scheduled_job_status(job_id, SCHEDULED_JOB_STATUS_ACTIVE)
+
+    async def modify_scheduled_job(self, job_id: str, **updates: Any) -> bool:
+        """
+        Modifies parameters of a scheduled job (e.g., cron, interval, repeat).
+        Currently supports modifying schedule parameters only.
+
+        Args:
+            job_id: The ID of the job to modify.
+            **updates: Keyword arguments for parameters to update.
+                       Supported: 'cron', 'interval', 'repeat', 'scheduled_timestamp_utc'.
+
+        Returns:
+            True if modification was successful.
+
+        Raises:
+            JobNotFoundError: If the job doesn't exist.
+            ConfigurationError: If invalid update parameters are provided.
+            NaqException: For other errors.
+        """
+        print(f"Attempting to modify scheduled job '{job_id}' with updates: {updates}")
+        kv = await self._get_scheduled_kv()
+        supported_keys = {'cron', 'interval', 'repeat', 'scheduled_timestamp_utc'}
+        update_keys = set(updates.keys())
+
+        if not update_keys.issubset(supported_keys):
+            raise ConfigurationError(f"Unsupported modification keys: {update_keys - supported_keys}. Supported: {supported_keys}")
+
+        try:
+            entry = await kv.get(job_id.encode('utf-8'))
+            if not entry:
+                raise JobNotFoundError(f"Scheduled job '{job_id}' not found.")
+
+            schedule_data = cloudpickle.loads(entry.value)
+
+            # Apply updates
+            needs_next_run_recalc = False
+            if 'cron' in updates:
+                schedule_data['cron'] = updates['cron']
+                schedule_data['interval_seconds'] = None # Clear interval if cron is set
+                needs_next_run_recalc = True
+            if 'interval' in updates:
+                interval = updates['interval']
+                if isinstance(interval, (int, float)):
+                    interval = timedelta(seconds=interval)
+                if isinstance(interval, timedelta):
+                    schedule_data['interval_seconds'] = interval.total_seconds()
+                    schedule_data['cron'] = None # Clear cron if interval is set
+                    needs_next_run_recalc = True
+                else:
+                    raise ConfigurationError("'interval' must be timedelta or numeric seconds.")
+            if 'repeat' in updates:
+                schedule_data['repeat'] = updates['repeat']
+            if 'scheduled_timestamp_utc' in updates:
+                 # Allow explicitly setting the next run time
+                 schedule_data['scheduled_timestamp_utc'] = updates['scheduled_timestamp_utc']
+                 schedule_data['next_run_utc'] = updates['scheduled_timestamp_utc']
+                 needs_next_run_recalc = False # Explicitly set, no recalc needed now
+
+            # Recalculate next run time if cron/interval changed and not explicitly set
+            if needs_next_run_recalc:
+                 now_utc = datetime.datetime.now(timezone.utc)
+                 next_run_ts: Optional[float] = None
+                 if schedule_data['cron']:
+                     try:
+                         from croniter import croniter
+                         cron_iter = croniter(schedule_data['cron'], now_utc)
+                         next_run_ts = cron_iter.get_next(datetime.datetime).timestamp()
+                     except ImportError:
+                         raise ImportError("Please install 'croniter' to use cron scheduling.")
+                     except Exception as e:
+                         raise ConfigurationError(f"Invalid cron format '{schedule_data['cron']}': {e}")
+                 elif schedule_data['interval_seconds']:
+                     # Base next run on the *original* scheduled time or last run if available?
+                     # Let's base it on 'now' for simplicity when modifying.
+                     next_run_ts = (now_utc + timedelta(seconds=schedule_data['interval_seconds'])).timestamp()
+
+                 if next_run_ts is not None:
+                     schedule_data['scheduled_timestamp_utc'] = next_run_ts
+                     schedule_data['next_run_utc'] = next_run_ts
+                 else:
+                      # This case might occur if a one-off job's time is modified without providing a new time
+                      print(f"Warning: Could not determine next run time for job '{job_id}' after modification. Check parameters.")
+
+
+            serialized_schedule_data = cloudpickle.dumps(schedule_data)
+            await kv.update(entry.key, serialized_schedule_data, last=entry.revision)
+            print(f"Scheduled job '{job_id}' modified successfully.")
+            return True
+
+        except KeyNotFoundError:
+             raise JobNotFoundError(f"Scheduled job '{job_id}' not found.")
+        except nats.js.errors.APIError as e:
+            if "wrong last sequence" in str(e).lower():
+                 print(f"Warning: Concurrent modification detected for job '{job_id}'. Update failed. Please retry.")
+                 return False
+            else:
+                 print(f"NATS API error modifying job '{job_id}': {e}")
+                 raise NaqException(f"Failed to modify job: {e}") from e
+        except Exception as e:
+            print(f"Error modifying job '{job_id}': {e}")
+            raise NaqException(f"Failed to modify job: {e}") from e
 
     def __repr__(self) -> str:
         return f"Queue('{self.name}')"
@@ -406,6 +595,27 @@ async def purge_queue(
     purged_count = await q.purge()
     # await close_nats_connection() # Avoid closing here
     return purged_count
+
+async def cancel_scheduled_job(job_id: str, nats_url: Optional[str] = None) -> bool:
+    """Helper to cancel a scheduled job (async)."""
+    # Need a queue instance mainly to get connection/KV config easily
+    q = Queue(nats_url=nats_url) # Queue name doesn't matter here
+    return await q.cancel_scheduled_job(job_id)
+
+async def pause_scheduled_job(job_id: str, nats_url: Optional[str] = None) -> bool:
+    """Helper to pause a scheduled job (async)."""
+    q = Queue(nats_url=nats_url)
+    return await q.pause_scheduled_job(job_id)
+
+async def resume_scheduled_job(job_id: str, nats_url: Optional[str] = None) -> bool:
+    """Helper to resume a scheduled job (async)."""
+    q = Queue(nats_url=nats_url)
+    return await q.resume_scheduled_job(job_id)
+
+async def modify_scheduled_job(job_id: str, nats_url: Optional[str] = None, **updates: Any) -> bool:
+    """Helper to modify a scheduled job (async)."""
+    q = Queue(nats_url=nats_url)
+    return await q.modify_scheduled_job(job_id, **updates)
 
 
 # --- Sync Helper Functions ---
@@ -517,4 +727,36 @@ def purge_queue_sync(
         count = await purge_queue(queue_name=queue_name, nats_url=nats_url)
         await close_nats_connection() # Close connection after sync op
         return count
+    return run_async_from_sync(_main())
+
+def cancel_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bool:
+    """Helper to cancel a scheduled job (sync)."""
+    async def _main():
+        res = await cancel_scheduled_job(job_id, nats_url=nats_url)
+        await close_nats_connection()
+        return res
+    return run_async_from_sync(_main())
+
+def pause_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bool:
+    """Helper to pause a scheduled job (sync)."""
+    async def _main():
+        res = await pause_scheduled_job(job_id, nats_url=nats_url)
+        await close_nats_connection()
+        return res
+    return run_async_from_sync(_main())
+
+def resume_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bool:
+    """Helper to resume a scheduled job (sync)."""
+    async def _main():
+        res = await resume_scheduled_job(job_id, nats_url=nats_url)
+        await close_nats_connection()
+        return res
+    return run_async_from_sync(_main())
+
+def modify_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None, **updates: Any) -> bool:
+    """Helper to modify a scheduled job (sync)."""
+    async def _main():
+        res = await modify_scheduled_job(job_id, nats_url=nats_url, **updates)
+        await close_nats_connection()
+        return res
     return run_async_from_sync(_main())
