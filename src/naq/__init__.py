@@ -47,7 +47,7 @@ from .settings import (
 
 from loguru import logger
 
-__version__ = "0.1.0"  # Bump version for scheduler HA and management features
+__version__ = "0.1.1"  # Bump version for result backend
 
 # Basic configuration/convenience
 def setup_logging(level=logging.INFO):
@@ -79,3 +79,8 @@ async def connect(url: Optional[str] = None):
 async def disconnect():
     """Convenience function to close default NATS connection."""
     await close_nats_connection()
+
+# --- Make result fetching available ---
+# Expose static methods directly if desired, or users can use Job.fetch_result
+fetch_job_result = Job.fetch_result
+fetch_job_result_sync = Job.fetch_result_sync

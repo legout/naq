@@ -2,20 +2,19 @@
 import uuid
 import time
 import cloudpickle
-import json
+#import json
 import traceback # Import traceback
 from typing import Optional, Any, Callable, Tuple, Dict, Union, Sequence, List
 
-from .settings import JOB_SERIALIZER
-from .exceptions import SerializationError
-
+from .settings import JOB_SERIALIZER, JOB_STATUS_COMPLETED, JOB_STATUS_FAILED
+from .exceptions import SerializationError, JobExecutionError
 # Define a type hint for retry delays
 RetryDelayType = Union[int, float, Sequence[Union[int, float]]]
 
 class Job:
     """
     Represents a job to be executed.
-    Includes function, args, kwargs, metadata, and retry configuration.
+    Includes function, args, kwargs, metadata, retry, and dependency configuration.
     """
     def __init__(
         self,
@@ -28,6 +27,7 @@ class Job:
         retry_delay: RetryDelayType = 0, # Default: immediate retry (if max_retries > 0)
         queue_name: Optional[str] = None, # Store the original queue name
         depends_on: Optional[Union[str, List[str], 'Job', List['Job']]] = None, # Job dependencies
+        result_ttl: Optional[int] = None, # TTL for the result in seconds
     ):
         self.job_id: str = job_id or uuid.uuid4().hex
         self.function: Callable = function
@@ -37,6 +37,7 @@ class Job:
         self.max_retries: Optional[int] = max_retries
         self.retry_delay: RetryDelayType = retry_delay
         self.queue_name: Optional[str] = queue_name # Store the queue name
+        self.result_ttl: Optional[int] = result_ttl # Store result TTL
 
         # Dependencies tracking
         self.dependency_ids: List[str] = []
@@ -98,6 +99,7 @@ class Job:
                     'retry_delay': self.retry_delay,
                     'queue_name': self.queue_name,
                     'dependency_ids': self.dependency_ids,  # Include dependencies
+                    'result_ttl': self.result_ttl, # Include result_ttl
                     # Do not serialize result/error/traceback for initial enqueue
                 }
                 return cloudpickle.dumps(payload)
@@ -131,6 +133,7 @@ class Job:
                     max_retries=payload.get('max_retries', 0),
                     retry_delay=payload.get('retry_delay', 0),
                     queue_name=payload.get('queue_name'),
+                    result_ttl=payload.get('result_ttl'), # Deserialize result_ttl
                 )
                 
                 # Restore dependency IDs if present
@@ -180,3 +183,80 @@ class Job:
         elif self.result is not None: # Crude check for completion
              status = "finished"
         return f"<Job {self.job_id}: {func_name}(...) status={status}>"
+
+    # --- Static method to fetch result ---
+    @staticmethod
+    async def fetch_result(
+        job_id: str,
+        nats_url: Optional[str] = None,
+        # Allow specifying connection/js context directly?
+    ) -> Any:
+        """
+        Fetches the result or error information for a completed job from the result backend.
+
+        Args:
+            job_id: The ID of the job.
+            nats_url: NATS server URL (if not using default).
+
+        Returns:
+            The job's result if successful.
+
+        Raises:
+            JobNotFoundError: If the job result is not found (or expired).
+            JobExecutionError: If the job failed, raises an error containing failure details.
+            NaqConnectionError: If connection fails.
+            SerializationError: If the stored result cannot be deserialized.
+            NaqException: For other errors.
+        """
+        from .connection import get_nats_connection, get_jetstream_context, close_nats_connection
+        from .settings import RESULT_KV_NAME
+        from .exceptions import JobNotFoundError, JobExecutionError, NaqConnectionError, SerializationError, NaqException
+        from nats.js.errors import KeyNotFoundError
+
+        nc = None
+        kv = None
+        try:
+            nc = await get_nats_connection(url=nats_url)
+            js = await get_jetstream_context(nc=nc)
+            try:
+                kv = await js.key_value(bucket=RESULT_KV_NAME)
+            except Exception as e:
+                 raise NaqException(f"Result backend KV store '{RESULT_KV_NAME}' not accessible: {e}") from e
+
+            entry = await kv.get(job_id.encode('utf-8'))
+            result_data = cloudpickle.loads(entry.value)
+
+            if result_data.get('status') == JOB_STATUS_FAILED:
+                error_str = result_data.get('error', 'Unknown error')
+                traceback_str = result_data.get('traceback')
+                err_msg = f"Job {job_id} failed: {error_str}"
+                if traceback_str:
+                    err_msg += f"\nTraceback:\n{traceback_str}"
+                # Raise an exception containing the failure info
+                raise JobExecutionError(err_msg)
+            elif result_data.get('status') == JOB_STATUS_COMPLETED:
+                return result_data.get('result')
+            else:
+                # Should not happen if worker stores status correctly
+                raise NaqException(f"Job {job_id} found in result store but has unexpected status: {result_data.get('status')}")
+
+        except KeyNotFoundError:
+            raise JobNotFoundError(f"Result for job {job_id} not found. It may not have completed, failed, or the result expired.") from None
+        except SerializationError: # Re-raise specific error
+             raise
+        except NaqConnectionError: # Re-raise specific error
+             raise
+        except JobExecutionError: # Re-raise specific error
+             raise
+        except Exception as e:
+            raise NaqException(f"Error fetching result for job {job_id}: {e}") from e
+        finally:
+            # Close connection if we opened it here
+            if nc:
+                 await close_nats_connection() # Use shared close
+
+    @staticmethod
+    def fetch_result_sync(job_id: str, nats_url: Optional[str] = None) -> Any:
+        """Synchronous version of fetch_result."""
+        from .utils import run_async_from_sync
+        return run_async_from_sync(Job.fetch_result(job_id, nats_url=nats_url))

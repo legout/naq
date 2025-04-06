@@ -57,4 +57,10 @@ FAILED_JOB_SUBJECT_PREFIX = f"{NAQ_PREFIX}.failed"
 # Define stream name for failed jobs (could be same or different)
 FAILED_JOB_STREAM_NAME = f"{NAQ_PREFIX}_failed_jobs"
 
+# --- Result Backend Settings ---
+# KV bucket name for storing job results/errors
+RESULT_KV_NAME = f"{NAQ_PREFIX}_results"
+# Default TTL (in seconds) for job results stored in the KV store (e.g., 7 days)
+DEFAULT_RESULT_TTL_SECONDS = int(os.getenv("NAQ_DEFAULT_RESULT_TTL", 604800))
+
 DEPENDENCY_CHECK_DELAY_SECONDS = 5

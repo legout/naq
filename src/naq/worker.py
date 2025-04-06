@@ -3,6 +3,8 @@ import asyncio
 import signal
 from loguru import logger
 import os
+import cloudpickle
+import traceback
 from typing import Optional, List, Sequence
 from datetime import timedelta  # Import timedelta
 
@@ -11,7 +13,7 @@ from nats.js import JetStreamContext
 from nats.js.api import ConsumerConfig, DeliverPolicy
 from nats.aio.msg import Msg
 from nats.js.kv import KeyValue  # Import KeyValue
-from nats.js.errors import BucketNotFoundError  # Import BucketNotFoundError
+from nats.js.errors import BucketNotFoundError, KeyNotFoundError  # Import BucketNotFoundError
 
 from .settings import (  # Import new settings
     DEFAULT_QUEUE_NAME,
@@ -23,6 +25,7 @@ from .settings import (  # Import new settings
     JOB_STATUS_FAILED,
     JOB_STATUS_TTL_SECONDS,
     DEPENDENCY_CHECK_DELAY_SECONDS,
+    RESULT_KV_NAME, DEFAULT_RESULT_TTL_SECONDS, # Import result settings
 )
 from .job import Job, JobExecutionError
 from .connection import (
@@ -69,6 +72,7 @@ class Worker:
         self._nc: Optional[nats.aio.client.Client] = None
         self._js: Optional[JetStreamContext] = None
         self._status_kv: Optional[KeyValue] = None  # Add handle for status KV
+        self._result_kv: Optional[KeyValue] = None # Add handle for result KV
         self._tasks: List[asyncio.Task] = []
         self._tasks: List[asyncio.Task] = []
         self._running = False
@@ -121,6 +125,26 @@ class Worker:
                     exc_info=True,
                 )
                 self._status_kv = None
+
+            # Connect to Result KV Store
+            try:
+                self._result_kv = await self._js.key_value(bucket=RESULT_KV_NAME)
+                logger.info(f"Bound to result KV store: '{RESULT_KV_NAME}'")
+            except BucketNotFoundError:
+                 logger.warning(f"Result KV store '{RESULT_KV_NAME}' not found. Creating...")
+                 try:
+                     self._result_kv = await self._js.create_key_value(
+                         bucket=RESULT_KV_NAME,
+                         # TTL is handled per-entry when putting results
+                         description="Stores naq job results and errors"
+                     )
+                     logger.info(f"Created result KV store: '{RESULT_KV_NAME}'")
+                 except Exception as create_e:
+                     logger.error(f"Failed to create result KV store '{RESULT_KV_NAME}': {create_e}", exc_info=True)
+                     self._result_kv = None # Continue without result backend if creation fails
+            except Exception as e:
+                 logger.error(f"Failed to bind to result KV store '{RESULT_KV_NAME}': {e}", exc_info=True)
+                 self._result_kv = None
 
     async def _ensure_failed_stream(self):
         """Ensures the stream for storing failed jobs exists."""
@@ -281,6 +305,41 @@ class Worker:
         except Exception as e:
             logger.error(f"Failed to update status for job {job_id} to '{status}': {e}", exc_info=True)
 
+    async def _store_result(self, job: Job):
+        """Stores the job result or failure info in the result KV store."""
+        if not self._result_kv:
+            logger.debug(f"Result KV store not available. Skipping result storage for job {job.job_id}.")
+            return
+
+        key = job.job_id.encode('utf-8')
+        ttl_seconds = job.result_ttl if job.result_ttl is not None else DEFAULT_RESULT_TTL_SECONDS
+
+        try:
+            if job.error:
+                # Store failure information
+                result_data = {
+                    'status': JOB_STATUS_FAILED,
+                    'error': job.error,
+                    'traceback': job.traceback,
+                }
+                logger.debug(f"Storing failure info for job {job.job_id} with TTL {ttl_seconds}s")
+            else:
+                # Store successful result
+                result_data = {
+                    'status': JOB_STATUS_COMPLETED,
+                    'result': job.result,
+                }
+                logger.debug(f"Storing result for job {job.job_id} with TTL {ttl_seconds}s")
+
+            payload = cloudpickle.dumps(result_data)
+
+            # Use put with TTL option
+            await self._result_kv.put(key, payload, ttl=ttl_seconds if ttl_seconds > 0 else None)
+
+        except Exception as e:
+            # Log error but don't let result storage failure stop job processing
+            logger.error(f"Failed to store result/failure info for job {job.job_id}: {e}", exc_info=True)
+
     async def process_message(self, msg: Msg):
         """Deserializes and executes a job, handling retries, failures, and dependencies."""
         job: Optional[Job] = None
@@ -302,6 +361,7 @@ class Worker:
             # --- Success ---
             logger.info(f"Job {job.job_id} completed successfully.")
             await self._update_job_status(job.job_id, JOB_STATUS_COMPLETED) # Update status on success
+            await self._store_result(job) # Store successful result
             await msg.ack()
             logger.debug(f"Message acknowledged: Sid='{msg.sid}'")
 
@@ -330,6 +390,7 @@ class Worker:
             else:
                 logger.error(f"Job {job.job_id} failed after {attempt-1} retries. Moving to failed queue.")
                 await self._update_job_status(job.job_id, JOB_STATUS_FAILED) # Update status on terminal failure
+                await self._store_result(job) # Store terminal failure info
                 await self.publish_failed_job(job)
                 try:
                     await msg.ack() # Ack original message after handling failure
@@ -346,7 +407,10 @@ class Worker:
             try:
                 # Update status to failed if possible, otherwise terminate
                 if job:
+                    job.error = f"Worker processing error: {e}" # Assign error for storage
+                    job.traceback = traceback.format_exc()
                     await self._update_job_status(job.job_id, JOB_STATUS_FAILED)
+                    await self._store_result(job)
                 await msg.term()
                 logger.warning(f"Terminated message Sid='{msg.sid}' due to unexpected processing error.")
             except Exception as term_e:
