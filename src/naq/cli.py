@@ -21,6 +21,7 @@ from . import __version__
 from .queue import Queue
 from .connection import get_nats_connection, get_jetstream_context, close_nats_connection
 from .scheduler import Scheduler
+from .utils import setup_logging
 
 app = typer.Typer(
     name="naq",
@@ -35,17 +36,6 @@ def version_callback(value: bool):
         print(f"naq version: {__version__}")
         raise typer.Exit()
         
-def setup_logging(level: str = "INFO"):
-    """Configures logging based on the provided level string using loguru."""
-    logger.remove()  # Remove default handler
-    logger.add(
-        sys.stdout,
-        level=level.upper(),
-        format="{time} - {name} - {level} - {message}",
-        colorize=True,
-    )
-    # Optionally silence overly verbose libraries if needed
-    # logging.getLogger("nats").setLevel(logging.WARNING)
 
 
 # --- CLI Commands ---

@@ -41,7 +41,10 @@ from .settings import (
     SCHEDULED_JOB_STATUS_ACTIVE,
     SCHEDULED_JOB_STATUS_PAUSED,
     SCHEDULED_JOB_STATUS_FAILED,
+    JOB_STATUS_COMPLETED, # Export new status
+    JOB_STATUS_FAILED as JOB_EXECUTION_FAILED, # Export new status (alias to avoid name clash)
 )
+
 from loguru import logger
 
 __version__ = "0.1.0"  # Bump version for scheduler HA and management features

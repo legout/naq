@@ -13,6 +13,7 @@ from nats.js.kv import KeyValue, KeyValueEntry
 from nats.js.errors import KeyNotFoundError
 from loguru import logger
 import cloudpickle
+from .utils import setup_logging
 
 # Attempt to import croniter only if needed later
 try:
@@ -65,6 +66,8 @@ class Scheduler:
         self._instance_id = instance_id or f"{socket.gethostname()}-{uuid.uuid4().hex[:8]}"
         self._lock_ttl = SCHEDULER_LOCK_TTL_SECONDS
         self._lock_renew_interval = SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS
+
+        setup_logging()  # Set up logging
 
     async def _connect(self):
         """Establish NATS connection, JetStream context, and KV handles."""

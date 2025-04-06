@@ -1,6 +1,9 @@
 # src/naq/utils.py
+import sys
 import asyncio
 from typing import Coroutine, TypeVar, Any
+from loguru import logger
+
 
 T = TypeVar('T')
 
@@ -49,3 +52,14 @@ def run_async_from_sync(coro: Coroutine[Any, Any, T]) -> T:
             # Re-raise other RuntimeErrors
             raise
 
+def setup_logging(level: str = "INFO"):
+    """Configures logging based on the provided level string using loguru."""
+    logger.remove()  # Remove default handler
+    logger.add(
+        sys.stdout,
+        level=level.upper(),
+        format="{time} - {name} - {level} - {message}",
+        colorize=True,
+    )
+    # Optionally silence overly verbose libraries if needed
+    # logging.getLogger("nats").setLevel(logging.WARNING)

@@ -38,7 +38,23 @@ else:
     # Default to a reasonable limit, e.g., 5, or None for infinite
     MAX_SCHEDULE_FAILURES = 5
 
+# --- Job Status Settings ---
+# KV bucket name for tracking job completion status (for dependencies)
+JOB_STATUS_KV_NAME = f"{NAQ_PREFIX}_job_status"
+# Status values stored in the job status KV
+JOB_STATUS_COMPLETED = "completed"
+JOB_STATUS_FAILED = "failed"
+# TTL for job status entries (e.g., 1 day) - adjust as needed
+JOB_STATUS_TTL_SECONDS = int(os.getenv("NAQ_JOB_STATUS_TTL", 86400))
+
 # Status values for scheduled jobs
 SCHEDULED_JOB_STATUS_ACTIVE = "active"
 SCHEDULED_JOB_STATUS_PAUSED = "paused"
 SCHEDULED_JOB_STATUS_FAILED = "schedule_failed" # Failed to be scheduled/enqueued repeatedly
+
+# Define subject for failed jobs
+FAILED_JOB_SUBJECT_PREFIX = f"{NAQ_PREFIX}.failed"
+# Define stream name for failed jobs (could be same or different)
+FAILED_JOB_STREAM_NAME = f"{NAQ_PREFIX}_failed_jobs"
+
+DEPENDENCY_CHECK_DELAY_SECONDS = 5

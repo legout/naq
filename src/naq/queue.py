@@ -3,7 +3,8 @@ import asyncio
 import time
 import datetime
 import cloudpickle # Ensure cloudpickle is imported
-from typing import Optional, Callable, Any, Tuple, Dict, Union
+from loguru import logger
+from typing import Optional, Callable, Any, Tuple, Dict, Union, List
 from datetime import timedelta, timezone
 
 import nats
@@ -18,10 +19,12 @@ from .settings import (
 from .job import Job, RetryDelayType
 from .connection import get_jetstream_context, ensure_stream, close_nats_connection, get_nats_connection
 from .exceptions import NaqException, ConnectionError as NaqConnectionError, ConfigurationError, JobNotFoundError # Add JobNotFoundError
-from .utils import run_async_from_sync
+from .utils import run_async_from_sync, setup_logging
 
 # Define KV bucket name for scheduled jobs
 SCHEDULED_JOBS_KV_NAME = f"{NAQ_PREFIX}_scheduled_jobs"
+
+
 
 class Queue:
     """Represents a job queue backed by a NATS JetStream stream."""
@@ -42,6 +45,8 @@ class Queue:
         self._nats_url = nats_url # Store potential override
         self._js: Optional[nats.js.JetStreamContext] = None
         self._default_timeout = default_timeout
+
+        setup_logging() # Ensure logging is set up
 
     async def _get_js(self) -> nats.js.JetStreamContext:
         """Gets the JetStream context, initializing if needed."""
@@ -80,6 +85,7 @@ class Queue:
         # Add retry parameters
         max_retries: Optional[int] = 0,
         retry_delay: RetryDelayType = 0,
+        depends_on: Optional[Union[str, List[str], Job, List[Job]]] = None, # Add depends_on
         **kwargs: Any,
     ) -> Job:
         """
@@ -90,39 +96,39 @@ class Queue:
             *args: Positional arguments for the function.
             max_retries: Maximum number of retries allowed.
             retry_delay: Delay between retries (seconds).
-                         Can be a single number or a sequence for backoff.
+            depends_on: A job ID, Job instance, or list of IDs/instances this job depends on.
             **kwargs: Keyword arguments for the function.
 
         Returns:
             The enqueued Job instance.
         """
-        # Pass retry params and queue name to Job constructor
+        # Pass retry params, queue name, and depends_on to Job constructor
         job = Job(
             function=func,
             args=args,
             kwargs=kwargs,
             max_retries=max_retries,
             retry_delay=retry_delay,
-            queue_name=self.name, # Pass queue name
+            queue_name=self.name,
+            depends_on=depends_on, # Pass dependency info
         )
-        print(f"Enqueueing job {job.job_id} ({func.__name__}) to queue '{self.name}' (subject: {self.subject})")
+        logger.info(f"Enqueueing job {job.job_id} ({func.__name__}) to queue '{self.name}' (subject: {self.subject})")
+        if job.dependency_ids:
+             logger.info(f"Job {job.job_id} depends on: {job.dependency_ids}")
 
         try:
             js = await self._get_js()
             serialized_job = job.serialize()
 
             # Publish the job to the specific subject for this queue
-            # JetStream will capture this message in the configured stream
             ack = await js.publish(
                 subject=self.subject,
                 payload=serialized_job,
-                # timeout=... # Optional publish timeout
             )
-            print(f"Job {job.job_id} published successfully. Stream: {ack.stream}, Seq: {ack.seq}")
+            logger.info(f"Job {job.job_id} published successfully. Stream: {ack.stream}, Seq: {ack.seq}")
             return job
         except Exception as e:
-            # Log or handle the error appropriately
-            print(f"Error enqueueing job {job.job_id}: {e}")
+            logger.error(f"Error enqueueing job {job.job_id}: {e}", exc_info=True)
             raise NaqException(f"Failed to enqueue job: {e}") from e
 
     async def enqueue_at(
@@ -525,18 +531,22 @@ async def enqueue(
     func: Callable,
     *args: Any,
     queue_name: str = DEFAULT_QUEUE_NAME,
-    nats_url: Optional[str] = None, # Allow passing nats_url
-    max_retries: Optional[int] = 0, # Add retry params
-    retry_delay: RetryDelayType = 0, # Add retry params
+    nats_url: Optional[str] = None,
+    max_retries: Optional[int] = 0,
+    retry_delay: RetryDelayType = 0,
+    depends_on: Optional[Union[str, List[str], Job, List[Job]]] = None, # Add depends_on
     **kwargs: Any,
 ) -> Job:
     """Helper to enqueue a job onto a specific queue (async)."""
-    # Pass nats_url if provided
     q = Queue(name=queue_name, nats_url=nats_url)
-    # Pass retry params to queue's enqueue method
-    job = await q.enqueue(func, *args, max_retries=max_retries, retry_delay=retry_delay, **kwargs)
-    # Decide if the helper should close the connection. Generally no.
-    # await close_nats_connection() # Avoid closing here, let user manage connection
+    # Pass retry params and depends_on to queue's enqueue method
+    job = await q.enqueue(
+        func, *args,
+        max_retries=max_retries,
+        retry_delay=retry_delay,
+        depends_on=depends_on, # Pass dependency info
+        **kwargs
+    )
     return job
 
 async def enqueue_at(
@@ -620,23 +630,22 @@ async def modify_scheduled_job(job_id: str, nats_url: Optional[str] = None, **up
 
 # --- Sync Helper Functions ---
 
+
 def enqueue_sync(
     func: Callable,
     *args: Any,
     queue_name: str = DEFAULT_QUEUE_NAME,
     nats_url: Optional[str] = None,
-    max_retries: Optional[int] = 0, # Add retry params
-    retry_delay: RetryDelayType = 0, # Add retry params
+    max_retries: Optional[int] = 0,
+    retry_delay: RetryDelayType = 0,
+    depends_on: Optional[Union[str, List[str], Job, List[Job]]] = None, # Add depends_on
     **kwargs: Any,
 ) -> Job:
     """
     Helper to enqueue a job onto a specific queue (synchronous).
-
-    Note: This will block until the enqueue operation is complete.
-    It manages its own NATS connection lifecycle for the operation.
     """
     async def _main():
-        # Pass retry params to async enqueue helper
+        # Pass retry params and depends_on to async enqueue helper
         job = await enqueue(
             func,
             *args,
@@ -644,9 +653,10 @@ def enqueue_sync(
             nats_url=nats_url,
             max_retries=max_retries,
             retry_delay=retry_delay,
+            depends_on=depends_on, # Pass dependency info
             **kwargs
         )
-        await close_nats_connection() # Close connection after sync op
+        await close_nats_connection()
         return job
     return run_async_from_sync(_main())
 
