@@ -3,16 +3,17 @@ import asyncio
 import signal
 from loguru import logger
 import os
-import cloudpickle
-import traceback
-from typing import Optional, List, Sequence
-from datetime import timedelta  # Import timedelta
+import time # Import time
+import socket # Import socket
+import uuid # Import uuid
+from typing import Optional, List, Sequence, Dict, Any # Import Dict, Any
+from datetime import timedelta, timezone # Import timezone
 
 import nats
 from nats.js import JetStreamContext
 from nats.js.api import ConsumerConfig, DeliverPolicy
 from nats.aio.msg import Msg
-from nats.js.kv import KeyValue  # Import KeyValue
+from nats.js.kv import KeyValue
 from nats.js.errors import BucketNotFoundError, KeyNotFoundError  # Import BucketNotFoundError
 
 from .settings import (  # Import new settings
@@ -26,6 +27,8 @@ from .settings import (  # Import new settings
     JOB_STATUS_TTL_SECONDS,
     DEPENDENCY_CHECK_DELAY_SECONDS,
     RESULT_KV_NAME, DEFAULT_RESULT_TTL_SECONDS, # Import result settings
+    WORKER_KV_NAME, DEFAULT_WORKER_TTL_SECONDS, DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS, # Worker monitor settings
+    WORKER_STATUS_STARTING, WORKER_STATUS_IDLE, WORKER_STATUS_BUSY, WORKER_STATUS_STOPPING, # Worker statuses
 )
 from .job import Job, JobExecutionError
 from .connection import (
@@ -35,7 +38,7 @@ from .connection import (
     ensure_stream,
 )
 from .exceptions import NaqException, SerializationError
-from .utils import setup_logging
+from .utils import setup_logging, run_async_from_sync # Import run_async_from_sync
 
 # logger = logging.getLogger(__name__)
 # logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -44,7 +47,8 @@ from .utils import setup_logging
 class Worker:
     """
     A worker that fetches jobs from specified NATS queues (subjects) and executes them.
-    Uses JetStream pull consumers for fetching jobs.
+    Uses JetStream pull consumers for fetching jobs. Handles retries, dependencies,
+    and reports its status via heartbeats.
     """
 
     def __init__(
@@ -53,6 +57,8 @@ class Worker:
         nats_url: Optional[str] = None,
         concurrency: int = 10,  # Max concurrent jobs
         worker_name: Optional[str] = None,  # For durable consumer names
+        heartbeat_interval: int = DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
+        worker_ttl: int = DEFAULT_WORKER_TTL_SECONDS,
     ):
         if isinstance(queues, str):
             queues = [queues]
@@ -65,21 +71,26 @@ class Worker:
         ]
         self._nats_url = nats_url
         self._concurrency = concurrency
-        self._worker_name = (
-            worker_name or f"naq-worker-{os.urandom(4).hex()}"
-        )  # Unique-ish name
+        # Generate a unique ID if name is not provided, otherwise use name as base
+        base_name = worker_name or f"naq-worker-{socket.gethostname()}"
+        self.worker_id = f"{base_name}-{os.getpid()}-{uuid.uuid4().hex[:6]}" # Unique ID for this worker instance
+        self._heartbeat_interval = heartbeat_interval
+        self._worker_ttl = worker_ttl
 
         self._nc: Optional[nats.aio.client.Client] = None
         self._js: Optional[JetStreamContext] = None
         self._status_kv: Optional[KeyValue] = None  # Add handle for status KV
         self._result_kv: Optional[KeyValue] = None # Add handle for result KV
-        self._tasks: List[asyncio.Task] = []
+        self._worker_kv: Optional[KeyValue] = None # Add handle for worker KV
         self._tasks: List[asyncio.Task] = []
         self._running = False
         self._shutdown_event = asyncio.Event()
         self._semaphore = asyncio.Semaphore(
             concurrency
         )  # Add semaphore for concurrency control
+        self._heartbeat_task: Optional[asyncio.Task] = None # Task for heartbeating
+        self._current_status: str = WORKER_STATUS_STARTING # Track current status
+        self._current_job_id: Optional[str] = None # Track current job being processed
 
         # JetStream stream name (assuming one stream for all queues for now)
         self.stream_name = f"{NAQ_PREFIX}_jobs"
@@ -94,7 +105,7 @@ class Worker:
             self._nc = await get_nats_connection(url=self._nats_url)
             self._js = await get_jetstream_context(nc=self._nc)
             logger.info(
-                f"Worker '{self._worker_name}' connected to NATS and JetStream."
+                f"Worker '{self.worker_id}' connected to NATS and JetStream."
             )
 
             # Connect to Job Status KV Store
@@ -145,6 +156,26 @@ class Worker:
             except Exception as e:
                  logger.error(f"Failed to bind to result KV store '{RESULT_KV_NAME}': {e}", exc_info=True)
                  self._result_kv = None
+
+            # Connect to Worker KV Store
+            try:
+                self._worker_kv = await self._js.key_value(bucket=WORKER_KV_NAME)
+                logger.info(f"Bound to worker status KV store: '{WORKER_KV_NAME}'")
+            except BucketNotFoundError:
+                 logger.warning(f"Worker status KV store '{WORKER_KV_NAME}' not found. Creating...")
+                 try:
+                     self._worker_kv = await self._js.create_key_value(
+                         bucket=WORKER_KV_NAME,
+                         # TTL is handled per-entry (heartbeat)
+                         description="Stores naq worker status and heartbeats"
+                     )
+                     logger.info(f"Created worker status KV store: '{WORKER_KV_NAME}'")
+                 except Exception as create_e:
+                     logger.error(f"Failed to create worker status KV store '{WORKER_KV_NAME}': {create_e}", exc_info=True)
+                     self._worker_kv = None # Continue without worker monitoring if creation fails
+            except Exception as e:
+                 logger.error(f"Failed to bind to worker status KV store '{WORKER_KV_NAME}': {e}", exc_info=True)
+                 self._worker_kv = None
 
     async def _ensure_failed_stream(self):
         """Ensures the stream for storing failed jobs exists."""
@@ -340,6 +371,67 @@ class Worker:
             # Log error but don't let result storage failure stop job processing
             logger.error(f"Failed to store result/failure info for job {job.job_id}: {e}", exc_info=True)
 
+    async def _update_worker_status(self, status: Optional[str] = None, job_id: Optional[str] = None):
+        """Updates the worker's status in the KV store (heartbeat)."""
+        if not self._worker_kv:
+            return # Cannot update status if KV is not available
+
+        if status:
+            self._current_status = status
+        # If status is busy, use provided job_id, otherwise clear it
+        self._current_job_id = job_id if self._current_status == WORKER_STATUS_BUSY else None
+
+        key = self.worker_id.encode('utf-8')
+        worker_data = {
+            'worker_id': self.worker_id,
+            'hostname': socket.gethostname(),
+            'pid': os.getpid(),
+            'queues': self.queue_names,
+            'status': self._current_status,
+            'current_job_id': self._current_job_id,
+            'last_heartbeat_utc': time.time(),
+            'concurrency': self._concurrency,
+            'active_tasks': self._concurrency - self._semaphore._value, # How many tasks are active
+        }
+        try:
+            payload = cloudpickle.dumps(worker_data)
+            # Put with TTL to ensure stale workers eventually disappear
+            await self._worker_kv.put(key, payload, ttl=self._worker_ttl)
+            logger.debug(f"Worker {self.worker_id} heartbeat sent. Status: {self._current_status}")
+        except Exception as e:
+            logger.warning(f"Failed to update worker status/heartbeat for {self.worker_id}: {e}")
+
+    async def _heartbeat_loop(self):
+        """Periodically sends heartbeat updates."""
+        while self._running:
+            try:
+                # Update status without changing it, just refresh TTL and timestamp
+                await self._update_worker_status()
+                # Wait for interval or shutdown
+                await asyncio.wait_for(self._shutdown_event.wait(), timeout=self._heartbeat_interval)
+                # If wait finished without timeout, shutdown was triggered
+                break
+            except asyncio.TimeoutError:
+                continue # Expected timeout, continue loop
+            except asyncio.CancelledError:
+                logger.info("Heartbeat loop cancelled.")
+                break
+            except Exception as e:
+                logger.error(f"Error in heartbeat loop for {self.worker_id}: {e}", exc_info=True)
+                # Wait a bit before retrying after an error
+                await asyncio.sleep(self._heartbeat_interval)
+
+    async def _unregister_worker(self):
+        """Removes the worker's status entry from the KV store."""
+        if not self._worker_kv:
+            return
+        logger.info(f"Unregistering worker {self.worker_id}...")
+        try:
+            await self._worker_kv.delete(self.worker_id.encode('utf-8'))
+            logger.debug(f"Worker {self.worker_id} status deleted from KV.")
+        except Exception as e:
+            logger.warning(f"Failed to delete worker status for {self.worker_id}: {e}")
+
     async def process_message(self, msg: Msg):
         """Deserializes and executes a job, handling retries, failures, and dependencies."""
         job: Optional[Job] = None
@@ -353,6 +445,9 @@ class Worker:
                 logger.info(f"Dependencies not met for job {job.job_id}. Re-queueing with delay {DEPENDENCY_CHECK_DELAY_SECONDS}s.")
                 await msg.nak(delay=DEPENDENCY_CHECK_DELAY_SECONDS)
                 return # Stop processing this message for now
+
+            # --- Update Status to Busy ---
+            await self._update_worker_status(status=WORKER_STATUS_BUSY, job_id=job.job_id)
 
             # --- Execute Job ---
             logger.info(f"Processing job {job.job_id} ({getattr(job.function, '__name__', 'unknown')}) attempt {msg.metadata.num_delivered}")
@@ -415,9 +510,11 @@ class Worker:
                 logger.warning(f"Terminated message Sid='{msg.sid}' due to unexpected processing error.")
             except Exception as term_e:
                 logger.error(f"Failed to Terminate message Sid='{msg.sid}': {term_e}", exc_info=True)
-        # Semaphore is released via task.add_done_callback in _subscribe_to_queue
-
-
+        finally:
+            # --- Update Status back to Idle (or starting if shutdown happened) ---
+            # Check self._running, as shutdown might have occurred during job execution
+            final_status = WORKER_STATUS_IDLE if self._running else WORKER_STATUS_STOPPING
+            await self._update_worker_status(status=final_status, job_id=None)
 
     async def publish_failed_job(self, job: Job):
         """Publishes failed job details to the failed job subject."""
@@ -453,6 +550,12 @@ class Worker:
 
         try:
             await self._connect()
+            # Register worker initially
+            await self._update_worker_status(status=WORKER_STATUS_STARTING)
+
+            # Start heartbeat task
+            self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+
             # Ensure the main work stream exists
             await ensure_stream(
                 js=self._js,
@@ -469,15 +572,24 @@ class Worker:
             ]
 
             logger.info(
-                f"Worker '{self._worker_name}' started. Listening on queues: {self.queue_names}. Concurrency: {self._concurrency}"
+                f"Worker '{self.worker_id}' started. Listening on queues: {self.queue_names}. Concurrency: {self._concurrency}"
             )
+            # Set status to idle once subscriptions are ready
+            await self._update_worker_status(status=WORKER_STATUS_IDLE)
+
             await self._shutdown_event.wait()
 
             logger.info("Shutdown signal received. Waiting for tasks to complete...")
+            await self._update_worker_status(status=WORKER_STATUS_STOPPING)
+
+            # Stop heartbeat task
+            if self._heartbeat_task and not self._heartbeat_task.done():
+                self._heartbeat_task.cancel()
+
             # Wait for active processing tasks (respecting semaphore)
             # Wait for all semaphore slots to be released
             active_tasks = self._concurrency - self._semaphore._value
-            if active_tasks > 0:
+            if (active_tasks > 0):
                 logger.info(f"Waiting for {active_tasks} active job(s) to finish...")
                 # Wait for semaphore to be fully released, with a timeout
                 try:
@@ -494,10 +606,18 @@ class Worker:
                 *subscription_tasks, return_exceptions=True
             )  # Wait for cancellation
 
+            # Wait for heartbeat task to finish cancellation
+            if self._heartbeat_task:
+                try:
+                    await self._heartbeat_task
+                except asyncio.CancelledError:
+                    pass # Expected
+
         except asyncio.CancelledError:
             logger.info("Run task cancelled.")
         except Exception as e:
             logger.error(f"Worker run loop encountered an error: {e}", exc_info=True)
+            await self._update_worker_status(status=WORKER_STATUS_STOPPING) # Mark as stopping on error too
         finally:
             logger.info("Worker shutting down...")
             await self._close()
@@ -510,10 +630,15 @@ class Worker:
 
     async def _close(self):
         """Closes NATS connection and cleans up resources."""
-        # Close NATS connection (this should ideally stop subscriptions)
-        await close_nats_connection()  # Use the shared close function
+        # Unregister worker first
+        await self._unregister_worker()
+        # Close NATS connection
+        await close_nats_connection()
         self._nc = None
         self._js = None
+        self._status_kv = None
+        self._result_kv = None
+        self._worker_kv = None
 
     def signal_handler(self, sig, frame):
         """Handles termination signals."""
@@ -525,3 +650,65 @@ class Worker:
         """Installs signal handlers for graceful shutdown."""
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
+
+    # --- Static methods for worker monitoring ---
+    @staticmethod
+    async def list_workers(nats_url: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Lists active workers by querying the worker status KV store.
+
+        Args:
+            nats_url: NATS server URL (if not using default).
+
+        Returns:
+            A list of dictionaries, each containing information about a worker.
+
+        Raises:
+            NaqConnectionError: If connection fails.
+            NaqException: For other errors.
+        """
+        from .connection import get_nats_connection, get_jetstream_context, close_nats_connection
+        from .settings import WORKER_KV_NAME
+        from .exceptions import NaqConnectionError, NaqException
+
+        workers = []
+        nc = None
+        kv = None
+        try:
+            nc = await get_nats_connection(url=nats_url)
+            js = await get_jetstream_context(nc=nc)
+            try:
+                kv = await js.key_value(bucket=WORKER_KV_NAME)
+            except Exception as e:
+                 logger.warning(f"Worker status KV store '{WORKER_KV_NAME}' not accessible: {e}")
+                 return [] # Return empty list if store doesn't exist
+
+            keys = await kv.keys()
+            for key_bytes in keys:
+                try:
+                    entry = await kv.get(key_bytes)
+                    if entry:
+                        worker_data = cloudpickle.loads(entry.value)
+                        # Optionally filter out workers whose TTL might have expired but haven't been cleaned yet
+                        # last_heartbeat = worker_data.get('last_heartbeat_utc', 0)
+                        # if time.time() - last_heartbeat < DEFAULT_WORKER_TTL_SECONDS * 1.1: # Add buffer
+                        workers.append(worker_data)
+                except KeyNotFoundError:
+                    continue # Key might have expired between keys() and get()
+                except Exception as e:
+                    logger.error(f"Error reading worker data for key '{key_bytes.decode()}': {e}")
+
+            return workers
+
+        except NaqConnectionError:
+            raise
+        except Exception as e:
+            raise NaqException(f"Error listing workers: {e}") from e
+        finally:
+            if nc:
+                await close_nats_connection()
+
+    @staticmethod
+    def list_workers_sync(nats_url: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Synchronous version of list_workers."""
+        return run_async_from_sync(Worker.list_workers(nats_url=nats_url))

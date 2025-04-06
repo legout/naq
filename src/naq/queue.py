@@ -21,10 +21,6 @@ from .connection import get_jetstream_context, ensure_stream, close_nats_connect
 from .exceptions import NaqException, ConnectionError as NaqConnectionError, ConfigurationError, JobNotFoundError # Add JobNotFoundError
 from .utils import run_async_from_sync, setup_logging
 
-# Define KV bucket name for scheduled jobs
-SCHEDULED_JOBS_KV_NAME = f"{NAQ_PREFIX}_scheduled_jobs"
-
-
 
 class Queue:
     """Represents a job queue backed by a NATS JetStream stream."""

@@ -63,4 +63,17 @@ RESULT_KV_NAME = f"{NAQ_PREFIX}_results"
 # Default TTL (in seconds) for job results stored in the KV store (e.g., 7 days)
 DEFAULT_RESULT_TTL_SECONDS = int(os.getenv("NAQ_DEFAULT_RESULT_TTL", 604800))
 
+# --- Worker Monitoring Settings ---
+# KV bucket name for storing worker status and heartbeats
+WORKER_KV_NAME = f"{NAQ_PREFIX}_workers"
+# Default TTL (in seconds) for worker heartbeat entries. Should be longer than heartbeat interval.
+DEFAULT_WORKER_TTL_SECONDS = int(os.getenv("NAQ_WORKER_TTL", "60"))
+# Default interval (in seconds) for worker heartbeats
+DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("NAQ_WORKER_HEARTBEAT_INTERVAL", "15"))
+# Worker status constants
+WORKER_STATUS_STARTING = "starting"
+WORKER_STATUS_IDLE = "idle"
+WORKER_STATUS_BUSY = "busy"
+WORKER_STATUS_STOPPING = "stopping"
+
 DEPENDENCY_CHECK_DELAY_SECONDS = 5

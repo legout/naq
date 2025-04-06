@@ -43,11 +43,16 @@ from .settings import (
     SCHEDULED_JOB_STATUS_FAILED,
     JOB_STATUS_COMPLETED, # Export new status
     JOB_STATUS_FAILED as JOB_EXECUTION_FAILED, # Export new status (alias to avoid name clash)
+    # Worker statuses
+    WORKER_STATUS_STARTING,
+    WORKER_STATUS_IDLE,
+    WORKER_STATUS_BUSY,
+    WORKER_STATUS_STOPPING,
 )
 
 from loguru import logger
 
-__version__ = "0.1.1"  # Bump version for result backend
+__version__ = "0.1.2"  # Bump version for worker monitoring
 
 # Basic configuration/convenience
 def setup_logging(level=logging.INFO):
@@ -84,3 +89,7 @@ async def disconnect():
 # Expose static methods directly if desired, or users can use Job.fetch_result
 fetch_job_result = Job.fetch_result
 fetch_job_result_sync = Job.fetch_result_sync
+
+# --- Make worker listing available ---
+list_workers = Worker.list_workers
+list_workers_sync = Worker.list_workers_sync
