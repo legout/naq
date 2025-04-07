@@ -9,3 +9,18 @@ services:
       - "4222:4222" # Standard NATS client port
       - "8222:8222" # HTTP monitoring port
     command: "-js" # Enable JetStream
+
+  nats-ui:
+    image: ghcr.io/nats-nui/nui:latest
+    ports:
+      - 31311:31311
+    environment:
+      NATS_URL: nats://nats:4222
+    volumes:
+      - db:/db
+    depends_on:
+      - nats
+
+volumes:
+  db:
+    

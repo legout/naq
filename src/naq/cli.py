@@ -11,6 +11,12 @@ import uvicorn  # Use uvicorn to run Sanic
 from loguru import logger
 from rich.console import Console
 from rich.table import Table
+from rich.panel import Panel
+from rich.markdown import Markdown
+from rich.text import Text
+from rich.style import Style
+
+
 
 # from naq.dashboard.app import app as dashboard_app
 
@@ -30,6 +36,7 @@ from .settings import (  # WORKER_STATUS_IDLE,; WORKER_STATUS_STARTING,; WORKER_
     SCHEDULED_JOB_STATUS_PAUSED,
     SCHEDULED_JOBS_KV_NAME,
     WORKER_STATUS_BUSY,
+    NAQ_PREFIX
 )
 from .utils import setup_logging
 from .worker import Worker
@@ -43,12 +50,15 @@ app = typer.Typer(
     add_completion=False,
 )
 
+# Create a shared console instance for Rich output
+console = Console()
+
 # --- Helper Functions ---
 
 
 def version_callback(value: bool):
     if value:
-        print(f"naq version: {__version__}")
+        console.print(f"[cyan]naq[/cyan] version: [bold]{__version__}[/bold]")
         raise typer.Exit()
 
 
@@ -126,7 +136,7 @@ def purge(
         envvar="NAQ_NATS_URL",
     ),
     log_level: str = typer.Option(
-        "INFO",
+        "WARNING", # Set default log level to WARNING
         "--log-level",
         "-l",
         help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR).",
@@ -140,19 +150,45 @@ def purge(
     logger.info(f"Using NATS URL: {nats_url}")
 
     async def _purge_queues():
+        results = {}
         total_purged = 0
+        # Instantiate Queue object once if nats_url is consistent for all purges
+        # If each queue needed different settings, loop would be necessary here.
+        q = Queue(nats_url=nats_url) # Instantiate once
+
         for queue_name in queues:
             try:
-                q = Queue(name=queue_name, nats_url=nats_url)
-                purged_count = await q.purge()
-                logger.info(
-                    f"Successfully purged queue '{queue_name}'. Removed {purged_count} jobs."
-                )
+                q.name = queue_name # Update the name for the current iteration
+                q.subject = f"{NAQ_PREFIX}.queue.{queue_name}" # Update subject accordingly
+                purged_count = await q.purge() # Call purge on the reused object
+                results[queue_name] = {"status": "success", "count": purged_count}
                 total_purged += purged_count
             except Exception as e:
+                results[queue_name] = {"status": "error", "error": str(e)}
                 logger.error(f"Failed to purge queue '{queue_name}': {e}")
-                # Optionally exit or continue with other queues
-        logger.info(f"Purge operation finished. Total jobs removed: {total_purged}")
+
+        # --- Report Results using Rich ---
+        success_count = sum(1 for r in results.values() if r["status"] == "success")
+        error_count = len(results) - success_count
+
+        console.print("\n[bold]Purge Results:[/bold]")
+        for name, result in results.items():
+            if result["status"] == "success":
+                console.print(f"  - [green]Queue '{name}': Purged {result['count']} jobs.[/green]")
+            else:
+                console.print(f"  - [red]Queue '{name}': Failed - {result['error']}[/red]")
+
+        # --- Summary Panel ---
+        summary_color = "green" if error_count == 0 else ("yellow" if success_count > 0 else "red")
+        summary_text = f"Total jobs removed: {total_purged}\nQueues processed: {len(results)}\nSuccessful purges: {success_count}\nFailed purges: {error_count}"
+        console.print(Panel(
+            summary_text,
+            title="Purge Summary",
+            style=summary_color,
+            expand=False
+        ))
+        # --- End Reporting ---
+
         # Close connection if opened by Queue instances
         await close_nats_connection()
 
@@ -289,18 +325,18 @@ def list_scheduled_jobs(
                 logger.error(
                     f"Failed to access KV store '{SCHEDULED_JOBS_KV_NAME}': {e}"
                 )
-                print("No scheduled jobs found or cannot access job store.")
+                console.print("[yellow]No scheduled jobs found or cannot access job store.[/yellow]")
                 return
 
             # Get all keys
             try:
                 keys = await kv.keys()
                 if not keys:
-                    print("No scheduled jobs found.")
+                    console.print("[yellow]No scheduled jobs found.[/yellow]")
                     return
             except nats.js.errors.NoKeysError:
                 # This is normal when no keys are found
-                print("No scheduled jobs found.")
+                console.print("[yellow]No scheduled jobs found.[/yellow]")
                 return
 
             jobs_data = []
@@ -350,9 +386,6 @@ def list_scheduled_jobs(
 
             # Sort by next run time
             jobs_data.sort(key=lambda j: j.get("scheduled_timestamp_utc", 0))
-
-            # Create rich console and table
-            console = Console()
             
             if detailed:
                 table = Table(title="NAQ Scheduled Jobs", show_header=True, header_style="bold cyan")
@@ -439,10 +472,13 @@ def list_scheduled_jobs(
 
             # Print the table
             console.print(table)
-            print(f"\nTotal: {len(jobs_data)} scheduled job(s)")
+            
+            # Total count with styling
+            console.print(f"\n[bold]Total:[/bold] {len(jobs_data)} scheduled job(s)")
 
         except Exception as e:
             logger.exception(f"Error listing scheduled jobs: {e}")
+            console.print(f"[red]Error listing scheduled jobs: {str(e)}[/red]")
         finally:
             await close_nats_connection()
 
@@ -530,27 +566,23 @@ def job_control(
             if action == "cancel":
                 result = await q.cancel_scheduled_job(job_id)
                 if result:
-                    print(f"Job {job_id} cancelled successfully.")
+                    console.print(f"[green]Job {job_id} cancelled successfully.[/green]")
                 else:
-                    print(f"Job {job_id} not found or already cancelled.")
+                    console.print(f"[yellow]Job {job_id} not found or already cancelled.[/yellow]")
 
             elif action == "pause":
                 result = await q.pause_scheduled_job(job_id)
                 if result:
-                    print(f"Job {job_id} paused successfully.")
+                    console.print(f"[green]Job {job_id} paused successfully.[/green]")
                 else:
-                    print(
-                        f"Failed to pause job {job_id}. Job might not exist or was already paused."
-                    )
+                    console.print(f"[yellow]Failed to pause job {job_id}. Job might not exist or was already paused.[/yellow]")
 
             elif action == "resume":
                 result = await q.resume_scheduled_job(job_id)
                 if result:
-                    print(f"Job {job_id} resumed successfully.")
+                    console.print(f"[green]Job {job_id} resumed successfully.[/green]")
                 else:
-                    print(
-                        f"Failed to resume job {job_id}. Job might not exist or was not paused."
-                    )
+                    console.print(f"[yellow]Failed to resume job {job_id}. Job might not exist or was not paused.[/yellow]")
 
             elif action == "reschedule":
                 # Build update dict
@@ -578,12 +610,31 @@ def job_control(
 
                 result = await q.modify_scheduled_job(job_id, **updates)
                 if result:
-                    print(f"Job {job_id} rescheduled successfully.")
+                    console.print(f"[green]Job {job_id} rescheduled successfully.[/green]")
+                    
+                    # Show a summary of the changes made
+                    change_summary = []
+                    if cron:
+                        change_summary.append(f"cron='{cron}'")
+                    if interval is not None:
+                        change_summary.append(f"interval={interval}s")
+                    if repeat is not None:
+                        change_summary.append(f"repeat={repeat}")
+                    if next_run:
+                        change_summary.append(f"next_run={next_run}")
+                    
+                    if change_summary:
+                        console.print(Panel(
+                            Text("\n".join(f"• {change}" for change in change_summary)),
+                            title="Applied Changes",
+                            expand=False
+                        ))
                 else:
-                    print(f"Failed to reschedule job {job_id}. Job might not exist.")
+                    console.print(f"[yellow]Failed to reschedule job {job_id}. Job might not exist.[/yellow]")
 
         except Exception as e:
             logger.exception(f"Error controlling job {job_id}: {e}")
+            console.print(f"[red]Error: {str(e)}[/red]")
         finally:
             await close_nats_connection()
 
@@ -620,14 +671,13 @@ def list_workers_command(
         try:
             workers = await Worker.list_workers(nats_url=nats_url)
             if not workers:
-                print("No active workers found.")
+                console.print("[yellow]No active workers found.[/yellow]")
                 return
 
             # Sort workers by ID for consistent output
             workers.sort(key=lambda w: w.get("worker_id", ""))
 
-            # Create rich console and table
-            console = Console()
+
             table = Table(title="NAQ Workers", show_header=True, header_style="bold cyan")
             
             # Add columns
@@ -680,10 +730,11 @@ def list_workers_command(
 
             # Print the table
             console.print(table)
-            print(f"\nTotal: {len(workers)} active worker(s)")
+            console.print(f"\n[bold]Total:[/bold] {len(workers)} active worker(s)")
 
         except Exception as e:
             logger.exception(f"Error listing workers: {e}")
+            console.print(f"[red]Error listing workers: {str(e)}[/red]")
         finally:
             await close_nats_connection()
 
@@ -751,8 +802,8 @@ def dashboard(
 #         """
 #         Starts the NAQ web dashboard (requires 'dashboard' extras).
 #         """
-#         print("Error: Dashboard dependencies not installed.")
-#         print("Please run: pip install naq[dashboard]")
+#         console.print("[red]Error:[/red] Dashboard dependencies not installed.")
+#         console.print("Please run: [bold cyan]pip install naq[dashboard][/bold cyan]")
 #         raise typer.Exit(code=1)
 
 
