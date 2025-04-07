@@ -19,3 +19,7 @@ class SerializationError(NaqException):
 class JobExecutionError(NaqException):
     """Raised when a job fails during execution."""
     pass
+
+class JobNotFoundError(NaqException):
+    """Raised when a job is not found in the queue."""
+    pass

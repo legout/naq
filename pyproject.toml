@@ -10,13 +10,14 @@ requires-python = ">=3.13"
 dependencies = [
     "nats-py>=2.6.0",
     "cloudpickle>=2.0.0",
-    "typer>=0.9.0", # Add typer dependency
+    "typer>=0.9.0", # Keep typer[all] for CLI convenience
     "loguru>=0.7.0",
-    "croniter>=1.4.0", # Add croniter
+    "croniter>=1.4.0",
 ]
 
 [project.scripts]
 naq = "naq.cli:app"
+
 
 [build-system]
 requires = ["hatchling"]
@@ -25,4 +26,14 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "ipython>=9.0.2",
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "six>=1.17.0",
+]
+dashboard = [
+    "datastar-py>=0.4.3",
+    "htmy>=0.7.3",
+    "sanic>=25.3.0",
+    "sanic-ext>=24.12.0",
+    "uvicorn>=0.34.0",
 ]

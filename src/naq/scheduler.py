@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any
 
 import nats
 from nats.js import JetStreamContext
-from nats.js.kv import KeyValue, KeyValueEntry
+from nats.js.kv import KeyValue
 from nats.js.errors import KeyNotFoundError
 from loguru import logger
 import cloudpickle

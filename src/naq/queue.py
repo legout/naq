@@ -8,7 +8,7 @@ from typing import Optional, Callable, Any, Tuple, Dict, Union, List
 from datetime import timedelta, timezone
 
 import nats
-from nats.js.kv import KeyValue, KeyValueEntry
+from nats.js.kv import KeyValue
 from nats.js.errors import KeyNotFoundError # Import KeyNotFoundError
 
 from .settings import (
@@ -18,7 +18,7 @@ from .settings import (
 )
 from .job import Job, RetryDelayType
 from .connection import get_jetstream_context, ensure_stream, close_nats_connection, get_nats_connection
-from .exceptions import NaqException, ConnectionError as NaqConnectionError, ConfigurationError, JobNotFoundError # Add JobNotFoundError
+from .exceptions import NaqException, ConnectionError as NaqConnectionError, ConfigurationError # Add JobNotFoundError
 from .utils import run_async_from_sync, setup_logging
 
 
