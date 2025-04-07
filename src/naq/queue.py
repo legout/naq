@@ -382,18 +382,18 @@ class Queue:
             # Purge messages specifically matching this queue's subject
             resp = await js.purge_stream(
                 name=self.stream_name,
-                filter=self.subject,  # Only purge messages for this specific queue's subject
+                subject=self.subject,  # Only purge messages for this specific queue's subject
             )
             print(
-                f"Purge successful for queue '{self.name}'. Purged {resp.purged} messages."
+                f"Purge successful for queue '{self.name}'."
             )
-            return resp.purged
-        except nats.js.errors.StreamNotFoundError:
+            return resp
+        except nats.js.errors.NotFoundError:
             print(
                 f"Stream '{self.stream_name}' not found. Nothing to purge for queue '{self.name}'."
             )
             return 0  # Stream doesn't exist, so 0 messages purged
-        except nats.errors.NatsError as e:
+        except nats.errors.Error as e:
             print(f"NATS error purging queue '{self.name}': {e}")
             raise NaqConnectionError(f"NATS error during purge: {e}") from e
         except Exception as e:
