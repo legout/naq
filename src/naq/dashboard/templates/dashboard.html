@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NAQ Dashboard</title>
+    <!-- Include Datastar CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/datastar-css@latest/dist/datastar-css.css">
+    <!-- Include Datastar JS -->
+    <script src="https://unpkg.com/datastar-js@latest/dist/datastar.js" defer></script>
+    <style>
+        /* Basic table styling */
+        table { width: 100%; border-collapse: collapse; margin-top: 1em; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .status-busy { color: orange; }
+        .status-idle { color: green; }
+        .status-starting, .status-stopping { color: blue; }
+        .stale { color: red; font-style: italic; }
+    </style>
+</head>
+<body>
+    <h1>NAQ Dashboard</h1>
+
+    <!-- Datastar controlled section -->
+    <div
+        data-store='{ "workers": [], "loading": true, "error": null, "now": 0 }'
+        data-fetch-workers="get:/api/workers"
+        data-on-fetch-workers-success="$store.workers = $event.detail.data; $store.loading = false; $store.error = null"
+        data-on-fetch-workers-error="$store.error = 'Failed to load workers'; $store.loading = false"
+        data-poll-workers="5s:/api/workers" /* Poll every 5 seconds */
+        data-interval-now="1s:$store.now = Date.now()" /* Update 'now' every second for relative time */
+    >
+        <h2>Workers</h2>
+
+        <div data-show="$store.loading">Loading workers...</div>
+        <div data-show="$store.error" data-text="$store.error" style="color: red;"></div>
+
+        <table data-show="!$store.loading && !$store.error && $store.workers.length > 0">
+            <thead>
+                <tr>
+                    <th>Worker ID</th>
+                    <th>Status</th>
+                    <th>Queues</th>
+                    <th>Current Job</th>
+                    <th>Active Tasks</th>
+                    <th>Last Heartbeat</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Use data-for to loop through workers -->
+                <template data-for="worker in $store.workers">
+                    <tr>
+                        <td data-text="worker.worker_id || 'unknown'"></td>
+                        <td>
+                            <span
+                                data-text="worker.status || '?'"
+                                data-class-status-idle="worker.status === 'idle'"
+                                data-class-status-busy="worker.status === 'busy'"
+                                data-class-status-starting="worker.status === 'starting'"
+                                data-class-status-stopping="worker.status === 'stopping'"
+                            ></span>
+                        </td>
+                        <td data-text="(worker.queues || []).join(', ')"></td>
+                        <td data-text="worker.status === 'busy' ? (worker.current_job_id || '-') : '-'"></td>
+                        <td data-text="worker.active_tasks !== undefined ? worker.active_tasks + '/' + worker.concurrency : '?'"></td>
+                        <td>
+                            <span data-text="worker.last_heartbeat_utc ? new Date(worker.last_heartbeat_utc * 1000).toLocaleString() : 'never'"></span>
+                            <!-- Calculate relative time and staleness -->
+                            <span data-show="worker.last_heartbeat_utc">
+                                (<span data-text="Math.round(($store.now / 1000 - worker.last_heartbeat_utc)) + 's ago'"></span>)
+                            </span>
+                            <!-- Check against worker_ttl (needs to be passed or hardcoded) -->
+                            <!-- Example: Assuming worker_ttl is 60 seconds -->
+                            <span
+                                class="stale"
+                                data-show="worker.last_heartbeat_utc && ($store.now / 1000 - worker.last_heartbeat_utc) > 60"
+                            >
+                                (STALE)
+                            </span>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+        <div data-show="!$store.loading && !$store.error && $store.workers.length === 0">
+            No active workers found.
+        </div>
+    </div>
+
+    <!-- Placeholder for other sections (Queues, Jobs, etc.) -->
+
+</body>
+</html>
