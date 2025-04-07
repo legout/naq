@@ -4,7 +4,7 @@
 
 **NAQ** is a simple, asynchronous job queueing library for Python, inspired by [RQ (Redis Queue)](https://python-rq.org/), but built entirely on top of [NATS](https://nats.io/) and its JetStream persistence layer.
 
-Think of it as **N**ATS **A**synchronous **Q**ueue - your simple way of *Knockin' on NATS's Door* for background job processing.
+Think of it as **N**ATS **A**synchronous **Q**ueue - your simple way of *Naqin' on NATS's Door* for background job processing.
 
 It allows you to easily enqueue Python functions to be executed asynchronously by worker processes, leveraging the power and resilience of NATS JetStream for message persistence and delivery.
 

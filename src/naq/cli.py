@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import time
+import nats.js.errors
 from datetime import timezone
 from typing import List, Optional  # , Dict, Any
 
@@ -8,6 +9,8 @@ import cloudpickle
 import typer
 import uvicorn  # Use uvicorn to run Sanic
 from loguru import logger
+from rich.console import Console
+from rich.table import Table
 
 # from naq.dashboard.app import app as dashboard_app
 
@@ -263,7 +266,7 @@ def list_scheduled_jobs(
         help="Show detailed job information",
     ),
     log_level: str = typer.Option(
-        "INFO",
+        "WARNING",
         "--log-level",
         "-l",
         help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR).",
@@ -290,8 +293,13 @@ def list_scheduled_jobs(
                 return
 
             # Get all keys
-            keys = await kv.keys()
-            if not keys:
+            try:
+                keys = await kv.keys()
+                if not keys:
+                    print("No scheduled jobs found.")
+                    return
+            except nats.js.errors.NoKeysError:
+                # This is normal when no keys are found
                 print("No scheduled jobs found.")
                 return
 
@@ -299,51 +307,82 @@ def list_scheduled_jobs(
 
             # Process each job
             for key_bytes in keys:
-                key = key_bytes.decode("utf-8")
-
-                # If filtering by job_id, skip non-matching jobs
-                if job_id and job_id != key:
-                    continue
-
+                key = None  # Initialize key to None for safety
+                job_data = None  # Initialize job_data as well
                 try:
+                    key = (
+                        key_bytes.decode("utf-8")
+                        if isinstance(key_bytes, bytes)
+                        else key_bytes
+                    )  # Assign key here
+
+                    # If filtering by job_id, skip non-matching jobs
+                    if job_id and job_id != key:
+                        continue
+
                     entry = await kv.get(key_bytes)
                     if not entry:
                         continue
 
-                    job_data = cloudpickle.loads(entry.value)
+                    job_data = cloudpickle.loads(entry.value)  # Assign job_data here
 
-                    # Apply filters
-                    if status and job_data.get("status") != status:
+                    # --- Apply filters ---
+                    # Check status filter first
+                    current_status = job_data.get(
+                        "status"
+                    )  # Get status before filter check
+                    if status and current_status != status:
                         continue
+                    # Check queue filter
                     if queue and job_data.get("queue_name") != queue:
                         continue
+                    # --- End filters ---
 
                     # Add to results
                     jobs_data.append(job_data)
                 except Exception as e:
-                    logger.error(f"Error processing job '{key}': {e}")
-                    continue
+                    # Safely log the error, using key_bytes if key is not assigned
+                    key_repr = key if key is not None else repr(key_bytes)
+                    logger.error(
+                        f"Error processing scheduled job entry '{key_repr}': {e}"
+                    )
+                    continue  # Continue to the next key
 
             # Sort by next run time
             jobs_data.sort(key=lambda j: j.get("scheduled_timestamp_utc", 0))
 
-            # Print header
+            # Create rich console and table
+            console = Console()
+            
             if detailed:
-                print(
-                    f"{'JOB ID':<36} | {'QUEUE':<15} | {'STATUS':<10} | {'NEXT RUN':<25} | {'SCHEDULE TYPE':<15} | {'REPEATS LEFT':<12} | DETAILS"
-                )
-                print("-" * 130)
+                table = Table(title="NAQ Scheduled Jobs", show_header=True, header_style="bold cyan")
+                table.add_column("JOB ID", style="dim", width=36)
+                table.add_column("QUEUE", width=15)
+                table.add_column("STATUS", width=10)
+                table.add_column("NEXT RUN", width=25)
+                table.add_column("SCHEDULE TYPE", width=15)
+                table.add_column("REPEATS LEFT", width=12)
+                table.add_column("DETAILS")
             else:
-                print(
-                    f"{'JOB ID':<36} | {'QUEUE':<15} | {'STATUS':<10} | {'NEXT RUN':<25} | {'SCHEDULE TYPE':<15}"
-                )
-                print("-" * 100)
+                table = Table(title="NAQ Scheduled Jobs", show_header=True, header_style="bold cyan")
+                table.add_column("JOB ID", style="dim", width=36)
+                table.add_column("QUEUE", width=15)
+                table.add_column("STATUS", width=10)
+                table.add_column("NEXT RUN", width=25)
+                table.add_column("SCHEDULE TYPE", width=15)
 
-            # Print each job
+            # Add rows to the table
             for job in jobs_data:
-                job_id = job.get("job_id", "unknown")
+                job_id_local = job.get("job_id", "unknown")
                 queue_name = job.get("queue_name", "unknown")
-                status = job.get("status", SCHEDULED_JOB_STATUS_ACTIVE)
+                current_job_status = job.get("status", SCHEDULED_JOB_STATUS_ACTIVE)
+                
+                # Determine status style
+                status_style = "green"
+                if current_job_status == SCHEDULED_JOB_STATUS_PAUSED:
+                    status_style = "yellow"
+                elif current_job_status == SCHEDULED_JOB_STATUS_FAILED:
+                    status_style = "red"
 
                 # Format next run time
                 next_run_ts = job.get("scheduled_timestamp_utc")
@@ -362,13 +401,8 @@ def list_scheduled_jobs(
                 else:
                     schedule_type = "one-time"
 
-                # Basic output
                 if detailed:
-                    repeats = (
-                        "infinite"
-                        if job.get("repeat") is None
-                        else str(job.get("repeat", 0))
-                    )
+                    repeats = "infinite" if job.get("repeat") is None else str(job.get("repeat", 0))
 
                     # Determine additional details
                     details = []
@@ -385,15 +419,26 @@ def list_scheduled_jobs(
                         details.append(f"last_run={last_run}")
 
                     details_str = ", ".join(details)
-                    print(
-                        f"{job_id:<36} | {queue_name:<15} | {status:<10} | {next_run:<25} | {schedule_type:<15} | {repeats:<12} | {details_str}"
+                    table.add_row(
+                        job_id_local, 
+                        queue_name, 
+                        f"[{status_style}]{current_job_status}[/{status_style}]", 
+                        next_run, 
+                        schedule_type, 
+                        repeats, 
+                        details_str
                     )
                 else:
-                    print(
-                        f"{job_id:<36} | {queue_name:<15} | {status:<10} | {next_run:<25} | {schedule_type:<15}"
+                    table.add_row(
+                        job_id_local, 
+                        queue_name, 
+                        f"[{status_style}]{current_job_status}[/{status_style}]", 
+                        next_run, 
+                        schedule_type
                     )
 
-            # Print summary
+            # Print the table
+            console.print(table)
             print(f"\nTotal: {len(jobs_data)} scheduled job(s)")
 
         except Exception as e:
@@ -559,7 +604,7 @@ def list_workers_command(
         envvar="NAQ_NATS_URL",
     ),
     log_level: str = typer.Option(
-        "INFO",
+        "WARNING",
         "--log-level",
         "-l",
         help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR).",
@@ -581,37 +626,60 @@ def list_workers_command(
             # Sort workers by ID for consistent output
             workers.sort(key=lambda w: w.get("worker_id", ""))
 
-            # Print header
-            print(
-                f"{'WORKER ID':<45} | {'STATUS':<10} | {'QUEUES':<30} | {'CURRENT JOB':<37} | {'LAST HEARTBEAT':<25}"
-            )
-            print("-" * 155)
+            # Create rich console and table
+            console = Console()
+            table = Table(title="NAQ Workers", show_header=True, header_style="bold cyan")
+            
+            # Add columns
+            table.add_column("WORKER ID", style="dim", width=45)
+            table.add_column("STATUS", width=10)
+            table.add_column("QUEUES", width=30)
+            table.add_column("CURRENT JOB", width=37)
+            table.add_column("LAST HEARTBEAT", width=25)
 
-            # Print worker info
+            # Add rows to the table
             now = time.time()
             for worker in workers:
                 worker_id = worker.get("worker_id", "unknown")
                 status = worker.get("status", "?")
+                
+                # Determine status style
+                status_style = "green"
+                if status == "busy":
+                    status_style = "yellow"
+                elif status in ["stopping", "starting"]:
+                    status_style = "blue"
+                    
                 queues = ", ".join(worker.get("queues", []))
                 current_job = (
                     worker.get("current_job_id", "-")
                     if status == WORKER_STATUS_BUSY
                     else "-"
                 )
+                
+                # Format last heartbeat
                 last_hb_ts = worker.get("last_heartbeat_utc")
                 if last_hb_ts:
                     hb_dt = datetime.datetime.fromtimestamp(last_hb_ts, timezone.utc)
                     hb_str = hb_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
-                    # Check if heartbeat is recent
+                    
+                    # Check if heartbeat is stale
                     if now - last_hb_ts > DEFAULT_WORKER_TTL_SECONDS:
-                        hb_str += " (STALE)"
+                        hb_str = f"[red]{hb_str} (STALE)[/red]"
                 else:
-                    hb_str = "never"
+                    hb_str = "[italic]never[/italic]"
 
-                print(
-                    f"{worker_id:<45} | {status:<10} | {queues:<30} | {current_job:<37} | {hb_str:<25}"
+                # Add row to table
+                table.add_row(
+                    worker_id,
+                    f"[{status_style}]{status}[/{status_style}]",
+                    queues,
+                    current_job,
+                    hb_str
                 )
 
+            # Print the table
+            console.print(table)
             print(f"\nTotal: {len(workers)} active worker(s)")
 
         except Exception as e:

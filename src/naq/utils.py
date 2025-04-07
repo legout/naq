@@ -60,7 +60,7 @@ def setup_logging(level: str = "INFO"):
     logger.add(
         sys.stdout,
         level=level.upper(),
-        format="{time} - {name} - {level} - {message}",
+        #format="{time} - {name} - {level} - {message}",
         colorize=True,
     )
     # Optionally silence overly verbose libraries if needed

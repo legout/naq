@@ -58,7 +58,7 @@ from .settings import (
 )
 from .worker import Worker
 
-__version__ = "0.1.2"  # Bump version for worker monitoring
+__version__ = "0.1.3"  # Bump version for worker monitoring
 
 
 # Basic configuration/convenience

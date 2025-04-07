@@ -1,12 +1,15 @@
 # src/naq/connection.py
 from typing import Optional
-
+from loguru import logger
 import nats
 from nats.aio.client import Client as NATSClient  # Use alias to avoid name clash
 from nats.js import JetStreamContext
 
 from .exceptions import ConnectionError as NaqConnectionError
 from .settings import DEFAULT_NATS_URL
+from .utils import setup_logging
+
+setup_logging()  # Setup logging for the module
 
 # Global connection cache (simple approach)
 _nc: Optional[NATSClient] = None
@@ -19,7 +22,7 @@ async def get_nats_connection(url: str = DEFAULT_NATS_URL) -> NATSClient:
     if _nc is None or not _nc.is_connected:
         try:
             _nc = await nats.connect(url, name="naq_client")
-            print(f"NATS connection established to {url}")
+            logger.info(f"NATS connection established to {url}")
         except Exception as e:
             _nc = None  # Reset on failure
             raise NaqConnectionError(f"Failed to connect to NATS at {url}: {e}") from e
@@ -38,7 +41,7 @@ async def get_jetstream_context(nc: Optional[NATSClient] = None) -> JetStreamCon
     if _js is None or _js._nc != nc:  # Check if associated connection is the same
         try:
             _js = nc.jetstream()
-            print("JetStream context obtained.")
+            logger.info("JetStream context obtained.")
         except Exception as e:
             _js = None  # Reset on failure
             raise NaqConnectionError(f"Failed to get JetStream context: {e}") from e
@@ -50,7 +53,7 @@ async def close_nats_connection():
     global _nc, _js
     if _nc and _nc.is_connected:
         await _nc.close()
-        print("NATS connection closed.")
+        logger.info("NATS connection closed.")
     _nc = None
     _js = None
 
@@ -70,10 +73,10 @@ async def ensure_stream(
     try:
         # Check if stream exists
         await js.stream_info(stream_name)
-        print(f"Stream '{stream_name}' already exists.")
+        logger.info(f"Stream '{stream_name}' already exists.")
     except nats.js.errors.NotFoundError:
         # Create stream if it doesn't exist
-        print(f"Stream '{stream_name}' not found, creating...")
+        logger.info(f"Stream '{stream_name}' not found, creating...")
         await js.add_stream(
             name=stream_name,
             subjects=subjects,
@@ -83,6 +86,6 @@ async def ensure_stream(
             storage=nats.js.api.StorageType.FILE,  # Use File storage
             retention=nats.js.api.RetentionPolicy.WORK_QUEUE,  # Consume then delete
         )
-        print(f"Stream '{stream_name}' created with subjects {subjects}.")
+        logger.info(f"Stream '{stream_name}' created with subjects {subjects}.")
     except Exception as e:
         raise NaqConnectionError(f"Failed to ensure stream '{stream_name}': {e}") from e

@@ -1,6 +1,6 @@
 [project]
 name = "naq"
-version = "0.1.2"
+version = "0.1.3"
 description = "A simple and lightweight NATS queue worker"
 readme = "README.md"
 authors = [
@@ -10,9 +10,10 @@ requires-python = ">=3.13"
 dependencies = [
     "nats-py>=2.6.0",
     "cloudpickle>=2.0.0",
-    "typer>=0.9.0", # Keep typer[all] for CLI convenience
+    "typer[all]>=0.9.0", # Keep typer[all] for CLI convenience
     "loguru>=0.7.0",
     "croniter>=1.4.0",
+    "rich>=13.3.0",      # For prettier CLI output (tables, etc.)
 ]
 
 [project.scripts]

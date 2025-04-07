@@ -373,6 +373,7 @@ dependencies = [
     { name = "croniter" },
     { name = "loguru" },
     { name = "nats-py" },
+    { name = "rich" },
     { name = "typer" },
 ]
 
@@ -401,7 +402,8 @@ requires-dist = [
     { name = "croniter", specifier = ">=1.4.0" },
     { name = "loguru", specifier = ">=0.7.0" },
     { name = "nats-py", specifier = ">=2.6.0" },
-    { name = "typer", specifier = ">=0.9.0" },
+    { name = "rich", specifier = ">=13.3.0" },
+    { name = "typer", extras = ["all"], specifier = ">=0.9.0" },
 ]
 
 [package.metadata.requires-dev]
