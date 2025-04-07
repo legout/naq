@@ -1,5 +1,6 @@
 # src/naq/dashboard/templates.py
-from htmy import html, Component, ComponentType
+from htmy import Component, ComponentType, html
+
 
 def BaseLayout(title: str, *content: ComponentType) -> Component:
     """Basic HTML page layout using HTMY."""

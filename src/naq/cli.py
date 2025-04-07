@@ -1,36 +1,38 @@
 import asyncio
-import time
 import datetime
-from typing import List, Optional, Dict, Any
+import time
 from datetime import timezone
-import os  # Import os for environment variables
+from typing import List, Optional  # , Dict, Any
 
-import typer
-from loguru import logger
 import cloudpickle
+import typer
+import uvicorn  # Use uvicorn to run Sanic
+from loguru import logger
 
-from .worker import Worker
-from .settings import (
-    DEFAULT_NATS_URL,
-    SCHEDULED_JOBS_KV_NAME,
-    SCHEDULED_JOB_STATUS_ACTIVE,
-    SCHEDULED_JOB_STATUS_PAUSED,
-    SCHEDULED_JOB_STATUS_FAILED,
-    WORKER_STATUS_IDLE,
-    WORKER_STATUS_BUSY,
-    WORKER_STATUS_STARTING,
-    WORKER_STATUS_STOPPING,
-    DEFAULT_WORKER_TTL_SECONDS,  # Import statuses
-)
+# from naq.dashboard.app import app as dashboard_app
+
 from . import __version__
-from .queue import Queue
 from .connection import (
-    get_nats_connection,
-    get_jetstream_context,
     close_nats_connection,
+    get_jetstream_context,
+    get_nats_connection,
 )
+from .queue import Queue
 from .scheduler import Scheduler
+from .settings import DEFAULT_WORKER_TTL_SECONDS  # Import statuses
+from .settings import (  # WORKER_STATUS_IDLE,; WORKER_STATUS_STARTING,; WORKER_STATUS_STOPPING,
+    DEFAULT_NATS_URL,
+    SCHEDULED_JOB_STATUS_ACTIVE,
+    SCHEDULED_JOB_STATUS_FAILED,
+    SCHEDULED_JOB_STATUS_PAUSED,
+    SCHEDULED_JOBS_KV_NAME,
+    WORKER_STATUS_BUSY,
+)
 from .utils import setup_logging
+from .worker import Worker
+
+# import os  # Import os for environment variables
+
 
 app = typer.Typer(
     name="naq",
@@ -626,9 +628,8 @@ def list_workers_command(
 
 # --- Dashboard Command (Optional) ---
 # try:
-    # Only define the command if dashboard dependencies are installed
-from naq.dashboard.app import app as dashboard_app
-import uvicorn  # Use uvicorn to run Sanic
+# Only define the command if dashboard dependencies are installed
+
 
 @app.command()
 def dashboard(
@@ -674,6 +675,7 @@ def dashboard(
         reload=False,  # Disable auto-reload for production-like command
         # workers=1 # Can configure workers if needed
     )
+
 
 # except ImportError:
 #     @app.command()

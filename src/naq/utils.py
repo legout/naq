@@ -1,11 +1,12 @@
 # src/naq/utils.py
-import sys
 import asyncio
-from typing import Coroutine, TypeVar, Any
+import sys
+from typing import Any, Coroutine, TypeVar
+
 from loguru import logger
 
+T = TypeVar("T")
 
-T = TypeVar('T')
 
 def run_async_from_sync(coro: Coroutine[Any, Any, T]) -> T:
     """
@@ -51,6 +52,7 @@ def run_async_from_sync(coro: Coroutine[Any, Any, T]) -> T:
         else:
             # Re-raise other RuntimeErrors
             raise
+
 
 def setup_logging(level: str = "INFO"):
     """Configures logging based on the provided level string using loguru."""

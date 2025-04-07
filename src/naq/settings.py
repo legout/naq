@@ -24,7 +24,9 @@ SCHEDULER_LOCK_KEY = "leader_lock"
 # TTL (in seconds) for the leader lock. A scheduler renews the lock periodically.
 SCHEDULER_LOCK_TTL_SECONDS = int(os.getenv("NAQ_SCHEDULER_LOCK_TTL", "30"))
 # How often the leader tries to renew the lock (should be less than TTL)
-SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS = int(os.getenv("NAQ_SCHEDULER_LOCK_RENEW_INTERVAL", "15"))
+SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS = int(
+    os.getenv("NAQ_SCHEDULER_LOCK_RENEW_INTERVAL", "15")
+)
 # Maximum number of times the scheduler will try to enqueue a job before marking it as failed.
 # Set to 0 or None for infinite retries by the scheduler itself.
 MAX_SCHEDULE_FAILURES = os.getenv("NAQ_MAX_SCHEDULE_FAILURES")
@@ -32,7 +34,9 @@ if MAX_SCHEDULE_FAILURES is not None:
     try:
         MAX_SCHEDULE_FAILURES = int(MAX_SCHEDULE_FAILURES)
     except ValueError:
-        print(f"Warning: Invalid NAQ_MAX_SCHEDULE_FAILURES value '{MAX_SCHEDULE_FAILURES}'. Disabling limit.")
+        print(
+            f"Warning: Invalid NAQ_MAX_SCHEDULE_FAILURES value '{MAX_SCHEDULE_FAILURES}'. Disabling limit."
+        )
         MAX_SCHEDULE_FAILURES = None
 else:
     # Default to a reasonable limit, e.g., 5, or None for infinite
@@ -50,7 +54,9 @@ JOB_STATUS_TTL_SECONDS = int(os.getenv("NAQ_JOB_STATUS_TTL", 86400))
 # Status values for scheduled jobs
 SCHEDULED_JOB_STATUS_ACTIVE = "active"
 SCHEDULED_JOB_STATUS_PAUSED = "paused"
-SCHEDULED_JOB_STATUS_FAILED = "schedule_failed" # Failed to be scheduled/enqueued repeatedly
+SCHEDULED_JOB_STATUS_FAILED = (
+    "schedule_failed"  # Failed to be scheduled/enqueued repeatedly
+)
 
 # Define subject for failed jobs
 FAILED_JOB_SUBJECT_PREFIX = f"{NAQ_PREFIX}.failed"
@@ -69,7 +75,9 @@ WORKER_KV_NAME = f"{NAQ_PREFIX}_workers"
 # Default TTL (in seconds) for worker heartbeat entries. Should be longer than heartbeat interval.
 DEFAULT_WORKER_TTL_SECONDS = int(os.getenv("NAQ_WORKER_TTL", "60"))
 # Default interval (in seconds) for worker heartbeats
-DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("NAQ_WORKER_HEARTBEAT_INTERVAL", "15"))
+DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS = int(
+    os.getenv("NAQ_WORKER_HEARTBEAT_INTERVAL", "15")
+)
 # Worker status constants
 WORKER_STATUS_STARTING = "starting"
 WORKER_STATUS_IDLE = "idle"
