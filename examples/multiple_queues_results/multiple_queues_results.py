@@ -22,7 +22,6 @@ def send_notification(user_id: str):
     return status
 
 if __name__ == "__main__":
-    print("Enqueuing jobs to different queues...")
 
     # Enqueue a job to the 'data_processing' queue
     job_data = enqueue_sync(
@@ -30,7 +29,6 @@ if __name__ == "__main__":
         data_id=123,
         queue_name='data_processing'
     )
-    print(f"Enqueued job {job_data.job_id} to queue '{job_data.queue_name}' for function '{job_data.function}'")
 
     # Enqueue a job to the 'notifications' queue
     job_notify = enqueue_sync(
@@ -38,7 +36,6 @@ if __name__ == "__main__":
         user_id="user_abc",
         queue_name='notifications'
     )
-    print(f"Enqueued job {job_notify.job_id} to queue '{job_notify.queue_name}' for function '{job_notify.function}'")
 
     print("\nWaiting a few seconds to allow workers to potentially pick up and finish jobs...")
     time.sleep(5) # Give workers some time

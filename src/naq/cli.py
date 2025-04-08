@@ -7,7 +7,6 @@ from typing import List, Optional  # , Dict, Any
 
 import cloudpickle
 import typer
-import uvicorn  # Use uvicorn to run Sanic
 from loguru import logger
 from rich.console import Console
 from rich.table import Table
@@ -778,6 +777,8 @@ def dashboard(
     """
     Starts the NAQ web dashboard (requires 'dashboard' extras).
     """
+    import uvicorn  # Use uvicorn to run Sanic
+
     setup_logging(log_level)  # Setup naq logging if needed
     logger.info(f"Starting NAQ Dashboard server on http://{host}:{port}")
     logger.info("Ensure NATS server is running and accessible.")

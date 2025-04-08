@@ -1,5 +1,6 @@
 import time
-from naq import enqueue_sync, setup_logging
+import asyncio
+from naq import enqueue,  setup_logging
 
 # Configure logging for naq (optional, but helpful)
 setup_logging(level="INFO")
@@ -13,12 +14,17 @@ def say_hello(name: str):
     print(f"Finished greeting {name}.")
     return f"Greeting for {name} completed."
 
+async def main():
+    for i in range(10):
+        job = await enqueue(say_hello, name="World", nats_url="nats://localhost:4222")
+    #return job
+
 if __name__ == "__main__":
 
     # Enqueue the job synchronously using the default queue ('naq_default_queue')
     # This function will block until the job is published to NATS.
     # It uses its own NATS connection which is closed afterwards.
-    job = enqueue_sync(say_hello, name="World")
+    job = asyncio.run(main())
 
 
     # You could optionally try fetching the result later (requires result backend)

@@ -50,8 +50,6 @@ async def main():
         max_retries=3,
         retry_delay=[2, 4, 6], # Retry after 2s, then 4s, then 6s
     )
-    print(f"Enqueued job {job.id} for flaky_task.")
-
 if __name__ == "__main__":
     # Setup logging to see DEBUG messages from naq, including retry info
     setup_logging(level="DEBUG")
