@@ -1,6 +1,10 @@
 # NAQ - NATS Asynchronous Queue
 
 [![PyPI version](https://badge.fury.io/py/naq.svg)](https://badge.fury.io/py/naq) <!-- Placeholder - Add actual badge once published -->
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/legout/naq)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/legout/naq/blob/main/LICENSE)
+[![Python version](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/release/python-3120/)
+
 
 **NAQ** is a simple, asynchronous job queueing library for Python, inspired by [RQ (Redis Queue)](https://python-rq.org/), but built entirely on top of [NATS](https://nats.io/) and its JetStream persistence layer.
 
