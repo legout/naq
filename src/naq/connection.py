@@ -118,6 +118,8 @@ _manager = ConnectionManager()
 # Provide compatibility with existing code
 async def get_nats_connection(url: str = DEFAULT_NATS_URL) -> NATSClient:
     """Gets a NATS client connection, reusing if possible."""
+    if url is None:
+        url = DEFAULT_NATS_URL
     return await _manager.get_connection(url)
 
 async def get_jetstream_context(nc: Optional[NATSClient] = None) -> JetStreamContext:

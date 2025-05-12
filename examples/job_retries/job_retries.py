@@ -7,7 +7,7 @@ from naq import enqueue, setup_logging
 # Define a temporary file to track attempts
 COUNTER_FILE = pathlib.Path(__file__).parent / "retry_counter.tmp"
 MAX_FAILURES = 2 # Fail the first 2 times, succeed on the 3rd attempt (retry #2)
-
+DEFAULT_NATS_URL = os.getenv("NAQ_NATS_URL", "nats://localhost:4222")
 async def flaky_task(message: str):
     """
     A task that simulates transient failures.
@@ -44,7 +44,7 @@ async def main():
 
     # Enqueue the flaky task with retry settings
     job = await enqueue(
-        "flaky_task",
+        flaky_task,
         message="Hello from retry example!",
         queue_name="naq_default_queue", # Explicitly use the default queue
         max_retries=3,

@@ -11,3 +11,4 @@ wheels/
 .python-version
 examples/**/*.log
 **.log
+examples/**/*.tmp

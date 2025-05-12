@@ -406,10 +406,10 @@ class Queue:
         # Validate retry parameters
         if max_retries is not None and max_retries < 0:
             raise ValueError("max_retries cannot be negative")
-        if not isinstance(retry_delay, (int, float)):
-            raise TypeError("retry_delay must be a number (int or float)")
-        if retry_delay < 0:
-            raise ValueError("retry_delay cannot be negative")
+        if not isinstance(retry_delay, ( int, float, list, tuple)):
+            raise TypeError("retry_delay must be a number (int or float or list of them)")
+        #if retry_delay < 0:
+        #    raise ValueError("retry_delay cannot be negative")
         # Create the job object
         job = Job(
             function=func,

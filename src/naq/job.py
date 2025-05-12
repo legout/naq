@@ -356,7 +356,7 @@ class Job:
             idx = min(self.retry_count, len(self.retry_delay) - 1)
             return float(self.retry_delay[idx])
 
-        return 0.0  # No delay if retry_delay is invalid
+        return 0.0  
 
     async def execute(self) -> Any:
         """Execute the job's function and manage its state.
