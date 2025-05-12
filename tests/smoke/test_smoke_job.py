@@ -1,6 +1,6 @@
 
 from naq.job import Job
-from naq.job import JobStatus
+from naq.job import JOB_STATUS
 
 def test_basic_job_instantiation():
     """Test basic Job instantiation with minimal parameters."""
@@ -17,7 +17,7 @@ def test_basic_job_instantiation():
     assert job.kwargs == {}
     assert isinstance(job.job_id, str)
     assert len(job.job_id) == 32  # UUID without hyphens
-    assert job.status == JobStatus.PENDING  # Default status
+    assert job.status == JOB_STATUS.PENDING  # Default status
 
 
 def test_job_id_uniqueness():
@@ -70,24 +70,24 @@ def test_job_lifecycle_status(mock_nats):
     # Test result serialization for success case
     success_data = job.serialize_result(
         "test_result",
-        JobStatus.COMPLETED,
+        JOB_STATUS.COMPLETED,
     )
     success_result = job.deserialize_result(success_data)
 
-    assert success_result["status"] == JobStatus.COMPLETED
+    assert success_result["status"] == JOB_STATUS.COMPLETED
     assert success_result["result"] == "test_result"
     assert success_result["error"] is None
 
     # Test result serialization for failure case
     error_data = job.serialize_result(
         None,
-        JobStatus.FAILED,
+        JOB_STATUS.FAILED,
         error="Test error",
         traceback_str="Test traceback"
     )
     error_result = job.deserialize_result(error_data)
 
-    assert error_result["status"] == JobStatus.FAILED
+    assert error_result["status"] == JOB_STATUS.FAILED
     assert error_result["result"] is None
     assert error_result["error"] == "Test error"
     assert error_result["traceback"] == "Test traceback"

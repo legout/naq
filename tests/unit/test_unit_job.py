@@ -3,13 +3,10 @@ import pytest
 
 from typing import Any
 
-from naq.job import Job, JobStatus
+from naq.job import Job, JOB_STATUS
 from naq.exceptions import  SerializationError
-from naq.settings import (
+from naq.settings import RETRY_STRATEGY
 
-    RETRY_STRATEGY_LINEAR,
-    RETRY_STRATEGY_EXPONENTIAL,
-)
 
 class TestJob:
     """Test cases for the Job class."""
@@ -29,7 +26,7 @@ class TestJob:
         assert job.queue_name == "default"
         assert job.max_retries == 0
         assert job.retry_delay == 0
-        assert job.retry_strategy == RETRY_STRATEGY_LINEAR
+        assert job.retry_strategy == RETRY_STRATEGY.LINEAR
         assert job.retry_on is None
         assert job.ignore_on is None
         assert job.depends_on is None
@@ -50,7 +47,7 @@ class TestJob:
             queue_name="custom_queue",
             max_retries=3,
             retry_delay=60,
-            retry_strategy=RETRY_STRATEGY_EXPONENTIAL,
+            retry_strategy=RETRY_STRATEGY.EXPONENTIAL,
             retry_on=(ValueError,),
             ignore_on=(TypeError,),
         )
@@ -62,7 +59,7 @@ class TestJob:
         assert job.queue_name == "custom_queue"
         assert job.max_retries == 3
         assert job.retry_delay == 60
-        assert job.retry_strategy == RETRY_STRATEGY_EXPONENTIAL
+        assert job.retry_strategy == RETRY_STRATEGY.EXPONENTIAL
         assert job.retry_on == (ValueError,)
         assert job.ignore_on == (TypeError,)
 
@@ -144,7 +141,7 @@ class TestJob:
             sample_func,
             max_retries=3,
             retry_delay=10,
-            retry_strategy=RETRY_STRATEGY_LINEAR
+            retry_strategy=RETRY_STRATEGY.LINEAR
         )
 
         assert job_linear.should_retry(ValueError()) is True
@@ -157,7 +154,7 @@ class TestJob:
             sample_func,
             max_retries=3,
             retry_delay=5,
-            retry_strategy=RETRY_STRATEGY_EXPONENTIAL
+            retry_strategy=RETRY_STRATEGY.EXPONENTIAL
         )
         print(f"Next retry delay (exponential): {job_exp.get_next_retry_delay()}")  # Add log
         assert job_exp.get_next_retry_delay() == 5.0
@@ -178,7 +175,7 @@ class TestJob:
         result = await job.execute()
         
         assert result == 3
-        assert job.status == JobStatus.COMPLETED
+        assert job.status == JOB_STATUS.COMPLETED
         assert job.result == 3
         assert job._start_time is not None
         assert job._finish_time is not None
@@ -196,7 +193,7 @@ class TestJob:
         result = await job.execute()
         
         assert result == 5
-        assert job.status == JobStatus.COMPLETED
+        assert job.status == JOB_STATUS.COMPLETED
         assert job.result == 5
         assert job._start_time is not None
         assert job._finish_time is not None
@@ -213,7 +210,7 @@ class TestJob:
         with pytest.raises(ValueError, match="Test error"):
             await job.execute()
         
-        assert job.status == JobStatus.FAILED
+        assert job.status == JOB_STATUS.FAILED
         assert job._start_time is not None
         assert job._finish_time is not None
         assert job.error == "Test error"

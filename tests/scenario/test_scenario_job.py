@@ -3,10 +3,9 @@ from freezegun import freeze_time
 
 from naq.job import Job
 from naq.settings import (
-    RETRY_STRATEGY_EXPONENTIAL,
-    RETRY_STRATEGY_LINEAR,
+    RETRY_STRATEGY
 )
-from naq.job import JobStatus
+from naq.job import JOB_STATUS
 
 
 # --- Helper Functions ---
@@ -65,7 +64,7 @@ class TestRetryPolicies:
             failing_task,
             max_retries=3,
             retry_delay=2,
-            retry_strategy=RETRY_STRATEGY_EXPONENTIAL
+            retry_strategy=RETRY_STRATEGY.EXPONENTIAL
         )
         
         # First retry: 2 seconds
@@ -85,7 +84,7 @@ class TestRetryPolicies:
             failing_task,
             max_retries=3,
             retry_delay=[5, 10, 15],
-            retry_strategy=RETRY_STRATEGY_LINEAR
+            retry_strategy=RETRY_STRATEGY.LINEAR
         )
         
         # Verify each retry delay in sequence
@@ -170,12 +169,12 @@ class TestComplexArguments:
         # Test result serialization
         result_bytes = Job.serialize_result(
             complex_result,
-            JobStatus.COMPLETED
+            JOB_STATUS.COMPLETED
         )
         
         # Deserialize and verify
         result_data = Job.deserialize_result(result_bytes)
-        assert result_data["status"] == JobStatus.COMPLETED
+        assert result_data["status"] == JOB_STATUS.COMPLETED
         assert result_data["result"] == complex_result
 
 

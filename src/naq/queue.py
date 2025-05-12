@@ -24,8 +24,7 @@ from .settings import (
     DEFAULT_QUEUE_NAME,
     JOB_SERIALIZER,
     NAQ_PREFIX,
-    SCHEDULED_JOB_STATUS_ACTIVE,
-    SCHEDULED_JOB_STATUS_PAUSED,
+    SCHEDULED_JOB_STATUS,
     SCHEDULED_JOBS_KV_NAME,
 )
 from .utils import run_async_from_sync, setup_logging
@@ -105,7 +104,7 @@ class ScheduledJobManager:
             "repeat": repeat,
             "_orig_job_payload": original_job_payload,
             "_serializer": JOB_SERIALIZER,
-            "status": SCHEDULED_JOB_STATUS_ACTIVE,  # Initial status
+            "status": SCHEDULED_JOB_STATUS.ACTIVE,  # Initial status
             "schedule_failure_count": 0,  # Initial failure count
             "last_enqueued_utc": None,  # Track last enqueue time
             "next_run_utc": scheduled_timestamp,  # Explicitly store next run time
@@ -704,7 +703,7 @@ class Queue:
         """
         logger.info(f"Attempting to pause scheduled job '{job_id}'")
         return await self._scheduled_job_manager.update_job_status(
-            job_id, SCHEDULED_JOB_STATUS_PAUSED
+            job_id, SCHEDULED_JOB_STATUS.PAUSED
         )
 
     async def resume_scheduled_job(self, job_id: str) -> bool:
@@ -723,7 +722,7 @@ class Queue:
         """
         logger.info(f"Attempting to resume scheduled job '{job_id}'")
         return await self._scheduled_job_manager.update_job_status(
-            job_id, SCHEDULED_JOB_STATUS_ACTIVE
+            job_id, SCHEDULED_JOB_STATUS.ACTIVE
         )
 
     async def modify_scheduled_job(self, job_id: str, **updates: Any) -> bool:

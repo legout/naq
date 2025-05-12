@@ -6,11 +6,9 @@ import cloudpickle
 from naq.queue import Queue
 from naq.settings import (
     NAQ_PREFIX,
-    SCHEDULED_JOB_STATUS_ACTIVE,
-    SCHEDULED_JOB_STATUS_PAUSED,
+    SCHEDULED_JOB_STATUS,
     SCHEDULED_JOBS_KV_NAME
 )
-from naq.exceptions import NaqException
 
 @pytest.mark.asyncio
 class TestQueue:
@@ -180,7 +178,7 @@ class TestQueue:
         
         # Mock KV get to return the entry we "put"
         original_schedule_data = {
-            "job_id": job.job_id, "queue_name": queue.name, "status": SCHEDULED_JOB_STATUS_ACTIVE,
+            "job_id": job.job_id, "queue_name": queue.name, "status": SCHEDULED_JOB_STATUS.ACTIVE,
             "scheduled_timestamp_utc": run_at_datetime.timestamp(),
             "function": cloudpickle.dumps(sample_func), "args": cloudpickle.dumps(()), "kwargs": cloudpickle.dumps({})
         }
@@ -198,7 +196,7 @@ class TestQueue:
         assert update_args.args[0] == job.job_id.encode("utf-8") # key
         
         updated_schedule_data = cloudpickle.loads(update_args.args[1]) # value
-        assert updated_schedule_data["status"] == SCHEDULED_JOB_STATUS_PAUSED
+        assert updated_schedule_data["status"] == SCHEDULED_JOB_STATUS.PAUSED
         assert update_args.kwargs.get("last") == mock_kv_entry.revision # revision check
 
     async def test_resume_scheduled_job(self, queue, mock_nats):
@@ -213,7 +211,7 @@ class TestQueue:
         
         # Mock KV get to return a "paused" entry
         original_schedule_data = {
-            "job_id": job.job_id, "queue_name": queue.name, "status": SCHEDULED_JOB_STATUS_PAUSED,
+            "job_id": job.job_id, "queue_name": queue.name, "status": SCHEDULED_JOB_STATUS.PAUSED,
             "scheduled_timestamp_utc": run_at_datetime.timestamp(),
             "function": cloudpickle.dumps(sample_func), "args": cloudpickle.dumps(()), "kwargs": cloudpickle.dumps({})
         }
@@ -231,7 +229,7 @@ class TestQueue:
         assert update_args.args[0] == job.job_id.encode("utf-8") # key
         
         updated_schedule_data = cloudpickle.loads(update_args.args[1]) # value
-        assert updated_schedule_data["status"] == SCHEDULED_JOB_STATUS_ACTIVE
+        assert updated_schedule_data["status"] == SCHEDULED_JOB_STATUS.ACTIVE
         assert update_args.kwargs.get("last") == mock_kv_entry.revision # revision check
 
     async def test_overlapping_schedules(self, queue, mock_nats):
@@ -275,7 +273,7 @@ class TestQueue:
             # Verify basic job properties
             assert stored_data["job_id"] == jobs[i].job_id
             assert stored_data["queue_name"] == queue.name
-            assert stored_data["status"] == SCHEDULED_JOB_STATUS_ACTIVE
+            assert stored_data["status"] == SCHEDULED_JOB_STATUS.ACTIVE
             
             # Verify schedule time matches (within 1 second tolerance)
             expected_ts = schedule_times[i].timestamp()

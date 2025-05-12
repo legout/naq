@@ -207,12 +207,9 @@ The following settings and constants are used throughout the `naq` library:
 *   `SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS`: How often the leader tries to renew the lock (defaults to 15).
 *   `MAX_SCHEDULE_FAILURES`: Maximum number of times the scheduler will try to enqueue a job before marking it as failed (defaults to 5).
 *   `JOB_STATUS_KV_NAME`: KV bucket name for tracking job completion status (for dependencies) (`naq_job_status`).
-*   `JOB_STATUS_COMPLETED`: Status value for completed jobs (`completed`).
-*   `JOB_STATUS_FAILED`: Status value for failed jobs (`failed`).
+*   `JOB_STATUS`: Status value for job status entries (`pending`, `running`, `completed`, `failed`, `scheduled`, `retry`, `paused`, `cancelled`).
 *   `JOB_STATUS_TTL_SECONDS`: TTL for job status entries (defaults to 86400 seconds, or 1 day).
-*   `SCHEDULED_JOB_STATUS_ACTIVE`: Status value for active scheduled jobs (`active`).
-*   `SCHEDULED_JOB_STATUS_PAUSED`: Status value for paused scheduled jobs (`paused`).
-*   `SCHEDULED_JOB_STATUS_FAILED`: Status value for jobs that failed to be scheduled/enqueued repeatedly (`schedule_failed`).
+*   `SCHEDULED_JOB_STATUS`: Status value for scheduled jobs (`active`, `paused`, `failed`).
 *   `FAILED_JOB_SUBJECT_PREFIX`: Prefix for the subject of failed jobs (`naq.failed`).
 *   `FAILED_JOB_STREAM_NAME`: Stream name for failed jobs (`naq_failed_jobs`).
 *   `RESULT_KV_NAME`: KV bucket name for storing job results/errors (`naq_results`).

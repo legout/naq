@@ -5,9 +5,7 @@ from typing import Any, Optional
 
 from naq.job import Job
 from naq.exceptions import SerializationError
-from naq.settings import (
-    RETRY_STRATEGY_LINEAR,
-)
+from naq.settings import RETRY_STRATEGY
 
 
 # Test Utilities
@@ -47,7 +45,7 @@ class TestJobIntegration:
             queue_name="test_queue",
             max_retries=2,
             retry_delay=5,
-            retry_strategy=RETRY_STRATEGY_LINEAR,
+            retry_strategy=RETRY_STRATEGY.LINEAR,
         )
 
         # Save and retrieve

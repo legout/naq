@@ -8,22 +8,16 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, 
 from nats.js import JetStreamContext
 
 # src/naq/job_status.py
-from enum import Enum
 import cloudpickle
 
-from .exceptions import JobExecutionError, SerializationError
-from .settings import JOB_SERIALIZER
+from .exceptions import SerializationError
+from .settings import JOB_SERIALIZER, JOB_STATUS
 
 # Define a type hint for retry delays
 RetryDelayType = Union[int, float, Sequence[Union[int, float]]]
 
 
-class JobStatus(Enum):
-    """Enum representing the possible states of a job."""
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
+
 
 class Serializer(Protocol):
     """Protocol defining the interface for job serializers."""
@@ -142,14 +136,14 @@ class PickleSerializer:
             raise SerializationError(f"Failed to pickle failed job details: {e}") from e
     
     @staticmethod
-    def serialize_result(result: Any, status: JobStatus, error: Optional[str] = None,
+    def serialize_result(result: Any, status: JOB_STATUS, error: Optional[str] = None,
                        traceback_str: Optional[str] = None) -> bytes:
         """Serialize a job result to bytes using cloudpickle."""
 
         try:
             payload = {
                 "status": status,
-                "result": result if status == JobStatus.COMPLETED else None,
+                "result": result if status == JOB_STATUS.COMPLETED else None,
                 "error": error,
                 "traceback": traceback_str,
             }
@@ -187,7 +181,7 @@ class JsonSerializer:
         raise NotImplementedError("JSON serialization not fully implemented yet")
     
     @staticmethod
-    def serialize_result(result: Any, status: JobStatus, error: Optional[str] = None,
+    def serialize_result(result: Any, status: JOB_STATUS, error: Optional[str] = None,
                        traceback_str: Optional[str] = None) -> bytes:
         raise NotImplementedError("JSON serialization not fully implemented yet")
     
@@ -208,11 +202,9 @@ def get_serializer() -> Serializer:
 
 
 # Define retry strategies
-from .settings import (
-    RETRY_STRATEGY_LINEAR,
-    RETRY_STRATEGY_EXPONENTIAL,
-)
-VALID_RETRY_STRATEGIES = {RETRY_STRATEGY_LINEAR, RETRY_STRATEGY_EXPONENTIAL}
+from .settings import     RETRY_STRATEGY
+
+VALID_RETRY_STRATEGIES = {RETRY_STRATEGY.LINEAR, RETRY_STRATEGY.EXPONENTIAL}
 
 class Job:
     """Represents a job to be executed."""
@@ -226,7 +218,7 @@ class Job:
         queue_name: str = "default",
         max_retries: int = 0,
         retry_delay: RetryDelayType = 0,
-        retry_strategy: str = RETRY_STRATEGY_LINEAR,
+        retry_strategy: str = RETRY_STRATEGY.LINEAR,
         retry_on: Optional[Tuple[Exception, ...]] = None,
         ignore_on: Optional[Tuple[Exception, ...]] = None,
         depends_on: Optional[Union[str, List[str], 'Job', List['Job']]] = None,
@@ -278,13 +270,13 @@ class Job:
         self._finish_time: Optional[float] = None
 
     @property
-    def status(self) -> JobStatus:
+    def status(self) -> JOB_STATUS:
         """Return the current status of the job."""
         if self._start_time is None:
-            return JobStatus.PENDING
+            return JOB_STATUS.PENDING
         if self._finish_time is None:
-            return JobStatus.RUNNING
-        return JobStatus.FAILED if self.error is not None else JobStatus.COMPLETED
+            return JOB_STATUS.RUNNING
+        return JOB_STATUS.FAILED if self.error is not None else JOB_STATUS.COMPLETED
 
     @property
     def dependency_ids(self) -> List[str]:
@@ -346,7 +338,7 @@ class Job:
         """
         if isinstance(self.retry_delay, (int, float)):
             base_delay = float(self.retry_delay)
-            if self.retry_strategy == RETRY_STRATEGY_LINEAR:
+            if self.retry_strategy == RETRY_STRATEGY.LINEAR:
                 return base_delay
             else:  # exponential
                 return base_delay * (2 ** self.retry_count)
@@ -403,7 +395,7 @@ class Job:
         return serializer.serialize_failed_job(self)
     
     @staticmethod
-    def serialize_result(result: Any, status: JobStatus, error: Optional[str] = None, 
+    def serialize_result(result: Any, status: JOB_STATUS, error: Optional[str] = None, 
                        traceback_str: Optional[str] = None) -> bytes:
         """Serializes job result data."""
         serializer = get_serializer()
@@ -508,11 +500,10 @@ class Job:
             SerializationError: If the stored result cannot be deserialized.
             NaqException: For other errors.
         """
-        from nats.js.errors import KeyNotFoundError
+        #from nats.js.errors import KeyNotFoundError
 
         from .connection import (
             close_nats_connection,
-            get_jetstream_context,
             get_nats_connection,
         )
         from .exceptions import (
@@ -531,7 +522,7 @@ class Job:
                 nats_url=nats_url,
             )
 
-            if result_data.get("status") == JobStatus.FAILED.value:
+            if result_data.get("status") == JOB_STATUS.FAILED.value:
                 error_str = result_data.get("error", "Unknown error")
                 traceback_str = result_data.get("traceback")
                 err_msg = f"Job {job_id} failed: {error_str}"
@@ -539,7 +530,7 @@ class Job:
                     err_msg += f"\nTraceback:\n{traceback_str}"
                 # Raise an exception containing the failure info
                 raise JobExecutionError(err_msg)
-            elif result_data.get("status") == JobStatus.COMPLETED.value:
+            elif result_data.get("status") == JOB_STATUS.COMPLETED.value:
                 return result_data.get("result")
             else:
                 # Should not happen if worker stores status correctly

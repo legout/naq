@@ -1,20 +1,16 @@
 import pytest
 import pytest_asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-from nats.js.kv import KeyValue
+from unittest.mock import AsyncMock
 import asyncio
 import cloudpickle
 from datetime import datetime, timezone
 import socket
 import os
 
-from naq.worker import Worker, WorkerStatusManager, JobStatusManager, FailedJobHandler
-from naq.job import Job, JobExecutionError, JobStatus
+from naq.worker import Worker
+from naq.job import Job, JOB_STATUS
 from naq.settings import (
-    WORKER_STATUS_STARTING,
-    WORKER_STATUS_IDLE,
-    WORKER_STATUS_BUSY,
-    WORKER_STATUS_STOPPING,
+    WORKER_STATUS,
     NAQ_PREFIX,
     WORKER_KV_NAME,
     RESULT_KV_NAME,
@@ -151,7 +147,7 @@ class TestWorker:
         await worker.process_message(job)
         
         assert job.result == mock_result
-        assert job.status == JobStatus.COMPLETED
+        assert job.status == JOB_STATUS.COMPLETED
         assert job.error is None
     
     @pytest.mark.asyncio
@@ -172,7 +168,7 @@ class TestWorker:
         
         await worker.process_message(job)
         
-        assert job.status == JobStatus.FAILED
+        assert job.status == JOB_STATUS.FAILED
         assert job.error == error_msg
 
     @pytest.mark.asyncio
@@ -198,18 +194,18 @@ class TestWorker:
         # Assert
         # Verify JobStatusManager interactions
         mock_jsm.store_result.assert_awaited_with(job)
-        assert job.status == JobStatus.COMPLETED
+        assert job.status == JOB_STATUS.COMPLETED
     
         # Verify WorkerStatusManager interactions
         # Check that update_status was called for BUSY and then IDLE
         wsm_calls = mock_wsm.update_status.await_args_list
         
         busy_call_found = any(
-            call.args == (WORKER_STATUS_BUSY,) and call.kwargs.get("job_id") == job.job_id
+            call.args == (WORKER_STATUS.BUSY,) and call.kwargs.get("job_id") == job.job_id
             for call in wsm_calls
         )
         idle_call_found = any(
-            call.args == (WORKER_STATUS_IDLE,) and call.kwargs.get("job_id") is None # After processing, job_id might be None for IDLE
+            call.args == (WORKER_STATUS.IDLE,) and call.kwargs.get("job_id") is None # After processing, job_id might be None for IDLE
             for call in wsm_calls
         )
         assert busy_call_found, "WorkerStatusManager was not set to BUSY"
@@ -241,7 +237,7 @@ class TestWorker:
         # Assert
         # Verify job status updates
         mock_jsm.store_result.assert_awaited_with(job)
-        assert job.status == JobStatus.FAILED
+        assert job.status == JOB_STATUS.FAILED
         
         # Verify failed job handler was called
         mock_fjh.handle_failed_job.assert_awaited_with(job)
@@ -249,11 +245,11 @@ class TestWorker:
         # Verify WorkerStatusManager interactions
         wsm_calls = mock_wsm.update_status.await_args_list
         busy_call_found = any(
-            call.args == (WORKER_STATUS_BUSY,) and call.kwargs.get("job_id") == job.job_id
+            call.args == (WORKER_STATUS.BUSY,) and call.kwargs.get("job_id") == job.job_id
             for call in wsm_calls
         )
         idle_call_found = any(
-            call.args == (WORKER_STATUS_IDLE,) and call.kwargs.get("job_id") is None
+            call.args == (WORKER_STATUS.IDLE,) and call.kwargs.get("job_id") is None
             for call in wsm_calls
         )
         assert busy_call_found, "WorkerStatusManager was not set to BUSY for failed job"
@@ -287,7 +283,7 @@ class TestWorker:
         # Verify BUSY state was set
         # WorkerStatusManager.update_status is called with (status, job_id=..., queue_name=...)
         assert any(
-            call.args == (WORKER_STATUS_BUSY,) and
+            call.args == (WORKER_STATUS.BUSY,) and
             call.kwargs.get("job_id") == job.job_id
             # queue_name is not passed by Worker.process_message to update_status
             for call in wsm_calls
@@ -296,15 +292,15 @@ class TestWorker:
         # Verify IDLE state was set
         # WorkerStatusManager.update_status is called with (status, job_id=None, queue_name=None) in finally block
         assert any(
-            call.args == (WORKER_STATUS_IDLE,) and
+            call.args == (WORKER_STATUS.IDLE,) and
             call.kwargs.get("job_id") is None and # job_id is typically None for general IDLE state
             call.kwargs.get("queue_name") is None
             for call in wsm_calls
         ), "WorkerStatusManager was not set to IDLE correctly"
         
         # Verify state transition order (BUSY before IDLE)
-        busy_indices = [i for i, call in enumerate(wsm_calls) if call.args == (WORKER_STATUS_BUSY,) and call.kwargs.get("job_id") == job.job_id]
-        idle_indices = [i for i, call in enumerate(wsm_calls) if call.args == (WORKER_STATUS_IDLE,)]
+        busy_indices = [i for i, call in enumerate(wsm_calls) if call.args == (WORKER_STATUS.BUSY,) and call.kwargs.get("job_id") == job.job_id]
+        idle_indices = [i for i, call in enumerate(wsm_calls) if call.args == (WORKER_STATUS.IDLE,)]
     
         assert busy_indices, "BUSY state not found in WorkerStatusManager calls"
         assert idle_indices, "IDLE state not found in WorkerStatusManager calls"
@@ -360,10 +356,10 @@ class TestWorker:
             max_concurrent = 0
             current_busy = 0
             for update in status_updates_from_manager:
-                if update["status"] == WORKER_STATUS_BUSY:
+                if update["status"] == WORKER_STATUS.BUSY:
                     current_busy += 1
                     max_concurrent = max(max_concurrent, current_busy)
-                elif update["status"] == WORKER_STATUS_IDLE and update.get("job_id") is not None:
+                elif update["status"] == WORKER_STATUS.IDLE and update.get("job_id") is not None:
                     current_busy -= 1
             
             assert max_concurrent <= worker_instance._concurrency
@@ -373,10 +369,10 @@ class TestWorker:
             max_concurrent = 0
             current_busy = 0
             for update in status_updates_from_manager:
-                if update["status"] == WORKER_STATUS_BUSY:
+                if update["status"] == WORKER_STATUS.BUSY:
                     current_busy += 1
                     max_concurrent = max(max_concurrent, current_busy)
-                elif update["status"] == WORKER_STATUS_IDLE:
+                elif update["status"] == WORKER_STATUS.IDLE:
                     current_busy -= 1
     
             # Verify concurrency limit was respected
@@ -385,7 +381,7 @@ class TestWorker:
             
             # Verify all jobs completed
             for job in jobs:
-                assert job.status == JobStatus.COMPLETED
+                assert job.status == JOB_STATUS.COMPLETED
                 assert job.result == "done"
         
 
@@ -424,13 +420,13 @@ class TestWorker:
         # The finally block will set it to IDLE.
         
         busy_for_this_job_found = any(
-            call.args == (WORKER_STATUS_BUSY,) and call.kwargs.get("job_id") == job.job_id
+            call.args == (WORKER_STATUS.BUSY,) and call.kwargs.get("job_id") == job.job_id
             for call in mock_wsm.update_status.await_args_list
         )
         assert not busy_for_this_job_found, "Worker status was set to BUSY for a job that should not have been processed due to shutdown."
         
         # Verify job status remained PENDING (its initial state)
-        assert job.status == JobStatus.PENDING
+        assert job.status == JOB_STATUS.PENDING
     
     @pytest.mark.asyncio
     async def test_shutdown_during_execution(self, worker):
@@ -458,5 +454,5 @@ class TestWorker:
         await process_task
 
         # Verify job completed despite shutdown
-        assert job.status == JobStatus.COMPLETED
+        assert job.status == JOB_STATUS.COMPLETED
         assert job.result == "done"

@@ -28,13 +28,11 @@ from .connection import (
 from .queue import Queue
 from .scheduler import Scheduler
 from .settings import DEFAULT_WORKER_TTL_SECONDS  # Import statuses
-from .settings import (  # WORKER_STATUS_IDLE,; WORKER_STATUS_STARTING,; WORKER_STATUS_STOPPING,
+from .settings import (
     DEFAULT_NATS_URL,
-    SCHEDULED_JOB_STATUS_ACTIVE,
-    SCHEDULED_JOB_STATUS_FAILED,
-    SCHEDULED_JOB_STATUS_PAUSED,
+    SCHEDULED_JOB_STATUS,
     SCHEDULED_JOBS_KV_NAME,
-    WORKER_STATUS_BUSY,
+    WORKER_STATUS,
     NAQ_PREFIX
 )
 from .utils import setup_logging
@@ -280,7 +278,7 @@ def list_scheduled_jobs(
         None,
         "--status",
         "-s",
-        help=f"Filter by job status: '{SCHEDULED_JOB_STATUS_ACTIVE}', '{SCHEDULED_JOB_STATUS_PAUSED}', or '{SCHEDULED_JOB_STATUS_FAILED}'",
+        help=f"Filter by job status: '{SCHEDULED_JOB_STATUS.ACTIVE}', '{SCHEDULED_JOB_STATUS.PAUSED}', or '{SCHEDULED_JOB_STATUS.FAILED}'",
     ),
     job_id: Optional[str] = typer.Option(
         None,
@@ -407,13 +405,13 @@ def list_scheduled_jobs(
             for job in jobs_data:
                 job_id_local = job.get("job_id", "unknown")
                 queue_name = job.get("queue_name", "unknown")
-                current_job_status = job.get("status", SCHEDULED_JOB_STATUS_ACTIVE)
+                current_job_status = job.get("status", SCHEDULED_JOB_STATUS.ACTIVE)
                 
                 # Determine status style
                 status_style = "green"
-                if current_job_status == SCHEDULED_JOB_STATUS_PAUSED:
+                if current_job_status == SCHEDULED_JOB_STATUS.PAUSED:
                     status_style = "yellow"
-                elif current_job_status == SCHEDULED_JOB_STATUS_FAILED:
+                elif current_job_status == SCHEDULED_JOB_STATUS.FAILED:
                     status_style = "red"
 
                 # Format next run time
@@ -702,7 +700,7 @@ def list_workers_command(
                 queues = ", ".join(worker.get("queues", []))
                 current_job = (
                     worker.get("current_job_id", "-")
-                    if status == WORKER_STATUS_BUSY
+                    if status == WORKER_STATUS.BUSY
                     else "-"
                 )
                 

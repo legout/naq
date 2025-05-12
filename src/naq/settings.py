@@ -1,6 +1,6 @@
 # src/naq/settings.py
 import os
-
+from enum import Enum
 # Default NATS server URL
 DEFAULT_NATS_URL = os.getenv("NAQ_NATS_URL", "nats://localhost:4222")
 
@@ -13,10 +13,6 @@ NAQ_PREFIX = "naq"
 # How jobs are serialized
 # Options: 'pickle' (default, more flexible), 'json' (safer, less flexible)
 JOB_SERIALIZER = os.getenv("NAQ_JOB_SERIALIZER", "pickle")
-
-# Retry strategy constants
-RETRY_STRATEGY_LINEAR = "linear"
-RETRY_STRATEGY_EXPONENTIAL = "exponential"
 
 # --- Scheduler Settings ---
 # KV bucket name for scheduled jobs
@@ -47,25 +43,35 @@ else:
     MAX_SCHEDULE_FAILURES = 5
 
 # --- Job Status Settings ---
+class JOB_STATUS(Enum):
+    """Enum representing the possible states of a job."""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    RETRY = "retry"
+    SCHEDULED = "scheduled"
+    PAUSED = "paused"
+    CANCELLED = "cancelled"
+
 # KV bucket name for tracking job completion status (for dependencies)
 JOB_STATUS_KV_NAME = f"{NAQ_PREFIX}_job_status"
 # Status values stored in the job status KV
-JOB_STATUS_COMPLETED = "completed"
-JOB_STATUS_FAILED = "failed"
+
 # TTL for job status entries (e.g., 1 day) - adjust as needed
 JOB_STATUS_TTL_SECONDS = int(os.getenv("NAQ_JOB_STATUS_TTL", 86400))
-
-# Status values for scheduled jobs
-SCHEDULED_JOB_STATUS_ACTIVE = "active"
-SCHEDULED_JOB_STATUS_PAUSED = "paused"
-SCHEDULED_JOB_STATUS_FAILED = (
-    "schedule_failed"  # Failed to be scheduled/enqueued repeatedly
-)
 
 # Define subject for failed jobs
 FAILED_JOB_SUBJECT_PREFIX = f"{NAQ_PREFIX}.failed"
 # Define stream name for failed jobs (could be same or different)
 FAILED_JOB_STREAM_NAME = f"{NAQ_PREFIX}_failed_jobs"
+
+class SCHEDULED_JOB_STATUS(Enum):
+    """Enum representing the possible states of a scheduled job."""
+    ACTIVE = "active"
+    PAUSED = "paused"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 # --- Result Backend Settings ---
 # KV bucket name for storing job results/errors
@@ -74,6 +80,14 @@ RESULT_KV_NAME = f"{NAQ_PREFIX}_results"
 DEFAULT_RESULT_TTL_SECONDS = int(os.getenv("NAQ_DEFAULT_RESULT_TTL", 604800))
 
 # --- Worker Monitoring Settings ---
+class WORKER_STATUS(Enum):
+    """Enum representing the possible states of a worker."""
+    STARTING = "starting"
+    IDLE = "idle"
+    BUSY = "busy"
+    STOPPING = "stopping"
+
+
 # KV bucket name for storing worker status and heartbeats
 WORKER_KV_NAME = f"{NAQ_PREFIX}_workers"
 # Default TTL (in seconds) for worker heartbeat entries. Should be longer than heartbeat interval.
@@ -82,10 +96,11 @@ DEFAULT_WORKER_TTL_SECONDS = int(os.getenv("NAQ_WORKER_TTL", "60"))
 DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS = int(
     os.getenv("NAQ_WORKER_HEARTBEAT_INTERVAL", "15")
 )
-# Worker status constants
-WORKER_STATUS_STARTING = "starting"
-WORKER_STATUS_IDLE = "idle"
-WORKER_STATUS_BUSY = "busy"
-WORKER_STATUS_STOPPING = "stopping"
 
 DEPENDENCY_CHECK_DELAY_SECONDS = 5
+
+# --- Job Retry Settings ---
+class RETRY_STRATEGY(Enum):
+    """Enum representing the retry strategies for job execution."""
+    LINEAR = "linear"
+    EXPONENTIAL = "exponential"

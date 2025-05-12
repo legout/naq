@@ -24,24 +24,20 @@ from .connection import (
     get_nats_connection,
 )
 from .exceptions import NaqException, SerializationError
-from .job import Job, JobStatus
+from .job import Job
 from .settings import (
     DEFAULT_RESULT_TTL_SECONDS,
     DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
     DEFAULT_WORKER_TTL_SECONDS,
     FAILED_JOB_STREAM_NAME,
     FAILED_JOB_SUBJECT_PREFIX,
-    JOB_STATUS_COMPLETED,
-    JOB_STATUS_FAILED,
+    JOB_STATUS,
     JOB_STATUS_KV_NAME,
     JOB_STATUS_TTL_SECONDS,
     NAQ_PREFIX,
     RESULT_KV_NAME,
     WORKER_KV_NAME,
-    WORKER_STATUS_BUSY,
-    WORKER_STATUS_IDLE,
-    WORKER_STATUS_STARTING,
-    WORKER_STATUS_STOPPING,
+    WORKER_STATUS
 )
 from .utils import run_async_from_sync, setup_logging
 
@@ -54,7 +50,7 @@ class WorkerStatusManager:
     def __init__(self, worker):
         """Initialize the worker status manager."""
         self.worker = worker
-        self._current_status = WORKER_STATUS_STARTING
+        self._current_status = WORKER_STATUS.STARTING
         self._kv_store = None
         self._heartbeat_task = None
     
@@ -81,9 +77,9 @@ class WorkerStatusManager:
                 self._kv_store = None
         return self._kv_store
     
-    async def update_status(self, status: str, job_id: Optional[str] = None) -> None:
+    async def update_status(self, status: WORKER_STATUS|str, job_id: Optional[str] = None) -> None:
         """Updates the worker's status in the KV store."""
-        self._current_status = status
+        self._current_status = status if isinstance(status, WORKER_STATUS) else WORKER_STATUS(status)
         kv_store = await self._get_kv_store()
         if not kv_store:
             return
@@ -113,7 +109,7 @@ class WorkerStatusManager:
         """Start the heartbeat loop."""
         if not self._heartbeat_task:
             self._heartbeat_task = asyncio.create_task(self._heartbeat())
-            await self.update_status(WORKER_STATUS_IDLE)
+            await self.update_status(WORKER_STATUS.IDLE)
 
     async def stop_heartbeat_loop(self) -> None:
         """Stop the heartbeat loop."""
@@ -122,7 +118,7 @@ class WorkerStatusManager:
 
         # Update status before canceling task to ensure it's captured
         try:
-            await self.update_status(WORKER_STATUS_STOPPING)
+            await self.update_status(WORKER_STATUS.STOPPING)
         except Exception as e:
             logger.error(f"Error updating status during shutdown: {e}")
 
@@ -346,10 +342,10 @@ class JobStatusManager:
                 try:
                     entry = await self._status_kv.get(dep_id.encode("utf-8"))
                     status = entry.value.decode("utf-8")
-                    if status == JOB_STATUS_COMPLETED:
+                    if status == JOB_STATUS.COMPLETED:
                         logger.debug(f"Dependency {dep_id} for job {job.job_id} is completed.")
                         continue  # Dependency met
-                    elif status == JOB_STATUS_FAILED:
+                    elif status == JOB_STATUS.FAILED:
                         logger.warning(
                             f"Dependency {dep_id} for job {job.job_id} failed. Job {job.job_id} will not run."
                         )
@@ -395,7 +391,7 @@ class JobStatusManager:
             if job.error:
                 # Store failure information
                 result_data = {
-                    "status": JOB_STATUS_FAILED,
+                    "status": JOB_STATUS.FAILED,
                     "error": job.error,
                     "traceback": job.traceback,
                 }
@@ -403,7 +399,7 @@ class JobStatusManager:
             else:
                 # Store successful result
                 result_data = {
-                    "status": JOB_STATUS_COMPLETED,
+                    "status": JOB_STATUS.COMPLETED,
                     "result": job.result,
                 }
                 logger.debug(f"Storing result for job {job.job_id}")
@@ -644,7 +640,7 @@ class Worker:
                 return # Do not process if shutdown is initiated
     
             # Update worker status to busy with this job
-            await self._worker_status_manager.update_status(WORKER_STATUS_BUSY, job_id=job.job_id)
+            await self._worker_status_manager.update_status(WORKER_STATUS.BUSY, job_id=job.job_id)
     
             # Execute the job
             await job.execute() # This will set job.error and job.traceback on failure
@@ -653,7 +649,7 @@ class Worker:
             await self._job_status_manager.store_result(job)
     
             # Handle failure if needed (e.g., publish to dead-letter queue)
-            if job.status == JobStatus.FAILED: # status is a property derived from job.error
+            if job.status == JOB_STATUS.FAILED: # status is a property derived from job.error
                 await self._failed_job_handler.handle_failed_job(job)
 
             # Acknowledge message processing complete
@@ -667,7 +663,7 @@ class Worker:
                 await msg.term()
         finally:
             # Update worker status back to idle
-            await self._worker_status_manager.update_status(WORKER_STATUS_IDLE)
+            await self._worker_status_manager.update_status(WORKER_STATUS.IDLE)
 
     async def _handle_job_execution_error(self, job: Optional[Job], msg: Msg) -> None:
         """Handle errors from job execution."""
@@ -697,7 +693,7 @@ class Worker:
         else:
             # --- Terminal Failure ---
             logger.error(f"Job {job.job_id} failed after {attempt - 1} retries. Moving to failed queue.")
-            await self._job_status_manager.update_job_status(job.job_id, JOB_STATUS_FAILED)
+            await self._job_status_manager.update_job_status(job.job_id, JOB_STATUS.FAILED)
             await self._job_status_manager.store_result(job)
             await self._failed_job_handler.publish_failed_job(job)
             try:
@@ -721,7 +717,7 @@ class Worker:
             if job:
                 job.error = f"Worker processing error: {error}"  # Assign error for storage
                 job.traceback = traceback.format_exc()
-                await self._job_status_manager.update_job_status(job.job_id, JOB_STATUS_FAILED)
+                await self._job_status_manager.update_job_status(job.job_id, JOB_STATUS.FAILED)
                 await self._job_status_manager.store_result(job)
             await msg.term()
             logger.warning(f"Terminated message Sid='{msg.sid}' due to unexpected processing error.")
@@ -738,7 +734,7 @@ class Worker:
             await self._connect()
             
             # Register worker initially
-            await self._worker_status_manager.update_status(status=WORKER_STATUS_STARTING)
+            await self._worker_status_manager.update_status(status=WORKER_STATUS.STARTING)
 
             # Start heartbeat task
             await self._worker_status_manager.start_heartbeat_loop()
@@ -762,12 +758,12 @@ class Worker:
             )
             
             # Set status to idle once subscriptions are ready
-            await self._worker_status_manager.update_status(status=WORKER_STATUS_IDLE)
+            await self._worker_status_manager.update_status(status=WORKER_STATUS.IDLE)
 
             await self._shutdown_event.wait()
 
             logger.info("Shutdown signal received. Waiting for tasks to complete...")
-            await self._worker_status_manager.update_status(status=WORKER_STATUS_STOPPING)
+            await self._worker_status_manager.update_status(status=WORKER_STATUS.STOPPING)
 
             # Stop heartbeat task
             await self._worker_status_manager.stop_heartbeat_loop()
@@ -791,7 +787,7 @@ class Worker:
             logger.info("Run task cancelled.")
         except Exception as e:
             logger.error(f"Worker run loop encountered an error: {e}", exc_info=True)
-            await self._worker_status_manager.update_status(status=WORKER_STATUS_STOPPING)
+            await self._worker_status_manager.update_status(status=WORKER_STATUS.STOPPING)
         finally:
             logger.info("Worker shutting down...")
             await self._close()

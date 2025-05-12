@@ -1,5 +1,4 @@
 import pytest
-import asyncio # Add import for asyncio
 import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock
 from nats.js.kv import KeyValue

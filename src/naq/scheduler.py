@@ -6,7 +6,7 @@ import socket
 import time
 import uuid
 from datetime import timezone
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional
 
 import cloudpickle
 import nats
@@ -29,14 +29,12 @@ from .connection import (
     get_nats_connection,
 )
 from .exceptions import ConnectionError as NaqConnectionError
-from .exceptions import NaqException, SerializationError
+from .exceptions import SerializationError
 from .settings import DEFAULT_NATS_URL
 from .settings import (
     MAX_SCHEDULE_FAILURES,
     NAQ_PREFIX,
-    SCHEDULED_JOB_STATUS_ACTIVE,
-    SCHEDULED_JOB_STATUS_FAILED,
-    SCHEDULED_JOB_STATUS_PAUSED,
+    SCHEDULED_JOB_STATUS,
     SCHEDULED_JOBS_KV_NAME,
     SCHEDULER_LOCK_KEY,
     SCHEDULER_LOCK_KV_NAME,
@@ -333,12 +331,12 @@ class ScheduledJobProcessor:
             
             # Skip paused jobs
             status = schedule_data.get("status")
-            if status == SCHEDULED_JOB_STATUS_PAUSED:
+            if status == SCHEDULED_JOB_STATUS.PAUSED:
                 logger.debug(f"Skipping paused job '{key}'")
                 return 0, 0
                 
             # Skip failed jobs that exceeded retry attempts
-            if status == SCHEDULED_JOB_STATUS_FAILED:
+            if status == SCHEDULED_JOB_STATUS.FAILED:
                 logger.debug(f"Skipping failed job '{key}' that exceeded retry limits")
                 return 0, 0
                 
@@ -382,7 +380,7 @@ class ScheduledJobProcessor:
                 # Check if we should mark the job as permanently failed
                 if MAX_SCHEDULE_FAILURES and failure_count >= MAX_SCHEDULE_FAILURES:
                     logger.warning(f"Job {job_id} has failed scheduling {failure_count} times, marking as failed")
-                    schedule_data["status"] = SCHEDULED_JOB_STATUS_FAILED
+                    schedule_data["status"] = SCHEDULED_JOB_STATUS.FAILED
                     serialized_data = cloudpickle.dumps(schedule_data)
                     await self._kv.put(key_bytes, serialized_data)
                     return 0, 1

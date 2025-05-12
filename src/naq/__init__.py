@@ -43,18 +43,11 @@ from .queue import (
     schedule_sync,
 )
 from .scheduler import Scheduler
-from .settings import JOB_STATUS_COMPLETED  # Export new status
+from .settings import JOB_STATUS 
+
 from .settings import (
-    JOB_STATUS_FAILED as JOB_EXECUTION_FAILED,
-)  # Worker statuses; Export new status (alias to avoid name clash)
-from .settings import (
-    SCHEDULED_JOB_STATUS_ACTIVE,
-    SCHEDULED_JOB_STATUS_FAILED,
-    SCHEDULED_JOB_STATUS_PAUSED,
-    WORKER_STATUS_BUSY,
-    WORKER_STATUS_IDLE,
-    WORKER_STATUS_STARTING,
-    WORKER_STATUS_STOPPING,
+    SCHEDULED_JOB_STATUS,
+    WORKER_STATUS
 )
 from .worker import Worker
 
