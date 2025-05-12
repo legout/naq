@@ -1,17 +1,29 @@
 # src/naq/job.py
+import asyncio
 import time
 import traceback
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, Protocol
 
+from nats.js import JetStreamContext
+
+# src/naq/job_status.py
+from enum import Enum
 import cloudpickle
 
 from .exceptions import JobExecutionError, SerializationError
-from .settings import JOB_SERIALIZER, JOB_STATUS_COMPLETED, JOB_STATUS_FAILED
+from .settings import JOB_SERIALIZER
 
 # Define a type hint for retry delays
 RetryDelayType = Union[int, float, Sequence[Union[int, float]]]
 
+
+class JobStatus(Enum):
+    """Enum representing the possible states of a job."""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 class Serializer(Protocol):
     """Protocol defining the interface for job serializers."""
@@ -59,8 +71,18 @@ class PickleSerializer:
                 "max_retries": job.max_retries,
                 "retry_delay": job.retry_delay,
                 "queue_name": job.queue_name,
-                "dependency_ids": job.dependency_ids,
+                #"dependency_ids": job.dependency_ids,
+                "depends_on": job.depends_on,
                 "result_ttl": job.result_ttl,
+                "retry_strategy": getattr(job, "retry_strategy", None),
+                "retry_on": [
+                    exc.__name__ if isinstance(exc, type) else str(exc)
+                    for exc in getattr(job, "retry_on", []) or []
+                ],
+                "ignore_on": [
+                    exc.__name__ if isinstance(exc, type) else str(exc)
+                    for exc in getattr(job, "ignore_on", []) or []
+                ],
             }
             return cloudpickle.dumps(payload)
         except Exception as e:
@@ -81,16 +103,19 @@ class PickleSerializer:
                 args=args,
                 kwargs=kwargs,
                 job_id=payload.get("job_id"),
-                enqueue_time=payload.get("enqueue_time"),
+                queue_name=payload.get("queue_name"),
                 max_retries=payload.get("max_retries", 0),
                 retry_delay=payload.get("retry_delay", 0),
-                queue_name=payload.get("queue_name"),
+                retry_strategy=payload.get("retry_strategy"),
+                retry_on=payload.get("retry_on"),
+                ignore_on=payload.get("ignore_on"),
+                depends_on=payload.get("depends_on"),
                 result_ttl=payload.get("result_ttl"),
             )
 
             # Restore dependency IDs if present
-            if "dependency_ids" in payload:
-                job.dependency_ids = payload["dependency_ids"]
+            #if "dependency_ids" in payload:
+            #    job.dependency_ids = payload["dependency_ids"]
 
             return job
         except Exception as e:
@@ -117,13 +142,14 @@ class PickleSerializer:
             raise SerializationError(f"Failed to pickle failed job details: {e}") from e
     
     @staticmethod
-    def serialize_result(result: Any, status: str, error: Optional[str] = None, 
+    def serialize_result(result: Any, status: JobStatus, error: Optional[str] = None,
                        traceback_str: Optional[str] = None) -> bytes:
         """Serialize a job result to bytes using cloudpickle."""
+
         try:
             payload = {
                 "status": status,
-                "result": result if status == JOB_STATUS_COMPLETED else None,
+                "result": result if status == JobStatus.COMPLETED else None,
                 "error": error,
                 "traceback": traceback_str,
             }
@@ -161,7 +187,7 @@ class JsonSerializer:
         raise NotImplementedError("JSON serialization not fully implemented yet")
     
     @staticmethod
-    def serialize_result(result: Any, status: str, error: Optional[str] = None, 
+    def serialize_result(result: Any, status: JobStatus, error: Optional[str] = None,
                        traceback_str: Optional[str] = None) -> bytes:
         raise NotImplementedError("JSON serialization not fully implemented yet")
     
@@ -181,86 +207,181 @@ def get_serializer() -> Serializer:
         raise SerializationError(f"Unknown serializer: {JOB_SERIALIZER}")
 
 
+# Define retry strategies
+from .settings import (
+    RETRY_STRATEGY_LINEAR,
+    RETRY_STRATEGY_EXPONENTIAL,
+)
+VALID_RETRY_STRATEGIES = {RETRY_STRATEGY_LINEAR, RETRY_STRATEGY_EXPONENTIAL}
+
 class Job:
-    """
-    Represents a job to be executed.
-    Includes function, args, kwargs, metadata, retry, and dependency configuration.
-    """
+    """Represents a job to be executed."""
 
     def __init__(
         self,
         function: Callable,
-        args: Optional[Tuple[Any, ...]] = None,
-        kwargs: Optional[Dict[str, Any]] = None,
+        args: Tuple = (),
+        kwargs: Dict = None,
         job_id: Optional[str] = None,
-        enqueue_time: Optional[float] = None,
-        max_retries: Optional[int] = 0,  # Default: no retries
-        retry_delay: RetryDelayType = 0,  # Default: immediate retry (if max_retries > 0)
-        queue_name: Optional[str] = None,  # Store the original queue name
-        depends_on: Optional[
-            Union[str, List[str], "Job", List["Job"]]
-        ] = None,  # Job dependencies
-        result_ttl: Optional[int] = None,  # TTL for the result in seconds
+        queue_name: str = "default",
+        max_retries: int = 0,
+        retry_delay: RetryDelayType = 0,
+        retry_strategy: str = RETRY_STRATEGY_LINEAR,
+        retry_on: Optional[Tuple[Exception, ...]] = None,
+        ignore_on: Optional[Tuple[Exception, ...]] = None,
+        depends_on: Optional[Union[str, List[str], 'Job', List['Job']]] = None,
+        result_ttl: Optional[int] = None,
     ):
-        self.job_id: str = job_id or uuid.uuid4().hex
-        self.function: Callable = function
-        self.args: Tuple[Any, ...] = args or ()
-        self.kwargs: Dict[str, Any] = kwargs or {}
-        self.enqueue_time: float = enqueue_time or time.time()
-        self.max_retries: Optional[int] = max_retries
-        self.retry_delay: RetryDelayType = retry_delay
-        self.queue_name: Optional[str] = queue_name  # Store the queue name
-        self.result_ttl: Optional[int] = result_ttl  # Store result TTL
+        """
+        Initialize a Job.
 
-        # Dependencies tracking
-        self.dependency_ids: List[str] = []
-        if depends_on is not None:
-            if isinstance(depends_on, (str, Job)):
-                depends_on = [depends_on]  # Convert single item to list
+        Args:
+            function: The function to execute
+            args: Positional arguments for the function
+            kwargs: Keyword arguments for the function
+            job_id: Optional job ID (generated if not provided)
+            queue_name: Name of the queue this job belongs to
+            max_retries: Maximum number of retry attempts
+            retry_delay: Delay between retries (seconds)
+            retry_strategy: Strategy for retry delays ('linear' or 'exponential')
+            retry_on: Tuple of exception types to retry on
+            ignore_on: Tuple of exception types to not retry on
+            depends_on: Job ID(s) that must complete before this one
 
-            for dep in depends_on:
-                if isinstance(dep, str):
-                    self.dependency_ids.append(dep)  # It's already a job_id
-                elif isinstance(dep, Job):
-                    self.dependency_ids.append(
-                        dep.job_id
-                    )  # Extract job_id from Job instance
-                else:
-                    raise ValueError(
-                        f"Invalid dependency type: {type(dep)}. Must be job_id string or Job instance."
-                    )
+        Raises:
+            ValueError: If retry_strategy is invalid
+        """
+        if retry_strategy not in VALID_RETRY_STRATEGIES:
+            raise ValueError(
+                f"Invalid retry strategy '{retry_strategy}'. "
+                f"Must be one of: {', '.join(VALID_RETRY_STRATEGIES)}"
+            )
 
-        # Execution result/error state
-        self.result: Any = None
-        self.error: Optional[str] = None
-        self.traceback: Optional[str] = None  # Store traceback on failure
+        self.job_id = job_id or str(uuid.uuid4()).replace("-", "")
+        self.function = function
+        self.args = args or ()
+        self.kwargs = kwargs or {}
+        self.queue_name = queue_name
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self.retry_strategy = retry_strategy
+        self.retry_on = retry_on
+        self.ignore_on = ignore_on
+        self.depends_on = depends_on
+        self.result_ttl = result_ttl
 
-    def execute(self) -> Any:
-        """Executes the job, capturing error and traceback."""
+        self.enqueue_time = time.time()
         self.error = None
         self.traceback = None
+        self._retry_count = 0
+        self._start_time: Optional[float] = None
+        self._finish_time: Optional[float] = None
+
+    @property
+    def status(self) -> JobStatus:
+        """Return the current status of the job."""
+        if self._start_time is None:
+            return JobStatus.PENDING
+        if self._finish_time is None:
+            return JobStatus.RUNNING
+        return JobStatus.FAILED if self.error is not None else JobStatus.COMPLETED
+
+    @property
+    def dependency_ids(self) -> List[str]:
+        """Return a list of dependency job IDs."""
+        if not self.depends_on:
+            return []
+        if isinstance(self.depends_on, str):
+            return [self.depends_on]
+        if isinstance(self.depends_on, Job):
+            return [self.depends_on.job_id]
+        ids = []
+        for dep in self.depends_on:
+            if isinstance(dep, Job):
+                ids.append(dep.job_id)
+            else:
+                ids.append(str(dep))
+        return ids
+
+    @property
+    def retry_count(self) -> int:
+        """Get the current retry count."""
+        return self._retry_count
+
+    def increment_retry_count(self) -> None:
+        """Increment the retry count."""
+        self._retry_count += 1
+
+    def should_retry(self, exc: Exception) -> bool:
+        """
+        Determine if the job should be retried based on the exception.
+
+        Args:
+            exc: The exception that caused the job to fail
+
+        Returns:
+            True if the job should be retried, False otherwise
+        """
+        # Don't retry if max retries exceeded
+        if self.retry_count >= self.max_retries:
+            return False
+
+        # If ignore_on is specified, check if exception matches any ignored types
+        if self.ignore_on and isinstance(exc, self.ignore_on):
+            return False
+
+        # If retry_on is specified, only retry on those exceptions
+        if self.retry_on:
+            return isinstance(exc, self.retry_on)
+
+        # By default, retry on all exceptions if retries are configured
+        return self.max_retries > 0
+
+    def get_next_retry_delay(self) -> float:
+        """
+        Calculate the delay for the next retry attempt.
+
+        Returns:
+            Delay in seconds before the next retry
+        """
+        if isinstance(self.retry_delay, (int, float)):
+            base_delay = float(self.retry_delay)
+            if self.retry_strategy == RETRY_STRATEGY_LINEAR:
+                return base_delay
+            else:  # exponential
+                return base_delay * (2 ** self.retry_count)
+
+        # If retry_delay is a sequence, use it as a lookup table
+        if isinstance(self.retry_delay, Sequence):
+            idx = min(self.retry_count, len(self.retry_delay) - 1)
+            return float(self.retry_delay[idx])
+
+        return 0.0  # No delay if retry_delay is invalid
+
+    async def execute(self) -> Any:
+        """Execute the job's function and manage its state.
+        
+        Returns:
+            The function's return value.
+            
+        Raises:
+            Any exception that the function raises and isn't handled by retry logic.
+        """
+        self._start_time = time.time()
         try:
-            self.result = self.function(*self.args, **self.kwargs)
+            if asyncio.iscoroutinefunction(self.function):
+                self.result = await self.function(*self.args, **self.kwargs)
+            else:
+                self.result = self.function(*self.args, **self.kwargs)
+            self._finish_time = time.time()
             return self.result
         except Exception as e:
-            self.error = f"{type(e).__name__}: {e}"
-            self.traceback = traceback.format_exc()  # Capture traceback
-            # Re-raise the exception so the worker knows it failed
-            raise JobExecutionError(f"Job {self.job_id} failed: {self.error}") from e
-
-    def get_retry_delay(self, attempt: int) -> float:
-        """Calculates the retry delay based on the configured strategy."""
-        if isinstance(self.retry_delay, (int, float)):
-            return float(self.retry_delay)
-        elif isinstance(self.retry_delay, Sequence):
-            if attempt > 0 and attempt <= len(self.retry_delay):
-                # Use the delay specified for this attempt (1-based index)
-                return float(self.retry_delay[attempt - 1])
-            elif self.retry_delay:
-                # If attempt exceeds sequence length, use the last value
-                return float(self.retry_delay[-1])
-        # Default to 0 if misconfigured or empty sequence
-        return 0.0
+            self.error = str(e)
+            self.traceback = traceback.format_exc()
+            # self.status is a property derived from self.error, no direct assignment needed
+            # Do not re-raise, allow Worker.process_message to handle storing result/error
+        finally:
+            self._finish_time = time.time()
 
     def serialize(self) -> bytes:
         """Serializes the job data for sending over NATS."""
@@ -271,7 +392,10 @@ class Job:
     def deserialize(cls, data: bytes) -> "Job":
         """Deserializes job data received from NATS."""
         serializer = get_serializer()
-        return serializer.deserialize_job(data)
+        job_dict = serializer.deserialize_job(data).__dict__
+        valid_keys = cls.__init__.__code__.co_varnames
+        filtered = {k: v for k, v in job_dict.items() if k in valid_keys}
+        return cls(**filtered)
 
     def serialize_failed_job(self) -> bytes:
         """Serializes job data including error info for the failed queue."""
@@ -279,7 +403,7 @@ class Job:
         return serializer.serialize_failed_job(self)
     
     @staticmethod
-    def serialize_result(result: Any, status: str, error: Optional[str] = None, 
+    def serialize_result(result: Any, status: JobStatus, error: Optional[str] = None, 
                        traceback_str: Optional[str] = None) -> bytes:
         """Serializes job result data."""
         serializer = get_serializer()
@@ -292,15 +416,76 @@ class Job:
         return serializer.deserialize_result(data)
 
     def __repr__(self) -> str:
+        """Basic string representation without fetching status."""
         func_name = getattr(self.function, "__name__", repr(self.function))
-        status = "pending"
-        if self.error:
-            status = "failed"
-        elif self.result is not None:  # Crude check for completion
-            status = "finished"
-        return f"<Job {self.job_id}: {func_name}(...) status={status}>"
+        return f"<Job {self.job_id}: {func_name}(...)>"
 
     # --- Static method to fetch result ---
+    @staticmethod
+    async def _fetch_result_data(
+        job_id: str,
+        js: Optional[JetStreamContext] = None,
+        nats_url: Optional[str] = None,
+    ) -> Any:
+        """Fetches the result or error information for a completed job from the result backend."""
+        from nats.js.errors import KeyNotFoundError
+
+        from .connection import (
+            close_nats_connection,
+            get_jetstream_context,
+            get_nats_connection,
+        )
+        from .exceptions import (
+            JobNotFoundError,
+            NaqException,
+        )
+        from .settings import RESULT_KV_NAME
+
+        nc = None
+        should_close = False
+        if not js:
+            nc = await get_nats_connection(url=nats_url)
+            js = await get_jetstream_context(nc=nc)
+            should_close = True
+        
+        try:
+            kv = await js.key_value(bucket=RESULT_KV_NAME)
+        except Exception as e:
+            if should_close and nc:
+                await close_nats_connection()
+            raise NaqException(
+                f"Result backend KV store '{RESULT_KV_NAME}' not accessible: {e}"
+            ) from e
+
+        try:
+            entry = await kv.get(job_id.encode("utf-8"))
+            result_data = Job.deserialize_result(entry.value)
+            return result_data
+        except KeyNotFoundError:
+            raise JobNotFoundError(
+                f"Result for job {job_id} not found. It may not have completed, failed, or the result expired."
+            ) from None
+        finally:
+            if should_close and nc:
+                await close_nats_connection()
+            
+    @staticmethod
+    def _fetch_result_data_sync(
+        job_id: str,
+        nats_url: Optional[str] = None,
+    ) -> Any:
+        """
+        DEPRECATED: Use _fetch_result_data instead.
+        
+        This synchronous version can cause issues with asyncio event loops.
+        Use the async version with proper connection management instead.
+        """
+        from warnings import warn
+        warn("_fetch_result_data_sync is deprecated. Use _fetch_result_data instead.", DeprecationWarning, stacklevel=2)
+        
+        from .utils import run_async_from_sync
+        return run_async_from_sync(Job._fetch_result_data(job_id, nats_url=nats_url))
+    
     @staticmethod
     async def fetch_result(
         job_id: str,
@@ -337,29 +522,16 @@ class Job:
             NaqException,
             SerializationError,
         )
-        from .settings import RESULT_KV_NAME
 
         nc = None
         try:
-            nc = await get_nats_connection(url=nats_url)
-            js = await get_jetstream_context(nc=nc)
-            
-            try:
-                kv = await js.key_value(bucket=RESULT_KV_NAME)
-            except Exception as e:
-                raise NaqException(
-                    f"Result backend KV store '{RESULT_KV_NAME}' not accessible: {e}"
-                ) from e
+            nc = await get_nats_connection(url=nats_url)            
+            result_data = await Job._fetch_result_data(
+                job_id=job_id,
+                nats_url=nats_url,
+            )
 
-            try:
-                entry = await kv.get(job_id.encode("utf-8"))
-                result_data = Job.deserialize_result(entry.value)
-            except KeyNotFoundError:
-                raise JobNotFoundError(
-                    f"Result for job {job_id} not found. It may not have completed, failed, or the result expired."
-                ) from None
-
-            if result_data.get("status") == JOB_STATUS_FAILED:
+            if result_data.get("status") == JobStatus.FAILED.value:
                 error_str = result_data.get("error", "Unknown error")
                 traceback_str = result_data.get("traceback")
                 err_msg = f"Job {job_id} failed: {error_str}"
@@ -367,7 +539,7 @@ class Job:
                     err_msg += f"\nTraceback:\n{traceback_str}"
                 # Raise an exception containing the failure info
                 raise JobExecutionError(err_msg)
-            elif result_data.get("status") == JOB_STATUS_COMPLETED:
+            elif result_data.get("status") == JobStatus.COMPLETED.value:
                 return result_data.get("result")
             else:
                 # Should not happen if worker stores status correctly
@@ -387,7 +559,14 @@ class Job:
 
     @staticmethod
     def fetch_result_sync(job_id: str, nats_url: Optional[str] = None) -> Any:
-        """Synchronous version of fetch_result."""
+        """
+        DEPRECATED: Use fetch_result instead.
+        
+        This synchronous version can cause issues with asyncio event loops.
+        Use the async version with proper connection management instead.
+        """
+        from warnings import warn
+        warn("fetch_result_sync is deprecated. Use fetch_result instead.", DeprecationWarning, stacklevel=2)
+        
         from .utils import run_async_from_sync
-
         return run_async_from_sync(Job.fetch_result(job_id, nats_url=nats_url))

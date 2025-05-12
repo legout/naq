@@ -24,12 +24,11 @@ from .connection import (
     get_nats_connection,
 )
 from .exceptions import NaqException, SerializationError
-from .job import Job, JobExecutionError
+from .job import Job, JobStatus
 from .settings import (
     DEFAULT_RESULT_TTL_SECONDS,
     DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
     DEFAULT_WORKER_TTL_SECONDS,
-    DEPENDENCY_CHECK_DELAY_SECONDS,
     FAILED_JOB_STREAM_NAME,
     FAILED_JOB_SUBJECT_PREFIX,
     JOB_STATUS_COMPLETED,
@@ -52,144 +51,100 @@ class WorkerStatusManager:
     Manages worker status reporting, heartbeats, and monitoring.
     """
     
-    def __init__(
-        self,
-        worker_id: str,
-        queue_names: List[str],
-        heartbeat_interval: int,
-        worker_ttl: int,
-        concurrency: int,
-        semaphore: asyncio.Semaphore,
-    ):
-        self.worker_id = worker_id
-        self.queue_names = queue_names
-        self._heartbeat_interval = heartbeat_interval
-        self._worker_ttl = worker_ttl
-        self._concurrency = concurrency
-        self._semaphore = semaphore
+    def __init__(self, worker):
+        """Initialize the worker status manager."""
+        self.worker = worker
         self._current_status = WORKER_STATUS_STARTING
-        self._current_job_id: Optional[str] = None
-        self._worker_kv: Optional[KeyValue] = None
-        self._heartbeat_task: Optional[asyncio.Task] = None
-        self._running = True
-        self._shutdown_event = asyncio.Event()
+        self._kv_store = None
+        self._heartbeat_task = None
     
-    async def initialize(self, js: JetStreamContext) -> None:
-        """Initialize the worker status manager with a JetStream context."""
-        # Connect to Worker KV Store
-        try:
-            self._worker_kv = await js.key_value(bucket=WORKER_KV_NAME)
-            logger.info(f"Bound to worker status KV store: '{WORKER_KV_NAME}'")
-            return
-        except BucketNotFoundError:
-            logger.warning(f"Worker status KV store '{WORKER_KV_NAME}' not found. Creating...")
+    async def _get_kv_store(self) -> Optional[KeyValue]:
+        """Initialize and return the NATS Key-Value store for worker statuses."""
+        if self._kv_store is None:
+            if not self.worker._js:
+                logger.error("JetStream context not available")
+                return None
             try:
-                # Use integer seconds for TTL
-                worker_ttl_seconds = int(self._worker_ttl) if self._worker_ttl > 0 else 0
-                logger.info(
-                    f"Creating worker status KV store '{WORKER_KV_NAME}' with default TTL: {worker_ttl_seconds}s"
-                )
-                self._worker_kv = await js.create_key_value(
-                    bucket=WORKER_KV_NAME,
-                    ttl=worker_ttl_seconds,
-                    description="Stores naq worker status and heartbeats",
-                )
-                logger.info(f"Created worker status KV store: '{WORKER_KV_NAME}'")
-            except Exception as create_e:
-                logger.error(
-                    f"Failed to create worker status KV store '{WORKER_KV_NAME}': {create_e}",
-                    exc_info=True,
-                )
-                self._worker_kv = None  # Continue without worker monitoring if creation fails
-        except Exception as e:
-            logger.error(
-                f"Failed to bind to worker status KV store '{WORKER_KV_NAME}': {e}",
-                exc_info=True,
-            )
-            self._worker_kv = None
-    
-    async def update_status(
-        self, status: Optional[str] = None, job_id: Optional[str] = None
-    ) -> None:
-        """Updates the worker's status in the KV store."""
-        if not self._worker_kv:
-            return  # Cannot update status if KV is not available
-
-        if status:
-            self._current_status = status
-            
-        # If status is busy, use provided job_id, otherwise clear it
-        self._current_job_id = job_id if self._current_status == WORKER_STATUS_BUSY else None
-
-        key = self.worker_id.encode("utf-8")
-        worker_data = {
-            "worker_id": self.worker_id,
-            "hostname": socket.gethostname(),
-            "pid": os.getpid(),
-            "queues": self.queue_names,
-            "status": self._current_status,
-            "current_job_id": self._current_job_id,
-            "last_heartbeat_utc": time.time(),
-            "concurrency": self._concurrency,
-            "active_tasks": self._concurrency - self._semaphore._value,  # How many tasks are active
-        }
-        
-        try:
-            payload = cloudpickle.dumps(worker_data)
-            await self._worker_kv.put(key, payload)
-            logger.debug(f"Worker {self.worker_id} heartbeat sent. Status: {self._current_status}")
-        except Exception as e:
-            logger.warning(f"Failed to update worker status/heartbeat for {self.worker_id}: {e}")
-    
-    async def start_heartbeat_loop(self) -> None:
-        """Start the heartbeat loop to periodically update worker status."""
-        self._shutdown_event.clear()
-        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
-    
-    async def _heartbeat_loop(self) -> None:
-        """Periodically sends heartbeat updates."""
-        while self._running:
-            try:
-                # Update status without changing it, just refresh TTL and timestamp
-                await self.update_status()
-                # Wait for interval or shutdown
-                await asyncio.wait_for(
-                    self._shutdown_event.wait(), timeout=self._heartbeat_interval
-                )
-                # If wait finished without timeout, shutdown was triggered
-                break
-            except asyncio.TimeoutError:
-                continue  # Expected timeout, continue loop
-            except asyncio.CancelledError:
-                logger.info("Heartbeat loop cancelled.")
-                break
+                self._kv_store = await self.worker._js.key_value(bucket=WORKER_KV_NAME)
+            except BucketNotFoundError:
+                try:
+                    self._kv_store = await self.worker._js.create_key_value(
+                        bucket=WORKER_KV_NAME,
+                        ttl=self.worker._worker_ttl if self.worker._worker_ttl > 0 else 0,
+                        description="Stores naq worker status and heartbeats"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to create worker status KV store: {e}")
+                    self._kv_store = None
             except Exception as e:
-                logger.error(f"Error in heartbeat loop for {self.worker_id}: {e}", exc_info=True)
-                # Wait a bit before retrying after an error
-                await asyncio.sleep(self._heartbeat_interval)
+                logger.error(f"Failed to get worker status KV store: {e}")
+                self._kv_store = None
+        return self._kv_store
     
+    async def update_status(self, status: str, job_id: Optional[str] = None) -> None:
+        """Updates the worker's status in the KV store."""
+        self._current_status = status
+        kv_store = await self._get_kv_store()
+        if not kv_store:
+            return
+
+        payload = {
+            "worker_id": self.worker.worker_id,
+            "status": status,
+            "timestamp": time.time(),
+            "hostname": socket.gethostname(),
+            "pid": os.getpid()
+        }
+        if job_id:
+            payload["job_id"] = job_id
+
+        try:
+            await kv_store.put(self.worker.worker_id.encode(), cloudpickle.dumps(payload))
+        except Exception as e:
+            logger.error(f"Failed to update worker status: {e}")
+    
+    async def _heartbeat(self) -> None:
+        """Sends periodic heartbeat updates."""
+        while True:
+            await self.update_status(self._current_status)
+            await asyncio.sleep(DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS)
+
+    async def start_heartbeat_loop(self) -> None:
+        """Start the heartbeat loop."""
+        if not self._heartbeat_task:
+            self._heartbeat_task = asyncio.create_task(self._heartbeat())
+            await self.update_status(WORKER_STATUS_IDLE)
+
     async def stop_heartbeat_loop(self) -> None:
         """Stop the heartbeat loop."""
-        self._running = False
-        self._shutdown_event.set()
-        if self._heartbeat_task and not self._heartbeat_task.done():
-            self._heartbeat_task.cancel()
-            try:
-                await self._heartbeat_task
-            except asyncio.CancelledError:
-                pass  # Expected
-    
-    async def unregister_worker(self) -> None:
-        """Removes the worker's status entry from the KV store."""
-        if not self._worker_kv:
+        if not self._heartbeat_task or self._heartbeat_task.done():
             return
-            
-        logger.info(f"Unregistering worker {self.worker_id}...")
+
+        # Update status before canceling task to ensure it's captured
         try:
-            await self._worker_kv.delete(self.worker_id.encode("utf-8"))
-            logger.debug(f"Worker {self.worker_id} status deleted from KV.")
+            await self.update_status(WORKER_STATUS_STOPPING)
         except Exception as e:
-            logger.warning(f"Failed to delete worker status for {self.worker_id}: {e}")
+            logger.error(f"Error updating status during shutdown: {e}")
+
+        # Cancel and wait for task with proper exception handling
+        self._heartbeat_task.cancel()
+        try:
+            await asyncio.gather(self._heartbeat_task, return_exceptions=True)
+        except Exception as e:
+            logger.error(f"Error during heartbeat task shutdown: {e}")
+
+    async def unregister_worker(self) -> None:
+        """Delete the worker's status entry from the KV store."""
+        kv_store = await self._get_kv_store()
+        if not kv_store:
+            logger.warning(f"Worker status KV store not available. Cannot unregister worker {self.worker.worker_id}")
+            return
+
+        try:
+            await kv_store.delete(self.worker.worker_id.encode('utf-8'))
+            logger.info(f"Unregistered worker {self.worker.worker_id}")
+        except Exception as e:
+            logger.error(f"Failed to unregister worker {self.worker.worker_id}: {e}")
     
     @staticmethod
     async def list_workers(nats_url: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -254,9 +209,55 @@ class JobStatusManager:
     Manages job status tracking and dependency resolution.
     """
     
-    def __init__(self):
-        self._status_kv: Optional[KeyValue] = None
-        self._result_kv: Optional[KeyValue] = None
+    def __init__(self, worker):
+        self.worker = worker
+        self._result_kv_store = None
+
+    async def _get_result_kv_store(self) -> Optional[KeyValue]:
+        """Initialize and return NATS KV store for results."""
+        if self._result_kv_store is None:
+            if not self.worker._js:
+                logger.error("JetStream context not available")
+                return None
+            try:
+                self._result_kv_store = await self.worker._js.key_value(bucket=RESULT_KV_NAME)
+            except BucketNotFoundError:
+                try:
+                    self._result_kv_store = await self.worker._js.create_key_value(
+                        bucket=RESULT_KV_NAME,
+                        description="Stores job results and errors"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to create result KV store: {e}")
+                    self._result_kv_store = None
+            except Exception as e:
+                logger.error(f"Failed to get result KV store: {e}")
+                self._result_kv_store = None
+        return self._result_kv_store
+
+    async def update_job(self, job: Job) -> None:
+        """Update job status and result in KV store."""
+        kv_store = await self._get_result_kv_store()
+        if not kv_store:
+            logger.warning(f"Result KV store not available. Cannot update status for job {job.job_id}")
+            return
+
+        try:
+            payload = {
+                'status': job.status.value,
+                'result': job.result if hasattr(job, 'result') else None,
+                'error': str(job.error) if job.error else None,
+                'traceback': job.traceback,
+                'job_id': job.job_id,
+                'queue_name': job.queue_name,
+                'started_at': job.started_at,
+                'finished_at': job.finished_at
+            }
+            serialized_payload = cloudpickle.dumps(payload)
+            await kv_store.put(job.job_id.encode('utf-8'), serialized_payload)
+            logger.debug(f"Updated status for job {job.job_id} to {job.status.value}")
+        except Exception as e:
+            logger.error(f"Failed to update job status: {e}")
     
     async def initialize(self, js: JetStreamContext) -> None:
         """Initialize the job status manager with a JetStream context."""
@@ -299,7 +300,7 @@ class JobStatusManager:
     async def _initialize_result_kv(self, js: JetStreamContext) -> None:
         """Initialize the result KV store."""
         try:
-            self._result_kv = await js.key_value(bucket=RESULT_KV_NAME)
+            self._result_kv_store = await js.key_value(bucket=RESULT_KV_NAME)
             logger.info(f"Bound to result KV store: '{RESULT_KV_NAME}'")
         except BucketNotFoundError:
             logger.warning(f"Result KV store '{RESULT_KV_NAME}' not found. Creating...")
@@ -309,7 +310,7 @@ class JobStatusManager:
                 logger.info(
                     f"Creating result KV store '{RESULT_KV_NAME}' with default TTL: {default_ttl_seconds}s"
                 )
-                self._result_kv = await js.create_key_value(
+                self._result_kv_store = await js.create_key_value(
                     bucket=RESULT_KV_NAME,
                     ttl=default_ttl_seconds,
                     description="Stores naq job results and errors",
@@ -320,13 +321,13 @@ class JobStatusManager:
                     f"Failed to create result KV store '{RESULT_KV_NAME}': {create_e}",
                     exc_info=True,
                 )
-                self._result_kv = None  # Continue without result backend if creation fails
+                self._result_kv_store = None  # Continue without result backend if creation fails
         except Exception as e:
             logger.error(
                 f"Failed to bind to result KV store '{RESULT_KV_NAME}': {e}",
                 exc_info=True,
             )
-            self._result_kv = None
+            self._result_kv_store = None
     
     async def check_dependencies(self, job: Job) -> bool:
         """Checks if all dependencies for the job are met."""
@@ -384,7 +385,7 @@ class JobStatusManager:
     
     async def store_result(self, job: Job) -> None:
         """Stores the job result or failure info in the result KV store."""
-        if not self._result_kv:
+        if not self._result_kv_store: # Directly use the initialized attribute
             logger.debug(f"Result KV store not available. Skipping result storage for job {job.job_id}.")
             return
 
@@ -408,7 +409,7 @@ class JobStatusManager:
                 logger.debug(f"Storing result for job {job.job_id}")
 
             payload = cloudpickle.dumps(result_data)
-            await self._result_kv.put(key, payload)
+            await self._result_kv_store.put(key, payload) # Use the direct attribute
 
         except Exception as e:
             # Log error but don't let result storage failure stop job processing
@@ -420,8 +421,30 @@ class FailedJobHandler:
     Handles failed job processing and storage.
     """
     
-    def __init__(self):
-        self._js: Optional[JetStreamContext] = None
+    def __init__(self, worker):
+        self.worker = worker
+
+    async def handle_failed_job(self, job: Job) -> None:
+        """Handle a failed job by publishing it to the failed job stream."""
+        if not self.worker._js:
+            logger.error(f"Cannot handle failed job {job.job_id}, JetStream context not available")
+            return
+
+        subject = f"{FAILED_JOB_SUBJECT_PREFIX}.{job.queue_name}"
+        try:
+            # Ensure the failed job stream exists
+            await ensure_stream(
+                js=self.worker._js,
+                stream_name=FAILED_JOB_STREAM_NAME,
+                subjects=[f"{FAILED_JOB_SUBJECT_PREFIX}.*"],
+            )
+            
+            # Publish the failed job
+            payload = job.serialize_failed_job()
+            await self.worker._js.publish(subject, payload)
+            logger.info(f"Published failed job {job.job_id} to {subject}")
+        except Exception as e:
+            logger.error(f"Failed to publish failed job {job.job_id}: {e}", exc_info=True)
     
     async def initialize(self, js: JetStreamContext) -> None:
         """Initialize the failed job handler with a JetStream context."""
@@ -488,7 +511,8 @@ class Worker:
         if not queues:
             raise ValueError("Worker must listen to at least one queue.")
 
-        self.queue_names: List[str] = list(set(queues))  # Ensure unique names
+        # Preserve order while ensuring uniqueness using dict.fromkeys()
+        self.queue_names: List[str] = list(dict.fromkeys(queues))
         self.subjects: List[str] = [f"{NAQ_PREFIX}.queue.{name}" for name in self.queue_names]
         self._nats_url = nats_url
         self._concurrency = concurrency
@@ -507,6 +531,7 @@ class Worker:
         self._running = False
         self._shutdown_event = asyncio.Event()
         self._semaphore = asyncio.Semaphore(concurrency)
+        self._consumers: Dict[str, nats.js.api.PullSubscribe] = {}  # Track queue consumers
 
         # JetStream stream name
         self.stream_name = f"{NAQ_PREFIX}_jobs"
@@ -514,16 +539,9 @@ class Worker:
         self.consumer_prefix = f"{NAQ_PREFIX}-worker"
 
         # Create component managers
-        self._status_manager = WorkerStatusManager(
-            worker_id=self.worker_id,
-            queue_names=self.queue_names,
-            heartbeat_interval=heartbeat_interval,
-            worker_ttl=worker_ttl,
-            concurrency=concurrency,
-            semaphore=self._semaphore,
-        )
-        self._job_status_manager = JobStatusManager()
-        self._failed_job_handler = FailedJobHandler()
+        self._worker_status_manager = WorkerStatusManager(self)
+        self._job_status_manager = JobStatusManager(self)
+        self._failed_job_handler = FailedJobHandler(self)
 
         setup_logging()  # Setup logging
 
@@ -535,7 +553,7 @@ class Worker:
             logger.info(f"Worker '{self.worker_id}' connected to NATS and JetStream.")
 
             # Initialize component managers
-            await self._status_manager.initialize(self._js)
+            await self._worker_status_manager.start_heartbeat_loop()
             await self._job_status_manager.initialize(self._js)
             await self._failed_job_handler.initialize(self._js)
 
@@ -560,6 +578,7 @@ class Worker:
                     max_ack_pending=self._concurrency * 2,
                 ),
             )
+            self._consumers[queue_name] = psub
             logger.info(f"Pull consumer '{durable_name}' created for subject '{subject}'.")
 
             while self._running:
@@ -607,55 +626,48 @@ class Worker:
                 exc_info=True,
             )
 
-    async def process_message(self, msg: Msg) -> None:
-        """Deserializes and executes a job, handling retries, failures, and dependencies."""
-        job: Optional[Job] = None
+    async def process_message(self, msg: Any) -> None:
+        """Process a received job message."""
+        job = None
         try:
-            logger.info(
-                f"Received message: Subject='{msg.subject}', Sid='{msg.sid}', "
-                f"Seq={msg.metadata.sequence.stream}, Delivered={msg.metadata.num_delivered}"
-            )
-            job = Job.deserialize(msg.data)
+            # Deserialize the job from the message data
+            if hasattr(msg, 'data'):
+                job = Job.deserialize(msg.data)
+            else:
+                # For testing where msg might be a Job directly
+                job = msg
 
-            # --- Dependency Check ---
-            dependencies_met = await self._job_status_manager.check_dependencies(job)
-            if not dependencies_met:
-                logger.info(
-                    f"Dependencies not met for job {job.job_id}. "
-                    f"Re-queueing with delay {DEPENDENCY_CHECK_DELAY_SECONDS}s."
-                )
-                await msg.nak(delay=DEPENDENCY_CHECK_DELAY_SECONDS)
-                return  # Stop processing this message for now
-
-            # --- Update Status to Busy ---
-            await self._status_manager.update_status(status=WORKER_STATUS_BUSY, job_id=job.job_id)
-
-            # --- Execute Job ---
-            logger.info(
-                f"Processing job {job.job_id} ({getattr(job.function, '__name__', 'unknown')}) "
-                f"attempt {msg.metadata.num_delivered}"
-            )
-            await asyncio.to_thread(job.execute)  # Run synchronous function in thread pool
-
-            # --- Success ---
-            logger.info(f"Job {job.job_id} completed successfully.")
-            await self._job_status_manager.update_job_status(job.job_id, JOB_STATUS_COMPLETED)
+            if self._shutdown_event.is_set():
+                logger.info(f"Shutdown in progress. Job {job.job_id if job else 'unknown'} will not be processed.")
+                if hasattr(msg, 'nak'): # NAK the message so it can be re-queued
+                    await msg.nak()
+                return # Do not process if shutdown is initiated
+    
+            # Update worker status to busy with this job
+            await self._worker_status_manager.update_status(WORKER_STATUS_BUSY, job_id=job.job_id)
+    
+            # Execute the job
+            await job.execute() # This will set job.error and job.traceback on failure
+    
+            # Store result (which includes error/traceback if any)
             await self._job_status_manager.store_result(job)
-            await msg.ack()
-            logger.debug(f"Message acknowledged: Sid='{msg.sid}'")
+    
+            # Handle failure if needed (e.g., publish to dead-letter queue)
+            if job.status == JobStatus.FAILED: # status is a property derived from job.error
+                await self._failed_job_handler.handle_failed_job(job)
 
-        except JobExecutionError as e:  # Job function raised an exception
-            await self._handle_job_execution_error(job, msg)
-        except SerializationError as e:
-            logger.error(f"Failed to deserialize job data: {e}. Terminating message.", exc_info=True)
-            await msg.term()  # Terminate poison pill messages
+            # Acknowledge message processing complete
+            if hasattr(msg, 'ack'):
+                await msg.ack()
+
         except Exception as e:
-            # Catch-all for unexpected errors during processing
-            await self._handle_unexpected_error(job, msg, e)
+            logger.error(f"Error processing job {job.job_id if job else 'unknown'}: {e}", exc_info=True)
+            # If we have a NATS message and it has a term() method, terminate it
+            if hasattr(msg, 'term'):
+                await msg.term()
         finally:
-            # --- Update Status back to Idle (or stopping if shutdown happened) ---
-            final_status = WORKER_STATUS_IDLE if self._running else WORKER_STATUS_STOPPING
-            await self._status_manager.update_status(status=final_status, job_id=None)
+            # Update worker status back to idle
+            await self._worker_status_manager.update_status(WORKER_STATUS_IDLE)
 
     async def _handle_job_execution_error(self, job: Optional[Job], msg: Msg) -> None:
         """Handle errors from job execution."""
@@ -726,10 +738,10 @@ class Worker:
             await self._connect()
             
             # Register worker initially
-            await self._status_manager.update_status(status=WORKER_STATUS_STARTING)
+            await self._worker_status_manager.update_status(status=WORKER_STATUS_STARTING)
 
             # Start heartbeat task
-            await self._status_manager.start_heartbeat_loop()
+            await self._worker_status_manager.start_heartbeat_loop()
 
             # Ensure the main work stream exists
             await ensure_stream(
@@ -750,15 +762,15 @@ class Worker:
             )
             
             # Set status to idle once subscriptions are ready
-            await self._status_manager.update_status(status=WORKER_STATUS_IDLE)
+            await self._worker_status_manager.update_status(status=WORKER_STATUS_IDLE)
 
             await self._shutdown_event.wait()
 
             logger.info("Shutdown signal received. Waiting for tasks to complete...")
-            await self._status_manager.update_status(status=WORKER_STATUS_STOPPING)
+            await self._worker_status_manager.update_status(status=WORKER_STATUS_STOPPING)
 
             # Stop heartbeat task
-            await self._status_manager.stop_heartbeat_loop()
+            await self._worker_status_manager.stop_heartbeat_loop()
 
             # Wait for active processing tasks (respecting semaphore)
             active_tasks = self._concurrency - self._semaphore._value
@@ -779,7 +791,7 @@ class Worker:
             logger.info("Run task cancelled.")
         except Exception as e:
             logger.error(f"Worker run loop encountered an error: {e}", exc_info=True)
-            await self._status_manager.update_status(status=WORKER_STATUS_STOPPING)
+            await self._worker_status_manager.update_status(status=WORKER_STATUS_STOPPING)
         finally:
             logger.info("Worker shutting down...")
             await self._close()
@@ -792,10 +804,39 @@ class Worker:
 
     async def _close(self) -> None:
         """Closes NATS connection and cleans up resources."""
-        # Unregister worker first
-        await self._status_manager.unregister_worker()
-        # Close NATS connection
-        await close_nats_connection()
+        # Set shutdown event first to prevent new message processing
+        self._shutdown_event.set()
+        self._running = False
+
+        # Stop heartbeat and update status first
+        try:
+            await self._worker_status_manager.stop_heartbeat_loop()
+        except Exception as e:
+            logger.error(f"Error stopping heartbeat: {e}")
+
+        # Cleanup all consumers before unregistering worker
+        for queue_name, consumer in self._consumers.items():
+            try:
+                logger.debug(f"Unsubscribing consumer for queue {queue_name}")
+                await consumer.unsubscribe()
+                logger.debug(f"Draining consumer for queue {queue_name}")
+                await consumer.drain()
+            except Exception as e:
+                logger.warning(f"Error cleaning up consumer for queue {queue_name}: {e}")
+        self._consumers.clear()
+
+        # Unregister worker after cleanup
+        try:
+            await self._worker_status_manager.unregister_worker()
+        except Exception as e:
+            logger.error(f"Error unregistering worker: {e}")
+
+        # Finally close NATS connection
+        try:
+            await close_nats_connection()
+        except Exception as e:
+            logger.error(f"Error closing NATS connection: {e}")
+        
         self._nc = None
         self._js = None
 

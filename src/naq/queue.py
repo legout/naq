@@ -1,7 +1,8 @@
 # src/naq/queue.py
 import datetime
+import re
 from datetime import timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import cloudpickle
 import nats
@@ -321,6 +322,9 @@ class ScheduledJobManager:
 class Queue:
     """Represents a job queue backed by a NATS JetStream stream."""
 
+    # Add regex for valid queue names (alphanumeric, underscore, hyphen)
+    _VALID_QUEUE_NAME = re.compile(r'^[a-zA-Z0-9_.-]+$')
+
     def __init__(
         self,
         name: str = DEFAULT_QUEUE_NAME,
@@ -331,10 +335,22 @@ class Queue:
         Initialize a Queue instance.
         
         Args:
-            name: The name of the queue
+            name: The name of the queue. Must be non-empty and contain only
+                alphanumeric characters, underscores, or hyphens.
             nats_url: Optional NATS server URL override
             default_timeout: Optional default job timeout in seconds
+            
+        Raises:
+            ValueError: If queue name is empty or contains invalid characters
         """
+        if not name:
+            raise ValueError("Queue name cannot be empty")
+        if not self._VALID_QUEUE_NAME.match(name):
+            raise ValueError(
+                f"Queue name '{name}' contains invalid characters. "
+                "Only alphanumeric, underscore, hyphen, and dot are allowed."
+            )
+            
         self.name = name
         self.subject = f"{NAQ_PREFIX}.queue.{self.name}"
         self.stream_name = f"{NAQ_PREFIX}_jobs"
@@ -375,8 +391,8 @@ class Queue:
         Args:
             func: The function to execute.
             *args: Positional arguments for the function.
-            max_retries: Maximum number of retries allowed.
-            retry_delay: Delay between retries (seconds).
+            max_retries: Maximum number of retries allowed. Must be non-negative.
+            retry_delay: Delay between retries (seconds). Must be non-negative.
             depends_on: A job ID, Job instance, or list of IDs/instances this job depends on.
             **kwargs: Keyword arguments for the function.
 
@@ -384,8 +400,16 @@ class Queue:
             The enqueued Job instance.
             
         Raises:
+            ValueError: If max_retries or retry_delay is negative
             NaqException: If enqueuing fails
         """
+        # Validate retry parameters
+        if max_retries is not None and max_retries < 0:
+            raise ValueError("max_retries cannot be negative")
+        if not isinstance(retry_delay, (int, float)):
+            raise TypeError("retry_delay must be a number (int or float)")
+        if retry_delay < 0:
+            raise ValueError("retry_delay cannot be negative")
         # Create the job object
         job = Job(
             function=func,
@@ -395,6 +419,10 @@ class Queue:
             retry_delay=retry_delay,
             queue_name=self.name,
             depends_on=depends_on,
+            retry_strategy=kwargs.get("retry_strategy", "linear"),
+            retry_on=kwargs.get("retry_on"),
+            ignore_on=kwargs.get("ignore_on"),
+            result_ttl=kwargs.get("result_ttl"),
         )
         
         logger.info(
@@ -715,6 +743,11 @@ class Queue:
             NaqException: For other errors
         """
         return await self._scheduled_job_manager.modify_job(job_id, **updates)
+
+    async def close(self) -> None:
+        """Closes NATS connection and cleans up resources."""
+        await close_nats_connection()
+        self._js = None
 
     def __repr__(self) -> str:
         return f"Queue('{self.name}')"

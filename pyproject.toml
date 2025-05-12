@@ -10,7 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "nats-py>=2.6.0",
     "cloudpickle>=2.0.0",
-    "typer[all]>=0.9.0", # Keep typer[all] for CLI convenience
+    "typer>=0.9.0", # Keep typer[all] for CLI convenience
     "loguru>=0.7.0",
     "croniter>=1.4.0",
     "rich>=13.3.0",      # For prettier CLI output (tables, etc.)
@@ -19,18 +19,20 @@ dependencies = [
 [project.scripts]
 naq = "naq.cli:app"
 
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[dependency-groups]
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-mock>=3.12.0",
+    "pytest-asyncio>=0.23.5",
+    "freezegun>=1.5.1",
+]
 dev = [
     "ipython>=9.0.2",
     "isort>=6.0.1",
     "nest-asyncio>=1.6.0",
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",
+    "pytest-mock>=3.12.0",
     "ruff>=0.11.4",
     "six>=1.17.0",
 ]
@@ -42,3 +44,13 @@ dashboard = [
     "sanic-ext>=24.12.0",
     "uvicorn>=0.34.0",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = "src"
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"  # Add this line

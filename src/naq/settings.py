@@ -14,6 +14,10 @@ NAQ_PREFIX = "naq"
 # Options: 'pickle' (default, more flexible), 'json' (safer, less flexible)
 JOB_SERIALIZER = os.getenv("NAQ_JOB_SERIALIZER", "pickle")
 
+# Retry strategy constants
+RETRY_STRATEGY_LINEAR = "linear"
+RETRY_STRATEGY_EXPONENTIAL = "exponential"
+
 # --- Scheduler Settings ---
 # KV bucket name for scheduled jobs
 SCHEDULED_JOBS_KV_NAME = f"{NAQ_PREFIX}_scheduled_jobs"
