@@ -116,7 +116,8 @@ def worker(
         module_paths=module_paths,
     )
     try:
-        asyncio.run(w.run())
+        # Use synchronous interface backed by AnyIO BlockingPortal
+        w.run_sync()
     except KeyboardInterrupt:
         logger.info("Worker interrupted by user (KeyboardInterrupt). Shutting down.")
     except Exception as e:
@@ -152,63 +153,42 @@ def purge(
     logger.info(f"Attempting to purge queues: {queues}")
     logger.info(f"Using NATS URL: {nats_url}")
 
-    async def _purge_queues():
-        results = {}
-        total_purged = 0
-        # Instantiate Queue object once if nats_url is consistent for all purges
-        # If each queue needed different settings, loop would be necessary here.
-        q = Queue(nats_url=nats_url)  # Instantiate once
+    # Use synchronous helper for purge (reuses thread-local NATS connection)
+    from .queue import purge_queue_sync
 
-        for queue_name in queues:
-            try:
-                q.name = queue_name  # Update the name for the current iteration
-                q.subject = (
-                    f"{NAQ_PREFIX}.queue.{queue_name}"  # Update subject accordingly
-                )
-                purged_count = await q.purge()  # Call purge on the reused object
-                results[queue_name] = {"status": "success", "count": purged_count}
-                total_purged += purged_count
-            except Exception as e:
-                results[queue_name] = {"status": "error", "error": str(e)}
-                logger.error(f"Failed to purge queue '{queue_name}': {e}")
+    results = {}
+    total_purged = 0
+    for queue_name in queues:
+        try:
+            purged_count = purge_queue_sync(queue_name=queue_name, nats_url=nats_url)
+            results[queue_name] = {"status": "success", "count": purged_count}
+            total_purged += purged_count
+        except Exception as e:
+            results[queue_name] = {"status": "error", "error": str(e)}
+            logger.error(f"Failed to purge queue '{queue_name}': {e}")
 
-        # --- Report Results using Rich ---
-        success_count = sum(1 for r in results.values() if r["status"] == "success")
-        error_count = len(results) - success_count
+    # --- Report Results using Rich ---
+    success_count = sum(1 for r in results.values() if r["status"] == "success")
+    error_count = len(results) - success_count
 
-        console.print("\n[bold]Purge Results:[/bold]")
-        for name, result in results.items():
-            if result["status"] == "success":
-                console.print(
-                    f"  - [green]Queue '{name}': Purged {result['count']} jobs.[/green]"
-                )
-            else:
-                console.print(
-                    f"  - [red]Queue '{name}': Failed - {result['error']}[/red]"
-                )
-
-        # --- Summary Panel ---
-        summary_color = (
-            "green" if error_count == 0 else ("yellow" if success_count > 0 else "red")
-        )
-        summary_text = f"Total jobs removed: {total_purged}\nQueues processed: {len(results)}\nSuccessful purges: {success_count}\nFailed purges: {error_count}"
-        console.print(
-            Panel(
-                summary_text, title="Purge Summary", style=summary_color, expand=False
+    console.print("\n[bold]Purge Results:[/bold]")
+    for name, result in results.items():
+        if result["status"] == "success":
+            console.print(
+                f"  - [green]Queue '{name}': Purged {result['count']} jobs.[/green]"
             )
-        )
-        # --- End Reporting ---
+        else:
+            console.print(f"  - [red]Queue '{name}': Failed - {result['error']}[/red]")
 
-        # Close connection if opened by Queue instances
-        await close_nats_connection()
-
-    try:
-        asyncio.run(_purge_queues())
-    except Exception as e:
-        logger.exception(f"Purge command failed unexpectedly: {e}")
-        raise typer.Exit(code=1)
-    finally:
-        logger.info("Purge process finished.")
+    # --- Summary Panel ---
+    summary_color = (
+        "green" if error_count == 0 else ("yellow" if success_count > 0 else "red")
+    )
+    summary_text = f"Total jobs removed: {total_purged}\nQueues processed: {len(results)}\nSuccessful purges: {success_count}\nFailed purges: {error_count}"
+    console.print(
+        Panel(summary_text, title="Purge Summary", style=summary_color, expand=False)
+    )
+    # --- End Reporting ---
 
 
 @app.command()
@@ -324,7 +304,17 @@ def list_scheduled_jobs(
     setup_logging(log_level)
     logger.info(f"Listing scheduled jobs from NATS at {nats_url}")
 
-    async def _list_scheduled_jobs():
+    # Use sync Key-Value access via thread-local connection for simplicity
+    from .queue import Queue
+    from .connection import get_nats_connection, get_jetstream_context  # types only
+
+    # We'll use run_async_from_sync through Queue helpers where available,
+    # but this command mostly reads KV directly; keep the logic synchronous by
+    # reusing thread-local connections within run_async_from_sync.
+    def _list_sync():
+        return asyncio.run(_list_scheduled_jobs_async())
+
+    async def _list_scheduled_jobs_async():
         try:
             nc = await get_nats_connection(url=nats_url)
             js = await get_jetstream_context(nc=nc)
@@ -347,24 +337,19 @@ def list_scheduled_jobs(
                     console.print("[yellow]No scheduled jobs found.[/yellow]")
                     return
             except nats.js.errors.NoKeysError:
-                # This is normal when no keys are found
                 console.print("[yellow]No scheduled jobs found.[/yellow]")
                 return
 
             jobs_data = []
 
-            # Process each job
             for key_bytes in keys:
-                key = None  # Initialize key to None for safety
-                job_data = None  # Initialize job_data as well
+                key = None
                 try:
                     key = (
                         key_bytes.decode("utf-8")
                         if isinstance(key_bytes, bytes)
                         else key_bytes
-                    )  # Assign key here
-
-                    # If filtering by job_id, skip non-matching jobs
+                    )
                     if job_id and job_id != key:
                         continue
 
@@ -372,31 +357,22 @@ def list_scheduled_jobs(
                     if not entry:
                         continue
 
-                    job_data = cloudpickle.loads(entry.value)  # Assign job_data here
+                    job_data = cloudpickle.loads(entry.value)
 
-                    # --- Apply filters ---
-                    # Check status filter first
-                    current_status = job_data.get(
-                        "status"
-                    )  # Get status before filter check
+                    current_status = job_data.get("status")
                     if status and current_status != status:
                         continue
-                    # Check queue filter
                     if queue and job_data.get("queue_name") != queue:
                         continue
-                    # --- End filters ---
 
-                    # Add to results
                     jobs_data.append(job_data)
                 except Exception as e:
-                    # Safely log the error, using key_bytes if key is not assigned
                     key_repr = key if key is not None else repr(key_bytes)
                     logger.error(
                         f"Error processing scheduled job entry '{key_repr}': {e}"
                     )
-                    continue  # Continue to the next key
+                    continue
 
-            # Sort by next run time
             jobs_data.sort(key=lambda j: j.get("scheduled_timestamp_utc", 0))
 
             if detailed:
@@ -424,20 +400,17 @@ def list_scheduled_jobs(
                 table.add_column("NEXT RUN", width=25)
                 table.add_column("SCHEDULE TYPE", width=15)
 
-            # Add rows to the table
             for job in jobs_data:
                 job_id_local = job.get("job_id", "unknown")
                 queue_name = job.get("queue_name", "unknown")
                 current_job_status = job.get("status", SCHEDULED_JOB_STATUS.ACTIVE)
 
-                # Determine status style
                 status_style = "green"
                 if current_job_status == SCHEDULED_JOB_STATUS.PAUSED:
                     status_style = "yellow"
                 elif current_job_status == SCHEDULED_JOB_STATUS.FAILED:
                     status_style = "red"
 
-                # Format next run time
                 next_run_ts = job.get("scheduled_timestamp_utc")
                 if next_run_ts:
                     next_run = datetime.datetime.fromtimestamp(
@@ -446,7 +419,6 @@ def list_scheduled_jobs(
                 else:
                     next_run = "unknown"
 
-                # Determine schedule type
                 if job.get("cron"):
                     schedule_type = "cron"
                 elif job.get("interval_seconds"):
@@ -460,8 +432,6 @@ def list_scheduled_jobs(
                         if job.get("repeat") is None
                         else str(job.get("repeat", 0))
                     )
-
-                    # Determine additional details
                     details = []
                     if job.get("cron"):
                         details.append(f"cron='{job.get('cron')}'")
@@ -494,23 +464,16 @@ def list_scheduled_jobs(
                         schedule_type,
                     )
 
-            # Print the table
             console.print(table)
-
-            # Total count with styling
             console.print(f"\n[bold]Total:[/bold] {len(jobs_data)} scheduled job(s)")
-
         except Exception as e:
             logger.exception(f"Error listing scheduled jobs: {e}")
             console.print(f"[red]Error listing scheduled jobs: {str(e)}[/red]")
         finally:
             await close_nats_connection()
 
-    try:
-        asyncio.run(_list_scheduled_jobs())
-    except Exception as e:
-        logger.exception(f"Command failed unexpectedly: {e}")
-        raise typer.Exit(code=1)
+    # Run the async routine
+    asyncio.run(_list_scheduled_jobs_async())
 
 
 @app.command("job-control")
@@ -582,109 +545,91 @@ def job_control(
 
     logger.info(f"Performing {action} on job {job_id}")
 
-    async def _control_job():
-        try:
-            q = Queue(nats_url=nats_url)
-
-            # Process according to action
-            if action == "cancel":
-                result = await q.cancel_scheduled_job(job_id)
-                if result:
-                    console.print(
-                        f"[green]Job {job_id} cancelled successfully.[/green]"
-                    )
-                else:
-                    console.print(
-                        f"[yellow]Job {job_id} not found or already cancelled.[/yellow]"
-                    )
-
-            elif action == "pause":
-                result = await q.pause_scheduled_job(job_id)
-                if result:
-                    console.print(f"[green]Job {job_id} paused successfully.[/green]")
-                else:
-                    console.print(
-                        f"[yellow]Failed to pause job {job_id}. Job might not exist or was already paused.[/yellow]"
-                    )
-
-            elif action == "resume":
-                result = await q.resume_scheduled_job(job_id)
-                if result:
-                    console.print(f"[green]Job {job_id} resumed successfully.[/green]")
-                else:
-                    console.print(
-                        f"[yellow]Failed to resume job {job_id}. Job might not exist or was not paused.[/yellow]"
-                    )
-
-            elif action == "reschedule":
-                # Build update dict
-                updates = {}
-
-                if cron:
-                    updates["cron"] = cron
-                if interval is not None:
-                    updates["interval"] = interval
-                if repeat is not None:
-                    updates["repeat"] = repeat
-                if next_run:
-                    try:
-                        # Parse ISO format
-                        next_run_dt = datetime.datetime.fromisoformat(
-                            next_run.replace("Z", "+00:00")
-                        )
-                        # Convert to UTC timestamp
-                        updates["scheduled_timestamp_utc"] = next_run_dt.timestamp()
-                    except ValueError as e:
-                        logger.error(
-                            f"Invalid next_run format: {e}. Use ISO format (e.g., '2023-01-01T12:00:00Z')"
-                        )
-                        raise typer.Exit(code=1)
-
-                result = await q.modify_scheduled_job(job_id, **updates)
-                if result:
-                    console.print(
-                        f"[green]Job {job_id} rescheduled successfully.[/green]"
-                    )
-
-                    # Show a summary of the changes made
-                    change_summary = []
-                    if cron:
-                        change_summary.append(f"cron='{cron}'")
-                    if interval is not None:
-                        change_summary.append(f"interval={interval}s")
-                    if repeat is not None:
-                        change_summary.append(f"repeat={repeat}")
-                    if next_run:
-                        change_summary.append(f"next_run={next_run}")
-
-                    if change_summary:
-                        console.print(
-                            Panel(
-                                Text(
-                                    "\n".join(
-                                        f"• {change}" for change in change_summary
-                                    )
-                                ),
-                                title="Applied Changes",
-                                expand=False,
-                            )
-                        )
-                else:
-                    console.print(
-                        f"[yellow]Failed to reschedule job {job_id}. Job might not exist.[/yellow]"
-                    )
-
-        except Exception as e:
-            logger.exception(f"Error controlling job {job_id}: {e}")
-            console.print(f"[red]Error: {str(e)}[/red]")
-        finally:
-            await close_nats_connection()
+    # Use synchronous helpers provided by Queue sync wrappers
+    from .queue import (
+        cancel_scheduled_job_sync,
+        pause_scheduled_job_sync,
+        resume_scheduled_job_sync,
+        modify_scheduled_job_sync,
+    )
 
     try:
-        asyncio.run(_control_job())
+        if action == "cancel":
+            result = cancel_scheduled_job_sync(job_id, nats_url=nats_url)
+            if result:
+                console.print(f"[green]Job {job_id} cancelled successfully.[/green]")
+            else:
+                console.print(
+                    f"[yellow]Job {job_id} not found or already cancelled.[/yellow]"
+                )
+
+        elif action == "pause":
+            result = pause_scheduled_job_sync(job_id, nats_url=nats_url)
+            if result:
+                console.print(f"[green]Job {job_id} paused successfully.[/green]")
+            else:
+                console.print(
+                    f"[yellow]Failed to pause job {job_id}. Job might not exist or was already paused.[/yellow]"
+                )
+
+        elif action == "resume":
+            result = resume_scheduled_job_sync(job_id, nats_url=nats_url)
+            if result:
+                console.print(f"[green]Job {job_id} resumed successfully.[/green]")
+            else:
+                console.print(
+                    f"[yellow]Failed to resume job {job_id}. Job might not exist or was not paused.[/yellow]"
+                )
+
+        elif action == "reschedule":
+            updates = {}
+            if cron:
+                updates["cron"] = cron
+            if interval is not None:
+                updates["interval"] = interval
+            if repeat is not None:
+                updates["repeat"] = repeat
+            if next_run:
+                try:
+                    next_run_dt = datetime.datetime.fromisoformat(
+                        next_run.replace("Z", "+00:00")
+                    )
+                    updates["scheduled_timestamp_utc"] = next_run_dt.timestamp()
+                except ValueError as e:
+                    logger.error(
+                        f"Invalid next_run format: {e}. Use ISO format (e.g., '2023-01-01T12:00:00Z')"
+                    )
+                    raise typer.Exit(code=1)
+
+            result = modify_scheduled_job_sync(job_id, nats_url=nats_url, **updates)
+            if result:
+                console.print(f"[green]Job {job_id} rescheduled successfully.[/green]")
+
+                change_summary = []
+                if cron:
+                    change_summary.append(f"cron='{cron}'")
+                if interval is not None:
+                    change_summary.append(f"interval={interval}s")
+                if repeat is not None:
+                    change_summary.append(f"repeat={repeat}")
+                if next_run:
+                    change_summary.append(f"next_run={next_run}")
+
+                if change_summary:
+                    console.print(
+                        Panel(
+                            Text("\n".join(f"• {change}" for change in change_summary)),
+                            title="Applied Changes",
+                            expand=False,
+                        )
+                    )
+            else:
+                console.print(
+                    f"[yellow]Failed to reschedule job {job_id}. Job might not exist.[/yellow]"
+                )
     except Exception as e:
-        logger.exception(f"Command failed unexpectedly: {e}")
-        raise typer.Exit(code=1)
+        logger.exception(f"Error controlling job {job_id}: {e}")
+        console.print(f"[red]Error: {str(e)}[/red]")
 
 
 @app.command("list-workers")
@@ -709,83 +654,79 @@ def list_workers_command(
     setup_logging(log_level)
     logger.info(f"Listing active workers from NATS at {nats_url}")
 
-    async def _list_workers():
-        try:
-            workers = await Worker.list_workers(nats_url=nats_url)
-            if not workers:
-                console.print("[yellow]No active workers found.[/yellow]")
-                return
+    try:
+        # Use synchronous interface to list workers
+        workers = Worker.list_workers_sync(nats_url=nats_url)
+        if not workers:
+            console.print("[yellow]No active workers found.[/yellow]")
+            return
 
-            # Sort workers by ID for consistent output
-            workers.sort(key=lambda w: w.get("worker_id", ""))
+        # Sort workers by ID for consistent output
+        workers.sort(key=lambda w: w.get("worker_id", ""))
 
-            table = Table(
-                title="NAQ Workers", show_header=True, header_style="bold cyan"
+        table = Table(title="NAQ Workers", show_header=True, header_style="bold cyan")
+
+        # Add columns
+        table.add_column("WORKER ID", style="dim", width=45)
+        table.add_column("STATUS", width=10)
+        table.add_column("QUEUES", width=30)
+        table.add_column("CURRENT JOB", width=37)
+        table.add_column("LAST HEARTBEAT", width=25)
+
+        # Add rows to the table
+        now = time.time()
+        for worker in workers:
+            worker_id = worker.get("worker_id", "unknown")
+            status = worker.get("status", "?")
+
+            # Determine status style
+            status_style = "green"
+            if status == "busy":
+                status_style = "yellow"
+            elif status in ["stopping", "starting"]:
+                status_style = "blue"
+
+            queues = ", ".join(worker.get("queues", []))
+            current_job = (
+                worker.get("current_job_id", "-")
+                if status == WORKER_STATUS.BUSY
+                else "-"
             )
 
-            # Add columns
-            table.add_column("WORKER ID", style="dim", width=45)
-            table.add_column("STATUS", width=10)
-            table.add_column("QUEUES", width=30)
-            table.add_column("CURRENT JOB", width=37)
-            table.add_column("LAST HEARTBEAT", width=25)
+            # Format last heartbeat
+            last_hb_ts = worker.get("last_heartbeat_utc")
+            if last_hb_ts:
+                hb_dt = datetime.datetime.fromtimestamp(last_hb_ts, timezone.utc)
+                hb_str = hb_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
 
-            # Add rows to the table
-            now = time.time()
-            for worker in workers:
-                worker_id = worker.get("worker_id", "unknown")
-                status = worker.get("status", "?")
+                # Check if heartbeat is stale
+                if now - last_hb_ts > DEFAULT_WORKER_TTL_SECONDS:
+                    hb_str = f"[red]{hb_str} (STALE)[/red]"
+            else:
+                hb_str = "[italic]never[/italic]"
 
-                # Determine status style
-                status_style = "green"
-                if status == "busy":
-                    status_style = "yellow"
-                elif status in ["stopping", "starting"]:
-                    status_style = "blue"
+            # Add row to table
+            table.add_row(
+                worker_id,
+                f"[{status_style}]{status}[/{status_style}]",
+                queues,
+                current_job,
+                hb_str,
+            )
 
-                queues = ", ".join(worker.get("queues", []))
-                current_job = (
-                    worker.get("current_job_id", "-")
-                    if status == WORKER_STATUS.BUSY
-                    else "-"
-                )
+        # Print the table
+        console.print(table)
+        console.print(f"\n[bold]Total:[/bold] {len(workers)} active worker(s)")
 
-                # Format last heartbeat
-                last_hb_ts = worker.get("last_heartbeat_utc")
-                if last_hb_ts:
-                    hb_dt = datetime.datetime.fromtimestamp(last_hb_ts, timezone.utc)
-                    hb_str = hb_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
-
-                    # Check if heartbeat is stale
-                    if now - last_hb_ts > DEFAULT_WORKER_TTL_SECONDS:
-                        hb_str = f"[red]{hb_str} (STALE)[/red]"
-                else:
-                    hb_str = "[italic]never[/italic]"
-
-                # Add row to table
-                table.add_row(
-                    worker_id,
-                    f"[{status_style}]{status}[/{status_style}]",
-                    queues,
-                    current_job,
-                    hb_str,
-                )
-
-            # Print the table
-            console.print(table)
-            console.print(f"\n[bold]Total:[/bold] {len(workers)} active worker(s)")
-
-        except Exception as e:
-            logger.exception(f"Error listing workers: {e}")
-            console.print(f"[red]Error listing workers: {str(e)}[/red]")
-        finally:
-            await close_nats_connection()
-
-    try:
-        asyncio.run(_list_workers())
     except Exception as e:
-        logger.exception(f"Command failed unexpectedly: {e}")
-        raise typer.Exit(code=1)
+        logger.exception(f"Error listing workers: {e}")
+        console.print(f"[red]Error listing workers: {str(e)}[/red]")
+    finally:
+        # Close any NATS connection if opened by the sync wrapper
+        try:
+            asyncio.run(close_nats_connection())
+        except Exception:
+            pass
 
 
 # --- Dashboard Command (Optional) ---

@@ -1008,7 +1008,7 @@ def enqueue_sync(
         # Do not close thread-local connection here; allow reuse across sync calls.
         return job
 
-    return run_async_from_sync(_main())
+    return run_async_from_sync(_main)
 
 
 def enqueue_at_sync(
@@ -1045,7 +1045,7 @@ def enqueue_at_sync(
         )
         return job
 
-    return run_async_from_sync(_main())
+    return run_async_from_sync(_main)
 
 
 def enqueue_in_sync(
@@ -1081,7 +1081,7 @@ def enqueue_in_sync(
         )
         return job
 
-    return run_async_from_sync(_main())
+    return run_async_from_sync(_main)
 
 
 def schedule_sync(
@@ -1122,7 +1122,7 @@ def schedule_sync(
         )
         return job
 
-    return run_async_from_sync(_main())
+    return run_async_from_sync(_main)
 
 
 def purge_queue_sync(
@@ -1141,7 +1141,7 @@ def purge_queue_sync(
         )
         return count
 
-    return run_async_from_sync(_main())
+    return run_async_from_sync(_main)
 
 
 def cancel_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bool:
@@ -1157,7 +1157,7 @@ def cancel_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bo
         )
         return res
 
-    return run_async_from_sync(_main())
+    return run_async_from_sync(_main)
 
 
 def pause_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bool:
@@ -1173,7 +1173,7 @@ def pause_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> boo
         )
         return res
 
-    return run_async_from_sync(_main())
+    return run_async_from_sync(_main)
 
 
 def resume_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bool:
@@ -1189,7 +1189,7 @@ def resume_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bo
         )
         return res
 
-    return run_async_from_sync(_main())
+    return run_async_from_sync(_main)
 
 
 def modify_scheduled_job_sync(
@@ -1207,7 +1207,7 @@ def modify_scheduled_job_sync(
         )
         return res
 
-    return run_async_from_sync(_main())
+    return run_async_from_sync(_main)
 
 
 # Optional: public function to explicitly close thread-local connection for sync batches
@@ -1223,4 +1223,4 @@ def close_sync_connections(nats_url: Optional[str] = None) -> None:
     async def _main():
         await close_nats_connection(url=nats_url, thread_local=True)
 
-    return run_async_from_sync(_main())
+    return run_async_from_sync(_main)

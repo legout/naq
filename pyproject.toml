@@ -14,6 +14,7 @@ dependencies = [
     "loguru>=0.7.0",
     "croniter>=1.4.0",
     "rich>=13.3.0",      # For prettier CLI output (tables, etc.)
+    "anyio>=4.9.0",
 ]
 
 [project.scripts]
@@ -37,7 +38,7 @@ dev = [
     "six>=1.17.0",
 ]
 dashboard = [
-    "datastar-py>=0.4.3",
+    "datastar-py>=0.6.3",
     "htmy>=0.7.3",
     "jinja2>=3.1.6",
     "sanic>=25.3.0",

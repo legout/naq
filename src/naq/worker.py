@@ -893,7 +893,6 @@ class Worker:
         """Starts the worker, connects to NATS, and begins processing jobs."""
         self._running = True
         self._shutdown_event.clear()
-        self.install_signal_handlers()
 
         try:
             await self._connect()
@@ -1018,9 +1017,29 @@ class Worker:
         self._shutdown_event.set()
 
     def install_signal_handlers(self) -> None:
-        """Installs signal handlers for graceful shutdown."""
-        signal.signal(signal.SIGINT, self.signal_handler)
-        signal.signal(signal.SIGTERM, self.signal_handler)
+        """Installs signal handlers for graceful shutdown.
+
+        Notes:
+            - signal.signal() may only be called from the main thread of the main
+              interpreter. If not in the main thread, this becomes a no-op with a warning.
+        """
+        try:
+            import threading
+
+            if threading.current_thread() is not threading.main_thread():
+                logger.warning(
+                    "Skipping installation of signal handlers because we are not in the main thread."
+                )
+                return
+            signal.signal(signal.SIGINT, self.signal_handler)
+            signal.signal(signal.SIGTERM, self.signal_handler)
+        except ValueError as e:
+            # This can happen in environments that disallow setting signals (e.g., some notebooks)
+            logger.warning(f"Could not install signal handlers: {e}")
+        except Exception as e:
+            logger.error(
+                f"Unexpected error installing signal handlers: {e}", exc_info=True
+            )
 
     # --- Static methods for worker monitoring ---
     @staticmethod
@@ -1031,4 +1050,115 @@ class Worker:
     @staticmethod
     def list_workers_sync(nats_url: Optional[str] = None) -> List[Dict[str, Any]]:
         """Synchronous version of list_workers."""
-        return run_async_from_sync(Worker.list_workers(nats_url=nats_url))
+        return run_async_from_sync(Worker.list_workers, nats_url=nats_url)
+
+    # --- Sync interface for long-running worker using anyio.BlockingPortal ---
+    def run_sync(self) -> None:
+        """
+        Start the async worker in a clean AnyIO event loop using a BlockingPortal.
+
+        Rationale:
+        - Avoids mixing with any possibly running event loop or asyncio.run() constraints.
+        - Provides consistent behavior when called from synchronous contexts (CLI, scripts).
+        """
+        try:
+            from anyio.from_thread import start_blocking_portal
+        except Exception as e:
+            # Keep import local to avoid introducing runtime dependency unless used
+            raise RuntimeError(
+                "anyio is required for Worker.run_sync(). Please ensure 'anyio' is installed."
+            ) from e
+
+        # Install signal handlers in the main thread before starting the event loop thread
+        self.install_signal_handlers()
+
+        # Use BlockingPortal to create and own the event loop for the duration of run()
+        with start_blocking_portal() as portal:
+            return portal.call(self.run)
+
+    # --- Optional persistent lifecycle control for sync contexts ---
+    class _Controller:
+        """
+        Controller to manage a Worker from synchronous code, keeping a BlockingPortal alive.
+
+        Methods:
+            stop(): request graceful stop and wait for shutdown.
+            status(): returns current boolean running state.
+        """
+
+        def __init__(self, worker, portal_cm, portal):
+            self._worker = worker
+            self._portal_cm = portal_cm
+            self._portal = portal
+            self._closed = False
+
+        def stop(self) -> None:
+            if self._closed:
+                return
+
+            # Signal shutdown in the worker's event loop
+            def _signal():
+                self._worker._running = False
+                self._worker._shutdown_event.set()
+                return None
+
+            self._portal.call(_signal)
+            # allow worker.run to finish, then close portal
+            self._portal_cm.__exit__(None, None, None)
+            self._closed = True
+
+        def status(self) -> bool:
+            # Check running flag via portal to avoid races
+            def _get():
+                return bool(self._worker._running)
+
+            return self._portal.call(_get)
+
+    def start_sync(self) -> "_Controller":
+        """
+        Start the worker asynchronously and return a synchronous Controller.
+
+        Usage:
+            ctl = worker.start_sync()
+            # ... later
+            ctl.stop()
+        """
+        try:
+            from anyio.from_thread import start_blocking_portal
+        except Exception as e:
+            raise RuntimeError(
+                "anyio is required for Worker.start_sync(). Please ensure 'anyio' is installed."
+            ) from e
+
+        # Install signal handlers in the main thread before starting the event loop thread
+        self.install_signal_handlers()
+
+        portal_cm = start_blocking_portal()
+        portal = portal_cm.__enter__()
+
+        # schedule the worker run in background; it exits when shutdown_event is set
+        def _start() -> None:
+            # fire-and-forget task
+            async def _runner():
+                await self.run()
+
+            # run as a task; no result awaited here
+            import anyio
+
+            anyio.create_task_group().start_soon  # no-op reference to satisfy linters
+            # simplest is to call soon
+            return asyncio.create_task(_runner())
+
+        portal.call(_start)
+
+        return Worker._Controller(self, portal_cm, portal)
+
+    def stop_sync(self) -> None:
+        """
+        Convenience synchronous stop for a worker that was started via start_sync(),
+        if a controller is not retained. This method is a no-op unless start_sync()
+        was used and a controller stored on the instance.
+        """
+        ctl = getattr(self, "_sync_controller", None)
+        if ctl:
+            ctl.stop()

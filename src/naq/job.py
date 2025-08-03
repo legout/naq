@@ -734,7 +734,7 @@ class Job:
 
         from .utils import run_async_from_sync
 
-        return run_async_from_sync(Job._fetch_result_data(job_id, nats_url=nats_url))
+        return run_async_from_sync(Job._fetch_result_data, job_id, nats_url=nats_url)
 
     @staticmethod
     async def fetch_result(
@@ -829,4 +829,4 @@ class Job:
 
         from .utils import run_async_from_sync
 
-        return run_async_from_sync(Job.fetch_result(job_id, nats_url=nats_url))
+        return run_async_from_sync(Job.fetch_result, job_id, nats_url=nats_url)

@@ -1,40 +1,49 @@
 # src/naq/utils.py
 import asyncio
 import sys
-from typing import Any, Coroutine, TypeVar
+from typing import Any, Callable, Coroutine, TypeVar
 
+import anyio
 from loguru import logger
 
 T = TypeVar("T")
 
 
-def run_async_from_sync(coro: Coroutine[Any, Any, T]) -> T:
+def run_async_from_sync(
+    func: Callable[..., Coroutine[Any, Any, T]], *args: Any, **kwargs: Any
+) -> T:
     """
-    Runs an async coroutine from a synchronous context.
+    Runs an async function from a synchronous context.
 
-    Handles event loop management by using asyncio.run() which creates a new
+    Handles event loop management by using anyio.run() which creates a new
     event loop if one isn't already running. If an event loop is already running,
     it raises an informative error directing the user to use the async interface.
 
     Args:
-        coro: The coroutine to run.
+        func: The async function to run.
+        *args: Positional arguments to pass to the async function.
+        **kwargs: Keyword arguments to pass to the async function.
 
     Returns:
-        The result of the coroutine.
+        The result of the async function.
 
     Raises:
         RuntimeError: If called when an asyncio event loop is already running.
     """
     try:
-        # asyncio.run() creates a new event loop if one isn't running,
+        # anyio.run() creates a new event loop if one isn't running,
         # runs the coroutine to completion, and then closes the loop.
-        return asyncio.run(coro)
+        return anyio.run(func, *args, **kwargs)
     except RuntimeError as e:
-        if "cannot call run() while another loop is running" in str(e):
-            # This occurs when the sync function is called from within an async context
-            # that already has a running event loop.
+        # Check for the specific error message from anyio when a loop is already running.
+        # The exact message might differ from asyncio.
+        if (
+            "cannot be called from a running event loop" in str(e).lower()
+            or "anyio.run() cannot be called from within a running event loop"
+            in str(e).lower()
+        ):
             raise RuntimeError(
-                "Cannot run naq sync function when an asyncio event loop is already running. "
+                "Cannot run naq sync function when an event loop is already running. "
                 "Please use the async version of the function (e.g., `await naq.enqueue(...)`)."
             ) from e
         else:

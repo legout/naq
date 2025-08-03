@@ -1,13 +1,13 @@
 import pytest
 import pytest_asyncio
-from unittest.mock import AsyncMock,  patch
+from unittest.mock import AsyncMock, patch
 import cloudpickle
 
 from naq.worker import Worker
 from naq.job import Job
 from naq.settings import (
-    WORKER_STATUS_IDLE,
-    JOB_STATUS_COMPLETED,
+    WORKER_STATUS,
+    JOB_STATUS,
     NAQ_PREFIX,
     RESULT_KV_NAME,
 )
@@ -20,16 +20,20 @@ async def noop_job() -> str:
 
 # Move the async fixture outside the class and use function-level pytest.mark.asyncio
 
+
 @pytest_asyncio.fixture
 async def mock_worker(mock_nats):
     """Setup a test worker with mocked NATS connection."""
     mock_nc, mock_js = mock_nats
-    with patch('naq.worker.get_nats_connection', return_value=mock_nc), \
-         patch('naq.worker.get_jetstream_context', return_value=mock_js), \
-         patch('naq.worker.ensure_stream'):
+    with (
+        patch("naq.worker.get_nats_connection", return_value=mock_nc),
+        patch("naq.worker.get_jetstream_context", return_value=mock_js),
+        patch("naq.worker.ensure_stream"),
+    ):
         worker = Worker(queues="test_queue", worker_name="test_worker")
         await worker._connect()  # Establish mock connections
         yield worker
+
 
 class TestWorkerSmoke:
     """Smoke tests for the Worker class."""
@@ -51,9 +55,7 @@ class TestWorkerSmoke:
         """Test that a Worker can be created with custom settings."""
         # Create worker with custom parameters
         worker = Worker(
-            queues=["queue1", "queue2"],
-            concurrency=5,
-            worker_name="custom_worker"
+            queues=["queue1", "queue2"], concurrency=5, worker_name="custom_worker"
         )
 
         # Verify custom settings are applied
@@ -81,10 +83,7 @@ class TestWorkerSmoke:
     async def test_simple_job_processing(self, mock_worker):
         """Test processing of a single simple job."""
         # Create a simple job that will succeed
-        job = Job(
-            noop_job,
-            queue_name="test_queue"
-        )
+        job = Job(noop_job, queue_name="test_queue")
 
         # Create mock message with the job
         mock_msg = AsyncMock()
@@ -105,9 +104,9 @@ class TestWorkerSmoke:
                 break
 
         assert persisted_data is not None
-        assert persisted_data['status'] == JOB_STATUS_COMPLETED
-        assert persisted_data['result'] == "success"
-        assert persisted_data.get('error') is None
+        assert persisted_data["status"] == JOB_STATUS.COMPLETED.value
+        assert persisted_data["result"] == "success"
+        assert persisted_data.get("error") is None
 
         # Verify message was acknowledged
         mock_msg.ack.assert_awaited_once()
@@ -134,20 +133,20 @@ class TestWorkerSmoke:
 
         # Verify expected behavior
         assert mock_worker._shutdown_event.is_set()  # Shutdown flag is set
-        
+
         # Verify persisted job status
         mock_kv_store = await mock_worker._js.key_value(RESULT_KV_NAME)
         mock_kv_store.put.assert_called()
-        
+
         persisted_data = None
         for call in mock_kv_store.put.mock_calls:
             if call.args[0] == job.job_id.encode("utf-8"):
                 persisted_data = cloudpickle.loads(call.args[1])
                 break
-                
+
         assert persisted_data is not None
-        assert persisted_data['status'] == JOB_STATUS_COMPLETED
-        
+        assert persisted_data["status"] == JOB_STATUS.COMPLETED.value
+
         mock_msg.ack.assert_awaited_once()  # Message was acknowledged
 
     @pytest.mark.asyncio
@@ -160,7 +159,10 @@ class TestWorkerSmoke:
 
         # Start worker
         await mock_worker._worker_status_manager.start_heartbeat_loop()
-        assert mock_worker._worker_status_manager._current_status == WORKER_STATUS_IDLE
+        assert (
+            mock_worker._worker_status_manager._current_status
+            == WORKER_STATUS.IDLE.value
+        )
 
         # Process job
         await mock_worker.process_message(mock_msg)
@@ -168,23 +170,26 @@ class TestWorkerSmoke:
         # Verify persisted job status
         mock_kv_store = await mock_worker._js.key_value(RESULT_KV_NAME)
         mock_kv_store.put.assert_called()
-        
+
         persisted_data = None
         for call in mock_kv_store.put.mock_calls:
             if call.args[0] == job.job_id.encode("utf-8"):
                 persisted_data = cloudpickle.loads(call.args[1])
                 break
-                
+
         assert persisted_data is not None
-        assert persisted_data['status'] == JOB_STATUS_COMPLETED
-        assert persisted_data['result'] == "success"
-        assert mock_worker._worker_status_manager._current_status == WORKER_STATUS_IDLE
+        assert persisted_data["status"] == JOB_STATUS.COMPLETED.value
+        assert persisted_data["result"] == "success"
+        assert (
+            mock_worker._worker_status_manager._current_status
+            == WORKER_STATUS.IDLE.value
+        )
 
         # Clean shutdown
         await mock_worker._worker_status_manager.stop_heartbeat_loop()
         await mock_worker._close()
 
         # Verify no errors occurred in persisted data
-        assert not persisted_data.get('error')
-        assert not persisted_data.get('traceback')
+        assert not persisted_data.get("error")
+        assert not persisted_data.get("traceback")
         mock_msg.ack.assert_awaited_once()
