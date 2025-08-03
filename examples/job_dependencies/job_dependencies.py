@@ -1,8 +1,8 @@
 import time
-from naq import enqueue_sync, setup_logging
+from naq import enqueue_sync
 
 # Enable debug logging to see dependency check messages
-setup_logging(level="DEBUG")
+# setup_logging(level="DEBUG")
 
 
 def task_a():

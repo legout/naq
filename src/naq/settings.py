@@ -139,3 +139,16 @@ class RETRY_STRATEGY(Enum):
 
     LINEAR = "linear"
     EXPONENTIAL = "exponential"
+
+
+# --- Logging Settings ---
+# Default log level for the application. Can be one of:
+# "TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+# Set to "CRITICAL" by default to effectively disable logging.
+LOG_LEVEL = os.getenv("NAQ_LOG_LEVEL", "CRITICAL").upper()
+
+# Whether to enable logging to a file.
+LOG_TO_FILE_ENABLED = os.getenv("NAQ_LOG_TO_FILE_ENABLED", "False").lower() == "true"
+
+# Path for the log file. Can include placeholders like {time}.
+LOG_FILE_PATH = os.getenv("NAQ_LOG_FILE_PATH", "naq_{time}.log")

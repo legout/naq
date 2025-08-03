@@ -92,17 +92,17 @@ def worker(
         "-m",
         help="Additional paths to add to sys.path for module imports. Can be specified multiple times.",
     ),
-    log_level: str = typer.Option(
-        "INFO",
+    log_level: Optional[str] = typer.Option(
+        None,
         "--log-level",
         "-l",
-        help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR).",
+        help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR). Defaults to NAQ_LOG_LEVEL env var or CRITICAL.",
     ),
 ):
     """
     Starts a naq worker process to listen for and execute jobs on the specified queues.
     """
-    setup_logging(log_level)
+    setup_logging(log_level if log_level else None)
     # Use loguru directly
     logger.info(f"Starting worker '{name or 'default'}' for queues: {queues}")
     logger.info(f"NATS URL: {nats_url}")
@@ -139,17 +139,17 @@ def purge(
         help="URL of the NATS server.",
         envvar="NAQ_NATS_URL",
     ),
-    log_level: str = typer.Option(
-        "WARNING",  # Set default log level to WARNING
+    log_level: Optional[str] = typer.Option(
+        None,  # Set default log level to None to use env var
         "--log-level",
         "-l",
-        help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR).",
+        help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR). Defaults to NAQ_LOG_LEVEL env var or CRITICAL.",
     ),
 ):
     """
     Removes all jobs from the specified queues.
     """
-    setup_logging(log_level)
+    setup_logging(log_level if log_level else None)
     logger.info(f"Attempting to purge queues: {queues}")
     logger.info(f"Using NATS URL: {nats_url}")
 
@@ -218,11 +218,11 @@ def scheduler(
         "--disable-ha",
         help="Disable high availability mode (leader election).",
     ),
-    log_level: str = typer.Option(
-        "INFO",
+    log_level: Optional[str] = typer.Option(
+        None,
         "--log-level",
         "-l",
-        help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR).",
+        help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR). Defaults to NAQ_LOG_LEVEL env var or CRITICAL.",
     ),
 ):
     """
@@ -231,7 +231,7 @@ def scheduler(
     In high availability mode (default), multiple scheduler instances can be run simultaneously
     and they will coordinate using leader election to ensure jobs are only processed once.
     """
-    setup_logging(log_level)
+    setup_logging(log_level if log_level else None)
     enable_ha = not disable_ha
 
     logger.info(
@@ -291,17 +291,17 @@ def list_scheduled_jobs(
         "-d",
         help="Show detailed job information",
     ),
-    log_level: str = typer.Option(
-        "WARNING",
+    log_level: Optional[str] = typer.Option(
+        None,
         "--log-level",
         "-l",
-        help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR).",
+        help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR). Defaults to NAQ_LOG_LEVEL env var or CRITICAL.",
     ),
 ):
     """
     Lists all scheduled jobs with their status and next run time.
     """
-    setup_logging(log_level)
+    setup_logging(log_level if log_level else None)
     logger.info(f"Listing scheduled jobs from NATS at {nats_url}")
 
     # Use sync Key-Value access via thread-local connection for simplicity
@@ -511,17 +511,17 @@ def job_control(
         "--next-run",
         help="Next run time (ISO format, e.g. '2023-01-01T12:00:00Z') for reschedule action",
     ),
-    log_level: str = typer.Option(
-        "INFO",
+    log_level: Optional[str] = typer.Option(
+        None,
         "--log-level",
         "-l",
-        help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR).",
+        help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR). Defaults to NAQ_LOG_LEVEL env var or CRITICAL.",
     ),
 ):
     """
     Controls scheduled jobs: cancel, pause, resume, or modify scheduling parameters.
     """
-    setup_logging(log_level)
+    setup_logging(log_level if log_level else None)
 
     # Validate action
     if action not in ["cancel", "pause", "resume", "reschedule"]:
@@ -641,17 +641,17 @@ def list_workers_command(
         help="URL of the NATS server.",
         envvar="NAQ_NATS_URL",
     ),
-    log_level: str = typer.Option(
-        "WARNING",
+    log_level: Optional[str] = typer.Option(
+        None,
         "--log-level",
         "-l",
-        help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR).",
+        help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR). Defaults to NAQ_LOG_LEVEL env var or CRITICAL.",
     ),
 ):
     """
     Lists all currently active workers registered in the system.
     """
-    setup_logging(log_level)
+    setup_logging(log_level if log_level else None)
     logger.info(f"Listing active workers from NATS at {nats_url}")
 
     try:
@@ -750,11 +750,11 @@ def dashboard(
         help="Port to run the dashboard server on.",
         envvar="NAQ_DASHBOARD_PORT",
     ),
-    log_level: str = typer.Option(
-        "INFO",
+    log_level: Optional[str] = typer.Option(
+        None,
         "--log-level",
         "-l",
-        help="Set logging level for the dashboard server.",
+        help="Set logging level for the dashboard server. Defaults to NAQ_LOG_LEVEL env var or CRITICAL.",
     ),
     # Add NATS URL option if dashboard needs direct NATS access later
     # nats_url: Optional[str] = typer.Option(...)
@@ -764,12 +764,12 @@ def dashboard(
     """
     import uvicorn  # Use uvicorn to run Sanic
 
-    setup_logging(log_level)  # Setup naq logging if needed
+    setup_logging(log_level if log_level else None)  # Setup naq logging if needed
     logger.info(f"Starting NAQ Dashboard server on http://{host}:{port}")
     logger.info("Ensure NATS server is running and accessible.")
 
     # Configure uvicorn logging level based on input
-    uvicorn_log_level = log_level.lower()
+    uvicorn_log_level = log_level.lower() if log_level else "critical"
 
     # Run Sanic app using uvicorn
     uvicorn.run(

@@ -11,8 +11,6 @@ from .exceptions import NaqConnectionError
 from .settings import DEFAULT_NATS_URL
 from .utils import setup_logging
 
-setup_logging()  # Setup logging for the module
-
 
 class ConnectionManager:
     """

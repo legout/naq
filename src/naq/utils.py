@@ -6,6 +6,8 @@ from typing import Any, Callable, Coroutine, TypeVar
 import anyio
 from loguru import logger
 
+from .settings import LOG_LEVEL, LOG_TO_FILE_ENABLED, LOG_FILE_PATH
+
 T = TypeVar("T")
 
 
@@ -51,14 +53,31 @@ def run_async_from_sync(
             raise
 
 
-def setup_logging(level: str = "INFO"):
-    """Configures logging based on the provided level string using loguru."""
-    logger.remove()  # Remove default handler
+def setup_logging(level: str = None):
+    """Configures logging based on environment variables or provided level string using loguru."""
+    logger.remove()  # Remove all existing handlers
+
+    # Determine the effective log level
+    # CLI argument takes precedence over environment variable
+    effective_level = level.upper() if level else LOG_LEVEL
+
+    # Add stdout handler
     logger.add(
         sys.stdout,
-        level=level.upper(),
-        # format="{time} - {name} - {level} - {message}",
+        level=effective_level,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
         colorize=True,
     )
+
+    # Add file handler if enabled
+    if LOG_TO_FILE_ENABLED:
+        logger.add(
+            LOG_FILE_PATH,
+            level=effective_level,
+            format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
+            rotation="10 MB",
+            retention="1 week",  # Keep logs for 1 week
+            compression="zip",  # Compress rotated logs
+        )
     # Optionally silence overly verbose libraries if needed
     # logging.getLogger("nats").setLevel(logging.WARNING)

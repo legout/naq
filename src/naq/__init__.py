@@ -52,15 +52,7 @@ __version__ = "0.1.3"  # Bump version for worker monitoring
 
 
 # Basic configuration/convenience
-def setup_logging(level=logging.INFO):
-    """Basic logging setup using loguru."""
-    logger.add(
-        "naq_{time}.log",  # File to log to (optional)
-        rotation="10 MB",  # Rotate log file every 10 MB (optional)
-        level=level,  # Set the logging level
-        format="{time} - {name} - {level} - {message}",  # Customize the format
-    )
-
+# setup_logging is now centralized in src/naq/utils.py
 
 # Global connection management (optional convenience)
 _default_loop = None
