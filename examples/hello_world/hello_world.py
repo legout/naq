@@ -27,13 +27,9 @@ def say_hello_sync(name: str):
 
 async def main():
     for i in range(5):
-        job = await enqueue(
-            say_hello_async, name="World (async)", nats_url="nats://localhost:4222"
-        )
+        job = await enqueue(say_hello_async, name="World (async)")
     for i in range(5):
-        job = await enqueue(
-            say_hello_sync, name="World (sync)", nats_url="nats://localhost:4222"
-        )
+        job = await enqueue(say_hello_sync, name="World (sync)")
     # return job
 
 
