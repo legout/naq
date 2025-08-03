@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,85 +11,263 @@
     <script src="https://unpkg.com/datastar-js@latest/dist/datastar.js" defer></script>
     <style>
         /* Basic table styling */
-        table { width: 100%; border-collapse: collapse; margin-top: 1em; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
-        .status-busy { color: orange; }
-        .status-idle { color: green; }
-        .status-starting, .status-stopping { color: blue; }
-        .stale { color: red; font-style: italic; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1em;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .status-busy {
+            color: orange;
+        }
+
+        .status-idle {
+            color: green;
+        }
+
+        .status-starting,
+        .status-stopping {
+            color: blue;
+        }
+
+        .stale {
+            color: red;
+            font-style: italic;
+        }
     </style>
 </head>
+
 <body>
     <h1>NAQ Dashboard</h1>
 
-    <!-- Datastar controlled section -->
-    <div
-        data-store='{ "workers": [], "loading": true, "error": null, "now": 0 }'
+    <!-- Datastar controlled section for Workers -->
+    <div data-store='{ "workers": [], "queues": [], "scheduled_jobs": [], "failed_jobs": [], "loading": true, "loadingQueues": true, "loadingScheduledJobs": true, "loadingFailedJobs": true, "error": null, "errorQueues": null, "errorScheduledJobs": null, "errorFailedJobs": null, "now": 0 }'
         data-fetch-workers="get:/api/workers"
         data-on-fetch-workers-success="$store.workers = $event.detail.data; $store.loading = false; $store.error = null"
         data-on-fetch-workers-error="$store.error = 'Failed to load workers'; $store.loading = false"
-        data-poll-workers="5s:/api/workers" /* Poll every 5 seconds */
-        data-interval-now="1s:$store.now = Date.now()" /* Update 'now' every second for relative time */
-    >
-        <h2>Workers</h2>
+        data-poll-workers="5s:/api/workers" /* Poll every 5 seconds */ data-interval-now="1s:$store.now = Date.now()" /*
+        Update 'now' every second for relative time */ data-fetch-failed-jobs="get:/api/failed_jobs"
+        data-on-fetch-failed-jobs-success="$store.failed_jobs = $event.detail.data; $store.loadingFailedJobs = false; $store.errorFailedJobs = null"
+        data-on-fetch-failed-jobs-error="$store.errorFailedJobs = 'Failed to load failed jobs'; $store.loadingFailedJobs = false"
+        data-poll-failed-jobs="30s:/api/failed_jobs" /* Poll every 30 seconds */ />
+    <h2>Workers</h2>
 
-        <div data-show="$store.loading">Loading workers...</div>
-        <div data-show="$store.error" data-text="$store.error" style="color: red;"></div>
+    <div data-show="$store.loading">Loading workers...</div>
+    <div data-show="$store.error" data-text="$store.error" style="color: red;"></div>
 
-        <table data-show="!$store.loading && !$store.error && $store.workers.length > 0">
-            <thead>
+    <table data-show="!$store.loading && !$store.error && $store.workers.length > 0">
+        <thead>
+            <tr>
+                <th>Worker ID>
+                <th>Status</th>
+                <th>Queues</th>
+                <th>Current Job>
+                <th>Active Tasks>
+                <th>Last Heartbeat</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Use data-for to loop through workers -->
+            <template data-for="worker in $store.workers">
                 <tr>
-                    <th>Worker ID</th>
-                    <th>Status</th>
-                    <th>Queues</th>
-                    <th>Current Job</th>
-                    <th>Active Tasks</th>
-                    <th>Last Heartbeat</th>
+                    <td data-text="worker.worker_id || 'unknown'"></td>
+                    <td>
+                        <span data-text="worker.status || '?'" data-class-status-idle="worker.status === 'idle'"
+                            data-class-status-busy="worker.status === 'busy'"
+                            data-class-status-starting="worker.status === 'starting'"
+                            data-class-status-stopping="worker.status === 'stopping'"></span>
+                    </td>
+                    <td data-text="(worker.queues || []).join(', ')"></td>
+                    <td data-text="worker.status === 'busy' ? (worker.current_job_id || '-') : '-'"></td>
+                    <td
+                        data-text="worker.active_tasks !== undefined ? worker.active_tasks + '/' + worker.concurrency : '?'">
+                    </td>
+                    <td>
+                        <span
+                            data-text="worker.last_heartbeat_utc ? new Date(worker.last_heartbeat_utc * 1000).toLocaleString() : 'never'"></span>
+                        <!-- Calculate relative time and staleness -->
+                        <span data-show="worker.last_heartbeat_utc">
+                            (<span
+                                data-text="Math.round(($store.now / 1000 - worker.last_heartbeat_utc)) + 's ago'"></span>)
+                        </span>
+                        <!-- Check against worker_ttl (needs to be passed or hardcoded) -->
+                        <!-- Example: Assuming worker_ttl is 60 seconds -->
+                        <span class="stale"
+                            data-show="worker.last_heartbeat_utc && ($store.now / 1000 - worker.last_heartbeat_utc) > 60">
+                            (STALE)
+                        </span>
+                    </td>
                 </tr>
-            </thead>
-            <tbody>
-                <!-- Use data-for to loop through workers -->
-                <template data-for="worker in $store.workers">
-                    <tr>
-                        <td data-text="worker.worker_id || 'unknown'"></td>
-                        <td>
-                            <span
-                                data-text="worker.status || '?'"
-                                data-class-status-idle="worker.status === 'idle'"
-                                data-class-status-busy="worker.status === 'busy'"
-                                data-class-status-starting="worker.status === 'starting'"
-                                data-class-status-stopping="worker.status === 'stopping'"
-                            ></span>
-                        </td>
-                        <td data-text="(worker.queues || []).join(', ')"></td>
-                        <td data-text="worker.status === 'busy' ? (worker.current_job_id || '-') : '-'"></td>
-                        <td data-text="worker.active_tasks !== undefined ? worker.active_tasks + '/' + worker.concurrency : '?'"></td>
-                        <td>
-                            <span data-text="worker.last_heartbeat_utc ? new Date(worker.last_heartbeat_utc * 1000).toLocaleString() : 'never'"></span>
-                            <!-- Calculate relative time and staleness -->
-                            <span data-show="worker.last_heartbeat_utc">
-                                (<span data-text="Math.round(($store.now / 1000 - worker.last_heartbeat_utc)) + 's ago'"></span>)
-                            </span>
-                            <!-- Check against worker_ttl (needs to be passed or hardcoded) -->
-                            <!-- Example: Assuming worker_ttl is 60 seconds -->
-                            <span
-                                class="stale"
-                                data-show="worker.last_heartbeat_utc && ($store.now / 1000 - worker.last_heartbeat_utc) > 60"
-                            >
-                                (STALE)
-                            </span>
-                        </td>
-                    </tr>
-                </template>
-            </tbody>
-        </table>
-        <div data-show="!$store.loading && !$store.error && $store.workers.length === 0">
-            No active workers found.
-        </div>
+            </template>
+        </tbody>
+    </table>
+    <div data-show="!$store.loading && !$store.error && $store.workers.length === 0">
+        No active workers found.
+    </div>
     </div>
 
-    <!-- Placeholder for other sections (Queues, Jobs, etc.) -->
+    <!-- Datastar controlled section for Queues -->
+    <div data-store='{ "queues": [], "loadingQueues": true, "errorQueues": null }' data-fetch-queues="get:/api/queues"
+        data-on-fetch-queues-success="$store.queues = $event.detail.data; $store.loadingQueues = false; $store.errorQueues = null"
+        data-on-fetch-queues-error="$store.errorQueues = 'Failed to load queues'; $store.loadingQueues = false"
+        data-poll-queues="10s:/api/queues" /* Poll every 10 seconds * />
+    <h2>Queues</h2>
+
+    <div data-show="$store.loadingQueues">Loading queues...</div>
+    <div data-show="$store.errorQueues" data-text="$store.errorQueues" style="color: red;"></div>
+
+    <table data-show="!$store.loadingQueues && !$store.errorQueues && $store.queues.length > 0">
+        <thead>
+            <tr>
+                <th>Queue Name>
+                <th>Subject</th>
+                <th>Stream>
+                <th>Consumer Name>
+                <th>Pending Messages</th>
+                <th>Ack Pending>
+                <th>Redelivered</th>
+                <th>Waiting>
+                <th>Paused>
+            </tr>
+        </thead>
+        <tbody>
+            <template data-for="queue in $store.queues">
+                <tr>
+                    <td data-text="queue.name"></td>
+                    <td data-text="queue.subject"></td>
+                    <td data-text="queue.stream"></td>
+                    <td data-text="queue.consumer ? queue.consumer.name : 'N/A'"></td>
+                    <td data-text="queue.consumer ? queue.consumer.num_pending : 'N/A'"></td>
+                    <td data-text="queue.consumer ? queue.consumer.num_ack_pending : 'N/A'"></td>
+                    <td data-text="queue.consumer ? queue.consumer.num_redelivered : 'N/A'"></td>
+                    <td data-text="queue.consumer ? queue.consumer.num_waiting : 'N/A'"></td>
+                    <td data-text="queue.consumer ? (queue.consumer.num_paused > 0 ? 'Yes' : 'No') : 'N/A'"></td>
+                </tr>
+            </template>
+        </tbody>
+    </table>
+    <div data-show="!$store.loadingQueues && !$store.errorQueues && $store.queues.length === 0">
+        No queues found.
+    </div>
+    </div>
+
+    <!-- Datastar controlled section for Scheduled Jobs -->
+    <div data-store='{ "scheduled_jobs": [], "loadingScheduledJobs": true, "errorScheduledJobs": null }'
+        data-fetch-scheduled-jobs="get:/api/scheduled_jobs"
+        data-on-fetch-scheduled-jobs-success="$store.scheduled_jobs = $event.detail.data; $store.loadingScheduledJobs = false; $store.errorScheduledJobs = null"
+        data-on-fetch-scheduled-jobs-error="$store.errorScheduledJobs = 'Failed to load scheduled jobs'; $store.loadingScheduledJobs = false"
+        data-poll-scheduled-jobs="15s:/api/scheduled_jobs" /* Poll every 15 seconds * />
+    <h2>Scheduled Jobs</h2>
+
+    <div data-show="$store.loadingScheduledJobs">Loading scheduled jobs...</div>
+    <div data-show="$store.errorScheduledJobs" data-text="$store.errorScheduledJobs" style="color: red;"></div>
+
+    <table data-show="!$store.loadingScheduledJobs && !$store.errorScheduledJobs && $store.scheduled_jobs.length > 0">
+        <thead>
+            <tr>
+                <th>Job ID>
+                <th>Status>
+                <th>Function</th>
+                <th>Scheduled Time (UTC)</th>
+                <th>Next Run (UTC)</th>
+                <th>Cron</th>
+                <th>Interval (s)</th>
+                <th>Repeat</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <template data-for="job in $store.scheduled_jobs">
+                <tr>
+                    <td data-text="job.job_id"></td>
+                    <td>
+                        <span data-text="job.status"></span>
+                    </td>
+                    <td data-text="job.function_str"></td>
+                    <td
+                        data-text="job.scheduled_timestamp_utc ? new Date(job.scheduled_timestamp_utc * 1000).toLocaleString() : 'N/A'">
+                    </td>
+                    <td data-text="job.next_run_utc ? new Date(job.next_run_utc * 1000).toLocaleString() : 'N/A'">
+                    </td>
+                    <td data-text="job.cron || 'N/A'"></td>
+                    <td data-text="job.interval_seconds || 'N/A'"></td>
+                    <td data-text="job.repeat !== null ? job.repeat : 'Infinite'"></td>
+                    <td>
+                        <button data-show="job.status === 'active'"
+                            data-on-click="post:/api/scheduled_jobs/{job.job_id}/pause"
+                            data-on-post-success="$store.fetchScheduledJobs()">Pause</button>
+                        <button data-show="job.status === 'paused'"
+                            data-on-click="post:/api/scheduled_jobs/{job.job_id}/resume"
+                            data-on-post-success="$store.fetchScheduledJobs()">Resume</button>
+                        <button data-on-click="post:/api/scheduled_jobs/{job.job_id}/cancel"
+                            data-on-post-success="$store.fetchScheduledJobs()">Cancel</button>
+                    </td>
+                </tr>
+            </template>
+        </tbody>
+    </table>
+    <div data-show="!$store.loadingScheduledJobs && !$store.errorScheduledJobs && $store.scheduled_jobs.length === 0">
+        No scheduled jobs found.
+    </div>
+    </div>
+
+    <!-- Datastar controlled section for Failed Jobs -->
+    <div data-store='{ "failed_jobs": [], "loadingFailedJobs": true, "errorFailedJobs": null }'
+        data-fetch-failed-jobs="get:/api/failed_jobs"
+        data-on-fetch-failed-jobs-success="$store.failed_jobs = $event.detail.data; $store.loadingFailedJobs = false; $store.errorFailedJobs = null"
+        data-on-fetch-failed-jobs-error="$store.errorFailedJobs = 'Failed to load failed jobs'; $store.loadingFailedJobs = false"
+        data-poll-failed-jobs="30s:/api/failed_jobs" /* Poll every 30 seconds */ />
+    <h2>Failed Jobs</h2>
+
+    <div data-show="$store.loadingFailedJobs">Loading failed jobs...</div>
+    <div data-show="$store.errorFailedJobs" data-text="$store.errorFailedJobs" style="color: red;"></div>
+
+    <table data-show="!$store.loadingFailedJobs && !$store.errorFailedJobs && $store.failed_jobs.length > 0">
+        <thead>
+            <tr>
+                <th>Job ID>
+                <th>Queue>
+                <th>Function>
+                <th>Error</th>
+                <th>Timestamp</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <template data-for="job in $store.failed_jobs">
+                <tr>
+                    <td data-text="job.job_id"></td>
+                    <td data-text="job.queue_name"></td>
+                    <td data-text="job.function_str"></td>
+                    <td data-text="job.error" style="max-width: 300px; word-wrap: break-word;"></td>
+                    <td data-text="job.timestamp ? new Date(job.timestamp * 1000).toLocaleString() : 'N/A'"></td>
+                    <td>
+                        <button
+                            data-on-click="if (confirm('Requeue this job? This will remove it from the failed jobs list. You may need to manually re-enqueue it based on its data.')) { post:/api/failed_jobs/{job.job_id}/requeue }"
+                            data-on-post-success="$store.fetchFailedJobs()">
+                            Requeue
+                        </button>
+                    </td>
+                </tr>
+            </template>
+        </tbody>
+    </table>
+    <div data-show="!$store.loadingFailedJobs && !$store.errorFailedJobs && $store.failed_jobs.length === 0">
+        No failed jobs found.
+    </div>
+    </div>
 
 </body>
+
 </html>

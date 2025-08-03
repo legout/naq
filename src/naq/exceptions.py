@@ -7,10 +7,7 @@ class NaqException(Exception):
     pass
 
 
-class ConnectionError(NaqException):
-    """Raised when there's an issue connecting to NATS."""
-
-    pass
+# Note: ConnectionError has been removed. Use NaqConnectionError for all NATS connection-related errors.
 
 
 class ConfigurationError(NaqException):
@@ -38,6 +35,6 @@ class JobNotFoundError(NaqException):
 
 
 class NaqConnectionError(NaqException):
-    """Raised when NATS connection fails."""
+    """Raised when there is a connection-related error with NATS."""
 
     pass

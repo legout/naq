@@ -12,7 +12,7 @@ from .connection import (
 )
 from .exceptions import (
     ConfigurationError,
-    ConnectionError,
+    NaqConnectionError,
     JobExecutionError,
     JobNotFoundError,
     NaqException,
@@ -43,12 +43,9 @@ from .queue import (
     schedule_sync,
 )
 from .scheduler import Scheduler
-from .settings import JOB_STATUS 
+from .settings import JOB_STATUS
 
-from .settings import (
-    SCHEDULED_JOB_STATUS,
-    WORKER_STATUS
-)
+from .settings import SCHEDULED_JOB_STATUS, WORKER_STATUS
 from .worker import Worker
 
 __version__ = "0.1.3"  # Bump version for worker monitoring

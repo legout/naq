@@ -4,7 +4,7 @@ version: '3.8'
 
 services:
   nats:
-    image: nats:2.10 # Use a specific version, e.g., 2.10 or latest
+    image: nats:latest # Use a specific version, e.g., 2.10 or latest
     ports:
       - "4222:4222" # Standard NATS client port
       - "8222:8222" # HTTP monitoring port
@@ -23,4 +23,3 @@ services:
 
 volumes:
   db:
-    
