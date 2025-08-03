@@ -10,6 +10,7 @@ from .connection import (
     get_jetstream_context,
     get_nats_connection,
 )
+from .settings import DEFAULT_NATS_URL
 from .exceptions import (
     ConfigurationError,
     NaqConnectionError,
@@ -69,7 +70,7 @@ def _get_loop():
     return _default_loop
 
 
-async def connect(url: Optional[str] = None):
+async def connect(url: str = DEFAULT_NATS_URL):
     """Convenience function to establish default NATS connection."""
     return await get_nats_connection(url=url)
 

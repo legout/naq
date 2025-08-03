@@ -22,6 +22,7 @@ from .exceptions import JobNotFoundError, NaqException
 from .job import Job, RetryDelayType
 from .settings import (
     DEFAULT_QUEUE_NAME,
+    DEFAULT_NATS_URL,
     JOB_SERIALIZER,
     NAQ_PREFIX,
     SCHEDULED_JOB_STATUS,
@@ -36,7 +37,7 @@ class ScheduledJobManager:
     Handles storing, retrieving, and managing scheduled jobs in the NATS KV store.
     """
 
-    def __init__(self, queue_name: str, nats_url: Optional[str] = None):
+    def __init__(self, queue_name: str, nats_url: str = DEFAULT_NATS_URL):
         self.queue_name = queue_name
         self._nats_url = nats_url
         self._kv: Optional[KeyValue] = None
@@ -340,7 +341,7 @@ class Queue:
     def __init__(
         self,
         name: str = DEFAULT_QUEUE_NAME,
-        nats_url: Optional[str] = None,
+        nats_url: str = DEFAULT_NATS_URL,
         default_timeout: Optional[int] = None,
         prefer_thread_local: bool = False,
     ):
@@ -790,7 +791,7 @@ async def enqueue(
     func: Callable,
     *args: Any,
     queue_name: str = DEFAULT_QUEUE_NAME,
-    nats_url: Optional[str] = None,
+    nats_url: str = DEFAULT_NATS_URL,
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
     depends_on: Optional[Union[str, List[str], Job, List[Job]]] = None,
@@ -819,7 +820,7 @@ async def enqueue_at(
     func: Callable,
     *args: Any,
     queue_name: str = DEFAULT_QUEUE_NAME,
-    nats_url: Optional[str] = None,
+    nats_url: str = DEFAULT_NATS_URL,
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
     timeout: Optional[int] = None,
@@ -846,7 +847,7 @@ async def enqueue_in(
     func: Callable,
     *args: Any,
     queue_name: str = DEFAULT_QUEUE_NAME,
-    nats_url: Optional[str] = None,
+    nats_url: str = DEFAULT_NATS_URL,
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
     timeout: Optional[int] = None,
@@ -872,7 +873,7 @@ async def schedule(
     func: Callable,
     *args: Any,
     queue_name: str = DEFAULT_QUEUE_NAME,
-    nats_url: Optional[str] = None,
+    nats_url: str = DEFAULT_NATS_URL,
     cron: Optional[str] = None,
     interval: Optional[Union[timedelta, float, int]] = None,
     repeat: Optional[int] = None,
@@ -901,7 +902,7 @@ async def schedule(
 
 async def purge_queue(
     queue_name: str = DEFAULT_QUEUE_NAME,
-    nats_url: Optional[str] = None,
+    nats_url: str = DEFAULT_NATS_URL,
     prefer_thread_local: bool = False,
 ) -> int:
     """Helper to purge jobs from a specific queue (async)."""
@@ -912,7 +913,7 @@ async def purge_queue(
 
 
 async def cancel_scheduled_job(
-    job_id: str, nats_url: Optional[str] = None, prefer_thread_local: bool = False
+    job_id: str, nats_url: str = DEFAULT_NATS_URL, prefer_thread_local: bool = False
 ) -> bool:
     """Helper to cancel a scheduled job (async)."""
     q = Queue(
@@ -922,7 +923,7 @@ async def cancel_scheduled_job(
 
 
 async def pause_scheduled_job(
-    job_id: str, nats_url: Optional[str] = None, prefer_thread_local: bool = False
+    job_id: str, nats_url: str = DEFAULT_NATS_URL, prefer_thread_local: bool = False
 ) -> bool:
     """Helper to pause a scheduled job (async)."""
     q = Queue(nats_url=nats_url, prefer_thread_local=prefer_thread_local)
@@ -930,7 +931,7 @@ async def pause_scheduled_job(
 
 
 async def resume_scheduled_job(
-    job_id: str, nats_url: Optional[str] = None, prefer_thread_local: bool = False
+    job_id: str, nats_url: str = DEFAULT_NATS_URL, prefer_thread_local: bool = False
 ) -> bool:
     """Helper to resume a scheduled job (async)."""
     q = Queue(nats_url=nats_url, prefer_thread_local=prefer_thread_local)
@@ -939,7 +940,7 @@ async def resume_scheduled_job(
 
 async def modify_scheduled_job(
     job_id: str,
-    nats_url: Optional[str] = None,
+    nats_url: str = DEFAULT_NATS_URL,
     prefer_thread_local: bool = False,
     **updates: Any,
 ) -> bool:
@@ -955,7 +956,7 @@ def enqueue_sync(
     func: Callable,
     *args: Any,
     queue_name: str = DEFAULT_QUEUE_NAME,
-    nats_url: Optional[str] = None,
+    nats_url: str = DEFAULT_NATS_URL,
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
     depends_on: Optional[Union[str, List[str], Job, List[Job]]] = None,
@@ -1016,7 +1017,7 @@ def enqueue_at_sync(
     func: Callable,
     *args: Any,
     queue_name: str = DEFAULT_QUEUE_NAME,
-    nats_url: Optional[str] = None,
+    nats_url: str = DEFAULT_NATS_URL,
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
     timeout: Optional[int] = None,
@@ -1053,7 +1054,7 @@ def enqueue_in_sync(
     func: Callable,
     *args: Any,
     queue_name: str = DEFAULT_QUEUE_NAME,
-    nats_url: Optional[str] = None,
+    nats_url: str = DEFAULT_NATS_URL,
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
     timeout: Optional[int] = None,
@@ -1088,7 +1089,7 @@ def schedule_sync(
     func: Callable,
     *args: Any,
     queue_name: str = DEFAULT_QUEUE_NAME,
-    nats_url: Optional[str] = None,
+    nats_url: str = DEFAULT_NATS_URL,
     cron: Optional[str] = None,
     interval: Optional[Union[timedelta, float, int]] = None,
     repeat: Optional[int] = None,
@@ -1127,7 +1128,7 @@ def schedule_sync(
 
 def purge_queue_sync(
     queue_name: str = DEFAULT_QUEUE_NAME,
-    nats_url: Optional[str] = None,
+    nats_url: str = DEFAULT_NATS_URL,
 ) -> int:
     """
     Helper to purge jobs from a specific queue (synchronous).
@@ -1144,7 +1145,7 @@ def purge_queue_sync(
     return run_async_from_sync(_main)
 
 
-def cancel_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bool:
+def cancel_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL) -> bool:
     """
     Helper to cancel a scheduled job (sync).
 
@@ -1160,7 +1161,7 @@ def cancel_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bo
     return run_async_from_sync(_main)
 
 
-def pause_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bool:
+def pause_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL) -> bool:
     """
     Helper to pause a scheduled job (sync).
 
@@ -1176,7 +1177,7 @@ def pause_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> boo
     return run_async_from_sync(_main)
 
 
-def resume_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bool:
+def resume_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL) -> bool:
     """
     Helper to resume a scheduled job (sync).
 
@@ -1193,7 +1194,7 @@ def resume_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bo
 
 
 def modify_scheduled_job_sync(
-    job_id: str, nats_url: Optional[str] = None, **updates: Any
+    job_id: str, nats_url: str = DEFAULT_NATS_URL, **updates: Any
 ) -> bool:
     """
     Helper to modify a scheduled job (sync).
@@ -1211,7 +1212,7 @@ def modify_scheduled_job_sync(
 
 
 # Optional: public function to explicitly close thread-local connection for sync batches
-def close_sync_connections(nats_url: Optional[str] = None) -> None:
+def close_sync_connections(nats_url: str = DEFAULT_NATS_URL) -> None:
     """
     Close thread-local NATS connection/JS context used by sync helpers.
 

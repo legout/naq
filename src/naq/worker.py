@@ -27,6 +27,7 @@ from .connection import (
 from .exceptions import NaqException, SerializationError
 from .job import Job
 from .settings import (
+    DEFAULT_NATS_URL,
     DEFAULT_RESULT_TTL_SECONDS,
     DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
     DEFAULT_WORKER_TTL_SECONDS,
@@ -41,6 +42,7 @@ from .settings import (
     WORKER_STATUS,
     DEFAULT_ACK_WAIT_SECONDS,
     ACK_WAIT_PER_QUEUE,
+    DEFAULT_QUEUE_NAME,
 )
 from .utils import run_async_from_sync, setup_logging
 
@@ -154,7 +156,7 @@ class WorkerStatusManager:
             logger.error(f"Failed to unregister worker {self.worker.worker_id}: {e}")
 
     @staticmethod
-    async def list_workers(nats_url: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def list_workers(nats_url: str = DEFAULT_NATS_URL) -> List[Dict[str, Any]]:
         """
         Lists active workers by querying the worker status KV store.
 
@@ -555,8 +557,8 @@ class Worker:
 
     def __init__(
         self,
-        queues: Sequence[str] | str,
-        nats_url: Optional[str] = None,
+        queues: Optional[Sequence[str] | str] = None,
+        nats_url: str = DEFAULT_NATS_URL,
         concurrency: int = 10,  # Max concurrent jobs
         worker_name: Optional[str] = None,  # For durable consumer names
         heartbeat_interval: int = DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
@@ -564,12 +566,12 @@ class Worker:
         ack_wait: Optional[
             int | Dict[str, int]
         ] = None,  # seconds; can be per-queue dict
-        module_paths: Optional[Sequence[str]] = None,
+        module_paths: Optional[Sequence[str] | str] = None,
     ):
         if isinstance(queues, str):
             queues = [queues]
         if not queues:
-            raise ValueError("Worker must listen to at least one queue.")
+            queues = [DEFAULT_QUEUE_NAME]
 
         # Preserve order while ensuring uniqueness using dict.fromkeys()
         self.queue_names: List[str] = list(dict.fromkeys(queues))
@@ -583,6 +585,8 @@ class Worker:
 
         # Add custom module paths to sys.path
         if module_paths:
+            if isinstance(module_paths, str):
+                module_paths = [module_paths]
             for path in module_paths:
                 if path not in sys.path:
                     sys.path.insert(0, path)
@@ -1043,12 +1047,12 @@ class Worker:
 
     # --- Static methods for worker monitoring ---
     @staticmethod
-    async def list_workers(nats_url: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def list_workers(nats_url: str = DEFAULT_NATS_URL) -> List[Dict[str, Any]]:
         """Lists active workers by querying the worker status KV store."""
         return await WorkerStatusManager.list_workers(nats_url)
 
     @staticmethod
-    def list_workers_sync(nats_url: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_workers_sync(nats_url: str = DEFAULT_NATS_URL) -> List[Dict[str, Any]]:
         """Synchronous version of list_workers."""
         return run_async_from_sync(Worker.list_workers, nats_url=nats_url)
 

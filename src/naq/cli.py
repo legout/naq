@@ -29,6 +29,7 @@ from .scheduler import Scheduler
 from .settings import DEFAULT_WORKER_TTL_SECONDS  # Import statuses
 from .settings import (
     DEFAULT_NATS_URL,
+    DEFAULT_QUEUE_NAME,
     SCHEDULED_JOB_STATUS,
     SCHEDULED_JOBS_KV_NAME,
     WORKER_STATUS,
@@ -64,9 +65,10 @@ def version_callback(value: bool):
 @app.command()
 def worker(
     queues: List[str] = typer.Argument(
-        ..., help="The names of the queues to listen to."
+        default=None,
+        help="The names of the queues to listen to. Defaults to the configured default queue.",
     ),
-    nats_url: Optional[str] = typer.Option(
+    nats_url: str = typer.Option(
         DEFAULT_NATS_URL,
         "--nats-url",
         "-u",
@@ -103,8 +105,15 @@ def worker(
     Starts a naq worker process to listen for and execute jobs on the specified queues.
     """
     setup_logging(log_level if log_level else None)
+
+    # If no queues are provided, let the Worker class handle the default
+    if queues is None:
+        queues = []
+
     # Use loguru directly
-    logger.info(f"Starting worker '{name or 'default'}' for queues: {queues}")
+    logger.info(
+        f"Starting worker '{name or 'default'}' for queues: {queues if queues else [DEFAULT_QUEUE_NAME]}"
+    )
     logger.info(f"NATS URL: {nats_url}")
     logger.info(f"Concurrency: {concurrency}")
 
@@ -132,7 +141,7 @@ def worker(
 @app.command()
 def purge(
     queues: List[str] = typer.Argument(..., help="The names of the queues to purge."),
-    nats_url: Optional[str] = typer.Option(
+    nats_url: str = typer.Option(
         DEFAULT_NATS_URL,
         "--nats-url",
         "-u",
@@ -193,7 +202,7 @@ def purge(
 
 @app.command()
 def scheduler(
-    nats_url: Optional[str] = typer.Option(
+    nats_url: str = typer.Option(
         DEFAULT_NATS_URL,
         "--nats-url",
         "-u",
@@ -260,7 +269,7 @@ def scheduler(
 
 @app.command("list-scheduled")
 def list_scheduled_jobs(
-    nats_url: Optional[str] = typer.Option(
+    nats_url: str = typer.Option(
         DEFAULT_NATS_URL,
         "--nats-url",
         "-u",
@@ -279,8 +288,8 @@ def list_scheduled_jobs(
         "-j",
         help="Filter by job ID",
     ),
-    queue: Optional[str] = typer.Option(
-        None,
+    queue: str = typer.Option(
+        DEFAULT_QUEUE_NAME,
         "--queue",
         "-q",
         help="Filter by queue name",
@@ -484,7 +493,7 @@ def job_control(
         help="Action to perform: 'cancel', 'pause', 'resume', or 'reschedule'",
         show_choices=True,
     ),
-    nats_url: Optional[str] = typer.Option(
+    nats_url: str = typer.Option(
         DEFAULT_NATS_URL,
         "--nats-url",
         "-u",
@@ -634,7 +643,7 @@ def job_control(
 
 @app.command("list-workers")
 def list_workers_command(
-    nats_url: Optional[str] = typer.Option(
+    nats_url: str = typer.Option(
         DEFAULT_NATS_URL,
         "--nats-url",
         "-u",

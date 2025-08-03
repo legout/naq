@@ -14,7 +14,14 @@ import importlib
 from dataclasses import asdict, is_dataclass
 
 from .exceptions import SerializationError
-from .settings import JOB_SERIALIZER, JOB_STATUS, JSON_ENCODER, JSON_DECODER
+from .settings import (
+    DEFAULT_NATS_URL,
+    DEFAULT_QUEUE_NAME,
+    JOB_SERIALIZER,
+    JOB_STATUS,
+    JSON_ENCODER,
+    JSON_DECODER,
+)
 
 # Define a type hint for retry delays
 RetryDelayType = Union[int, float, Sequence[Union[int, float]]]
@@ -359,7 +366,7 @@ class JsonSerializer:
             args=args,
             kwargs=kwargs,
             job_id=payload.get("job_id"),
-            queue_name=payload.get("queue_name") or "default",
+            queue_name=payload.get("queue_name") or DEFAULT_QUEUE_NAME,
             max_retries=payload.get("max_retries", 0),
             retry_delay=payload.get("retry_delay", 0),
             retry_strategy=retry_strategy,
@@ -450,7 +457,7 @@ class Job:
         args: Tuple = (),
         kwargs: Dict = None,
         job_id: Optional[str] = None,
-        queue_name: str = "default",
+        queue_name: str = DEFAULT_QUEUE_NAME,
         max_retries: int = 0,
         retry_delay: RetryDelayType = 0,
         retry_strategy: str = RETRY_STRATEGY.LINEAR,
@@ -668,7 +675,7 @@ class Job:
     async def _fetch_result_data(
         job_id: str,
         js: Optional[JetStreamContext] = None,
-        nats_url: Optional[str] = None,
+        nats_url: str = DEFAULT_NATS_URL,
     ) -> Any:
         """Fetches the result or error information for a completed job from the result backend."""
         from nats.js.errors import KeyNotFoundError
@@ -716,7 +723,7 @@ class Job:
     @staticmethod
     def _fetch_result_data_sync(
         job_id: str,
-        nats_url: Optional[str] = None,
+        nats_url: str = DEFAULT_NATS_URL,
     ) -> Any:
         """
         DEPRECATED: Use _fetch_result_data instead.
@@ -739,7 +746,7 @@ class Job:
     @staticmethod
     async def fetch_result(
         job_id: str,
-        nats_url: Optional[str] = None,
+        nats_url: str = DEFAULT_NATS_URL,
     ) -> Any:
         """
         Fetches the result or error information for a completed job from the result backend.
@@ -812,7 +819,7 @@ class Job:
                 await close_nats_connection()  # Use shared close
 
     @staticmethod
-    def fetch_result_sync(job_id: str, nats_url: Optional[str] = None) -> Any:
+    def fetch_result_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL) -> Any:
         """
         DEPRECATED: Use fetch_result instead.
 
