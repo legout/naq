@@ -17,7 +17,7 @@ from .connection import (
     get_nats_connection,
 )
 from .exceptions import ConfigurationError
-from .exceptions import ConnectionError as NaqConnectionError
+from .exceptions import NaqConnectionError
 from .exceptions import JobNotFoundError, NaqException
 from .job import Job, RetryDelayType
 from .settings import (

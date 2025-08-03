@@ -4,6 +4,17 @@
 
 naq is a simple, asynchronous job queueing library for Python, built on top of NATS.io and its JetStream persistence layer. It provides a similar API to RQ (Redis Queue) but uses NATS for message queuing and result storage.
 
+## ⚠️ Critical Security Warning
+
+**IMPORTANT**: NAQ uses Python's `pickle` serialization by default, which poses a serious security vulnerability. Malicious job data can execute arbitrary code on worker systems. 
+
+**Strongly recommended**: Use the secure JSON serializer by setting:
+```bash
+export NAQ_JOB_SERIALIZER=json
+```
+
+See [Security Documentation](security.md) for detailed information and migration guide.
+
 ## Core Components
 
 The naq library is structured around the following core components:

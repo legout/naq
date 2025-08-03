@@ -162,38 +162,182 @@ class PickleSerializer:
 
 class JsonSerializer:
     """
-    JSON serialization placeholder.
+    JSON-based serializer that stores functions by their import path.
     
-    This is not fully implemented yet, but the class structure allows for
-    easy implementation in the future.
+    This serializer is safer than pickle as it only allows importing
+    functions that are already available in the Python path, preventing
+    arbitrary code execution.
     """
     
     @staticmethod
+    def _get_function_path(func: Callable) -> str:
+        """Get the import path for a function."""
+        module = getattr(func, '__module__', None)
+        name = getattr(func, '__qualname__', None) or getattr(func, '__name__', None)
+        
+        if module is None or name is None:
+            raise SerializationError(
+                f"Cannot serialize function {func}: missing module or name attributes. "
+                "Only named functions and methods can be serialized with JSON."
+            )
+        
+        return f"{module}.{name}"
+    
+    @staticmethod
+    def _import_function(func_path: str) -> Callable:
+        """Import a function from its path."""
+        try:
+            module_path, func_name = func_path.rsplit('.', 1)
+            module = __import__(module_path, fromlist=[func_name])
+            return getattr(module, func_name)
+        except (ImportError, AttributeError, ValueError) as e:
+            raise SerializationError(
+                f"Cannot import function '{func_path}': {e}. "
+                "Ensure the function is available in the Python path."
+            ) from e
+    
+    @staticmethod
+    def _serialize_json_safe(obj: Any) -> Any:
+        """Convert an object to JSON-serializable format."""
+        import json
+        
+        if obj is None or isinstance(obj, (bool, int, float, str)):
+            return obj
+        elif isinstance(obj, (list, tuple)):
+            return [JsonSerializer._serialize_json_safe(item) for item in obj]
+        elif isinstance(obj, dict):
+            return {str(k): JsonSerializer._serialize_json_safe(v) for k, v in obj.items()}
+        else:
+            # For non-JSON-serializable objects, store their string representation
+            return {"__non_json_type__": type(obj).__name__, "__value__": str(obj)}
+    
+    @staticmethod
     def serialize_job(job: 'Job') -> bytes:
-        raise NotImplementedError("JSON serialization not fully implemented yet")
+        """Serialize a job to bytes using JSON."""
+        import json
+        
+        try:
+            func_path = JsonSerializer._get_function_path(job.function)
+            
+            payload = {
+                "job_id": job.job_id,
+                "enqueue_time": job.enqueue_time,
+                "function_path": func_path,
+                "args": JsonSerializer._serialize_json_safe(job.args),
+                "kwargs": JsonSerializer._serialize_json_safe(job.kwargs),
+                "max_retries": job.max_retries,
+                "retry_delay": job.retry_delay,
+                "queue_name": job.queue_name,
+                "depends_on": job.depends_on,
+                "result_ttl": job.result_ttl,
+                "retry_strategy": getattr(job, "retry_strategy", None),
+                "retry_on": [
+                    exc.__name__ if isinstance(exc, type) else str(exc)
+                    for exc in getattr(job, "retry_on", []) or []
+                ],
+                "ignore_on": [
+                    exc.__name__ if isinstance(exc, type) else str(exc)
+                    for exc in getattr(job, "ignore_on", []) or []
+                ],
+            }
+            return json.dumps(payload).encode('utf-8')
+        except Exception as e:
+            raise SerializationError(f"Failed to serialize job to JSON: {e}") from e
     
     @staticmethod
     def deserialize_job(data: bytes) -> 'Job':
-        raise NotImplementedError("JSON serialization not fully implemented yet")
+        """Deserialize bytes to a job using JSON."""
+        import json
+        
+        try:
+            payload = json.loads(data.decode('utf-8'))
+            function = JsonSerializer._import_function(payload["function_path"])
+            
+            # Create the job with all the saved attributes
+            job = Job(
+                function=function,
+                args=tuple(payload.get("args", [])),
+                kwargs=payload.get("kwargs", {}),
+                job_id=payload.get("job_id"),
+                queue_name=payload.get("queue_name"),
+                max_retries=payload.get("max_retries", 0),
+                retry_delay=payload.get("retry_delay", 0),
+                retry_strategy=payload.get("retry_strategy"),
+                retry_on=payload.get("retry_on"),
+                ignore_on=payload.get("ignore_on"),
+                depends_on=payload.get("depends_on"),
+                result_ttl=payload.get("result_ttl"),
+            )
+            
+            # Set the enqueue time
+            if "enqueue_time" in payload:
+                job.enqueue_time = payload["enqueue_time"]
+            
+            return job
+        except Exception as e:
+            raise SerializationError(f"Failed to deserialize job from JSON: {e}") from e
     
     @staticmethod
     def serialize_failed_job(job: 'Job') -> bytes:
-        raise NotImplementedError("JSON serialization not fully implemented yet")
+        """Serialize a failed job to bytes using JSON."""
+        import json
+        
+        try:
+            payload = {
+                "job_id": job.job_id,
+                "enqueue_time": job.enqueue_time,
+                "function_str": getattr(job.function, "__name__", repr(job.function)),
+                "args_repr": repr(job.args),
+                "kwargs_repr": repr(job.kwargs),
+                "max_retries": job.max_retries,
+                "retry_delay": job.retry_delay,
+                "queue_name": job.queue_name,
+                "error": job.error,
+                "traceback": job.traceback,
+            }
+            return json.dumps(payload).encode('utf-8')
+        except Exception as e:
+            raise SerializationError(f"Failed to serialize failed job to JSON: {e}") from e
     
     @staticmethod
     def serialize_result(result: Any, status: JOB_STATUS, error: Optional[str] = None,
                        traceback_str: Optional[str] = None) -> bytes:
-        raise NotImplementedError("JSON serialization not fully implemented yet")
+        """Serialize a job result to bytes using JSON."""
+        import json
+        
+        try:
+            payload = {
+                "status": status,
+                "result": JsonSerializer._serialize_json_safe(result) if status == JOB_STATUS.COMPLETED else None,
+                "error": error,
+                "traceback": traceback_str,
+            }
+            return json.dumps(payload).encode('utf-8')
+        except Exception as e:
+            raise SerializationError(f"Failed to serialize result to JSON: {e}") from e
     
     @staticmethod
     def deserialize_result(data: bytes) -> Dict[str, Any]:
-        raise NotImplementedError("JSON serialization not fully implemented yet")
+        """Deserialize bytes to a result dictionary using JSON."""
+        import json
+        
+        try:
+            return json.loads(data.decode('utf-8'))
+        except Exception as e:
+            raise SerializationError(f"Failed to deserialize result from JSON: {e}") from e
 
 
 # Factory function to get the appropriate serializer
 def get_serializer() -> Serializer:
     """Returns the appropriate serializer based on JOB_SERIALIZER setting."""
     if JOB_SERIALIZER == "pickle":
+        from loguru import logger
+        logger.warning(
+            "⚠️  SECURITY WARNING: Using 'pickle' serializer which allows arbitrary code execution! "
+            "This can be exploited by malicious job data. Consider switching to 'json' serializer "
+            "by setting NAQ_JOB_SERIALIZER=json environment variable. "
+            "See documentation for more details on secure serialization."
+        )
         return PickleSerializer
     elif JOB_SERIALIZER == "json":
         return JsonSerializer
@@ -384,10 +528,7 @@ class Job:
     def deserialize(cls, data: bytes) -> "Job":
         """Deserializes job data received from NATS."""
         serializer = get_serializer()
-        job_dict = serializer.deserialize_job(data).__dict__
-        valid_keys = cls.__init__.__code__.co_varnames
-        filtered = {k: v for k, v in job_dict.items() if k in valid_keys}
-        return cls(**filtered)
+        return serializer.deserialize_job(data)
 
     def serialize_failed_job(self) -> bytes:
         """Serializes job data including error info for the failed queue."""

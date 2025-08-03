@@ -501,7 +501,17 @@ class Worker:
         worker_name: Optional[str] = None,  # For durable consumer names
         heartbeat_interval: int = DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
         worker_ttl: int = DEFAULT_WORKER_TTL_SECONDS,
+        shutdown_timeout: float = 30.0,  # Graceful shutdown timeout in seconds
     ):
+        # Check serializer and warn if using pickle
+        from .settings import JOB_SERIALIZER
+        if JOB_SERIALIZER == "pickle":
+            logger.warning(
+                "⚠️  SECURITY WARNING: Worker is configured to use 'pickle' serializer which "
+                "allows arbitrary code execution! This worker can be exploited by malicious job data. "
+                "Consider switching to 'json' serializer by setting NAQ_JOB_SERIALIZER=json environment variable."
+            )
+        
         if isinstance(queues, str):
             queues = [queues]
         if not queues:
@@ -519,6 +529,7 @@ class Worker:
         
         self._heartbeat_interval = heartbeat_interval
         self._worker_ttl = worker_ttl
+        self._shutdown_timeout = shutdown_timeout
 
         # Connection and state variables
         self._nc: Optional[nats.aio.client.Client] = None
@@ -656,6 +667,13 @@ class Worker:
             if hasattr(msg, 'ack'):
                 await msg.ack()
 
+        except SerializationError as e:
+            # Handle malformed job messages (poison pills) by sending to dead-letter stream
+            logger.error(f"SerializationError: Malformed job message received: {e}")
+            await self._handle_poison_pill(msg, str(e))
+            # Acknowledge the message to remove it from the queue
+            if hasattr(msg, 'ack'):
+                await msg.ack()
         except Exception as e:
             logger.error(f"Error processing job {job.job_id if job else 'unknown'}: {e}", exc_info=True)
             # If we have a NATS message and it has a term() method, terminate it
@@ -664,6 +682,61 @@ class Worker:
         finally:
             # Update worker status back to idle
             await self._worker_status_manager.update_status(WORKER_STATUS.IDLE)
+
+    async def _handle_poison_pill(self, msg, error_message: str) -> None:
+        """
+        Handle malformed job messages (poison pills) by publishing them to a dead-letter stream.
+        
+        This prevents losing malformed messages that cannot be deserialized, while removing
+        them from the normal job processing queue.
+        
+        Args:
+            msg: The NATS message containing malformed data
+            error_message: The serialization error message
+        """
+        try:
+            # Create dead-letter stream for malformed jobs
+            stream_name = f"{NAQ_PREFIX}_malformed_jobs"
+            subject = f"{NAQ_PREFIX}.malformed.{self.worker_id}"
+            
+            # Ensure the dead-letter stream exists
+            await ensure_stream(
+                js=self._js,
+                stream_name=stream_name,
+                subjects=[f"{NAQ_PREFIX}.malformed.*"],
+            )
+            
+            # Create metadata about the malformed message
+            metadata = {
+                "error": error_message,
+                "worker_id": self.worker_id,
+                "subject": getattr(msg, 'subject', 'unknown'),
+                "seq": getattr(msg, 'seq', 0),
+                "timestamp": time.time(),
+                "raw_data_size": len(msg.data) if hasattr(msg, 'data') else 0,
+            }
+            
+            # Publish the raw message data to the dead-letter stream
+            payload = {
+                "metadata": metadata,
+                "raw_data": msg.data if hasattr(msg, 'data') else b'',
+            }
+            
+            import cloudpickle
+            serialized_payload = cloudpickle.dumps(payload)
+            await self._js.publish(subject, serialized_payload)
+            
+            logger.info(
+                f"Published malformed job message to dead-letter stream '{stream_name}' "
+                f"with subject '{subject}'. Error: {error_message}"
+            )
+            
+        except Exception as e:
+            logger.error(
+                f"Failed to publish malformed message to dead-letter stream: {e}. "
+                f"Original error was: {error_message}",
+                exc_info=True
+            )
 
     async def _handle_job_execution_error(self, job: Optional[Job], msg: Msg) -> None:
         """Handle errors from job execution."""
@@ -771,12 +844,12 @@ class Worker:
             # Wait for active processing tasks (respecting semaphore)
             active_tasks = self._concurrency - self._semaphore._value
             if active_tasks > 0:
-                logger.info(f"Waiting for {active_tasks} active job(s) to finish...")
+                logger.info(f"Waiting for {active_tasks} active job(s) to finish (timeout: {self._shutdown_timeout}s)...")
                 # Wait for semaphore to be fully released, with a timeout
                 try:
-                    await asyncio.wait_for(self._wait_for_semaphore(), timeout=30.0)  # Wait up to 30s
+                    await asyncio.wait_for(self._wait_for_semaphore(), timeout=self._shutdown_timeout)
                 except asyncio.TimeoutError:
-                    logger.warning("Timeout waiting for active jobs to finish.")
+                    logger.warning(f"Timeout after {self._shutdown_timeout}s waiting for active jobs to finish.")
 
             # Cancel subscription loops
             for task in subscription_tasks:

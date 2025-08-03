@@ -1,13 +1,17 @@
 # NAQ Library Architecture
 
 ## 1. Overview
-NAQ (NATS Asynchronous Queue) is a simple, lightweight distributed task queue built on NATS JetStream. It provides:
+NAQ (NATS Asynchronous Queue) is a simple, lightweight distributed task queue built on NATS JetStream. It provides a similar API to RQ (Redis Queue) but uses NATS for message queuing and result storage.
 
+**Core Features:**
 - Job enqueueing with retries and dependencies
 - Worker processing with concurrency control
-- Scheduled and recurring tasks
-- Result storage and retrieval
-- Web dashboard for monitoring
+- Scheduled and recurring tasks (cron-style or interval-based)
+- Result storage and retrieval via NATS KV store
+- Worker monitoring and heartbeating
+- High Availability scheduler with leader election
+- Web dashboard for monitoring and administration
+- Command-line interface for management
 
 ## 2. High-Level Directory Structure
 ```

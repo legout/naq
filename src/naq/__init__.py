@@ -12,9 +12,9 @@ from .connection import (
 )
 from .exceptions import (
     ConfigurationError,
-    ConnectionError,
     JobExecutionError,
     JobNotFoundError,
+    NaqConnectionError,
     NaqException,
     SerializationError,
 )
@@ -50,6 +50,7 @@ from .settings import (
     WORKER_STATUS
 )
 from .worker import Worker
+from .client import SyncClient
 
 __version__ = "0.1.3"  # Bump version for worker monitoring
 
@@ -63,21 +64,6 @@ def setup_logging(level=logging.INFO):
         level=level,  # Set the logging level
         format="{time} - {name} - {level} - {message}",  # Customize the format
     )
-
-
-# Global connection management (optional convenience)
-_default_loop = None
-
-
-def _get_loop():
-    global _default_loop
-    if _default_loop is None:
-        try:
-            _default_loop = asyncio.get_running_loop()
-        except RuntimeError:
-            _default_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(_default_loop)
-    return _default_loop
 
 
 async def connect(url: Optional[str] = None):

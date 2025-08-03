@@ -116,4 +116,15 @@ naq scheduler
 ```
 The scheduler monitors scheduled jobs and enqueues them onto the appropriate queue when they are due.
 
+## ⚠️ Security Warning
+
+**CRITICAL**: NAQ uses Python's `pickle` serialization by default, which allows arbitrary code execution and poses a serious security risk. Malicious job data can execute arbitrary commands on worker machines.
+
+**Recommended**: Switch to the secure JSON serializer:
+```bash
+export NAQ_JOB_SERIALIZER=json
+```
+
+For more details, see [Security Documentation](docs/security.md).
+
 

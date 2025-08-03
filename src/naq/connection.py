@@ -6,7 +6,7 @@ import nats
 from nats.aio.client import Client as NATSClient
 from nats.js import JetStreamContext
 
-from .exceptions import ConnectionError as NaqConnectionError
+from .exceptions import NaqConnectionError
 from .settings import DEFAULT_NATS_URL
 from .utils import setup_logging
 

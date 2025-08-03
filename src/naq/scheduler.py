@@ -28,7 +28,7 @@ from .connection import (
     get_jetstream_context,
     get_nats_connection,
 )
-from .exceptions import ConnectionError as NaqConnectionError
+from .exceptions import NaqConnectionError
 from .exceptions import SerializationError
 from .settings import DEFAULT_NATS_URL
 from .settings import (

@@ -7,12 +7,6 @@ class NaqException(Exception):
     pass
 
 
-class ConnectionError(NaqException):
-    """Raised when there's an issue connecting to NATS."""
-
-    pass
-
-
 class ConfigurationError(NaqException):
     """Raised for configuration issues."""
 

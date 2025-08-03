@@ -132,6 +132,12 @@ def purge(
         help="URL of the NATS server.",
         envvar="NAQ_NATS_URL",
     ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Skip confirmation prompt and force purge operations.",
+    ),
     log_level: str = typer.Option(
         "WARNING", # Set default log level to WARNING
         "--log-level",
@@ -143,6 +149,17 @@ def purge(
     Removes all jobs from the specified queues.
     """
     setup_logging(log_level)
+    
+    # Show warning and ask for confirmation unless --force is used
+    if not force:
+        queue_list = ", ".join(f"'{q}'" for q in queues)
+        console.print(f"[yellow]⚠️  WARNING: This will permanently delete all jobs from queue(s): {queue_list}[/yellow]")
+        console.print(f"[yellow]NATS URL: {nats_url}[/yellow]")
+        
+        if not typer.confirm("Are you sure you want to proceed?"):
+            console.print("[red]Operation cancelled.[/red]")
+            raise typer.Exit(0)
+    
     logger.info(f"Attempting to purge queues: {queues}")
     logger.info(f"Using NATS URL: {nats_url}")
 
