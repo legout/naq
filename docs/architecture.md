@@ -205,4 +205,39 @@ naq dashboard
 ## 6. References
 - [Job Module Analysis](docs/job_module_analysis.md)
 - [Dashboard Analysis](docs/dashboard_analysis.md)
-- [Examples](examples/)
+
+## 7. Async-First with Sync Interface Design
+
+This section summarizes the design principles, implementation techniques, and performance considerations for creating Python libraries that are async-first but also provide a synchronous interface for broader usability.
+
+### 7.1. Core Concepts
+- An "async-first" library builds its primary logic using asynchronous paradigms (`async`/`await`, `asyncio`, `anyio`) for efficient I/O-bound operations and high concurrency.
+- A "sync interface" exposes functions/methods that can be called from synchronous code, typically by running the underlying asynchronous operations in a separate thread.
+
+### 7.2. Design Best Practices
+- **Async Core, Sync Wrapper:** Implement core logic asynchronously; provide sync wrappers for public API.
+- **Clear Naming:** Use conventions (e.g., `async_func()`, `func_sync()`) to distinguish async/sync versions.
+- **Minimal Sync Interface:** Only expose sync versions for operations that genuinely benefit from it.
+- **Consistent Error Handling:** Ensure exceptions propagate correctly across interfaces.
+- **Documentation:** Clearly document both APIs and their usage.
+
+### 7.3. Implementation Techniques
+The primary method for bridging async to sync involves running the asynchronous code in a separate thread.
+- **`asyncio.run()`:** Suitable for simple, single calls to an async function from a synchronous context, automatically managing the event loop for that call.
+- **`anyio.run()` (Recommended for most library sync wrappers):** Provides a clean, backend-agnostic way to run an async function from a sync context. It handles event loop management and thread execution robustly.
+- **`anyio.from_thread.BlockingPortal` (For advanced, persistent interaction):** Used when a synchronous thread needs to persistently interact with an `anyio` event loop running in another thread (e.g., controlling a long-running async worker, sending multiple commands to a single async instance). It provides a more advanced, persistent communication channel than `anyio.run()`.
+
+### 7.4. Relevant Tools and Frameworks
+- **`asyncio` (Built-in):** The foundation for async programming in Python.
+- **`anyio`:** A universal async I/O library that simplifies bridging async and sync code, and supports multiple async backends.
+- **`trio`:** An alternative async framework, often used with `anyio`.
+- Libraries like `httpx` and `SQLAlchemy` (2.0+) demonstrate effective dual async/sync API design.
+
+### 7.5. Performance Implications
+Bridging async to sync via threads introduces overhead:
+- **Thread Overhead:** Creation, management, and context switching of threads have a cost.
+- **Event Loop Management:** Starting/stopping event loops in threads adds overhead.
+- **Data Transfer:** Costs associated with passing data between threads.
+- **GIL:** The Global Interpreter Lock limits true parallelism for CPU-bound tasks, even with threads.
+
+The overhead is generally acceptable for I/O-bound operations where the I/O wait time significantly exceeds the threading overhead. For performance-critical synchronous use cases or frequent CPU-bound operations, direct async usage or multiprocessing might be necessary. `BlockingPortal` can reduce repeated event loop startup overhead for persistent interactions.
