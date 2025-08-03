@@ -16,7 +16,6 @@ from rich.text import Text
 from rich.style import Style
 
 
-
 # from naq.dashboard.app import app as dashboard_app
 
 from . import __version__
@@ -33,7 +32,7 @@ from .settings import (
     SCHEDULED_JOB_STATUS,
     SCHEDULED_JOBS_KV_NAME,
     WORKER_STATUS,
-    NAQ_PREFIX
+    NAQ_PREFIX,
 )
 from .utils import setup_logging
 from .worker import Worker
@@ -87,6 +86,12 @@ def worker(
         "-n",
         help="Optional name for this worker instance.",
     ),
+    module_paths: Optional[List[str]] = typer.Option(
+        None,
+        "--module-path",
+        "-m",
+        help="Additional paths to add to sys.path for module imports. Can be specified multiple times.",
+    ),
     log_level: str = typer.Option(
         "INFO",
         "--log-level",
@@ -108,6 +113,7 @@ def worker(
         nats_url=nats_url,
         concurrency=concurrency,
         worker_name=name,
+        module_paths=module_paths,
     )
     try:
         asyncio.run(w.run())
@@ -133,7 +139,7 @@ def purge(
         envvar="NAQ_NATS_URL",
     ),
     log_level: str = typer.Option(
-        "WARNING", # Set default log level to WARNING
+        "WARNING",  # Set default log level to WARNING
         "--log-level",
         "-l",
         help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR).",
@@ -151,13 +157,15 @@ def purge(
         total_purged = 0
         # Instantiate Queue object once if nats_url is consistent for all purges
         # If each queue needed different settings, loop would be necessary here.
-        q = Queue(nats_url=nats_url) # Instantiate once
+        q = Queue(nats_url=nats_url)  # Instantiate once
 
         for queue_name in queues:
             try:
-                q.name = queue_name # Update the name for the current iteration
-                q.subject = f"{NAQ_PREFIX}.queue.{queue_name}" # Update subject accordingly
-                purged_count = await q.purge() # Call purge on the reused object
+                q.name = queue_name  # Update the name for the current iteration
+                q.subject = (
+                    f"{NAQ_PREFIX}.queue.{queue_name}"  # Update subject accordingly
+                )
+                purged_count = await q.purge()  # Call purge on the reused object
                 results[queue_name] = {"status": "success", "count": purged_count}
                 total_purged += purged_count
             except Exception as e:
@@ -171,19 +179,24 @@ def purge(
         console.print("\n[bold]Purge Results:[/bold]")
         for name, result in results.items():
             if result["status"] == "success":
-                console.print(f"  - [green]Queue '{name}': Purged {result['count']} jobs.[/green]")
+                console.print(
+                    f"  - [green]Queue '{name}': Purged {result['count']} jobs.[/green]"
+                )
             else:
-                console.print(f"  - [red]Queue '{name}': Failed - {result['error']}[/red]")
+                console.print(
+                    f"  - [red]Queue '{name}': Failed - {result['error']}[/red]"
+                )
 
         # --- Summary Panel ---
-        summary_color = "green" if error_count == 0 else ("yellow" if success_count > 0 else "red")
+        summary_color = (
+            "green" if error_count == 0 else ("yellow" if success_count > 0 else "red")
+        )
         summary_text = f"Total jobs removed: {total_purged}\nQueues processed: {len(results)}\nSuccessful purges: {success_count}\nFailed purges: {error_count}"
-        console.print(Panel(
-            summary_text,
-            title="Purge Summary",
-            style=summary_color,
-            expand=False
-        ))
+        console.print(
+            Panel(
+                summary_text, title="Purge Summary", style=summary_color, expand=False
+            )
+        )
         # --- End Reporting ---
 
         # Close connection if opened by Queue instances
@@ -322,7 +335,9 @@ def list_scheduled_jobs(
                 logger.error(
                     f"Failed to access KV store '{SCHEDULED_JOBS_KV_NAME}': {e}"
                 )
-                console.print("[yellow]No scheduled jobs found or cannot access job store.[/yellow]")
+                console.print(
+                    "[yellow]No scheduled jobs found or cannot access job store.[/yellow]"
+                )
                 return
 
             # Get all keys
@@ -383,9 +398,13 @@ def list_scheduled_jobs(
 
             # Sort by next run time
             jobs_data.sort(key=lambda j: j.get("scheduled_timestamp_utc", 0))
-            
+
             if detailed:
-                table = Table(title="NAQ Scheduled Jobs", show_header=True, header_style="bold cyan")
+                table = Table(
+                    title="NAQ Scheduled Jobs",
+                    show_header=True,
+                    header_style="bold cyan",
+                )
                 table.add_column("JOB ID", style="dim", width=36)
                 table.add_column("QUEUE", width=15)
                 table.add_column("STATUS", width=10)
@@ -394,7 +413,11 @@ def list_scheduled_jobs(
                 table.add_column("REPEATS LEFT", width=12)
                 table.add_column("DETAILS")
             else:
-                table = Table(title="NAQ Scheduled Jobs", show_header=True, header_style="bold cyan")
+                table = Table(
+                    title="NAQ Scheduled Jobs",
+                    show_header=True,
+                    header_style="bold cyan",
+                )
                 table.add_column("JOB ID", style="dim", width=36)
                 table.add_column("QUEUE", width=15)
                 table.add_column("STATUS", width=10)
@@ -406,7 +429,7 @@ def list_scheduled_jobs(
                 job_id_local = job.get("job_id", "unknown")
                 queue_name = job.get("queue_name", "unknown")
                 current_job_status = job.get("status", SCHEDULED_JOB_STATUS.ACTIVE)
-                
+
                 # Determine status style
                 status_style = "green"
                 if current_job_status == SCHEDULED_JOB_STATUS.PAUSED:
@@ -432,7 +455,11 @@ def list_scheduled_jobs(
                     schedule_type = "one-time"
 
                 if detailed:
-                    repeats = "infinite" if job.get("repeat") is None else str(job.get("repeat", 0))
+                    repeats = (
+                        "infinite"
+                        if job.get("repeat") is None
+                        else str(job.get("repeat", 0))
+                    )
 
                     # Determine additional details
                     details = []
@@ -450,26 +477,26 @@ def list_scheduled_jobs(
 
                     details_str = ", ".join(details)
                     table.add_row(
-                        job_id_local, 
-                        queue_name, 
-                        f"[{status_style}]{current_job_status}[/{status_style}]", 
-                        next_run, 
-                        schedule_type, 
-                        repeats, 
-                        details_str
+                        job_id_local,
+                        queue_name,
+                        f"[{status_style}]{current_job_status}[/{status_style}]",
+                        next_run,
+                        schedule_type,
+                        repeats,
+                        details_str,
                     )
                 else:
                     table.add_row(
-                        job_id_local, 
-                        queue_name, 
-                        f"[{status_style}]{current_job_status}[/{status_style}]", 
-                        next_run, 
-                        schedule_type
+                        job_id_local,
+                        queue_name,
+                        f"[{status_style}]{current_job_status}[/{status_style}]",
+                        next_run,
+                        schedule_type,
                     )
 
             # Print the table
             console.print(table)
-            
+
             # Total count with styling
             console.print(f"\n[bold]Total:[/bold] {len(jobs_data)} scheduled job(s)")
 
@@ -563,23 +590,31 @@ def job_control(
             if action == "cancel":
                 result = await q.cancel_scheduled_job(job_id)
                 if result:
-                    console.print(f"[green]Job {job_id} cancelled successfully.[/green]")
+                    console.print(
+                        f"[green]Job {job_id} cancelled successfully.[/green]"
+                    )
                 else:
-                    console.print(f"[yellow]Job {job_id} not found or already cancelled.[/yellow]")
+                    console.print(
+                        f"[yellow]Job {job_id} not found or already cancelled.[/yellow]"
+                    )
 
             elif action == "pause":
                 result = await q.pause_scheduled_job(job_id)
                 if result:
                     console.print(f"[green]Job {job_id} paused successfully.[/green]")
                 else:
-                    console.print(f"[yellow]Failed to pause job {job_id}. Job might not exist or was already paused.[/yellow]")
+                    console.print(
+                        f"[yellow]Failed to pause job {job_id}. Job might not exist or was already paused.[/yellow]"
+                    )
 
             elif action == "resume":
                 result = await q.resume_scheduled_job(job_id)
                 if result:
                     console.print(f"[green]Job {job_id} resumed successfully.[/green]")
                 else:
-                    console.print(f"[yellow]Failed to resume job {job_id}. Job might not exist or was not paused.[/yellow]")
+                    console.print(
+                        f"[yellow]Failed to resume job {job_id}. Job might not exist or was not paused.[/yellow]"
+                    )
 
             elif action == "reschedule":
                 # Build update dict
@@ -607,8 +642,10 @@ def job_control(
 
                 result = await q.modify_scheduled_job(job_id, **updates)
                 if result:
-                    console.print(f"[green]Job {job_id} rescheduled successfully.[/green]")
-                    
+                    console.print(
+                        f"[green]Job {job_id} rescheduled successfully.[/green]"
+                    )
+
                     # Show a summary of the changes made
                     change_summary = []
                     if cron:
@@ -619,15 +656,23 @@ def job_control(
                         change_summary.append(f"repeat={repeat}")
                     if next_run:
                         change_summary.append(f"next_run={next_run}")
-                    
+
                     if change_summary:
-                        console.print(Panel(
-                            Text("\n".join(f"• {change}" for change in change_summary)),
-                            title="Applied Changes",
-                            expand=False
-                        ))
+                        console.print(
+                            Panel(
+                                Text(
+                                    "\n".join(
+                                        f"• {change}" for change in change_summary
+                                    )
+                                ),
+                                title="Applied Changes",
+                                expand=False,
+                            )
+                        )
                 else:
-                    console.print(f"[yellow]Failed to reschedule job {job_id}. Job might not exist.[/yellow]")
+                    console.print(
+                        f"[yellow]Failed to reschedule job {job_id}. Job might not exist.[/yellow]"
+                    )
 
         except Exception as e:
             logger.exception(f"Error controlling job {job_id}: {e}")
@@ -674,9 +719,10 @@ def list_workers_command(
             # Sort workers by ID for consistent output
             workers.sort(key=lambda w: w.get("worker_id", ""))
 
+            table = Table(
+                title="NAQ Workers", show_header=True, header_style="bold cyan"
+            )
 
-            table = Table(title="NAQ Workers", show_header=True, header_style="bold cyan")
-            
             # Add columns
             table.add_column("WORKER ID", style="dim", width=45)
             table.add_column("STATUS", width=10)
@@ -689,27 +735,27 @@ def list_workers_command(
             for worker in workers:
                 worker_id = worker.get("worker_id", "unknown")
                 status = worker.get("status", "?")
-                
+
                 # Determine status style
                 status_style = "green"
                 if status == "busy":
                     status_style = "yellow"
                 elif status in ["stopping", "starting"]:
                     status_style = "blue"
-                    
+
                 queues = ", ".join(worker.get("queues", []))
                 current_job = (
                     worker.get("current_job_id", "-")
                     if status == WORKER_STATUS.BUSY
                     else "-"
                 )
-                
+
                 # Format last heartbeat
                 last_hb_ts = worker.get("last_heartbeat_utc")
                 if last_hb_ts:
                     hb_dt = datetime.datetime.fromtimestamp(last_hb_ts, timezone.utc)
                     hb_str = hb_dt.strftime("%Y-%m-%d %H:%M:%S UTC")
-                    
+
                     # Check if heartbeat is stale
                     if now - last_hb_ts > DEFAULT_WORKER_TTL_SECONDS:
                         hb_str = f"[red]{hb_str} (STALE)[/red]"
@@ -722,7 +768,7 @@ def list_workers_command(
                     f"[{status_style}]{status}[/{status_style}]",
                     queues,
                     current_job,
-                    hb_str
+                    hb_str,
                 )
 
             # Print the table

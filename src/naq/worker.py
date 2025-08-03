@@ -3,6 +3,7 @@ import asyncio
 import os
 import signal
 import socket
+import sys
 import time
 import traceback
 import uuid
@@ -563,6 +564,7 @@ class Worker:
         ack_wait: Optional[
             int | Dict[str, int]
         ] = None,  # seconds; can be per-queue dict
+        module_paths: Optional[Sequence[str]] = None,
     ):
         if isinstance(queues, str):
             queues = [queues]
@@ -574,6 +576,17 @@ class Worker:
         self.subjects: List[str] = [
             f"{NAQ_PREFIX}.queue.{name}" for name in self.queue_names
         ]
+
+        # Add current path to sys.path by default
+        if os.getcwd() not in sys.path:
+            sys.path.insert(0, os.getcwd())
+
+        # Add custom module paths to sys.path
+        if module_paths:
+            for path in module_paths:
+                if path not in sys.path:
+                    sys.path.insert(0, path)
+
         self._nats_url = nats_url
         self._concurrency = concurrency
 

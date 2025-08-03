@@ -460,7 +460,9 @@ test = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "anyio" },
     { name = "ipython" },
+    { name = "nest-asyncio" },
     { name = "rq" },
 ]
 test = [
@@ -501,7 +503,9 @@ provides-extras = ["test", "dev", "dashboard"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "anyio", specifier = ">=4.9.0" },
     { name = "ipython", specifier = ">=9.4.0" },
+    { name = "nest-asyncio", specifier = ">=1.6.0" },
     { name = "rq", specifier = ">=2.4.1" },
 ]
 test = [
