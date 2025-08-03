@@ -1,6 +1,7 @@
 # src/naq/settings.py
 import os
 from enum import Enum
+
 # Default NATS server URL
 DEFAULT_NATS_URL = os.getenv("NAQ_NATS_URL", "nats://localhost:4222")
 
@@ -13,6 +14,11 @@ NAQ_PREFIX = "naq"
 # How jobs are serialized
 # Options: 'pickle' (default, more flexible), 'json' (safer, less flexible)
 JOB_SERIALIZER = os.getenv("NAQ_JOB_SERIALIZER", "pickle")
+
+# Optional: Dotted paths to JSON encoder/decoder classes for custom types
+# Defaults use Python's built-in json.JSONEncoder/JSONDecoder
+JSON_ENCODER = os.getenv("NAQ_JSON_ENCODER", "json.JSONEncoder")
+JSON_DECODER = os.getenv("NAQ_JSON_DECODER", "json.JSONDecoder")
 
 # --- Scheduler Settings ---
 # KV bucket name for scheduled jobs
@@ -42,9 +48,11 @@ else:
     # Default to a reasonable limit, e.g., 5, or None for infinite
     MAX_SCHEDULE_FAILURES = 5
 
+
 # --- Job Status Settings ---
 class JOB_STATUS(Enum):
     """Enum representing the possible states of a job."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -53,6 +61,7 @@ class JOB_STATUS(Enum):
     SCHEDULED = "scheduled"
     PAUSED = "paused"
     CANCELLED = "cancelled"
+
 
 # KV bucket name for tracking job completion status (for dependencies)
 JOB_STATUS_KV_NAME = f"{NAQ_PREFIX}_job_status"
@@ -66,12 +75,15 @@ FAILED_JOB_SUBJECT_PREFIX = f"{NAQ_PREFIX}.failed"
 # Define stream name for failed jobs (could be same or different)
 FAILED_JOB_STREAM_NAME = f"{NAQ_PREFIX}_failed_jobs"
 
+
 class SCHEDULED_JOB_STATUS(Enum):
     """Enum representing the possible states of a scheduled job."""
+
     ACTIVE = "active"
     PAUSED = "paused"
     FAILED = "failed"
     CANCELLED = "cancelled"
+
 
 # --- Result Backend Settings ---
 # KV bucket name for storing job results/errors
@@ -79,9 +91,11 @@ RESULT_KV_NAME = f"{NAQ_PREFIX}_results"
 # Default TTL (in seconds) for job results stored in the KV store (e.g., 7 days)
 DEFAULT_RESULT_TTL_SECONDS = int(os.getenv("NAQ_DEFAULT_RESULT_TTL", 604800))
 
+
 # --- Worker Monitoring Settings ---
 class WORKER_STATUS(Enum):
     """Enum representing the possible states of a worker."""
+
     STARTING = "starting"
     IDLE = "idle"
     BUSY = "busy"
@@ -97,10 +111,31 @@ DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS = int(
     os.getenv("NAQ_WORKER_HEARTBEAT_INTERVAL", "15")
 )
 
+# Default ack_wait (in seconds) for JetStream consumers. Must be >= max expected job duration.
+# Can be overridden per-worker by passing ack_wait in Worker(...) or via env var below.
+DEFAULT_ACK_WAIT_SECONDS = int(os.getenv("NAQ_DEFAULT_ACK_WAIT", "60"))
+
+# Optional per-queue overrides via environment, JSON object mapping queue_name -> seconds.
+# Example: NAQ_ACK_WAIT_PER_QUEUE='{"email": 120, "reports": 300}'
+import json as _json
+
+_ACK_PER_QUEUE_ENV = os.getenv("NAQ_ACK_WAIT_PER_QUEUE")
+ACK_WAIT_PER_QUEUE: dict[str, int] = {}
+if _ACK_PER_QUEUE_ENV:
+    try:
+        parsed = _json.loads(_ACK_PER_QUEUE_ENV)
+        if isinstance(parsed, dict):
+            ACK_WAIT_PER_QUEUE = {str(k): int(v) for k, v in parsed.items()}
+    except Exception:
+        # Leave as empty on parse error
+        ACK_WAIT_PER_QUEUE = {}
+
 DEPENDENCY_CHECK_DELAY_SECONDS = 5
+
 
 # --- Job Retry Settings ---
 class RETRY_STRATEGY(Enum):
     """Enum representing the retry strategies for job execution."""
+
     LINEAR = "linear"
     EXPONENTIAL = "exponential"

@@ -12,3 +12,5 @@ wheels/
 examples/**/*.log
 **.log
 examples/**/*.tmp
+improvement_plan.md
+IMPROVEMENTS.md

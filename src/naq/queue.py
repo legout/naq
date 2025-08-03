@@ -17,7 +17,7 @@ from .connection import (
     get_nats_connection,
 )
 from .exceptions import ConfigurationError
-from .exceptions import ConnectionError as NaqConnectionError
+from .exceptions import NaqConnectionError
 from .exceptions import JobNotFoundError, NaqException
 from .job import Job, RetryDelayType
 from .settings import (
@@ -81,14 +81,14 @@ class ScheduledJobManager:
     ) -> None:
         """
         Stores a job in the scheduled jobs KV store.
-        
+
         Args:
             job: The job to schedule
             scheduled_timestamp: When the job should run (UTC timestamp)
             cron: Optional cron expression for recurring jobs
             interval_seconds: Optional interval in seconds for recurring jobs
             repeat: Optional number of times to repeat (None=infinite)
-        
+
         Raises:
             NaqException: If storing the job fails
         """
@@ -121,13 +121,13 @@ class ScheduledJobManager:
     async def cancel_job(self, job_id: str) -> bool:
         """
         Cancels a scheduled job by deleting it from the KV store.
-        
+
         Args:
             job_id: ID of the job to cancel
-            
+
         Returns:
             True if job was found and canceled, False if not found
-            
+
         Raises:
             NaqException: For errors other than job not found
         """
@@ -148,14 +148,14 @@ class ScheduledJobManager:
     async def update_job_status(self, job_id: str, status: str) -> bool:
         """
         Updates the status of a scheduled job.
-        
+
         Args:
             job_id: ID of the job to update
             status: New status (ACTIVE, PAUSED, etc.)
-            
+
         Returns:
             True if update was successful, False on concurrency conflict
-            
+
         Raises:
             JobNotFoundError: If job doesn't exist
             NaqException: For other errors
@@ -197,20 +197,22 @@ class ScheduledJobManager:
     async def modify_job(self, job_id: str, **updates: Any) -> bool:
         """
         Modifies parameters of a scheduled job.
-        
+
         Args:
             job_id: ID of the job to modify
             **updates: Parameters to update (cron, interval, repeat, etc.)
-            
+
         Returns:
             True if modification was successful, False on concurrency conflict
-            
+
         Raises:
             JobNotFoundError: If job doesn't exist
             ConfigurationError: If invalid parameters are provided
             NaqException: For other errors
         """
-        logger.info(f"Attempting to modify scheduled job '{job_id}' with updates: {updates}")
+        logger.info(
+            f"Attempting to modify scheduled job '{job_id}' with updates: {updates}"
+        )
         kv = await self.get_kv()
         supported_keys = {"cron", "interval", "repeat", "scheduled_timestamp_utc"}
         update_keys = set(updates.keys())
@@ -231,9 +233,11 @@ class ScheduledJobManager:
             needs_next_run_recalc = False
             if "cron" in updates:
                 schedule_data["cron"] = updates["cron"]
-                schedule_data["interval_seconds"] = None  # Clear interval if cron is set
+                schedule_data["interval_seconds"] = (
+                    None  # Clear interval if cron is set
+                )
                 needs_next_run_recalc = True
-                
+
             if "interval" in updates:
                 interval = updates["interval"]
                 if isinstance(interval, (int, float)):
@@ -246,20 +250,22 @@ class ScheduledJobManager:
                     raise ConfigurationError(
                         "'interval' must be timedelta or numeric seconds."
                     )
-                    
+
             if "repeat" in updates:
                 schedule_data["repeat"] = updates["repeat"]
-                
+
             if "scheduled_timestamp_utc" in updates:
                 # Allow explicitly setting the next run time
-                schedule_data["scheduled_timestamp_utc"] = updates["scheduled_timestamp_utc"]
+                schedule_data["scheduled_timestamp_utc"] = updates[
+                    "scheduled_timestamp_utc"
+                ]
                 schedule_data["next_run_utc"] = updates["scheduled_timestamp_utc"]
                 needs_next_run_recalc = False  # Explicitly set, no recalc needed now
 
             # Recalculate next run time if cron/interval changed and not explicitly set
             if needs_next_run_recalc:
                 next_run_ts = self._calculate_next_run_time(schedule_data)
-                
+
                 if next_run_ts is not None:
                     schedule_data["scheduled_timestamp_utc"] = next_run_ts
                     schedule_data["next_run_utc"] = next_run_ts
@@ -289,32 +295,39 @@ class ScheduledJobManager:
             logger.error(f"Error modifying job '{job_id}': {e}")
             raise NaqException(f"Failed to modify job: {e}") from e
 
-    def _calculate_next_run_time(self, schedule_data: Dict[str, Any]) -> Optional[float]:
+    def _calculate_next_run_time(
+        self, schedule_data: Dict[str, Any]
+    ) -> Optional[float]:
         """
         Calculates the next run time based on cron or interval.
-        
+
         Args:
             schedule_data: The scheduled job data
-            
+
         Returns:
             Next run timestamp or None if it couldn't be calculated
         """
         now_utc = datetime.datetime.now(timezone.utc)
-        
+
         if schedule_data.get("cron"):
             try:
                 from croniter import croniter
+
                 cron_iter = croniter(schedule_data["cron"], now_utc)
                 return cron_iter.get_next(datetime.datetime).timestamp()
             except ImportError:
                 raise ImportError("Please install 'croniter' to use cron scheduling.")
             except Exception as e:
-                raise ConfigurationError(f"Invalid cron format '{schedule_data['cron']}': {e}")
-                
+                raise ConfigurationError(
+                    f"Invalid cron format '{schedule_data['cron']}': {e}"
+                )
+
         elif schedule_data.get("interval_seconds"):
             # Base next run on 'now' for simplicity when modifying
-            return (now_utc + timedelta(seconds=schedule_data["interval_seconds"])).timestamp()
-            
+            return (
+                now_utc + timedelta(seconds=schedule_data["interval_seconds"])
+            ).timestamp()
+
         return None
 
 
@@ -322,23 +335,25 @@ class Queue:
     """Represents a job queue backed by a NATS JetStream stream."""
 
     # Add regex for valid queue names (alphanumeric, underscore, hyphen)
-    _VALID_QUEUE_NAME = re.compile(r'^[a-zA-Z0-9_.-]+$')
+    _VALID_QUEUE_NAME = re.compile(r"^[a-zA-Z0-9_.-]+$")
 
     def __init__(
         self,
         name: str = DEFAULT_QUEUE_NAME,
         nats_url: Optional[str] = None,
         default_timeout: Optional[int] = None,
+        prefer_thread_local: bool = False,
     ):
         """
         Initialize a Queue instance.
-        
+
         Args:
             name: The name of the queue. Must be non-empty and contain only
                 alphanumeric characters, underscores, or hyphens.
             nats_url: Optional NATS server URL override
             default_timeout: Optional default job timeout in seconds
-            
+            prefer_thread_local: When True, reuse a thread-local connection/JS context.
+
         Raises:
             ValueError: If queue name is empty or contains invalid characters
         """
@@ -349,7 +364,7 @@ class Queue:
                 f"Queue name '{name}' contains invalid characters. "
                 "Only alphanumeric, underscore, hyphen, and dot are allowed."
             )
-            
+
         self.name = name
         self.subject = f"{NAQ_PREFIX}.queue.{self.name}"
         self.stream_name = f"{NAQ_PREFIX}_jobs"
@@ -357,16 +372,21 @@ class Queue:
         self._js: Optional[nats.js.JetStreamContext] = None
         self._default_timeout = default_timeout
         self._scheduled_job_manager = ScheduledJobManager(name, nats_url)
-        
+        self._prefer_thread_local = prefer_thread_local
+
         setup_logging()  # Ensure logging is set up
 
     async def _get_js(self) -> nats.js.JetStreamContext:
         """Gets the JetStream context, initializing if needed."""
         if self._js is None:
             # First, get the NATS connection
-            nc = await get_nats_connection(url=self._nats_url)
+            nc = await get_nats_connection(
+                url=self._nats_url, prefer_thread_local=self._prefer_thread_local
+            )
             # Then, get the JetStream context using the connection
-            self._js = await get_jetstream_context(nc=nc)
+            self._js = await get_jetstream_context(
+                nc=nc, prefer_thread_local=self._prefer_thread_local
+            )
             # Ensure the stream exists when the queue is first used
             await ensure_stream(
                 js=self._js,
@@ -382,6 +402,7 @@ class Queue:
         max_retries: Optional[int] = 0,
         retry_delay: RetryDelayType = 0,
         depends_on: Optional[Union[str, List[str], Job, List[Job]]] = None,
+        timeout: Optional[int] = None,
         **kwargs: Any,
     ) -> Job:
         """
@@ -397,7 +418,7 @@ class Queue:
 
         Returns:
             The enqueued Job instance.
-            
+
         Raises:
             ValueError: If max_retries or retry_delay is negative
             NaqException: If enqueuing fails
@@ -405,9 +426,11 @@ class Queue:
         # Validate retry parameters
         if max_retries is not None and max_retries < 0:
             raise ValueError("max_retries cannot be negative")
-        if not isinstance(retry_delay, ( int, float, list, tuple)):
-            raise TypeError("retry_delay must be a number (int or float or list of them)")
-        #if retry_delay < 0:
+        if not isinstance(retry_delay, (int, float, list, tuple)):
+            raise TypeError(
+                "retry_delay must be a number (int or float or list of them)"
+            )
+        # if retry_delay < 0:
         #    raise ValueError("retry_delay cannot be negative")
         # Create the job object
         job = Job(
@@ -422,8 +445,9 @@ class Queue:
             retry_on=kwargs.get("retry_on"),
             ignore_on=kwargs.get("ignore_on"),
             result_ttl=kwargs.get("result_ttl"),
+            timeout=timeout,
         )
-        
+
         logger.info(
             f"Enqueueing job {job.job_id} ({func.__name__}) to queue '{self.name}' (subject: {self.subject})"
         )
@@ -454,6 +478,7 @@ class Queue:
         *args: Any,
         max_retries: Optional[int] = 0,
         retry_delay: RetryDelayType = 0,
+        timeout: Optional[int] = None,
         **kwargs: Any,
     ) -> Job:
         """
@@ -469,7 +494,7 @@ class Queue:
 
         Returns:
             The scheduled Job instance.
-            
+
         Raises:
             NaqException: If scheduling fails
         """
@@ -489,11 +514,12 @@ class Queue:
             max_retries=max_retries,
             retry_delay=retry_delay,
             queue_name=self.name,
+            timeout=timeout,
         )
 
         # Store in scheduled jobs KV
         await self._scheduled_job_manager.store_job(job, scheduled_timestamp)
-        
+
         logger.info(
             f"Scheduled job {job.job_id} ({func.__name__}) to run at {dt} on queue '{self.name}'"
         )
@@ -506,6 +532,7 @@ class Queue:
         *args: Any,
         max_retries: Optional[int] = 0,
         retry_delay: RetryDelayType = 0,
+        timeout: Optional[int] = None,
         **kwargs: Any,
     ) -> Job:
         """
@@ -521,7 +548,7 @@ class Queue:
 
         Returns:
             The scheduled Job instance.
-            
+
         Raises:
             NaqException: If scheduling fails
         """
@@ -545,6 +572,7 @@ class Queue:
         repeat: Optional[int] = None,
         max_retries: Optional[int] = 0,
         retry_delay: RetryDelayType = 0,
+        timeout: Optional[int] = None,
         **kwargs: Any,
     ) -> Job:
         """
@@ -562,7 +590,7 @@ class Queue:
 
         Returns:
             The scheduled Job instance (representing the first scheduled run).
-            
+
         Raises:
             ConfigurationError: If schedule configuration is invalid
             NaqException: If scheduling fails
@@ -592,6 +620,7 @@ class Queue:
             max_retries=max_retries,
             retry_delay=retry_delay,
             queue_name=self.name,
+            timeout=timeout,
         )
 
         # Calculate first run time
@@ -613,7 +642,9 @@ class Queue:
             raise ConfigurationError("Invalid schedule configuration.")
 
         # Extract interval seconds if interval was provided
-        interval_seconds = interval.total_seconds() if isinstance(interval, timedelta) else None
+        interval_seconds = (
+            interval.total_seconds() if isinstance(interval, timedelta) else None
+        )
         if isinstance(interval, (int, float)):
             interval_seconds = float(interval)
 
@@ -625,7 +656,7 @@ class Queue:
             interval_seconds=interval_seconds,
             repeat=repeat,
         )
-        
+
         logger.info(
             f"Scheduled recurring job {job.job_id} ({func.__name__}) starting at "
             f"{datetime.datetime.fromtimestamp(first_run_ts, timezone.utc)} on queue '{self.name}'"
@@ -690,13 +721,13 @@ class Queue:
     async def pause_scheduled_job(self, job_id: str) -> bool:
         """
         Pauses a scheduled job.
-        
+
         Args:
             job_id: The ID of the job to pause
-            
+
         Returns:
             True if successful, False on concurrency conflict
-            
+
         Raises:
             JobNotFoundError: If job doesn't exist
             NaqException: For other errors
@@ -709,13 +740,13 @@ class Queue:
     async def resume_scheduled_job(self, job_id: str) -> bool:
         """
         Resumes a paused scheduled job.
-        
+
         Args:
             job_id: The ID of the job to resume
-            
+
         Returns:
             True if successful, False on concurrency conflict
-            
+
         Raises:
             JobNotFoundError: If job doesn't exist
             NaqException: For other errors
@@ -728,14 +759,14 @@ class Queue:
     async def modify_scheduled_job(self, job_id: str, **updates: Any) -> bool:
         """
         Modifies parameters of a scheduled job.
-        
+
         Args:
             job_id: The ID of the job to modify
             **updates: Parameters to update (cron, interval, repeat, etc.)
-            
+
         Returns:
             True if successful, False on concurrency conflict
-            
+
         Raises:
             JobNotFoundError: If job doesn't exist
             ConfigurationError: If invalid parameters are provided
@@ -754,6 +785,7 @@ class Queue:
 
 # --- Async Helper Functions ---
 
+
 async def enqueue(
     func: Callable,
     *args: Any,
@@ -762,16 +794,21 @@ async def enqueue(
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
     depends_on: Optional[Union[str, List[str], Job, List[Job]]] = None,
+    timeout: Optional[int] = None,
+    prefer_thread_local: bool = False,
     **kwargs: Any,
 ) -> Job:
     """Helper to enqueue a job onto a specific queue (async)."""
-    q = Queue(name=queue_name, nats_url=nats_url)
+    q = Queue(
+        name=queue_name, nats_url=nats_url, prefer_thread_local=prefer_thread_local
+    )
     job = await q.enqueue(
         func,
         *args,
         max_retries=max_retries,
         retry_delay=retry_delay,
         depends_on=depends_on,
+        timeout=timeout,
         **kwargs,
     )
     return job
@@ -785,12 +822,22 @@ async def enqueue_at(
     nats_url: Optional[str] = None,
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
+    timeout: Optional[int] = None,
+    prefer_thread_local: bool = False,
     **kwargs: Any,
 ) -> Job:
     """Helper to schedule a job for a specific time (async)."""
-    q = Queue(name=queue_name, nats_url=nats_url)
+    q = Queue(
+        name=queue_name, nats_url=nats_url, prefer_thread_local=prefer_thread_local
+    )
     return await q.enqueue_at(
-        dt, func, *args, max_retries=max_retries, retry_delay=retry_delay, **kwargs
+        dt,
+        func,
+        *args,
+        max_retries=max_retries,
+        retry_delay=retry_delay,
+        timeout=timeout,
+        **kwargs,
     )
 
 
@@ -802,12 +849,22 @@ async def enqueue_in(
     nats_url: Optional[str] = None,
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
+    timeout: Optional[int] = None,
+    prefer_thread_local: bool = False,
     **kwargs: Any,
 ) -> Job:
     """Helper to schedule a job after a delay (async)."""
-    q = Queue(name=queue_name, nats_url=nats_url)
+    q = Queue(
+        name=queue_name, nats_url=nats_url, prefer_thread_local=prefer_thread_local
+    )
     return await q.enqueue_in(
-        delta, func, *args, max_retries=max_retries, retry_delay=retry_delay, **kwargs
+        delta,
+        func,
+        *args,
+        max_retries=max_retries,
+        retry_delay=retry_delay,
+        timeout=timeout,
+        **kwargs,
     )
 
 
@@ -821,10 +878,14 @@ async def schedule(
     repeat: Optional[int] = None,
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
+    timeout: Optional[int] = None,
+    prefer_thread_local: bool = False,
     **kwargs: Any,
 ) -> Job:
     """Helper to schedule a recurring job (async)."""
-    q = Queue(name=queue_name, nats_url=nats_url)
+    q = Queue(
+        name=queue_name, nats_url=nats_url, prefer_thread_local=prefer_thread_local
+    )
     return await q.schedule(
         func,
         *args,
@@ -833,6 +894,7 @@ async def schedule(
         repeat=repeat,
         max_retries=max_retries,
         retry_delay=retry_delay,
+        timeout=timeout,
         **kwargs,
     )
 
@@ -840,39 +902,54 @@ async def schedule(
 async def purge_queue(
     queue_name: str = DEFAULT_QUEUE_NAME,
     nats_url: Optional[str] = None,
+    prefer_thread_local: bool = False,
 ) -> int:
     """Helper to purge jobs from a specific queue (async)."""
-    q = Queue(name=queue_name, nats_url=nats_url)
+    q = Queue(
+        name=queue_name, nats_url=nats_url, prefer_thread_local=prefer_thread_local
+    )
     return await q.purge()
 
 
-async def cancel_scheduled_job(job_id: str, nats_url: Optional[str] = None) -> bool:
+async def cancel_scheduled_job(
+    job_id: str, nats_url: Optional[str] = None, prefer_thread_local: bool = False
+) -> bool:
     """Helper to cancel a scheduled job (async)."""
-    q = Queue(nats_url=nats_url)  # Queue name doesn't matter here
+    q = Queue(
+        nats_url=nats_url, prefer_thread_local=prefer_thread_local
+    )  # Queue name doesn't matter here
     return await q.cancel_scheduled_job(job_id)
 
 
-async def pause_scheduled_job(job_id: str, nats_url: Optional[str] = None) -> bool:
+async def pause_scheduled_job(
+    job_id: str, nats_url: Optional[str] = None, prefer_thread_local: bool = False
+) -> bool:
     """Helper to pause a scheduled job (async)."""
-    q = Queue(nats_url=nats_url)
+    q = Queue(nats_url=nats_url, prefer_thread_local=prefer_thread_local)
     return await q.pause_scheduled_job(job_id)
 
 
-async def resume_scheduled_job(job_id: str, nats_url: Optional[str] = None) -> bool:
+async def resume_scheduled_job(
+    job_id: str, nats_url: Optional[str] = None, prefer_thread_local: bool = False
+) -> bool:
     """Helper to resume a scheduled job (async)."""
-    q = Queue(nats_url=nats_url)
+    q = Queue(nats_url=nats_url, prefer_thread_local=prefer_thread_local)
     return await q.resume_scheduled_job(job_id)
 
 
 async def modify_scheduled_job(
-    job_id: str, nats_url: Optional[str] = None, **updates: Any
+    job_id: str,
+    nats_url: Optional[str] = None,
+    prefer_thread_local: bool = False,
+    **updates: Any,
 ) -> bool:
     """Helper to modify a scheduled job (async)."""
-    q = Queue(nats_url=nats_url)
+    q = Queue(nats_url=nats_url, prefer_thread_local=prefer_thread_local)
     return await q.modify_scheduled_job(job_id, **updates)
 
 
 # --- Sync Helper Functions ---
+
 
 def enqueue_sync(
     func: Callable,
@@ -882,9 +959,39 @@ def enqueue_sync(
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
     depends_on: Optional[Union[str, List[str], Job, List[Job]]] = None,
+    timeout: Optional[int] = None,
     **kwargs: Any,
 ) -> Job:
-    """Helper to enqueue a job onto a specific queue (synchronous)."""
+    """
+    Helper to enqueue a job onto a specific queue (synchronous).
+
+    Performance and connection reuse:
+      - This sync wrapper reuses a thread-local NATS connection and JetStream context
+        by calling the async path with prefer_thread_local=True.
+      - Reuse avoids connect/close per call and significantly improves throughput in
+        batch-style producers that call enqueue_sync repeatedly from the same thread.
+
+    When to use:
+      - Use enqueue_sync for simple synchronous producers or CLI tools.
+      - For tight loops and high throughput, consider either:
+          a) Repeatedly calling enqueue_sync (it reuses TLS connection automatically), or
+          b) Managing a Queue instance asynchronously in your own event loop for maximal control.
+
+    Explicit cleanup:
+      - Thread-local connections can be explicitly closed when a batch is completed:
+            from naq.queue import close_sync_connections
+            close_sync_connections()
+        This is optional; the connection is also cleaned up on process exit.
+
+    Equivalent async batching (for reference):
+        async def produce(url):
+            q = Queue(nats_url=url, prefer_thread_local=False)
+            for i in range(1000):
+                await q.enqueue(my_func, i)
+            await q.close()
+
+    """
+
     async def _main():
         job = await enqueue(
             func,
@@ -894,9 +1001,11 @@ def enqueue_sync(
             max_retries=max_retries,
             retry_delay=retry_delay,
             depends_on=depends_on,
+            timeout=timeout,
+            prefer_thread_local=True,
             **kwargs,
         )
-        await close_nats_connection()
+        # Do not close thread-local connection here; allow reuse across sync calls.
         return job
 
     return run_async_from_sync(_main())
@@ -910,9 +1019,17 @@ def enqueue_at_sync(
     nats_url: Optional[str] = None,
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
+    timeout: Optional[int] = None,
     **kwargs: Any,
 ) -> Job:
-    """Helper to schedule a job for a specific time (sync)."""
+    """
+    Helper to schedule a job for a specific time (sync).
+
+    This sync wrapper reuses a thread-local NATS connection/JetStream context to
+    avoid per-call connect/close. See enqueue_sync() docstring for details on
+    performance characteristics and explicit cleanup via close_sync_connections().
+    """
+
     async def _main():
         job = await enqueue_at(
             dt,
@@ -922,9 +1039,10 @@ def enqueue_at_sync(
             nats_url=nats_url,
             max_retries=max_retries,
             retry_delay=retry_delay,
+            timeout=timeout,
+            prefer_thread_local=True,
             **kwargs,
         )
-        await close_nats_connection()
         return job
 
     return run_async_from_sync(_main())
@@ -938,9 +1056,16 @@ def enqueue_in_sync(
     nats_url: Optional[str] = None,
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
+    timeout: Optional[int] = None,
     **kwargs: Any,
 ) -> Job:
-    """Helper to schedule a job after a delay (sync)."""
+    """
+    Helper to schedule a job after a delay (sync).
+
+    Uses a thread-local NATS connection for efficient repeated calls from the
+    same thread. See enqueue_sync() for batching guidance and cleanup options.
+    """
+
     async def _main():
         job = await enqueue_in(
             delta,
@@ -950,9 +1075,10 @@ def enqueue_in_sync(
             nats_url=nats_url,
             max_retries=max_retries,
             retry_delay=retry_delay,
+            timeout=timeout,
+            prefer_thread_local=True,
             **kwargs,
         )
-        await close_nats_connection()
         return job
 
     return run_async_from_sync(_main())
@@ -968,9 +1094,17 @@ def schedule_sync(
     repeat: Optional[int] = None,
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
+    timeout: Optional[int] = None,
     **kwargs: Any,
 ) -> Job:
-    """Helper to schedule a recurring job (sync)."""
+    """
+    Helper to schedule a recurring job (sync).
+
+    Reuses a thread-local NATS connection/JetStream context to minimize overhead
+    in synchronous producers. Refer to enqueue_sync() for full guidance on reuse,
+    batching patterns, and explicit cleanup.
+    """
+
     async def _main():
         job = await schedule(
             func,
@@ -982,9 +1116,10 @@ def schedule_sync(
             repeat=repeat,
             max_retries=max_retries,
             retry_delay=retry_delay,
+            timeout=timeout,
+            prefer_thread_local=True,
             **kwargs,
         )
-        await close_nats_connection()
         return job
 
     return run_async_from_sync(_main())
@@ -994,40 +1129,64 @@ def purge_queue_sync(
     queue_name: str = DEFAULT_QUEUE_NAME,
     nats_url: Optional[str] = None,
 ) -> int:
-    """Helper to purge jobs from a specific queue (synchronous)."""
+    """
+    Helper to purge jobs from a specific queue (synchronous).
+
+    Uses thread-local connection reuse to avoid repeated connect/close costs.
+    """
+
     async def _main():
-        count = await purge_queue(queue_name=queue_name, nats_url=nats_url)
-        await close_nats_connection()
+        count = await purge_queue(
+            queue_name=queue_name, nats_url=nats_url, prefer_thread_local=True
+        )
         return count
 
     return run_async_from_sync(_main())
 
 
 def cancel_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bool:
-    """Helper to cancel a scheduled job (sync)."""
+    """
+    Helper to cancel a scheduled job (sync).
+
+    Uses thread-local connection reuse for efficiency across multiple calls.
+    """
+
     async def _main():
-        res = await cancel_scheduled_job(job_id, nats_url=nats_url)
-        await close_nats_connection()
+        res = await cancel_scheduled_job(
+            job_id, nats_url=nats_url, prefer_thread_local=True
+        )
         return res
 
     return run_async_from_sync(_main())
 
 
 def pause_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bool:
-    """Helper to pause a scheduled job (sync)."""
+    """
+    Helper to pause a scheduled job (sync).
+
+    Uses thread-local connection reuse for efficiency across multiple calls.
+    """
+
     async def _main():
-        res = await pause_scheduled_job(job_id, nats_url=nats_url)
-        await close_nats_connection()
+        res = await pause_scheduled_job(
+            job_id, nats_url=nats_url, prefer_thread_local=True
+        )
         return res
 
     return run_async_from_sync(_main())
 
 
 def resume_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bool:
-    """Helper to resume a scheduled job (sync)."""
+    """
+    Helper to resume a scheduled job (sync).
+
+    Uses thread-local connection reuse for efficiency across multiple calls.
+    """
+
     async def _main():
-        res = await resume_scheduled_job(job_id, nats_url=nats_url)
-        await close_nats_connection()
+        res = await resume_scheduled_job(
+            job_id, nats_url=nats_url, prefer_thread_local=True
+        )
         return res
 
     return run_async_from_sync(_main())
@@ -1036,10 +1195,32 @@ def resume_scheduled_job_sync(job_id: str, nats_url: Optional[str] = None) -> bo
 def modify_scheduled_job_sync(
     job_id: str, nats_url: Optional[str] = None, **updates: Any
 ) -> bool:
-    """Helper to modify a scheduled job (sync)."""
+    """
+    Helper to modify a scheduled job (sync).
+
+    Uses thread-local connection reuse for efficiency across multiple calls.
+    """
+
     async def _main():
-        res = await modify_scheduled_job(job_id, nats_url=nats_url, **updates)
-        await close_nats_connection()
+        res = await modify_scheduled_job(
+            job_id, nats_url=nats_url, prefer_thread_local=True, **updates
+        )
         return res
+
+    return run_async_from_sync(_main())
+
+
+# Optional: public function to explicitly close thread-local connection for sync batches
+def close_sync_connections(nats_url: Optional[str] = None) -> None:
+    """
+    Close thread-local NATS connection/JS context used by sync helpers.
+
+    Use this to explicitly end a synchronous batch when you know no further
+    enqueue_sync (or other sync helpers) will be called from the current thread.
+    This can release the connection resources earlier than process exit.
+    """
+
+    async def _main():
+        await close_nats_connection(url=nats_url, thread_local=True)
 
     return run_async_from_sync(_main())
