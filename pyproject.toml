@@ -54,3 +54,15 @@ testpaths = ["tests"]
 pythonpath = "src"
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"  # Add this line
+
+[dependency-groups]
+dev = [
+    "ipython>=9.4.0",
+    "rq>=2.4.1",
+]
+test = [
+    "freezegun>=1.5.4",
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.1.0",
+    "pytest-mock>=3.14.1",
+]

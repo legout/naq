@@ -147,7 +147,7 @@ class WorkerStatusManager:
             return
 
         try:
-            await kv_store.delete(self.worker.worker_id.encode("utf-8"))
+            await kv_store.delete(self.worker.worker_id)
             logger.info(f"Unregistered worker {self.worker.worker_id}")
         except Exception as e:
             logger.error(f"Failed to unregister worker {self.worker.worker_id}: {e}")
@@ -268,7 +268,7 @@ class JobStatusManager:
                 "finished_at": job.finished_at,
             }
             serialized_payload = cloudpickle.dumps(payload)
-            await kv_store.put(job.job_id.encode("utf-8"), serialized_payload)
+            await kv_store.put(job.job_id, serialized_payload)
             logger.debug(f"Updated status for job {job.job_id} to {job.status.value}")
         except Exception as e:
             logger.error(f"Failed to update job status: {e}")
@@ -413,7 +413,7 @@ class JobStatusManager:
 
         logger.debug(f"Updating status for job {job_id} to '{status}'")
         try:
-            await self._status_kv.put(job_id.encode("utf-8"), status.encode("utf-8"))
+            await self._status_kv.put(job_id, status.encode("utf-8"))
         except Exception as e:
             logger.error(
                 f"Failed to update status for job {job_id} to '{status}': {e}",
@@ -428,13 +428,13 @@ class JobStatusManager:
             )
             return
 
-        key = job.job_id.encode("utf-8")
+        key = job.job_id
 
         try:
             if job.error:
                 # Store failure information
                 result_data = {
-                    "status": JOB_STATUS.FAILED,
+                    "status": JOB_STATUS.FAILED.value,
                     "error": job.error,
                     "traceback": job.traceback,
                 }
@@ -442,7 +442,7 @@ class JobStatusManager:
             else:
                 # Store successful result
                 result_data = {
-                    "status": JOB_STATUS.COMPLETED,
+                    "status": JOB_STATUS.COMPLETED.value,
                     "result": job.result,
                 }
                 logger.debug(f"Storing result for job {job.job_id}")

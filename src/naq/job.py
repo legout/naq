@@ -61,6 +61,13 @@ class PickleSerializer:
     def serialize_job(job: "Job") -> bytes:
         """Serialize a job to bytes using cloudpickle."""
         try:
+            # Ensure retry_strategy is stored as a plain string
+            rs = getattr(job, "retry_strategy", None)
+            if rs is not None and hasattr(rs, "value"):
+                rs = rs.value
+            elif rs is not None:
+                rs = str(rs)
+
             payload = {
                 "job_id": job.job_id,
                 "enqueue_time": job.enqueue_time,
@@ -74,7 +81,7 @@ class PickleSerializer:
                 "depends_on": job.depends_on,
                 "result_ttl": job.result_ttl,
                 "timeout": job.timeout,
-                "retry_strategy": getattr(job, "retry_strategy", None),
+                "retry_strategy": rs,
                 "retry_on": [
                     exc.__name__ if isinstance(exc, type) else str(exc)
                     for exc in getattr(job, "retry_on", []) or []
@@ -284,6 +291,13 @@ class JsonSerializer:
             job.args, job.kwargs
         )
 
+        # Ensure retry_strategy is a simple string
+        rs = job.retry_strategy
+        if rs is not None and hasattr(rs, "value"):
+            rs = rs.value
+        elif rs is not None:
+            rs = str(rs)
+
         payload = {
             "job_id": job.job_id,
             "enqueue_time": job.enqueue_time,
@@ -296,7 +310,7 @@ class JsonSerializer:
             "depends_on": job.dependency_ids,  # store as list of IDs
             "result_ttl": job.result_ttl,
             "timeout": job.timeout,
-            "retry_strategy": job.retry_strategy,
+            "retry_strategy": rs,
             "retry_on": JsonSerializer._encode_exceptions(job.retry_on),
             "ignore_on": JsonSerializer._encode_exceptions(job.ignore_on),
         }
@@ -332,6 +346,13 @@ class JsonSerializer:
         from .settings import RETRY_STRATEGY  # local import to avoid cycles
 
         retry_strategy = payload.get("retry_strategy", RETRY_STRATEGY.LINEAR)
+        # Normalize to string for Job construction
+        if retry_strategy is None:
+            retry_strategy = "linear"
+        elif hasattr(retry_strategy, "value"):
+            retry_strategy = retry_strategy.value
+        else:
+            retry_strategy = str(retry_strategy)
 
         job = Job(
             function=function,
@@ -416,7 +437,8 @@ def get_serializer() -> Serializer:
 # Define retry strategies
 from .settings import RETRY_STRATEGY
 
-VALID_RETRY_STRATEGIES = {RETRY_STRATEGY.LINEAR, RETRY_STRATEGY.EXPONENTIAL}
+# Normalize valid strategies to string values for consistent comparison and error messages
+VALID_RETRY_STRATEGIES = {"linear", "exponential"}
 
 
 class Job:
@@ -457,10 +479,16 @@ class Job:
         Raises:
             ValueError: If retry_strategy is invalid
         """
+        # Normalize enum or other inputs to a canonical lowercase string
+        if hasattr(retry_strategy, "value"):
+            retry_strategy = retry_strategy.value
+        else:
+            retry_strategy = str(retry_strategy).lower()
+
         if retry_strategy not in VALID_RETRY_STRATEGIES:
             raise ValueError(
                 f"Invalid retry strategy '{retry_strategy}'. "
-                f"Must be one of: {', '.join(VALID_RETRY_STRATEGIES)}"
+                f"Must be one of: {', '.join(sorted(VALID_RETRY_STRATEGIES))}"
             )
 
         self.job_id = job_id or str(uuid.uuid4()).replace("-", "")
@@ -553,7 +581,7 @@ class Job:
         """
         if isinstance(self.retry_delay, (int, float)):
             base_delay = float(self.retry_delay)
-            if self.retry_strategy == RETRY_STRATEGY.LINEAR:
+            if self.retry_strategy == "linear":
                 return base_delay
             else:  # exponential
                 return base_delay * (2**self.retry_count)
@@ -577,9 +605,15 @@ class Job:
         self._start_time = time.time()
         try:
             if asyncio.iscoroutinefunction(self.function):
+                # For async functions, use await as before
                 self.result = await self.function(*self.args, **self.kwargs)
             else:
-                self.result = self.function(*self.args, **self.kwargs)
+                # For sync functions, run them in a separate thread to avoid blocking
+                # the event loop. This allows true parallel execution when
+                # multiple sync jobs are processed concurrently.
+                self.result = await asyncio.to_thread(
+                    self.function, *self.args, **self.kwargs
+                )
             self._finish_time = time.time()
             return self.result
         except Exception as e:
@@ -667,7 +701,8 @@ class Job:
             ) from e
 
         try:
-            entry = await kv.get(job_id.encode("utf-8"))
+            # Keys in NATS KV APIs should be str, not bytes
+            entry = await kv.get(job_id)
             result_data = Job.deserialize_result(entry.value)
             return result_data
         except KeyNotFoundError:
@@ -745,7 +780,7 @@ class Job:
                 nats_url=nats_url,
             )
 
-            if result_data.get("status") == JOB_STATUS.FAILED.value:
+            if result_data.get("status") == JOB_STATUS.FAILED:
                 error_str = result_data.get("error", "Unknown error")
                 traceback_str = result_data.get("traceback")
                 err_msg = f"Job {job_id} failed: {error_str}"
@@ -753,7 +788,7 @@ class Job:
                     err_msg += f"\nTraceback:\n{traceback_str}"
                 # Raise an exception containing the failure info
                 raise JobExecutionError(err_msg)
-            elif result_data.get("status") == JOB_STATUS.COMPLETED.value:
+            elif result_data.get("status") == JOB_STATUS.COMPLETED:
                 return result_data.get("result")
             else:
                 # Should not happen if worker stores status correctly
