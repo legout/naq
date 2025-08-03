@@ -373,12 +373,12 @@ class JobStatusManager:
                 try:
                     entry = await self._status_kv.get(dep_id.encode("utf-8"))
                     status = entry.value.decode("utf-8")
-                    if status == JOB_STATUS.COMPLETED:
+                    if status == JOB_STATUS.COMPLETED.value:
                         logger.debug(
                             f"Dependency {dep_id} for job {job.job_id} is completed."
                         )
                         continue  # Dependency met
-                    elif status == JOB_STATUS.FAILED:
+                    elif status == JOB_STATUS.FAILED.value:
                         logger.warning(
                             f"Dependency {dep_id} for job {job.job_id} failed. Job {job.job_id} will not run."
                         )
@@ -404,7 +404,7 @@ class JobStatusManager:
             )
             return False  # Assume dependencies not met on error
 
-    async def update_job_status(self, job_id: str, status: str) -> None:
+    async def update_job_status(self, job_id: str, status: JOB_STATUS) -> None:
         """Updates the job status in the KV store."""
         if not self._status_kv:
             logger.warning(
@@ -412,12 +412,12 @@ class JobStatusManager:
             )
             return
 
-        logger.debug(f"Updating status for job {job_id} to '{status}'")
+        logger.debug(f"Updating status for job {job_id} to '{status.value}'")
         try:
-            await self._status_kv.put(job_id, status.encode("utf-8"))
+            await self._status_kv.put(job_id, status.value.encode("utf-8"))
         except Exception as e:
             logger.error(
-                f"Failed to update status for job {job_id} to '{status}': {e}",
+                f"Failed to update status for job {job_id} to '{status.value}': {e}",
                 exc_info=True,
             )
 

@@ -780,7 +780,7 @@ class Job:
                 nats_url=nats_url,
             )
 
-            if result_data.get("status") == JOB_STATUS.FAILED:
+            if result_data.get("status") == JOB_STATUS.FAILED.value:
                 error_str = result_data.get("error", "Unknown error")
                 traceback_str = result_data.get("traceback")
                 err_msg = f"Job {job_id} failed: {error_str}"
@@ -788,7 +788,7 @@ class Job:
                     err_msg += f"\nTraceback:\n{traceback_str}"
                 # Raise an exception containing the failure info
                 raise JobExecutionError(err_msg)
-            elif result_data.get("status") == JOB_STATUS.COMPLETED:
+            elif result_data.get("status") == JOB_STATUS.COMPLETED.value:
                 return result_data.get("result")
             else:
                 # Should not happen if worker stores status correctly
