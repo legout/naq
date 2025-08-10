@@ -1,0 +1,60 @@
+---
+title: "Job API"
+---
+
+The `Job` class represents a unit of work that is enqueued and executed by a worker. You typically don't create `Job` instances directly; they are created for you when you call functions like `naq.enqueue()`.
+
+A `Job` instance is returned every time you enqueue a task, and it serves as a handle to that task.
+
+## `naq.job.Job`
+
+### Properties
+
+| Property         | Type                               | Description                                                                 |
+| ---------------- | ---------------------------------- | --------------------------------------------------------------------------- |
+| `job_id`         | `str`                              | A unique identifier for the job.                                            |
+| `function`       | `Callable`                         | The function that will be executed.                                         |
+| `args`           | `tuple`                            | The positional arguments passed to the function.                            |
+| `kwargs`         | `dict`                             | The keyword arguments passed to the function.                               |
+| `queue_name`     | `str`                              | The name of the queue the job belongs to.                                   |
+| `status`         | `JOB_STATUS`                       | The current status of the job (`pending`, `running`, `completed`, `failed`).|
+| `max_retries`    | `int`                              | The maximum number of times the job will be retried if it fails.            |
+| `retry_delay`    | `int` &#124; `float` &#124; `list` | The delay (in seconds) between retries. Can be a single value or a list.      |
+| `retry_strategy` | `str`                              | The retry strategy (`linear` or `exponential`).                             |
+| `depends_on`     | `list[str]` &#124; `None`           | A list of job IDs that this job depends on.                                 |
+| `result_ttl`     | `int` &#124; `None`                 | The time-to-live (in seconds) for the job's result.                         |
+| `timeout`        | `int` &#124; `None`                 | The maximum time (in seconds) the job is allowed to run.                    |
+| `enqueue_time`   | `float`                            | The timestamp when the job was enqueued.                                    |
+| `error`          | `str` &#124; `None`                 | The error message if the job failed.                                        |
+| `traceback`      | `str` &#124; `None`                 | The traceback if the job failed.                                            |
+
+### Methods
+
+#### `fetch_result()`
+
+A static method to fetch the result of a completed job.
+
+```python
+@staticmethod
+async def fetch_result(job_id: str, nats_url: str = DEFAULT_NATS_URL) -> Any
+```
+
+| Parameter  | Type  | Description                                     |
+| ---------- | ----- | ----------------------------------------------- |
+| `job_id`   | `str` | The ID of the job whose result you want to fetch. |
+| `nats_url` | `str` | The URL of the NATS server.                     |
+
+**Returns:** The return value of the job's function.
+
+**Raises:**
+
+-   `JobNotFoundError`: If the job result is not found (it may not have completed, or the result may have expired).
+-   `JobExecutionError`: If the job failed. The exception message will contain the error and traceback from the worker.
+
+#### `fetch_result_sync()`
+
+A synchronous version of `fetch_result()`.
+
+::: {.callout-note}
+`fetch_result_sync` is deprecated and will be removed in a future version. Please use `fetch_result` in an async context.
+:::

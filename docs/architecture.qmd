@@ -1,0 +1,68 @@
+---
+title: "Architecture Overview"
+---
+
+`naq` is designed to be a simple yet powerful distributed task queue. Its architecture is fundamentally built around [NATS](https://nats.io) and its persistence layer, [JetStream](https://docs.nats.io/jetstream/jetstream), which serve as the central nervous system for communication between clients, workers, and the scheduler.
+
+## Core Components
+
+The `naq` ecosystem consists of four main components:
+
+1.  **The Client (Producer)**: Any application that enqueues jobs. This could be a web server, a script, or any other part of your system that needs to offload work.
+2.  **NATS Server (with JetStream)**: The message broker that provides persistence, message delivery, and storage for job results and worker metadata.
+3.  **The Worker(s)**: The processes that subscribe to queues, execute jobs, and report back their results. You can run as many workers as you need, on as many machines as you want.
+4.  **The Scheduler**: A dedicated process that handles time-based events, such as scheduled jobs and recurring tasks.
+
+## How It Works: The Job Lifecycle
+
+Here is a high-level overview of what happens when a job is enqueued and processed:
+
+
+```{mermaid}
+graph TD
+    subgraph "Your Application"
+        Client[Client]
+        PythonCode[Python Code]
+    end
+
+    subgraph "NAQ Processes"
+        Worker[Worker]
+        Scheduler[Scheduler]
+    end
+
+    subgraph "NATS Server (JetStream)"
+        QueueStream[Queue Stream]
+        ResultStore[Result KV Store]
+        ScheduledJobs[Scheduled Jobs KV]
+    end
+
+    Client -- "1. Enqueue Job" --> QueueStream
+    Scheduler -- "7. Check for Due Jobs" --> ScheduledJobs
+    ScheduledJobs -- "Job is Due" --> Scheduler
+    Scheduler -- "8. Enqueue Due Job" --> QueueStream
+    Worker -- "3. Fetch Job" --> QueueStream
+    Worker -- "4. Execute Function" --> PythonCode
+    PythonCode -- "5. Return Result" --> Worker
+    Worker -- "6. Store Result" --> ResultStore
+```
+
+1.  **Enqueueing**: The client calls an `enqueue` function (e.g., `enqueue_sync`). The function, its arguments, and other metadata are serialized into a job payload. This payload is then published as a message to a NATS subject that corresponds to the target queue.
+
+2.  **Persistence**: NATS JetStream receives this message and persists it in a **Stream**. Each queue in `naq` maps directly to a JetStream Stream. This ensures that even if no workers are online, the job is safely stored and will be processed later.
+
+3.  **Fetching**: A `naq` worker process is constantly listening on the queue's Stream. When a new job is available, the worker consumes the message, acknowledging it to NATS so that it isn't delivered to another worker.
+
+4.  **Execution**: The worker deserializes the job payload and executes the specified Python function with the provided arguments.
+
+5.  **Result Handling**: Once the function completes, its return value is serialized. The worker then stores this result in a NATS **Key-Value (KV) Store**, using the unique job ID as the key. This result has a configurable Time-To-Live (TTL), after which it is automatically purged by NATS.
+
+6.  **Scheduled Jobs**: The `naq scheduler` process periodically scans a dedicated KV store for jobs that are due to run. When it finds one, it enqueues it into the appropriate queue, and the job follows the normal lifecycle from there.
+
+## Why NATS?
+
+Using NATS and JetStream as the foundation provides several key advantages:
+
+-   **Decoupling**: Clients, workers, and the scheduler are completely decoupled. They only need to know how to talk to NATS, not to each other directly.
+-   **Scalability**: You can add more workers at any time to increase your processing capacity. NATS handles the load balancing of jobs to available workers automatically.
+-   **Resilience**: If a worker crashes, JetStream ensures that the job it was processing will be re-delivered to another worker after a timeout. If the entire `naq` system goes down, the jobs are safe in the NATS stream, ready to be processed when the system comes back online.
+-   **Simplicity**: By offloading the complexities of persistence, delivery guarantees, and storage to NATS, the `naq` codebase can remain focused on the core logic of job execution and scheduling.

@@ -1,0 +1,110 @@
+---
+title: "Advanced Usage"
+---
+
+This section covers advanced features and configuration options for optimizing `naq` in production environments.
+
+## Efficient Connection Handling & Batching
+
+When enqueuing many jobs in a tight loop, creating a new NATS connection for each job is inefficient. `naq` provides several ways to manage connections for high-throughput scenarios.
+
+### Using a `Queue` Instance (Async)
+
+For asynchronous applications, the most efficient way to enqueue jobs is to instantiate a `Queue` object and reuse it. The `Queue` instance manages a persistent connection to NATS.
+
+```python
+# async_batch_enqueue.py
+import asyncio
+from naq.queue import Queue
+
+async def my_task(i):
+    return f"Processed item {i}"
+
+async def main():
+    # Create a single Queue instance for the 'high_volume' queue
+    queue = Queue(name="high_volume")
+
+    print("Enqueuing 1,000 jobs using a single connection...")
+    tasks = []
+    for i in range(1000):
+        task = queue.enqueue(my_task, i)
+        tasks.append(task)
+
+    await asyncio.gather(*tasks)
+    print("All jobs enqueued.")
+
+    # The connection remains open until the Queue object is no longer in use
+    # or explicitly closed.
+    await queue.close()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Thread-Local Connections (Sync)
+
+The synchronous helper functions (`enqueue_sync`, `enqueue_at_sync`, etc.) are optimized for batching out of the box. They automatically use a **thread-local NATS connection**. This means that all calls to these functions from the same thread will reuse the same connection, avoiding the overhead of reconnecting each time.
+
+```python
+# sync_batch_enqueue.py
+from naq import enqueue_sync, close_sync_connections
+
+def my_task(i):
+    return f"Processed item {i}"
+
+def main():
+    print("Enqueuing 1,000 jobs using a thread-local connection...")
+    for i in range(1000):
+        enqueue_sync(my_task, i)
+    print("All jobs enqueued.")
+
+    # Optionally, you can explicitly close the thread-local connection
+    # when you are done with a batch. This is not required, as connections
+    # are also closed on process exit.
+    close_sync_connections()
+    print("Thread-local connection closed.")
+
+if __name__ == "__main__":
+    main()
+```
+
+## Configuration via Environment Variables
+
+Many of `naq`'s settings can be configured using environment variables, which is ideal for production and containerized deployments.
+
+| Variable                      | Default                        | Description                                                                                             |
+| ----------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `NAQ_NATS_URL`                | `nats://localhost:4222`        | The URL of the NATS server.                                                                             |
+| `NAQ_DEFAULT_QUEUE`           | `naq_default_queue`            | The default queue name used when none is specified.                                                     |
+| `NAQ_JOB_SERIALIZER`          | `pickle`                       | The serializer for jobs. Can be `pickle` or `json`. **See security note below.**                        |
+| `NAQ_DEFAULT_RESULT_TTL`      | `604800` (7 days)              | Default time-to-live (in seconds) for job results stored in NATS.                                       |
+| `NAQ_SCHEDULER_LOCK_TTL`      | `30`                           | TTL (in seconds) for the scheduler's high-availability leader lock.                                       |
+| `NAQ_WORKER_TTL`              | `60`                           | TTL (in seconds) for a worker's heartbeat. If a worker is silent for this long, it's considered dead.    |
+| `NAQ_WORKER_HEARTBEAT_INTERVAL` | `15`                           | How often (in seconds) a worker sends a heartbeat to NATS.                                              |
+| `NAQ_LOG_LEVEL`               | `CRITICAL`                     | The logging level for `naq` components. Can be `DEBUG`, `INFO`, `WARNING`, `ERROR`.                       |
+
+## Job Serialization (`pickle` vs. `json`)
+
+`naq` uses a serializer to convert job data (the function and its arguments) into a format that can be stored in NATS. You can choose between two built-in serializers.
+
+### `pickle` (Default)
+
+-   **Pros**: Can serialize almost any Python object, including complex custom classes, lambdas, and functions defined in a REPL.
+-   **Cons**: **Not secure**. A malicious actor who can enqueue jobs could craft a `pickle` payload that executes arbitrary code on your workers.
+
+### `json` (Recommended for Production)
+
+-   **Pros**: **Secure**. Only serializes basic data types (strings, numbers, lists, dicts). Functions are referenced by their import path (e.g., `my_app.tasks.process_data`), not serialized directly. This prevents arbitrary code execution.
+-   **Cons**: Less flexible. Cannot serialize complex Python objects that don't have a natural JSON representation.
+
+To use the `json` serializer, set the following environment variable:
+
+```bash
+export NAQ_JOB_SERIALIZER=json
+```
+
+::: {.callout-warning}
+**Security Warning**
+
+It is **strongly recommended** to use the `json` serializer in any environment where the job producer is not fully trusted.
+:::

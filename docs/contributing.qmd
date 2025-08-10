@@ -1,0 +1,94 @@
+---
+title: "Contributing"
+---
+
+We welcome contributions to `naq`! Whether you're fixing a bug, adding a new feature, or improving the documentation, your help is appreciated.
+
+## Getting Started
+
+If you're new to the project, a good place to start is by looking at the [open issues](https://github.com/legout/naq/issues) on GitHub.
+
+### Development Setup
+
+To get your development environment set up, follow these steps:
+
+1.  **Fork and Clone the Repository**
+
+    Start by forking the [main repository](https://github.com/legout/naq) on GitHub, and then clone your fork locally:
+
+    ```bash
+    git clone https://github.com/YOUR_USERNAME/naq.git
+    cd naq
+    ```
+
+2.  **Install Dependencies**
+
+    We recommend using a virtual environment. `naq` uses `uv` for dependency management.
+
+    ```bash
+    # Create a virtual environment
+    python -m venv .venv
+    source .venv/bin/activate
+
+    # Install dependencies, including development tools
+    uv pip install -e ".[dev]"
+    ```
+
+3.  **Run the NATS Server**
+
+    The test suite and examples require a running NATS server. You can use the provided Docker Compose file:
+
+    ```bash
+    cd docker
+    docker-compose up -d
+    ```
+
+4.  **Run the Tests**
+
+    To make sure everything is set up correctly, run the test suite:
+
+    ```bash
+    pytest
+    ```
+
+## Making Changes
+
+1.  **Create a New Branch**
+
+    Create a new branch for your changes:
+
+    ```bash
+    git checkout -b feature/my-new-feature
+    ```
+
+2.  **Write Your Code**
+
+    Make your changes to the codebase. If you're adding a new feature, please include tests.
+
+3.  **Format Your Code**
+
+    Before committing, make sure your code is formatted correctly:
+
+    ```bash
+    ruff format .
+    ruff check --fix .
+    ```
+
+4.  **Commit and Push**
+
+    Commit your changes with a clear and descriptive message, and push them to your fork:
+
+    ```bash
+    git commit -m "feat: Add my new feature"
+    git push origin feature/my-new-feature
+    ```
+
+5.  **Create a Pull Request**
+
+    Open a pull request from your fork to the `main` branch of the `naq` repository. Provide a clear description of your changes and reference any related issues.
+
+## Code of Conduct
+
+Please note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by its terms.
+
+Thank you for contributing to `naq`!

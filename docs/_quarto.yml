@@ -1,0 +1,39 @@
+project:
+  type: website
+  output-dir: _site
+render:
+    - "*.qmd"
+    - "!lib/"
+
+website:
+  title: "naq"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - href: installation.qmd
+        text: Installation
+      - href: quickstart.qmd
+        text: Quickstart
+      - href: architecture.qmd
+        text: Architecture
+      - href: examples.qmd
+        text: Examples
+      - href: advanced.qmd
+        text: Advanced
+      - href: api/index.qmd
+        text: API
+      - href: contributing.qmd
+        text: Contributing
+  search: true
+
+format:
+  html:
+    mermaid:
+      theme: "default"
+    #theme: lux
+    theme:
+      light: flatly
+      dark: darkly
+    #css: styles.css
+    toc: true

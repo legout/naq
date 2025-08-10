@@ -1,0 +1,84 @@
+---
+title: "Quickstart Guide"
+---
+
+This guide will walk you through the basics of setting up a task, enqueuing it, and running a worker to process it.
+
+## 1. Define a Task
+
+First, create a Python file to define the function you want to run in the background. Let's call this file `tasks.py`.
+
+This function can be any regular Python function. For this example, we'll create a simple function that simulates some work and counts the words in a given text.
+
+```python
+# tasks.py
+import time
+import random
+
+def count_words(text):
+    """
+    A simple function that counts the words in a string.
+    """
+    print(f"Processing text: '{text[:30]}...'")
+    # Simulate some I/O or CPU-bound work
+    time.sleep(random.randint(1, 3))
+    word_count = len(text.split())
+    print(f"Found {word_count} words.")
+    return word_count
+```
+
+## 2. Enqueue the Job
+
+Now, let's enqueue the `count_words` function to be executed by a worker. Create another file, `main.py`, to send the job to the queue.
+
+We'll use the `enqueue_sync` function, which is a simple, blocking way to add a job to the queue.
+
+```python
+# main.py
+from naq import enqueue_sync
+from tasks import count_words
+
+# The text we want to process
+long_text = (
+    "A journey of a thousand miles begins with a single step. "
+    "The best time to plant a tree was 20 years ago. "
+    "The second best time is now."
+)
+
+print("Enqueuing job to count words...")
+
+# Enqueue the function `count_words` with `long_text` as its argument
+job = enqueue_sync(count_words, long_text)
+
+print(f"Successfully enqueued job {job.job_id}.")
+print("To process the job, run a worker with: naq worker default")
+```
+
+## 3. Run the Worker
+
+With the job enqueued, the final step is to start a worker process. The worker will connect to NATS, fetch the job from the queue, and execute the `count_words` function.
+
+Open your terminal and run the following command:
+
+```bash
+naq worker default
+```
+
+The `default` argument tells the worker to listen to the default queue, which is where `enqueue_sync` sends jobs.
+
+You should see output similar to this in your worker's terminal:
+
+```
+14:30:15.123 INFO     Worker listening on queue: naq_default_queue
+Processing text: 'A journey of a thousand miles...'
+Found 25 words.
+14:30:18.245 INFO     Job 1a2b3c4d completed. Result: 25
+```
+
+Congratulations! You've successfully enqueued and processed your first background job with `naq`.
+
+## What's Next?
+
+-   Explore how to [schedule jobs](examples.qmd) to run in the future.
+-   Learn about the [architecture](architecture.qmd) of `naq`.
+-   Check out more complex [examples](examples.qmd).

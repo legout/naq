@@ -14,3 +14,5 @@ examples/**/*.log
 examples/**/*.tmp
 improvement_plan.md
 IMPROVEMENTS.md
+fix-gem-cli/
+sqlite/

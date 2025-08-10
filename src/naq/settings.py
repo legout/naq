@@ -49,20 +49,6 @@ else:
     MAX_SCHEDULE_FAILURES = 5
 
 
-# --- Job Status Settings ---
-class JOB_STATUS(Enum):
-    """Enum representing the possible states of a job."""
-
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    RETRY = "retry"
-    SCHEDULED = "scheduled"
-    PAUSED = "paused"
-    CANCELLED = "cancelled"
-
-
 # KV bucket name for tracking job completion status (for dependencies)
 JOB_STATUS_KV_NAME = f"{NAQ_PREFIX}_job_status"
 # Status values stored in the job status KV

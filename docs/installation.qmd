@@ -1,0 +1,71 @@
+---
+title: "Installation"
+---
+
+## Installing NAQ
+
+You can install `naq` directly from PyPI using `pip`. A Python version of 3.12 or higher is required.
+
+```bash
+pip install naq
+```
+
+### Using `uv` or `pixi`
+
+For faster installation, you can also use modern package managers like `uv` or `pixi`:
+
+```bash
+# Using uv
+uv pip install naq
+
+# Using pixi
+pixi add naq
+```
+
+### Optional Dashboard
+
+`naq` comes with an optional web-based dashboard for real-time monitoring. To install the necessary dependencies (including Sanic and Datastar), use the `dashboard` extra:
+
+```bash
+pip install naq[dashboard]
+```
+
+## Setting Up NATS
+
+`naq` requires a running NATS server with JetStream enabled to function. JetStream provides the persistence layer for jobs and results.
+
+### Using Docker (Recommended)
+
+The easiest way to get a NATS server running for development is by using the provided Docker Compose file.
+
+1.  **Navigate to the `docker` directory** in the project root:
+    ```bash
+    cd /path/to/naq/docker
+    ```
+
+2.  **Start the NATS server** in detached mode:
+    ```bash
+    docker-compose up -d
+    ```
+
+This will start a NATS server on `localhost:4222` with JetStream enabled and ready to use.
+
+### Manual Setup
+
+If you prefer to run a NATS server manually, ensure that you start it with the `-js` flag to enable JetStream:
+
+```bash
+nats-server -js
+```
+
+Refer to the [official NATS documentation](https://docs.nats.io/running-a-nats-service/introduction/installation) for detailed installation instructions for your operating system.
+
+## Troubleshooting
+
+::: {.callout-note}
+**Connection Issues?**
+
+-   Ensure your NATS server is running and accessible from where you are running your application and workers.
+-   Verify that JetStream is enabled. You can check the server logs for a line confirming "JetStream is enabled."
+-   By default, `naq` attempts to connect to `nats://localhost:4222`. If your server is elsewhere, set the `NATS_URL` environment variable.
+:::

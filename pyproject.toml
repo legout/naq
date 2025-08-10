@@ -15,6 +15,7 @@ dependencies = [
     "croniter>=1.4.0",
     "rich>=13.3.0",      # For prettier CLI output (tables, etc.)
     "anyio>=4.9.0",
+    "msgspec>=0.18.0",
 ]
 
 [project.scripts]
@@ -61,6 +62,7 @@ dev = [
     "anyio>=4.9.0",
     "ipython>=9.4.0",
     "nest-asyncio>=1.6.0",
+    "quarto>=0.1.0",
     "rq>=2.4.1",
 ]
 test = [

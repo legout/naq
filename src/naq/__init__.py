@@ -20,6 +20,7 @@ from .exceptions import (
     SerializationError,
 )
 from .job import Job, RetryDelayType
+from .results import Results
 
 # Make key classes and functions available directly from the 'naq' package
 from .queue import (
@@ -43,8 +44,8 @@ from .queue import (
     schedule,
     schedule_sync,
 )
+from .job import JOB_STATUS
 from .scheduler import Scheduler
-from .settings import JOB_STATUS
 
 from .settings import SCHEDULED_JOB_STATUS, WORKER_STATUS
 from .worker import Worker
@@ -84,6 +85,9 @@ async def disconnect():
 # Expose static methods directly if desired, or users can use Job.fetch_result
 fetch_job_result = Job.fetch_result
 fetch_job_result_sync = Job.fetch_result_sync
+
+# Make Results class available for direct use
+Results = Results
 
 # --- Make worker listing available ---
 list_workers = Worker.list_workers

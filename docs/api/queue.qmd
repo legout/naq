@@ -1,0 +1,135 @@
+---
+title: "Queue API"
+---
+
+The `queue` module provides the primary interface for adding jobs to `naq`.
+
+## `Queue` Class
+
+The `Queue` class represents a job queue and is the main entry point for enqueuing tasks.
+
+::: {.callout-note}
+For simple, one-off enqueueing, you might prefer the helper functions like [`enqueue`](#enqueue-functions) which manage the `Queue` instance for you.
+:::
+
+### `naq.queue.Queue(name, nats_url, default_timeout)`
+
+| Parameter         | Type                | Description                                                               |
+| ----------------- | ------------------- | ------------------------------------------------------------------------- |
+| `name`            | `str`               | The name of the queue. Defaults to `naq_default_queue`.                   |
+| `nats_url`        | `str`               | The URL of the NATS server. Defaults to `nats://localhost:4222`.          |
+| `default_timeout` | `int` &#124; `None` | The default timeout in seconds for jobs in this queue.                    |
+
+### Methods
+
+#### `enqueue()`
+
+Enqueues a job for immediate execution.
+
+```python
+async def enqueue(
+    self,
+    func: Callable,
+    *args: Any,
+    max_retries: Optional[int] = 0,
+    retry_delay: RetryDelayType = 0,
+    depends_on: Optional[Union[str, List[str], Job, List[Job]]] = None,
+    timeout: Optional[int] = None,
+    **kwargs: Any
+) -> Job
+```
+
+#### `enqueue_at()`
+
+Schedules a job to be enqueued at a specific `datetime`.
+
+```python
+async def enqueue_at(
+    self,
+    dt: datetime.datetime,
+    func: Callable,
+    *args: Any,
+    ...
+) -> Job
+```
+
+#### `enqueue_in()`
+
+Schedules a job to be enqueued after a `timedelta`.
+
+```python
+async def enqueue_in(
+    self,
+    delta: timedelta,
+    func: Callable,
+    *args: Any,
+    ...
+) -> Job
+```
+
+#### `schedule()`
+
+Schedules a job to run on a recurring basis.
+
+```python
+async def schedule(
+    self,
+    func: Callable,
+    *args: Any,
+    cron: Optional[str] = None,
+    interval: Optional[Union[timedelta, float, int]] = None,
+    repeat: Optional[int] = None,
+    ...
+) -> Job
+```
+
+| Parameter  | Type                                | Description                                                              |
+| ---------- | ----------------------------------- | ------------------------------------------------------------------------ |
+| `cron`     | `str`                               | A cron string (e.g., `'*/5 * * * *'`) for the schedule.                   |
+| `interval` | `timedelta` &#124; `float` &#124; `int` | The interval in seconds or as a `timedelta` between job runs.            |
+| `repeat`   | `int` &#124; `None`                  | The number of times to repeat the job. `None` for indefinitely.          |
+
+#### `purge()`
+
+Removes all jobs from the queue.
+
+```python
+async def purge(self) -> int
+```
+
+Returns the number of jobs purged.
+
+#### `cancel_scheduled_job()`
+
+Cancels a scheduled or recurring job.
+
+```python
+async def cancel_scheduled_job(self, job_id: str) -> bool
+```
+
+Returns `True` if the job was found and canceled.
+
+## Enqueue Functions
+
+These helper functions provide a simpler way to enqueue jobs without needing to manage a `Queue` instance yourself. They are available in both async and sync versions.
+
+### Async Helpers
+
+-   `naq.enqueue()`
+-   `naq.enqueue_at()`
+-   `naq.enqueue_in()`
+-   `naq.schedule()`
+-   `naq.purge_queue()`
+-   `naq.cancel_scheduled_job()`
+
+### Sync Helpers
+
+For use in synchronous code, `naq` provides sync versions of the enqueue functions. These functions automatically manage an event loop and use a thread-local connection for efficiency.
+
+-   `naq.enqueue_sync()`
+-   `naq.enqueue_at_sync()`
+-   `naq.enqueue_in_sync()`
+-   `naq.schedule_sync()`
+-   `naq.purge_queue_sync()`
+-   `naq.cancel_scheduled_job_sync()`
+-   `naq.close_sync_connections()`

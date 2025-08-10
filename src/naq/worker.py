@@ -26,6 +26,8 @@ from .connection import (
 )
 from .exceptions import NaqException, SerializationError
 from .job import Job
+from .results import Results
+from .job import JOB_STATUS
 from .settings import (
     DEFAULT_NATS_URL,
     DEFAULT_RESULT_TTL_SECONDS,
@@ -33,7 +35,6 @@ from .settings import (
     DEFAULT_WORKER_TTL_SECONDS,
     FAILED_JOB_STREAM_NAME,
     FAILED_JOB_SUBJECT_PREFIX,
-    JOB_STATUS,
     JOB_STATUS_KV_NAME,
     JOB_STATUS_TTL_SECONDS,
     NAQ_PREFIX,
@@ -424,16 +425,12 @@ class JobStatusManager:
             )
 
     async def store_result(self, job: Job) -> None:
-        """Stores the job result or failure info in the result KV store."""
-        if not self._result_kv_store:  # Directly use the initialized attribute
-            logger.debug(
-                f"Result KV store not available. Skipping result storage for job {job.job_id}."
-            )
-            return
-
-        key = job.job_id
-
+        """Stores the job result or failure info using the Results class."""
         try:
+            # Create a Results instance
+            results_manager = Results(nats_url=self.worker._nats_url)
+            
+            # Prepare result data
             if job.error:
                 # Store failure information
                 result_data = {
@@ -450,8 +447,12 @@ class JobStatusManager:
                 }
                 logger.debug(f"Storing result for job {job.job_id}")
 
-            payload = cloudpickle.dumps(result_data)
-            await self._result_kv_store.put(key, payload)  # Use the direct attribute
+            # Use the Results class to store the result
+            await results_manager.add_job_result(
+                job_id=job.job_id,
+                result_data=result_data,
+                result_ttl=job.result_ttl
+            )
 
         except Exception as e:
             # Log error but don't let result storage failure stop job processing
