@@ -19,7 +19,7 @@ from .connection import (
 from .exceptions import ConfigurationError
 from .exceptions import NaqConnectionError
 from .exceptions import JobNotFoundError, NaqException
-from .job import Job, RetryDelayType
+from .models import Job, RetryDelayType
 from .settings import (
     DEFAULT_QUEUE_NAME,
     DEFAULT_NATS_URL,
@@ -29,6 +29,7 @@ from .settings import (
     SCHEDULED_JOBS_KV_NAME,
 )
 from .utils import run_async_from_sync, setup_logging
+from .events.logger import AsyncJobEventLogger
 
 
 class ScheduledJobManager:
@@ -475,6 +476,19 @@ class Queue:
             logger.info(
                 f"Job {job.job_id} published successfully. Stream: {ack.stream}, Seq: {ack.seq}"
             )
+            
+            # Log job enqueued event
+            try:
+                event_logger = AsyncJobEventLogger(nats_url=self._nats_url)
+                await event_logger.start()
+                await event_logger.log_job_enqueued(
+                    job_id=job.job_id,
+                    queue_name=self.name,
+                )
+                await event_logger.stop()
+            except Exception as e:
+                logger.warning(f"Failed to log enqueue event for job {job.job_id}: {e}")
+            
             return job
         except Exception as e:
             logger.error(f"Error enqueueing job {job.job_id}: {e}", exc_info=True)
@@ -528,6 +542,19 @@ class Queue:
 
         # Store in scheduled jobs KV
         await self._scheduled_job_manager.store_job(job, scheduled_timestamp)
+
+        # Log job scheduled event
+        try:
+            event_logger = AsyncJobEventLogger(nats_url=self._nats_url)
+            await event_logger.start()
+            await event_logger.log_job_scheduled(
+                job_id=job.job_id,
+                queue_name=self.name,
+                scheduled_timestamp=scheduled_timestamp,
+            )
+            await event_logger.stop()
+        except Exception as e:
+            logger.warning(f"Failed to log scheduled event for job {job.job_id}: {e}")
 
         logger.info(
             f"Scheduled job {job.job_id} ({func.__name__}) to run at {dt} on queue '{self.name}'"
@@ -725,7 +752,22 @@ class Queue:
         Raises:
             NaqException: For errors during deletion.
         """
-        return await self._scheduled_job_manager.cancel_job(job_id)
+        result = await self._scheduled_job_manager.cancel_job(job_id)
+        
+        if result:
+            # Log schedule cancelled event
+            try:
+                event_logger = AsyncJobEventLogger(nats_url=self._nats_url)
+                await event_logger.start()
+                await event_logger.log_schedule_cancelled(
+                    job_id=job_id,
+                    queue_name=self.name,
+                )
+                await event_logger.stop()
+            except Exception as e:
+                logger.warning(f"Failed to log schedule cancelled event for job {job_id}: {e}")
+        
+        return result
 
     async def pause_scheduled_job(self, job_id: str) -> bool:
         """
@@ -742,9 +784,24 @@ class Queue:
             NaqException: For other errors
         """
         logger.info(f"Attempting to pause scheduled job '{job_id}'")
-        return await self._scheduled_job_manager.update_job_status(
+        result = await self._scheduled_job_manager.update_job_status(
             job_id, SCHEDULED_JOB_STATUS.PAUSED
         )
+        
+        if result:
+            # Log schedule paused event
+            try:
+                event_logger = AsyncJobEventLogger(nats_url=self._nats_url)
+                await event_logger.start()
+                await event_logger.log_schedule_paused(
+                    job_id=job_id,
+                    queue_name=self.name,
+                )
+                await event_logger.stop()
+            except Exception as e:
+                logger.warning(f"Failed to log schedule paused event for job {job_id}: {e}")
+        
+        return result
 
     async def resume_scheduled_job(self, job_id: str) -> bool:
         """
@@ -761,9 +818,24 @@ class Queue:
             NaqException: For other errors
         """
         logger.info(f"Attempting to resume scheduled job '{job_id}'")
-        return await self._scheduled_job_manager.update_job_status(
+        result = await self._scheduled_job_manager.update_job_status(
             job_id, SCHEDULED_JOB_STATUS.ACTIVE
         )
+        
+        if result:
+            # Log schedule resumed event
+            try:
+                event_logger = AsyncJobEventLogger(nats_url=self._nats_url)
+                await event_logger.start()
+                await event_logger.log_schedule_resumed(
+                    job_id=job_id,
+                    queue_name=self.name,
+                )
+                await event_logger.stop()
+            except Exception as e:
+                logger.warning(f"Failed to log schedule resumed event for job {job_id}: {e}")
+        
+        return result
 
     async def modify_scheduled_job(self, job_id: str, **updates: Any) -> bool:
         """
@@ -781,7 +853,23 @@ class Queue:
             ConfigurationError: If invalid parameters are provided
             NaqException: For other errors
         """
-        return await self._scheduled_job_manager.modify_job(job_id, **updates)
+        result = await self._scheduled_job_manager.modify_job(job_id, **updates)
+        
+        if result:
+            # Log schedule modified event
+            try:
+                event_logger = AsyncJobEventLogger(nats_url=self._nats_url)
+                await event_logger.start()
+                await event_logger.log_schedule_modified(
+                    job_id=job_id,
+                    queue_name=self.name,
+                    modifications=updates,
+                )
+                await event_logger.stop()
+            except Exception as e:
+                logger.warning(f"Failed to log schedule modified event for job {job_id}: {e}")
+        
+        return result
 
     async def close(self) -> None:
         """Closes NATS connection and cleans up resources."""

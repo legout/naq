@@ -21,6 +21,8 @@ website:
         text: Examples
       - href: advanced.qmd
         text: Advanced
+      - href: event-logging.qmd
+        text: Event-Driven State Management
       - href: api/index.qmd
         text: API
       - href: contributing.qmd

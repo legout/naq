@@ -66,3 +66,155 @@ Using NATS and JetStream as the foundation provides several key advantages:
 -   **Scalability**: You can add more workers at any time to increase your processing capacity. NATS handles the load balancing of jobs to available workers automatically.
 -   **Resilience**: If a worker crashes, JetStream ensures that the job it was processing will be re-delivered to another worker after a timeout. If the entire `naq` system goes down, the jobs are safe in the NATS stream, ready to be processed when the system comes back online.
 -   **Simplicity**: By offloading the complexities of persistence, delivery guarantees, and storage to NATS, the `naq` codebase can remain focused on the core logic of job execution and scheduling.
+
+## Event-Driven State Management Architecture
+
+NAQ implements comprehensive event-driven state management where every state transition is captured as a structured event and stored in NATS JetStream streams. This provides complete observability and enables powerful monitoring, debugging, and analytics capabilities.
+
+### Event Flow Architecture
+
+```{mermaid}
+graph TD
+    subgraph "NAQ Components"
+        Worker[Worker Process]
+        Queue[Queue Client]
+        Scheduler[Scheduler Process]
+    end
+
+    subgraph "NATS JetStream - Job Processing"
+        JobStream[Job Queue Stream<br/>naq_jobs]
+        ResultKV[Results KV Store<br/>naq_results]
+        ScheduleKV[Scheduled Jobs KV<br/>naq_scheduled_jobs]
+        WorkerKV[Worker Status KV<br/>naq_workers]
+    end
+
+    subgraph "NATS JetStream - Event Logging"
+        EventStream[Event Stream<br/>NAQ_JOB_EVENTS]
+        EventStorage[(Durable Event Storage)]
+    end
+
+    subgraph "Event Consumers"
+        Monitor[Real-time Monitor<br/>naq events]
+        Analytics[Analytics Engine<br/>naq event-stats]
+        History[Historical Queries<br/>naq event-history]
+        Custom[Custom Event Handlers]
+    end
+
+    %% Job Processing Flow
+    Queue --> JobStream
+    JobStream --> Worker
+    Worker --> ResultKV
+    Queue --> ScheduleKV
+    Scheduler --> ScheduleKV
+    Scheduler --> JobStream
+    Worker --> WorkerKV
+
+    %% Event Logging Flow
+    Worker -.->|Job Events| EventStream
+    Queue -.->|Enqueue Events| EventStream
+    Scheduler -.->|Schedule Events| EventStream
+    Worker -.->|Worker Events| EventStream
+
+    %% Event Storage & Consumption
+    EventStream --> EventStorage
+    EventStorage --> Monitor
+    EventStorage --> Analytics  
+    EventStorage --> History
+    EventStorage --> Custom
+
+    %% Styling
+    classDef naqComponent fill:#e1f5fe
+    classDef natsStorage fill:#f3e5f5
+    classDef eventSystem fill:#e8f5e8
+    classDef consumers fill:#fff3e0
+
+    class Worker,Queue,Scheduler naqComponent
+    class JobStream,ResultKV,ScheduleKV,WorkerKV natsStorage
+    class EventStream,EventStorage eventSystem
+    class Monitor,Analytics,History,Custom consumers
+```
+
+### State Management Layers
+
+NAQ's state management operates on multiple layers:
+
+**1. Operational State (KV Stores)**
+- **Current state** of jobs, workers, and schedules
+- **Fast lookups** for status queries
+- **Optimized for real-time operations**
+
+**2. Event Stream (Audit Trail)**
+- **Complete history** of all state transitions
+- **Immutable event log** for debugging and compliance
+- **Time-ordered** event sequence for analysis
+
+**3. Derived State (Analytics)**
+- **Aggregated metrics** computed from event streams
+- **System health indicators** and performance stats
+- **Trend analysis** and capacity planning data
+
+### Event Types and Sources
+
+```{mermaid}
+graph LR
+    subgraph "Event Sources"
+        W[Worker]
+        Q[Queue] 
+        S[Scheduler]
+    end
+
+    subgraph "Event Categories"
+        JE[Job Lifecycle Events]
+        WE[Worker Status Events]
+        SE[Schedule Management Events]
+    end
+
+    subgraph "Event Stream"
+        ES[NAQ_JOB_EVENTS<br/>JetStream]
+    end
+
+    W --> JE
+    W --> WE
+    Q --> JE
+    Q --> SE
+    S --> JE
+    S --> SE
+
+    JE --> ES
+    WE --> ES
+    SE --> ES
+```
+
+**Job Lifecycle Events:**
+- ENQUEUED, STARTED, COMPLETED, FAILED, RETRY_SCHEDULED
+- SCHEDULED, SCHEDULE_TRIGGERED, CANCELLED
+
+**Worker Status Events:**
+- WORKER_STARTED, WORKER_STOPPED, WORKER_IDLE, WORKER_BUSY
+- WORKER_HEARTBEAT, WORKER_ERROR
+
+**Schedule Management Events:**
+- SCHEDULE_PAUSED, SCHEDULE_RESUMED, SCHEDULE_CANCELLED
+- SCHEDULE_MODIFIED
+
+### Benefits of Event-Driven Architecture
+
+**Complete Observability**
+- Every system operation is logged and queryable
+- Real-time monitoring of all components
+- Historical analysis for debugging and optimization
+
+**Reactive Capabilities**
+- Build applications that respond to job lifecycle events
+- Implement custom business logic triggered by state changes
+- Create monitoring and alerting systems
+
+**Debugging & Analytics**
+- Trace job execution across the entire system
+- Analyze performance patterns and bottlenecks
+- Monitor worker health and capacity utilization
+
+**Compliance & Auditing**
+- Immutable audit trail of all operations
+- Meet compliance requirements for job processing
+- Track system usage and resource consumption

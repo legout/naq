@@ -16,6 +16,7 @@ from nats.js.errors import KeyNotFoundError
 from nats.js.kv import KeyValue
 
 from .utils import setup_logging
+from .events.logger import AsyncJobEventLogger
 
 # Attempt to import croniter only if needed later
 try:
@@ -218,9 +219,10 @@ class ScheduledJobProcessor:
     Handles the processing of scheduled jobs from the NATS KV store.
     """
 
-    def __init__(self, js: JetStreamContext, kv: KeyValue):
+    def __init__(self, js: JetStreamContext, kv: KeyValue, nats_url: str = DEFAULT_NATS_URL):
         self._js = js
         self._kv = kv
+        self._nats_url = nats_url
 
     async def _enqueue_job(self, queue_name: str, subject: str, payload: bytes) -> bool:
         """
@@ -399,6 +401,18 @@ class ScheduledJobProcessor:
                 # Reset failure count on success
                 schedule_data["schedule_failure_count"] = 0
                 schedule_data["last_enqueued_utc"] = now_ts
+                
+                # Log schedule triggered event
+                try:
+                    event_logger = AsyncJobEventLogger(nats_url=self._nats_url)
+                    await event_logger.start()
+                    await event_logger.log_schedule_triggered(
+                        job_id=job_id,
+                        queue_name=queue_name,
+                    )
+                    await event_logger.stop()
+                except Exception as e:
+                    logger.warning(f"Failed to log schedule triggered event for job {job_id}: {e}")
             else:
                 errors += 1
                 # Track failures for potential retry limiting
@@ -556,7 +570,7 @@ class Scheduler:
 
             # Create job processor
             if self._js and self._kv:
-                self._job_processor = ScheduledJobProcessor(self._js, self._kv)
+                self._job_processor = ScheduledJobProcessor(self._js, self._kv, self._nats_url)
 
     async def run(self) -> None:
         """Starts the scheduler loop with leader election."""

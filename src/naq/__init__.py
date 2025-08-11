@@ -19,7 +19,7 @@ from .exceptions import (
     NaqException,
     SerializationError,
 )
-from .job import Job, RetryDelayType
+from .models import Job, RetryDelayType
 from .results import Results
 
 # Make key classes and functions available directly from the 'naq' package
@@ -44,11 +44,14 @@ from .queue import (
     schedule,
     schedule_sync,
 )
-from .job import JOB_STATUS
+from .models import JOB_STATUS
 from .scheduler import Scheduler
 
 from .settings import SCHEDULED_JOB_STATUS, WORKER_STATUS
 from .worker import Worker
+
+# Import events module for event logging capabilities
+from . import events
 
 __version__ = "0.1.3"  # Bump version for worker monitoring
 

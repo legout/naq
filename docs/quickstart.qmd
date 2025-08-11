@@ -77,8 +77,91 @@ Found 25 words.
 
 Congratulations! You've successfully enqueued and processed your first background job with `naq`.
 
+## 4. Monitor Your Jobs
+
+One of NAQ's most powerful features is its comprehensive event-driven monitoring system. Every job operation is logged as structured events that you can monitor in real-time.
+
+### Real-time Job Monitoring
+
+Open a new terminal and run the events monitor to see your jobs in action:
+
+```bash
+# Watch all job events in real-time
+naq events
+```
+
+This will show a live stream of all job lifecycle events as they happen. Now go back to your `main.py` and run it again to see the events flowing:
+
+```bash
+python main.py
+```
+
+You should see events like:
+```
+12:34:56.789  job-abc123   enqueued      default  -        Job enqueued to default
+12:34:56.823  job-abc123   started       default  worker-1 Job started by worker-1  
+12:34:59.156  job-abc123   completed     default  worker-1 Job completed in 2333ms
+```
+
+### Monitor Specific Jobs
+
+You can also monitor events for a specific job:
+
+```bash
+# Monitor events for a specific job ID
+naq events --job-id job-abc123
+
+# Monitor only failed jobs
+naq events --event-type failed
+
+# Monitor events for a specific queue
+naq events --queue my-queue
+```
+
+### Job Event History
+
+Get the complete event history for any job:
+
+```bash
+# Get event history for a specific job
+naq event-history job-abc123
+```
+
+This shows the complete lifecycle of a job with timestamps, durations, and detailed information.
+
+### Worker Status Monitoring
+
+Monitor your workers' health and activity:
+
+```bash
+# Watch worker lifecycle events
+naq worker-events
+
+# Check worker status
+naq list-workers
+```
+
+### System Health
+
+Get overall system statistics:
+
+```bash
+# Show system event statistics
+naq event-stats
+```
+
+### Why This Matters
+
+This comprehensive monitoring gives you:
+
+- **Instant Visibility**: See exactly what's happening with your jobs
+- **Easy Debugging**: Trace job failures with complete event history  
+- **Performance Insights**: Monitor job durations and worker utilization
+- **Production Readiness**: Built-in observability for production deployments
+
 ## What's Next?
 
+-   Learn about [Event-Driven State Management](event-logging.qmd) for advanced monitoring.
 -   Explore how to [schedule jobs](examples.qmd) to run in the future.
 -   Learn about the [architecture](architecture.qmd) of `naq`.
 -   Check out more complex [examples](examples.qmd).

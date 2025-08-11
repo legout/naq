@@ -108,3 +108,369 @@ export NAQ_JOB_SERIALIZER=json
 
 It is **strongly recommended** to use the `json` serializer in any environment where the job producer is not fully trusted.
 :::
+
+## Event System Configuration
+
+NAQ's event-driven state management system is highly configurable for different deployment scenarios and performance requirements.
+
+### Core Event Logging Settings
+
+| Environment Variable | Default Value | Description |
+|---------------------|---------------|-------------|
+| `NAQ_EVENT_LOGGING_ENABLED` | `true` | Enable/disable event logging system globally |
+| `NAQ_EVENT_STREAM_NAME` | `NAQ_JOB_EVENTS` | Name of the NATS JetStream stream for events |
+| `NAQ_EVENT_SUBJECT_PREFIX` | `naq.jobs.events` | Subject prefix for event messages |
+| `NAQ_EVENT_STREAM_MAX_AGE` | `168h` | Maximum age for events (7 days) |
+| `NAQ_EVENT_STREAM_MAX_BYTES` | `1GB` | Maximum storage for event stream |
+
+### Event Logger Performance
+
+| Environment Variable | Default Value | Description |
+|---------------------|---------------|-------------|
+| `NAQ_EVENT_LOGGER_BATCH_SIZE` | `100` | Number of events to batch before flushing |
+| `NAQ_EVENT_LOGGER_FLUSH_INTERVAL` | `5.0` | Maximum seconds between flushes |
+| `NAQ_EVENT_LOGGER_MAX_PENDING` | `1000` | Maximum pending events in memory |
+
+### Example Production Configuration
+
+```bash
+# Enable event logging with optimized settings
+export NAQ_EVENT_LOGGING_ENABLED=true
+export NAQ_EVENT_STREAM_MAX_AGE=720h    # 30 days retention
+export NAQ_EVENT_STREAM_MAX_BYTES=5GB   # Larger storage limit
+
+# Performance tuning for high-throughput scenarios
+export NAQ_EVENT_LOGGER_BATCH_SIZE=250  # Larger batches
+export NAQ_EVENT_LOGGER_FLUSH_INTERVAL=2.0  # More frequent flushes
+export NAQ_EVENT_LOGGER_MAX_PENDING=2000    # Higher memory buffer
+
+# Reduce worker heartbeat noise
+export NAQ_WORKER_HEARTBEAT_INTERVAL=30  # Less frequent heartbeats
+```
+
+## Custom Event Processing
+
+### Building Custom Event Processors
+
+Create specialized event processors for your specific needs:
+
+```python
+# custom_processor.py
+import asyncio
+from naq.events import AsyncJobEventProcessor, JobEventType
+from datetime import datetime, timedelta
+
+class PerformanceAnalyzer:
+    """Custom processor for performance analysis."""
+    
+    def __init__(self, alert_threshold_ms=10000):
+        self.alert_threshold = alert_threshold_ms
+        self.slow_jobs = []
+        self.queue_stats = {}
+    
+    async def start_monitoring(self):
+        """Start the performance monitoring system."""
+        processor = AsyncJobEventProcessor()
+        
+        # Register handlers
+        processor.add_handler(JobEventType.COMPLETED, self._analyze_completion)
+        processor.add_handler(JobEventType.FAILED, self._analyze_failure)
+        
+        await processor.start()
+        
+        try:
+            # Process events continuously
+            async for event in processor.stream_job_events():
+                pass
+        finally:
+            await processor.stop()
+    
+    async def _analyze_completion(self, event):
+        """Analyze completed job performance."""
+        if event.duration_ms and event.duration_ms > self.alert_threshold:
+            self.slow_jobs.append({
+                'job_id': event.job_id,
+                'duration': event.duration_ms,
+                'queue': event.queue_name,
+                'worker': event.worker_id,
+                'timestamp': event.timestamp
+            })
+            
+            # Send alert
+            await self._send_performance_alert(event)
+        
+        # Update queue statistics
+        queue = event.queue_name or 'default'
+        if queue not in self.queue_stats:
+            self.queue_stats[queue] = {
+                'completed': 0,
+                'total_duration': 0,
+                'avg_duration': 0
+            }
+        
+        stats = self.queue_stats[queue]
+        stats['completed'] += 1
+        stats['total_duration'] += (event.duration_ms or 0)
+        stats['avg_duration'] = stats['total_duration'] / stats['completed']
+    
+    async def _analyze_failure(self, event):
+        """Analyze job failures."""
+        print(f"🚨 Job failure analysis: {event.job_id}")
+        print(f"   Error: {event.error_message}")
+        print(f"   Queue: {event.queue_name}")
+        print(f"   Worker: {event.worker_id}")
+    
+    async def _send_performance_alert(self, event):
+        """Send performance alert."""
+        print(f"⚠️  SLOW JOB ALERT: {event.job_id}")
+        print(f"   Duration: {event.duration_ms}ms (threshold: {self.alert_threshold}ms)")
+        print(f"   Queue: {event.queue_name}")
+        
+        # In production: send to Slack, PagerDuty, etc.
+    
+    def get_performance_report(self):
+        """Generate performance report."""
+        return {
+            'slow_jobs_count': len(self.slow_jobs),
+            'queue_performance': self.queue_stats,
+            'recent_slow_jobs': self.slow_jobs[-10:]
+        }
+
+# Usage
+analyzer = PerformanceAnalyzer(alert_threshold_ms=5000)
+asyncio.run(analyzer.start_monitoring())
+```
+
+### Integration with Monitoring Systems
+
+#### Prometheus Metrics
+
+```python
+# prometheus_integration.py
+import time
+from prometheus_client import Counter, Histogram, Gauge, start_http_server
+from naq.events import AsyncJobEventProcessor, JobEventType
+
+# Define metrics
+job_total = Counter('naq_jobs_total', 'Total jobs processed', ['queue', 'status'])
+job_duration = Histogram('naq_job_duration_seconds', 'Job duration', ['queue'])
+active_workers = Gauge('naq_active_workers', 'Number of active workers')
+
+class PrometheusExporter:
+    """Export NAQ metrics to Prometheus."""
+    
+    def __init__(self, port=8000):
+        self.port = port
+        self.active_worker_count = 0
+    
+    async def start_exporter(self):
+        """Start the Prometheus metrics exporter."""
+        # Start HTTP server for metrics
+        start_http_server(self.port)
+        print(f"📊 Prometheus metrics available at http://localhost:{self.port}/metrics")
+        
+        # Start event processing
+        processor = AsyncJobEventProcessor()
+        
+        processor.add_handler(JobEventType.COMPLETED, self._handle_completed)
+        processor.add_handler(JobEventType.FAILED, self._handle_failed)
+        processor.add_handler(JobEventType.ENQUEUED, self._handle_enqueued)
+        processor.add_global_handler(self._handle_worker_events)
+        
+        await processor.start()
+        
+        try:
+            async for event in processor.stream_job_events():
+                pass
+        finally:
+            await processor.stop()
+    
+    async def _handle_completed(self, event):
+        """Handle completed job metrics."""
+        queue = event.queue_name or 'default'
+        job_total.labels(queue=queue, status='completed').inc()
+        
+        if event.duration_ms:
+            duration_seconds = event.duration_ms / 1000.0
+            job_duration.labels(queue=queue).observe(duration_seconds)
+    
+    async def _handle_failed(self, event):
+        """Handle failed job metrics."""
+        queue = event.queue_name or 'default'
+        job_total.labels(queue=queue, status='failed').inc()
+    
+    async def _handle_enqueued(self, event):
+        """Handle enqueued job metrics."""
+        queue = event.queue_name or 'default'
+        job_total.labels(queue=queue, status='enqueued').inc()
+    
+    async def _handle_worker_events(self, event):
+        """Handle worker events for active count."""
+        if hasattr(event, 'details') and event.details:
+            if event.details.get('event_category') == 'worker':
+                if 'worker_started' in event.event_type.value:
+                    self.active_worker_count += 1
+                elif 'worker_stopped' in event.event_type.value:
+                    self.active_worker_count -= 1
+                
+                active_workers.set(self.active_worker_count)
+
+# Usage
+exporter = PrometheusExporter(port=8000)
+asyncio.run(exporter.start_exporter())
+```
+
+## Performance Optimization
+
+### High-Volume Event Logging
+
+For high-throughput systems, optimize event logging performance:
+
+```python
+# high_performance_config.py
+import os
+
+# Optimize for high volume
+os.environ.update({
+    'NAQ_EVENT_LOGGER_BATCH_SIZE': '500',        # Larger batches
+    'NAQ_EVENT_LOGGER_FLUSH_INTERVAL': '1.0',    # Faster flushes
+    'NAQ_EVENT_LOGGER_MAX_PENDING': '5000',      # Higher memory buffer
+    
+    # Reduce event noise
+    'NAQ_WORKER_HEARTBEAT_INTERVAL': '60',       # Less frequent heartbeats
+    
+    # Optimize NATS JetStream
+    'NAQ_EVENT_STREAM_MAX_BYTES': '10GB',        # Larger stream
+    'NAQ_EVENT_STREAM_MAX_AGE': '48h',           # Shorter retention
+})
+```
+
+### Memory Management
+
+Monitor and control memory usage:
+
+```python
+# memory_monitoring.py
+import asyncio
+import psutil
+from naq.events import AsyncJobEventLogger
+
+class MemoryAwareLogger:
+    """Event logger with memory monitoring."""
+    
+    def __init__(self, memory_threshold_mb=1000):
+        self.threshold = memory_threshold_mb
+        self.logger = AsyncJobEventLogger()
+        self._monitoring = True
+    
+    async def start_with_monitoring(self):
+        """Start logger with memory monitoring."""
+        await self.logger.start()
+        
+        # Start memory monitoring task
+        monitor_task = asyncio.create_task(self._monitor_memory())
+        
+        try:
+            # Your application logic here
+            pass
+        finally:
+            self._monitoring = False
+            monitor_task.cancel()
+            await self.logger.stop()
+    
+    async def _monitor_memory(self):
+        """Monitor memory usage and adjust batch size."""
+        while self._monitoring:
+            process = psutil.Process()
+            memory_mb = process.memory_info().rss / 1024 / 1024
+            
+            if memory_mb > self.threshold:
+                print(f"⚠️  High memory usage: {memory_mb:.1f}MB")
+                # Force flush to reduce memory
+                await self.logger.flush()
+            
+            await asyncio.sleep(30)  # Check every 30 seconds
+
+# Usage
+memory_logger = MemoryAwareLogger(memory_threshold_mb=800)
+asyncio.run(memory_logger.start_with_monitoring())
+```
+
+## Troubleshooting
+
+### Common Event System Issues
+
+**Events not appearing in stream:**
+
+1. Check if event logging is enabled:
+   ```bash
+   echo $NAQ_EVENT_LOGGING_ENABLED
+   ```
+
+2. Verify NATS connectivity:
+   ```bash
+   nats stream info NAQ_JOB_EVENTS
+   ```
+
+3. Check event logger lifecycle:
+   ```python
+   logger = AsyncJobEventLogger()
+   await logger.start()  # Must call start()
+   # ... log events
+   await logger.stop()   # Must call stop()
+   ```
+
+**High memory usage:**
+
+1. Reduce batch size:
+   ```bash
+   export NAQ_EVENT_LOGGER_BATCH_SIZE=50
+   ```
+
+2. Increase flush frequency:
+   ```bash
+   export NAQ_EVENT_LOGGER_FLUSH_INTERVAL=2.0
+   ```
+
+3. Monitor pending events:
+   ```python
+   # In your application
+   if logger._pending_events_count > 500:
+       await logger.flush()
+   ```
+
+**Slow event processing:**
+
+1. Increase batch size for better throughput:
+   ```bash
+   export NAQ_EVENT_LOGGER_BATCH_SIZE=300
+   ```
+
+2. Use dedicated NATS cluster for events
+3. Consider event sampling for very high-volume scenarios
+
+### Debug Commands
+
+```bash
+# Check event stream status
+nats stream info NAQ_JOB_EVENTS
+
+# Monitor event rate
+naq events --format raw | pv -l
+
+# Test event logging
+python -c "
+import asyncio
+from naq.events import AsyncJobEventLogger
+
+async def test():
+    logger = AsyncJobEventLogger()
+    await logger.start()
+    await logger.log_job_enqueued('test-job', 'test-queue')
+    await logger.flush()
+    await logger.stop()
+    print('Event logged successfully')
+
+asyncio.run(test())
+"
+```

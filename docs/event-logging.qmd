@@ -1,0 +1,435 @@
+---
+title: "Event-Driven State Management"
+---
+
+NAQ provides comprehensive event-driven state management using NATS JetStream for complete observability, monitoring, and debugging of your job queues.
+
+## Overview
+
+The event logging system captures all state transitions and lifecycle events across:
+
+- **Job Lifecycle**: Enqueue, start, completion, failures, retries
+- **Schedule Management**: Job scheduling, triggers, pauses, resumes, modifications  
+- **Worker Status**: Worker start/stop, status changes, heartbeats, errors
+
+All events are stored in a NATS JetStream event stream providing:
+- **Complete Audit Trail**: Immutable record of all system activity
+- **Real-time Monitoring**: Live event streaming for system observability
+- **Historical Analysis**: Query past events for debugging and analytics
+- **High Performance**: Non-blocking async event logging with minimal latency impact
+
+## Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│     Worker      │    │     Queue       │    │   Scheduler     │
+│                 │    │                 │    │                 │
+│  ┌───────────┐  │    │  ┌───────────┐  │    │  ┌───────────┐  │
+│  │Job Events │  │    │  │Job Events │  │    │  │Job Events │  │
+│  │Worker     │──┼────┼──│Schedule   │──┼────┼──│Schedule   │  │
+│  │Events     │  │    │  │Events     │  │    │  │Events     │  │
+│  └───────────┘  │    │  └───────────┘  │    │  └───────────┘  │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
+                                 ▼
+                    ┌─────────────────────────┐
+                    │   NATS JetStream        │
+                    │   Event Stream          │
+                    │   (NAQ_JOB_EVENTS)      │
+                    └─────────────────────────┘
+                                 │
+                    ┌─────────────────────────┐
+                    │   Event Processors      │
+                    │   - Real-time Monitor   │
+                    │   - Analytics          │
+                    │   - Alerting           │
+                    └─────────────────────────┘
+```
+
+## Why Event-Driven State Management?
+
+Event-driven state management transforms NAQ from a simple task queue into a complete observability platform:
+
+- **Real-time Monitoring**: See job progress as it happens
+- **Debugging**: Track job failures with detailed error information  
+- **Performance Analysis**: Monitor job durations and throughput
+- **Reactive Systems**: Build event-driven applications that respond to job lifecycle changes
+- **Audit Trail**: Complete history of all job operations
+- **Alerting**: React to job failures or performance issues instantly
+
+## Quick Start: Monitoring Jobs
+
+The fastest way to see NAQ's event logging in action is using the built-in monitoring command:
+
+```bash
+# Monitor all job events in real-time
+naq events
+
+# Monitor events for a specific job
+naq events --job-id abc123def456
+
+# Monitor only failed jobs
+naq events --event-type failed
+
+# Output in JSON format for processing
+naq events --format json
+```
+
+This command connects to your NATS event stream and displays job lifecycle events as they occur, giving you instant visibility into your job processing.
+
+## Job Event Types
+
+NAQ captures every significant moment in a job's lifecycle:
+
+| Event Type | Description | When It Occurs |
+|------------|-------------|----------------|
+| `ENQUEUED` | Job added to queue | When `enqueue()`, `enqueue_at()`, or `enqueue_in()` is called |
+| `STARTED` | Job execution begins | When a worker picks up the job and starts processing |
+| `COMPLETED` | Job finished successfully | When job function returns without errors |
+| `FAILED` | Job execution failed | When job function raises an exception |
+| `RETRY_SCHEDULED` | Job scheduled for retry | When a failed job will be retried |
+| `SCHEDULED` | Job scheduled for future | When using `schedule()` with cron or interval |
+| `SCHEDULE_TRIGGERED` | Scheduled job enqueued | When scheduler moves a scheduled job to active queue |
+
+Each event includes rich metadata like timestamps, worker IDs, queue names, error details, and execution duration.
+
+## CLI Monitoring
+
+The `naq events` command provides powerful filtering and formatting options:
+
+### Basic Usage
+
+```bash
+# Monitor all events
+naq events
+
+# Monitor specific queue
+naq events --queue high-priority
+
+# Monitor specific worker
+naq events --worker worker-1
+
+# Combine filters
+naq events --queue urgent --event-type failed
+```
+
+### Output Formats
+
+```bash
+# Table format (default) - human readable
+naq events --format table
+
+# JSON format - machine readable
+naq events --format json
+
+# Raw format - compact logging
+naq events --format raw
+```
+
+### Example Output
+
+```
+Time      Job ID       Event      Queue        Worker       Message
+14:30:15  abc123...    enqueued   default      -            Job abc123 enqueued to default
+14:30:16  abc123...    started    default      worker-1     Job abc123 started by worker worker-1
+14:30:19  abc123...    completed  default      worker-1     Job abc123 completed successfully in 2847ms
+```
+
+## Programmatic Event Processing
+
+For advanced use cases, you can programmatically process events in your applications:
+
+### Basic Event Handler
+
+```python
+import asyncio
+from naq.events import AsyncJobEventProcessor
+
+async def main():
+    # Create event processor
+    processor = AsyncJobEventProcessor()
+    
+    # Register handler for failed jobs
+    def handle_job_failure(event):
+        print(f"🚨 Job {event.job_id} failed: {event.error_message}")
+        # Send alert, log to monitoring system, etc.
+    
+    processor.on_job_failed(handle_job_failure)
+    
+    # Start processing events
+    await processor.start()
+    
+    # Keep running (in real app, this would be your main loop)
+    try:
+        await asyncio.sleep(3600)  # Run for 1 hour
+    finally:
+        await processor.stop()
+
+asyncio.run(main())
+```
+
+### Advanced Event Processing
+
+```python
+from naq.events import AsyncJobEventProcessor, JobEventType
+
+async def build_monitoring_system():
+    processor = AsyncJobEventProcessor()
+    
+    # Track job statistics
+    job_stats = {"completed": 0, "failed": 0, "total_duration": 0}
+    
+    def update_stats(event):
+        if event.event_type == JobEventType.COMPLETED:
+            job_stats["completed"] += 1
+            if event.duration_ms:
+                job_stats["total_duration"] += event.duration_ms
+        elif event.event_type == JobEventType.FAILED:
+            job_stats["failed"] += 1
+    
+    # Global handler receives all events
+    processor.add_global_handler(update_stats)
+    
+    # Specific handlers for different event types
+    processor.on_job_failed(lambda e: send_alert(f"Job failed: {e.job_id}"))
+    processor.on_job_completed(lambda e: log_success(e.job_id, e.duration_ms))
+    
+    await processor.start()
+    return processor
+
+def send_alert(message):
+    # Integration with monitoring systems
+    print(f"ALERT: {message}")
+
+def log_success(job_id, duration_ms):
+    print(f"✅ Job {job_id} completed in {duration_ms}ms")
+```
+
+### Event-Driven Workflows
+
+Build reactive systems that respond to job completions:
+
+```python
+from naq import enqueue
+from naq.events import AsyncJobEventProcessor
+
+# Define workflow tasks
+async def process_image(image_path):
+    # Process the image
+    return f"processed_{image_path}"
+
+async def generate_thumbnail(processed_path):
+    # Generate thumbnail from processed image
+    return f"thumb_{processed_path}"
+
+async def send_notification(user_id, image_path):
+    # Notify user that processing is complete
+    print(f"Image {image_path} ready for user {user_id}")
+
+async def image_workflow():
+    processor = AsyncJobEventProcessor()
+    
+    # When image processing completes, start thumbnail generation
+    async def on_image_processed(event):
+        if event.event_type == JobEventType.COMPLETED:
+            # Check if this was an image processing job
+            if "process_image" in str(event.message):
+                # Get the result and enqueue thumbnail job
+                result = await get_job_result(event.job_id)
+                await enqueue(generate_thumbnail, result)
+    
+    # When thumbnail generation completes, notify user
+    async def on_thumbnail_generated(event):
+        if event.event_type == JobEventType.COMPLETED:
+            if "generate_thumbnail" in str(event.message):
+                await enqueue(send_notification, "user123", event.job_id)
+    
+    processor.add_global_handler(on_image_processed)
+    processor.add_global_handler(on_thumbnail_generated)
+    
+    await processor.start()
+    return processor
+
+async def get_job_result(job_id):
+    # Implementation to fetch job result
+    pass
+```
+
+## Configuration
+
+Event logging can be configured via environment variables:
+
+### Core Settings
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NAQ_EVENTS_ENABLED` | `true` | Enable/disable event logging system |
+| `NAQ_EVENT_STORAGE_URL` | Same as `NAQ_NATS_URL` | NATS URL for event storage |
+| `NAQ_EVENT_STREAM_NAME` | `NAQ_JOB_EVENTS` | JetStream stream name for events |
+| `NAQ_EVENT_SUBJECT_PREFIX` | `naq.jobs.events` | Base subject for event routing |
+
+### Performance Tuning
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NAQ_EVENT_LOGGER_BATCH_SIZE` | `100` | Number of events to buffer before flushing |
+| `NAQ_EVENT_LOGGER_FLUSH_INTERVAL` | `5.0` | Seconds between automatic flushes |
+| `NAQ_EVENT_LOGGER_MAX_BUFFER_SIZE` | `10000` | Maximum events to buffer (prevents memory issues) |
+
+### Example Configuration
+
+```bash
+# Enable event logging with custom settings
+export NAQ_EVENTS_ENABLED=true
+export NAQ_EVENT_STREAM_NAME=MY_JOB_EVENTS
+export NAQ_EVENT_LOGGER_BATCH_SIZE=50
+export NAQ_EVENT_LOGGER_FLUSH_INTERVAL=2.0
+
+# Run your application
+python my_app.py
+```
+
+## Architecture & Performance
+
+### NATS JetStream Integration
+
+NAQ's event logging is built on NATS JetStream, providing:
+
+- **Durable Storage**: Events survive server restarts
+- **Ordered Delivery**: Events maintain chronological order
+- **High Throughput**: Optimized for high-volume event streams
+- **Subject Filtering**: Efficient filtering by job, queue, or worker
+- **Clustering**: Horizontal scaling and high availability
+
+### Event Storage Structure
+
+Events are stored using a hierarchical NATS subject structure:
+
+```
+naq.jobs.events.{job_id}.{context}.{event_type}
+```
+
+Examples:
+- `naq.jobs.events.abc123.worker.worker-1.started`
+- `naq.jobs.events.def456.queue.high-priority.enqueued`
+- `naq.jobs.events.ghi789.system.completed`
+
+This structure enables efficient filtering and routing of events.
+
+### Performance Characteristics
+
+- **Buffered Logging**: Events are batched for efficiency
+- **Non-blocking**: Event logging never blocks job execution
+- **Retry Logic**: Failed event writes are automatically retried
+- **Memory Management**: Automatic buffer limits prevent memory issues
+- **Background Processing**: All event I/O happens in background tasks
+
+::: {.callout-tip}
+**Performance Tip**
+
+For high-throughput applications, adjust batch size and flush interval:
+
+```bash
+# Process more events per batch, flush less frequently
+export NAQ_EVENT_LOGGER_BATCH_SIZE=500
+export NAQ_EVENT_LOGGER_FLUSH_INTERVAL=10.0
+```
+
+This reduces overhead but increases memory usage and potential data loss window.
+:::
+
+## Use Cases
+
+### Production Monitoring
+
+```python
+# Monitor production job health
+from naq.events import AsyncJobEventProcessor
+
+async def production_monitor():
+    processor = AsyncJobEventProcessor()
+    
+    # Track failure rate
+    failure_count = 0
+    total_count = 0
+    
+    def track_jobs(event):
+        nonlocal failure_count, total_count
+        if event.event_type in [JobEventType.COMPLETED, JobEventType.FAILED]:
+            total_count += 1
+            if event.event_type == JobEventType.FAILED:
+                failure_count += 1
+            
+            # Alert if failure rate exceeds 10%
+            failure_rate = failure_count / total_count
+            if failure_rate > 0.1 and total_count > 10:
+                send_alert(f"High failure rate: {failure_rate:.1%}")
+    
+    processor.add_global_handler(track_jobs)
+    await processor.start()
+```
+
+### Performance Analysis
+
+```python
+# Analyze job performance patterns
+import statistics
+from collections import defaultdict
+
+async def performance_analyzer():
+    processor = AsyncJobEventProcessor()
+    durations = defaultdict(list)  # queue_name -> [durations]
+    
+    def analyze_performance(event):
+        if event.event_type == JobEventType.COMPLETED and event.duration_ms:
+            durations[event.queue_name].append(event.duration_ms)
+            
+            # Log statistics every 100 jobs per queue
+            if len(durations[event.queue_name]) % 100 == 0:
+                queue_durations = durations[event.queue_name]
+                avg_duration = statistics.mean(queue_durations)
+                p95_duration = statistics.quantiles(queue_durations, n=20)[18]  # 95th percentile
+                
+                print(f"Queue {event.queue_name}: avg={avg_duration:.0f}ms, p95={p95_duration:.0f}ms")
+    
+    processor.add_global_handler(analyze_performance)
+    await processor.start()
+```
+
+### Debugging Failed Jobs
+
+```python
+# Detailed failure analysis
+async def debug_failures():
+    processor = AsyncJobEventProcessor()
+    
+    def debug_failure(event):
+        print(f"""
+        🚨 Job Failure Debug Report
+        ===========================
+        Job ID: {event.job_id}
+        Queue: {event.queue_name}
+        Worker: {event.worker_id}
+        Error Type: {event.error_type}
+        Error Message: {event.error_message}
+        Duration: {event.duration_ms}ms
+        Timestamp: {event.timestamp}
+        """)
+    
+    processor.on_job_failed(debug_failure)
+    await processor.start()
+```
+
+::: {.callout-note}
+**Integration Note**
+
+The event logging system integrates seamlessly with existing NAQ functionality. When enabled, it automatically captures events from all job operations without requiring code changes to your existing tasks or workers.
+:::
+
+## What's Next?
+
+- Explore the [Event Logging API Reference](api/events.qmd) for detailed technical documentation
+- Learn about [advanced configuration options](advanced.qmd#event-logging-configuration)
+- Check out more [event-driven examples](examples.qmd#event-driven-workflows)
+- Understand the [architecture](architecture.qmd#event-logging-architecture) behind the event system

@@ -25,9 +25,9 @@ from .connection import (
     get_nats_connection,
 )
 from .exceptions import NaqException, SerializationError
-from .job import Job
+from .models import Job
 from .results import Results
-from .job import JOB_STATUS
+from .models import JOB_STATUS
 from .settings import (
     DEFAULT_NATS_URL,
     DEFAULT_RESULT_TTL_SECONDS,
@@ -46,6 +46,7 @@ from .settings import (
     DEFAULT_QUEUE_NAME,
 )
 from .utils import run_async_from_sync, setup_logging
+from .events.logger import AsyncJobEventLogger
 
 
 class WorkerStatusManager:
@@ -108,6 +109,43 @@ class WorkerStatusManager:
 
         try:
             await kv_store.put(self.worker.worker_id, cloudpickle.dumps(payload))
+            
+            # Log worker status event
+            try:
+                hostname = socket.gethostname()
+                pid = os.getpid()
+                active_jobs = self.worker._concurrency - self.worker._semaphore._value
+                
+                if self._current_status == WORKER_STATUS.STARTING:
+                    await self.worker._event_logger.log_worker_started(
+                        worker_id=self.worker.worker_id,
+                        hostname=hostname,
+                        pid=pid,
+                        queue_names=self.worker.queue_names,
+                        concurrency_limit=self.worker._concurrency,
+                    )
+                elif self._current_status == WORKER_STATUS.IDLE:
+                    await self.worker._event_logger.log_worker_idle(
+                        worker_id=self.worker.worker_id,
+                        hostname=hostname,
+                        pid=pid,
+                    )
+                elif self._current_status == WORKER_STATUS.BUSY:
+                    await self.worker._event_logger.log_worker_busy(
+                        worker_id=self.worker.worker_id,
+                        hostname=hostname,
+                        pid=pid,
+                        current_job_id=job_id or "unknown",
+                    )
+                elif self._current_status == WORKER_STATUS.STOPPING:
+                    await self.worker._event_logger.log_worker_stopped(
+                        worker_id=self.worker.worker_id,
+                        hostname=hostname,
+                        pid=pid,
+                    )
+            except Exception as event_e:
+                logger.warning(f"Failed to log worker status event: {event_e}")
+                
         except Exception as e:
             logger.error(f"Failed to update worker status: {e}")
 
@@ -115,6 +153,28 @@ class WorkerStatusManager:
         """Sends periodic heartbeat updates."""
         while True:
             await self.update_status(self._current_status)
+            
+            # Log heartbeat event periodically (every 10th heartbeat to reduce noise)
+            if hasattr(self, '_heartbeat_count'):
+                self._heartbeat_count += 1
+            else:
+                self._heartbeat_count = 1
+                
+            if self._heartbeat_count % 10 == 0:
+                try:
+                    hostname = socket.gethostname()
+                    pid = os.getpid()
+                    active_jobs = self.worker._concurrency - self.worker._semaphore._value
+                    await self.worker._event_logger.log_worker_heartbeat(
+                        worker_id=self.worker.worker_id,
+                        hostname=hostname,
+                        pid=pid,
+                        active_jobs=active_jobs,
+                        concurrency_limit=self.worker._concurrency,
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to log worker heartbeat event: {e}")
+                    
             await asyncio.sleep(DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS)
 
     async def start_heartbeat_loop(self) -> None:
@@ -624,6 +684,7 @@ class Worker:
         self._worker_status_manager = WorkerStatusManager(self)
         self._job_status_manager = JobStatusManager(self)
         self._failed_job_handler = FailedJobHandler(self)
+        self._event_logger = AsyncJobEventLogger(nats_url=nats_url)
 
         setup_logging()  # Setup logging
 
@@ -638,6 +699,7 @@ class Worker:
             await self._worker_status_manager.start_heartbeat_loop()
             await self._job_status_manager.initialize(self._js)
             await self._failed_job_handler.initialize(self._js)
+            await self._event_logger.start()
 
     def _resolve_ack_wait_seconds(self, queue_name: str) -> int:
         """
@@ -779,6 +841,14 @@ class Worker:
                 WORKER_STATUS.BUSY, job_id=job.job_id
             )
 
+            # Log job started event
+            start_time = time.time()
+            await self._event_logger.log_job_started(
+                job_id=job.job_id,
+                worker_id=self.worker_id,
+                queue_name=job.queue_name,
+            )
+
             # Execute the job
             try:
                 if job.timeout is not None and job.timeout > 0:
@@ -791,6 +861,27 @@ class Worker:
 
             # Store result (which includes error/traceback if any)
             await self._job_status_manager.store_result(job)
+
+            # Log completion or failure event
+            execution_time = time.time() - start_time
+            duration_ms = int(execution_time * 1000)
+            
+            if job.status == JOB_STATUS.COMPLETED:
+                await self._event_logger.log_job_completed(
+                    job_id=job.job_id,
+                    worker_id=self.worker_id,
+                    queue_name=job.queue_name,
+                    duration_ms=duration_ms,
+                )
+            elif job.status == JOB_STATUS.FAILED:
+                await self._event_logger.log_job_failed(
+                    job_id=job.job_id,
+                    worker_id=self.worker_id,
+                    queue_name=job.queue_name,
+                    error_type=type(Exception(job.error)).__name__ if job.error else "UnknownError",
+                    error_message=job.error or "Unknown error occurred",
+                    duration_ms=duration_ms,
+                )
 
             # Handle failure if needed (e.g., publish to dead-letter queue)
             if (
@@ -835,6 +926,16 @@ class Worker:
                 f"Job {job.job_id} failed, scheduling retry {attempt}/{max_retries} "
                 f"after {delay:.2f}s delay."
             )
+            
+            # Log retry scheduled event
+            await self._event_logger.log_job_retry_scheduled(
+                job_id=job.job_id,
+                worker_id=self.worker_id,
+                queue_name=job.queue_name,
+                retry_count=attempt,
+                retry_delay=delay,
+            )
+            
             try:
                 await msg.nak(delay=delay)
                 logger.debug(f"Message Nak'd for retry: Sid='{msg.sid}'")
@@ -986,6 +1087,12 @@ class Worker:
             await self._worker_status_manager.stop_heartbeat_loop()
         except Exception as e:
             logger.error(f"Error stopping heartbeat: {e}")
+        
+        # Stop event logger
+        try:
+            await self._event_logger.stop()
+        except Exception as e:
+            logger.error(f"Error stopping event logger: {e}")
 
         # Cleanup all consumers before unregistering worker
         for queue_name, consumer in self._consumers.items():

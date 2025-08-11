@@ -106,18 +106,21 @@ By following these guidelines, you can avoid common pitfalls related to timezone
 
 ## Features
 
-*   Simple API similar to RQ.
-*   Asynchronous core using `asyncio` and `nats-py`.
-*   Job persistence via NATS JetStream streams.
-*   Support for scheduled jobs (run at a specific time or after a delay).
-*   Support for recurring jobs (cron-style or interval-based).
-*   Job dependencies (run a job only after others complete).
-*   Job retries with configurable backoff.
-*   Result backend using NATS KV store (with TTL).
-*   Worker monitoring and heartbeating using NATS KV store.
-*   High Availability for the scheduler process via leader election.
-*   Optional web dashboard (requires `naq[dashboard]`).
-*   Command-line interface (`naq`) for workers, scheduler, queue management, and dashboard.
+*   **Simple API**: Similar to RQ with familiar async/sync interfaces.
+*   **Asynchronous Core**: Built with `asyncio` and `nats-py` for high performance.
+*   **Event-Driven State Management**: Complete observability with real-time job, worker, and schedule event streaming.
+*   **Comprehensive Monitoring**: Live monitoring of job lifecycle, worker status, and system health with rich CLI tools.
+*   **Job persistence**: Via NATS JetStream streams for reliable delivery.
+*   **Scheduled & Recurring Jobs**: Supports cron-style, interval-based, and one-time scheduled tasks.
+*   **Job Dependencies**: Create complex workflows by defining dependencies between jobs.
+*   **Job Retries**: Configurable retry mechanism with exponential backoff for failed jobs.
+*   **Worker Status Tracking**: Real-time worker heartbeats, status changes, and performance monitoring.
+*   **Schedule Management**: Full lifecycle management of scheduled jobs with pause, resume, modify, and cancel operations.
+*   **Historical Analysis**: Query job event history for debugging, analytics, and compliance.
+*   **Result Backend**: Using NATS KV store (with TTL).
+*   **High Availability**: For the scheduler process via leader election.
+*   **Optional Web Dashboard**: (requires `naq[dashboard]`).
+*   **Powerful CLI**: Comprehensive command-line interface with real-time monitoring, event history, and system analytics.
 ## Installation
 
 Install `naq` using pip:
@@ -175,7 +178,27 @@ naq worker default
 
 The worker will pick up the job and execute the `count_words` function.
 
-### 4. Scheduling Jobs:
+### 4. Monitor Your Jobs
+
+NAQ provides comprehensive real-time monitoring of your job processing:
+
+```bash
+# Watch all job events in real-time  
+naq events
+
+# Monitor worker status and health
+naq worker-events
+
+# Get job event history  
+naq event-history job-abc-123
+
+# System event statistics
+naq event-stats
+```
+
+This gives you instant visibility into job processing, worker health, and system performance.
+
+### 5. Scheduling Jobs:
 
 Jobs can be scheduled to run later.
 
@@ -200,7 +223,7 @@ print(f"Job {job_in.job_id} scheduled to run in {run_in}")
 print("Run 'naq scheduler' and 'naq worker default' to process scheduled jobs.")
 ````
 
-5. Run the Scheduler
+### 6. Run the Scheduler
 For scheduled jobs (`enqueue_at`, `enqueue_in`, `schedule`), you also need to run the `naq` scheduler process:
 ```bash
 naq scheduler

@@ -16,4 +16,6 @@ The API is organized into modules, each providing specific functionality.
 
 -   [**`scheduler` Module**](scheduler.qmd): Contains the `Scheduler` class, responsible for enqueuing scheduled and recurring jobs.
 
+-   [**`events` Module**](events.qmd): Comprehensive event-driven state management system for job monitoring, logging, and reactive programming.
+
 -   [**`exceptions` Module**](exceptions.qmd): Defines custom exceptions raised by `naq`.

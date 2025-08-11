@@ -6,7 +6,7 @@ from dataclasses import asdict, is_dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union, Protocol
 
 from .exceptions import SerializationError
-from .job import JOB_STATUS
+from .models import JOB_STATUS
 from .settings import (
     DEFAULT_QUEUE_NAME,
     JOB_SERIALIZER,
@@ -101,7 +101,7 @@ class PickleSerializer:
             kwargs = cloudpickle.loads(payload["kwargs"])
 
             # Create the job with all the saved attributes
-            from .job import Job  # Import here to avoid circular imports
+            from .models import Job  # Import here to avoid circular imports
 
             job = Job(
                 function=function,
@@ -342,7 +342,7 @@ class JsonSerializer:
             payload.get("retry_strategy", RETRY_STRATEGY.LINEAR)
         )
 
-        from .job import Job  # Import here to avoid circular imports
+        from .models import Job  # Import here to avoid circular imports
 
         job = Job(
             function=function,

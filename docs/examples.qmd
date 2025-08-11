@@ -237,3 +237,337 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+```
+
+## Example 3: Event Monitoring and Analytics
+
+NAQ's event-driven architecture provides comprehensive monitoring and analytics capabilities. This example shows how to leverage events for system observability and custom business logic.
+
+### Real-time Event Monitoring
+
+Monitor job events programmatically for custom processing:
+
+```python
+# event_monitor.py
+import asyncio
+from naq.events import AsyncJobEventProcessor, JobEventType
+
+async def monitor_jobs():
+    """Monitor job events and implement custom logic."""
+    processor = AsyncJobEventProcessor()
+    
+    # Global handler for all events
+    def log_all_events(event):
+        print(f"[{event.timestamp}] {event.event_type}: {event.job_id}")
+    
+    # Specific handler for failed jobs
+    def handle_failures(event):
+        print(f"❌ Job {event.job_id} failed: {event.error_message}")
+        # Send alert, create ticket, etc.
+        
+    # Performance monitoring handler  
+    def track_performance(event):
+        if event.duration_ms:
+            if event.duration_ms > 10000:  # > 10 seconds
+                print(f"⚠️  Slow job detected: {event.job_id} took {event.duration_ms}ms")
+    
+    # Register event handlers
+    processor.add_global_handler(log_all_events)
+    processor.add_handler(JobEventType.FAILED, handle_failures)
+    processor.add_handler(JobEventType.COMPLETED, track_performance)
+    
+    # Start monitoring
+    await processor.start()
+    
+    try:
+        print("🔍 Monitoring events... (Press Ctrl+C to stop)")
+        # Stream events with filtering
+        async for event in processor.stream_job_events():
+            # Events are processed by registered handlers
+            pass
+    except KeyboardInterrupt:
+        print("\n👋 Stopping event monitor")
+    finally:
+        await processor.stop()
+
+if __name__ == "__main__":
+    asyncio.run(monitor_jobs())
+```
+
+### Worker Status Monitoring
+
+Monitor worker health and performance:
+
+```python
+# worker_monitor.py
+import asyncio
+from naq.events import AsyncJobEventProcessor
+from collections import defaultdict
+from datetime import datetime
+
+class WorkerMonitor:
+    def __init__(self):
+        self.worker_stats = defaultdict(lambda: {
+            'jobs_processed': 0,
+            'last_heartbeat': None,
+            'status': 'unknown',
+            'errors': 0
+        })
+    
+    def handle_worker_event(self, event):
+        """Handle worker-specific events."""
+        if not (hasattr(event, 'details') and event.details and 
+               event.details.get('event_category') == 'worker'):
+            return
+            
+        worker_id = event.worker_id
+        stats = self.worker_stats[worker_id]
+        
+        if 'worker_started' in event.event_type.value:
+            stats['status'] = 'active'
+            print(f"🟢 Worker {worker_id} started")
+            
+        elif 'worker_stopped' in event.event_type.value:
+            stats['status'] = 'stopped'
+            print(f"🔴 Worker {worker_id} stopped")
+            
+        elif 'worker_heartbeat' in event.event_type.value:
+            stats['last_heartbeat'] = datetime.now()
+            if event.details.get('active_jobs') is not None:
+                active = event.details['active_jobs']
+                limit = event.details.get('concurrency_limit', 0)
+                print(f"💓 {worker_id}: {active}/{limit} jobs active")
+                
+        elif 'worker_error' in event.event_type.value:
+            stats['errors'] += 1
+            print(f"⚠️  Worker {worker_id} error: {event.error_message}")
+    
+    def handle_job_event(self, event):
+        """Handle job events for worker tracking."""
+        if event.event_type == JobEventType.COMPLETED and event.worker_id:
+            self.worker_stats[event.worker_id]['jobs_processed'] += 1
+    
+    def print_stats(self):
+        """Print current worker statistics."""
+        print("\n📊 Worker Statistics:")
+        print("-" * 60)
+        for worker_id, stats in self.worker_stats.items():
+            print(f"Worker: {worker_id}")
+            print(f"  Status: {stats['status']}")
+            print(f"  Jobs Processed: {stats['jobs_processed']}")
+            print(f"  Errors: {stats['errors']}")
+            if stats['last_heartbeat']:
+                print(f"  Last Heartbeat: {stats['last_heartbeat']}")
+            print()
+
+async def monitor_workers():
+    """Monitor worker status and health."""
+    monitor = WorkerMonitor()
+    processor = AsyncJobEventProcessor()
+    
+    # Register handlers
+    processor.add_global_handler(monitor.handle_worker_event)
+    processor.add_global_handler(monitor.handle_job_event)
+    
+    await processor.start()
+    
+    try:
+        print("👷 Monitoring workers... (Press Ctrl+C to stop)")
+        
+        # Print stats every 30 seconds
+        import time
+        last_stats = time.time()
+        
+        async for event in processor.stream_job_events():
+            # Check if it's time to print stats
+            if time.time() - last_stats > 30:
+                monitor.print_stats()
+                last_stats = time.time()
+                
+    except KeyboardInterrupt:
+        print("\n👋 Stopping worker monitor")
+        monitor.print_stats()
+    finally:
+        await processor.stop()
+
+if __name__ == "__main__":
+    asyncio.run(monitor_workers())
+```
+
+### Custom Event-Driven Application
+
+Build applications that react to job lifecycle events:
+
+```python
+# notification_system.py
+import asyncio
+from naq.events import AsyncJobEventProcessor, JobEventType
+from naq import enqueue
+
+class NotificationSystem:
+    """Example system that reacts to job events."""
+    
+    def __init__(self):
+        self.failed_jobs = []
+        self.slow_jobs = []
+    
+    async def handle_job_completed(self, event):
+        """Handle successful job completion."""
+        if event.duration_ms and event.duration_ms > 5000:
+            self.slow_jobs.append({
+                'job_id': event.job_id,
+                'duration': event.duration_ms,
+                'queue': event.queue_name
+            })
+            
+            # Maybe enqueue a follow-up optimization job
+            await enqueue(
+                self.analyze_slow_job,
+                job_id=event.job_id,
+                duration=event.duration_ms,
+                queue_name="analytics"
+            )
+    
+    async def handle_job_failed(self, event):
+        """Handle job failures."""
+        self.failed_jobs.append({
+            'job_id': event.job_id,
+            'error': event.error_message,
+            'worker': event.worker_id,
+            'timestamp': event.timestamp
+        })
+        
+        # Enqueue failure analysis
+        await enqueue(
+            self.analyze_failure,
+            job_id=event.job_id,
+            error_message=event.error_message,
+            queue_name="support"
+        )
+        
+        print(f"📧 Failure notification sent for job {event.job_id}")
+    
+    async def analyze_slow_job(self, job_id, duration):
+        """Analyze why a job was slow."""
+        print(f"🔍 Analyzing slow job {job_id} (took {duration}ms)")
+        # Implement analysis logic
+        return {"analysis": "completed", "recommendations": ["optimize_query"]}
+    
+    async def analyze_failure(self, job_id, error_message):
+        """Analyze job failure."""
+        print(f"🔍 Analyzing failed job {job_id}: {error_message}")
+        # Implement failure analysis logic
+        return {"analysis": "completed", "likely_cause": "timeout"}
+    
+    async def get_health_report(self):
+        """Generate system health report."""
+        return {
+            "failed_jobs_count": len(self.failed_jobs),
+            "slow_jobs_count": len(self.slow_jobs),
+            "recent_failures": self.failed_jobs[-5:],
+            "recent_slow_jobs": self.slow_jobs[-5:]
+        }
+
+async def run_notification_system():
+    """Run the notification system."""
+    notification_system = NotificationSystem()
+    processor = AsyncJobEventProcessor()
+    
+    # Register event handlers
+    processor.add_handler(JobEventType.COMPLETED, notification_system.handle_job_completed)
+    processor.add_handler(JobEventType.FAILED, notification_system.handle_job_failed)
+    
+    await processor.start()
+    
+    try:
+        print("📢 Notification system active... (Press Ctrl+C to stop)")
+        async for event in processor.stream_job_events():
+            pass
+    except KeyboardInterrupt:
+        print("\n👋 Stopping notification system")
+        # Print final health report
+        health_report = await notification_system.get_health_report()
+        print(f"📊 Final Health Report: {health_report}")
+    finally:
+        await processor.stop()
+
+if __name__ == "__main__":
+    asyncio.run(run_notification_system())
+```
+
+### Schedule Management with Event Tracking
+
+Monitor and manage scheduled jobs:
+
+```python
+# schedule_manager.py
+import asyncio
+from datetime import datetime, timedelta
+from naq import Queue
+from naq.events import AsyncJobEventProcessor, JobEventType
+
+async def scheduled_task(task_name, run_count):
+    """Example scheduled task."""
+    print(f"🚀 Running {task_name} (execution #{run_count})")
+    await asyncio.sleep(2)
+    return f"Task {task_name} completed"
+
+async def demo_schedule_management():
+    """Demonstrate schedule management with event tracking."""
+    queue = Queue("scheduled_demo")
+    processor = AsyncJobEventProcessor()
+    
+    # Track schedule events
+    def track_schedule_events(event):
+        if 'schedule' in event.event_type.value:
+            print(f"📅 {event.event_type}: {event.job_id} - {event.message}")
+    
+    processor.add_global_handler(track_schedule_events)
+    await processor.start()
+    
+    try:
+        # Schedule a recurring job (every 30 seconds, 3 times)
+        scheduled_job = await queue.schedule(
+            scheduled_task,
+            task_name="data_sync",
+            run_count=1,
+            interval=timedelta(seconds=30),
+            repeat=3
+        )
+        
+        print(f"📋 Scheduled job {scheduled_job.job_id}")
+        
+        # Let it run for a bit
+        await asyncio.sleep(45)
+        
+        # Pause the scheduled job
+        print("⏸️  Pausing scheduled job...")
+        await queue.pause_scheduled_job(scheduled_job.job_id)
+        
+        await asyncio.sleep(10)
+        
+        # Resume it
+        print("▶️  Resuming scheduled job...")
+        await queue.resume_scheduled_job(scheduled_job.job_id)
+        
+        await asyncio.sleep(45)
+        
+        # Finally cancel it
+        print("❌ Cancelling scheduled job...")
+        await queue.cancel_scheduled_job(scheduled_job.job_id)
+        
+    finally:
+        await processor.stop()
+        await queue.close()
+
+if __name__ == "__main__":
+    asyncio.run(demo_schedule_management())
+```
+
+These examples show how NAQ's event system enables:
+
+- **Custom Monitoring**: Build tailored monitoring solutions
+- **Reactive Applications**: Create systems that respond to job events  
+- **Performance Analytics**: Track and analyze system performance
+- **Automated Management**: Implement automated responses to events
+- **Business Intelligence**: Extract insights from job processing patterns

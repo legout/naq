@@ -97,6 +97,28 @@ DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS = int(
     os.getenv("NAQ_WORKER_HEARTBEAT_INTERVAL", "15")
 )
 
+
+# --- Event Logging Settings ---
+# Enable/disable the entire event logging system
+NAQ_EVENTS_ENABLED = os.getenv("NAQ_EVENTS_ENABLED", "true").lower() in ("true", "1", "yes", "on")
+
+# Storage backend type for events (currently only 'nats' supported)
+NAQ_EVENT_STORAGE_TYPE = os.getenv("NAQ_EVENT_STORAGE_TYPE", "nats")
+
+# NATS URL for the event system (defaults to main NATS URL)
+NAQ_EVENT_STORAGE_URL = os.getenv("NAQ_EVENT_STORAGE_URL", DEFAULT_NATS_URL)
+
+# JetStream stream name for job events
+NAQ_EVENT_STREAM_NAME = os.getenv("NAQ_EVENT_STREAM_NAME", "NAQ_JOB_EVENTS")
+
+# Base subject prefix for event routing
+NAQ_EVENT_SUBJECT_PREFIX = os.getenv("NAQ_EVENT_SUBJECT_PREFIX", "naq.jobs.events")
+
+# Event logger buffer settings
+NAQ_EVENT_LOGGER_BATCH_SIZE = int(os.getenv("NAQ_EVENT_LOGGER_BATCH_SIZE", "100"))
+NAQ_EVENT_LOGGER_FLUSH_INTERVAL = float(os.getenv("NAQ_EVENT_LOGGER_FLUSH_INTERVAL", "5.0"))
+NAQ_EVENT_LOGGER_MAX_BUFFER_SIZE = int(os.getenv("NAQ_EVENT_LOGGER_MAX_BUFFER_SIZE", "10000"))
+
 # Default ack_wait (in seconds) for JetStream consumers. Must be >= max expected job duration.
 # Can be overridden per-worker by passing ack_wait in Worker(...) or via env var below.
 DEFAULT_ACK_WAIT_SECONDS = int(os.getenv("NAQ_DEFAULT_ACK_WAIT", "60"))
