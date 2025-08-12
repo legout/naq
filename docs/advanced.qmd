@@ -108,3 +108,1111 @@ export NAQ_JOB_SERIALIZER=json
 
 It is **strongly recommended** to use the `json` serializer in any environment where the job producer is not fully trusted.
 :::
+
+## Event Logging & Monitoring
+
+`naq` includes a powerful, built-in event logging and monitoring system that provides deep visibility into your job queue. This system captures all key events throughout a job's lifecycle—from enqueuing to completion or failure—and stores them durably in NATS JetStream.
+
+### Key Concepts
+
+The event system is composed of a few core components:
+
+-   **`JobEvent`**: A structured data object representing a single event in a job's lifecycle (e.g., `ENQUEUED`, `STARTED`, `FAILED`).
+-   **`AsyncJobEventLogger`**: A high-performance, non-blocking logger that buffers events and flushes them to NATS in batches. This is integrated into the core `naq` components (`Queue`, `Worker`, `Scheduler`).
+-   **`NATSJobEventStorage`**: The storage backend that persists events to a dedicated NATS JetStream stream.
+-   **`AsyncJobEventProcessor`**: A real-time event processor that allows you to subscribe to event streams and react to events as they happen.
+-   **`SharedEventLoggerManager`**: A singleton manager that provides centralized event logging across all components.
+
+### Enabling Event Logging
+
+Event logging is controlled by the `NAQ_EVENTS_ENABLED` environment variable. By default, it is disabled.
+
+```bash
+# Enable event logging
+export NAQ_EVENTS_ENABLED=true
+```
+
+Once enabled, `naq` workers and queues will automatically start logging events without any code changes.
+
+### Configuration
+
+The event system is highly configurable through environment variables:
+
+| Variable                      | Default                        | Description                                                                                             |
+| ----------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `NAQ_EVENTS_ENABLED`          | `False`                        | Whether to enable the event logging system.                                                             |
+| `NAQ_EVENT_STORAGE_TYPE`      | `nats`                         | The type of storage backend (currently only `nats` is supported).                                       |
+| `NAQ_EVENT_STORAGE_URL`       | `nats://localhost:4222`        | The URL of the NATS server for event storage.                                                           |
+| `NAQ_EVENT_STREAM_NAME`       | `NAQ_JOB_EVENTS`               | The name of the JetStream stream where events are stored.                                               |
+| `NAQ_EVENT_SUBJECT_PREFIX`    | `naq.jobs.events`              | The base subject prefix for publishing events.                                                           |
+
+### Monitoring Events in Real-Time
+
+`naq` provides a built-in CLI command to monitor events in real-time. This is incredibly useful for debugging and observing the behavior of your queues during development and in production.
+
+To start monitoring, simply run:
+
+```bash
+naq events
+```
+
+This command will start an `AsyncJobEventProcessor` with a default handler that prints a formatted, colorized representation of each event to your console. You will see output like this:
+
+```
+12:34:56.789 [ENQUEUED]   job-abc-123 on queue 'default'
+12:34:56.790 [STARTED]    job-abc-123 by worker 'worker-1'
+12:35:01.123 [COMPLETED]  job-abc-123 by worker 'worker-1' (duration: 4333ms)
+```
+
+### Building Reactive Applications with Event Handlers
+
+The real power of the event system lies in its ability to let you build reactive, event-driven applications. You can register custom handlers to react to specific job events.
+
+Here's an example of how to set up a custom event processor to send a Slack notification whenever a job fails:
+
+```python
+# custom_handler.py
+import asyncio
+from naq.events import AsyncJobEventProcessor, NATSJobEventStorage, JobEventType
+
+async def send_failure_alert(event: naq.events.JobEvent):
+    """Sends a Slack alert when a job fails."""
+    print(f"ALERT: Job {event.job_id} failed!")
+    print(f"  - Error: {event.error_message}")
+    print(f"  - Queue: {event.queue_name}")
+    print(f"  - Worker: {event.worker_id}")
+    # In a real application, you would integrate with the Slack API here.
+    # await slack_client.post_message(channel="#alerts", text=f"Job {event.job_id} failed!")
+
+async def main():
+    # Create the storage and processor
+    storage = NATSJobEventStorage()
+    processor = AsyncJobEventProcessor(storage)
+
+    # Register our custom handler for FAILED events
+    processor.add_handler(JobEventType.FAILED, send_failure_alert)
+
+    # Start the processor
+    await processor.start()
+
+    try:
+        # Keep the processor running indefinitely
+        while True:
+            await asyncio.sleep(1)
+    finally:
+        # Ensure the processor is stopped cleanly
+        await processor.stop()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+You would run this script alongside your workers and other `naq` components. It will connect to the same NATS server and receive a copy of all `FAILED` events, allowing you to trigger custom logic.
+
+### Event Data Structure
+
+Each `JobEvent` contains rich contextual information. Here's a breakdown of the data available for a `COMPLETED` event:
+
+```json
+{
+  "job_id": "job-xyz-789",
+  "event_type": "completed",
+  "timestamp": 1678886400.123,
+  "worker_id": "worker-2",
+  "queue_name": "high_priority",
+  "message": "Job completed successfully",
+  "details": {
+    "result_type": "str"
+  },
+  "error_type": null,
+  "error_message": null,
+  "duration_ms": 2500,
+  "nats_subject": "naq.jobs.events.job-xyz-789.worker.worker-2.completed",
+  "nats_sequence": 12345
+}
+```
+
+This structured data makes it easy to build complex monitoring, analytics, and alerting systems on top of `naq`'s event stream.
+
+## Building Event-Driven Applications with naq
+
+The event-driven architecture of naq enables you to build reactive applications that respond to job lifecycle events in real-time. This section covers how to leverage the event system for building sophisticated, event-driven applications.
+
+### Core Principles
+
+Event-driven applications built with naq follow these principles:
+
+1. **Reactive Processing**: Your application reacts to events as they occur rather than polling for state changes.
+2. **Decoupled Components**: Event producers and consumers are completely decoupled, communicating only through the event stream.
+3. **Event Correlation**: All events for a job can be correlated using the job ID, enabling complete lifecycle tracking.
+4. **Real-time Processing**: Events are processed as they arrive, enabling immediate responses to state changes.
+
+### Setting Up an Event-Driven Application
+
+```python
+# event_driven_app.py
+import asyncio
+from naq.events import (
+    AsyncJobEventProcessor,
+    NATSJobEventStorage,
+    JobEventType,
+    configure_shared_logger
+)
+
+async def handle_job_events():
+    """Main event processing function."""
+    # Configure event logging
+    configure_shared_logger(enabled=True)
+    
+    # Create storage and processor
+    storage = NATSJobEventStorage()
+    processor = AsyncJobEventProcessor(storage)
+    
+    # Register event handlers
+    processor.add_handler(JobEventType.COMPLETED, handle_job_completed)
+    processor.add_handler(JobEventType.FAILED, handle_job_failed)
+    processor.add_handler(JobEventType.STATUS_CHANGED, handle_status_change)
+    processor.add_global_handler(log_all_events)
+    
+    # Start processing events
+    await processor.start()
+    
+    try:
+        # Keep the application running
+        while True:
+            await asyncio.sleep(1)
+    finally:
+        await processor.stop()
+
+async def handle_job_completed(event):
+    """Handle job completion events."""
+    print(f"Job {event.job_id} completed successfully")
+    
+    # Update application state
+    await update_job_status(event.job_id, "completed")
+    
+    # Trigger post-processing tasks
+    if event.details.get("requires_post_processing"):
+        await enqueue_post_processing(event.job_id)
+
+async def handle_job_failed(event):
+    """Handle job failure events."""
+    print(f"Job {event.job_id} failed: {event.error_message}")
+    
+    # Update application state
+    await update_job_status(event.job_id, "failed")
+    
+    # Send alert if critical
+    if event.queue_name == "critical":
+        await send_failure_alert(event)
+    
+    # Log failure for analysis
+    await log_failure_for_analysis(event)
+
+async def handle_status_change(event):
+    """Handle job status change events."""
+    old_status = event.details.get("old_status")
+    new_status = event.details.get("new_status")
+    
+    print(f"Job {event.job_id} status changed: {old_status} -> {new_status}")
+    
+    # Update dashboards
+    await update_dashboard_metrics(event)
+    
+    # Check for specific transitions
+    if old_status == "running" and new_status == "failed":
+        await handle_runtime_failure(event)
+
+async def log_all_events(event):
+    """Log all events for auditing."""
+    await persist_event_to_database(event)
+
+if __name__ == "__main__":
+    asyncio.run(handle_job_events())
+```
+
+### Best Practices for Event Logging and Monitoring
+
+#### 1. Use Structured Event Details
+
+Always include structured data in event details to enable better filtering and processing:
+
+```python
+# Good - structured details
+event.details = {
+    "user_id": "user-123",
+    "priority": "high",
+    "retry_count": 2,
+    "custom_metadata": {
+        "source": "api",
+        "version": "1.0"
+    }
+}
+
+# Avoid - unstructured details
+event.details = "Job failed, will retry"
+```
+
+#### 2. Implement Proper Error Handling
+
+Event handlers should be resilient to errors:
+
+```python
+async def robust_event_handler(event):
+    """Robust event handler with proper error handling."""
+    try:
+        # Process the event
+        await process_event(event)
+    except Exception as e:
+        # Log the error but don't crash
+        print(f"Error processing event {event.job_id}: {e}")
+        
+        # Optionally send to dead-letter queue
+        await send_to_dead_letter_queue(event, e)
+```
+
+#### 3. Use Selective Event Processing
+
+Only process the events you need to avoid unnecessary overhead:
+
+```python
+# Good - specific event types
+processor.add_handler(JobEventType.COMPLETED, handle_completion)
+processor.add_handler(JobEventType.FAILED, handle_failure)
+
+# Avoid - processing all events when not needed
+processor.add_global_handler(handle_all_events)  # Only if truly needed
+```
+
+#### 4. Implement Event Batching for High Volume
+
+For high-volume event processing, implement batching:
+
+```python
+class BatchEventProcessor:
+    def __init__(self, batch_size=100, flush_interval=5.0):
+        self.batch = []
+        self.batch_size = batch_size
+        self.flush_interval = flush_interval
+        self.last_flush = time.time()
+    
+    async def process_event(self, event):
+        """Process events in batches."""
+        self.batch.append(event)
+        
+        # Flush if batch is full or interval elapsed
+        if (len(self.batch) >= self.batch_size or
+            time.time() - self.last_flush >= self.flush_interval):
+            await self.flush_batch()
+    
+    async def flush_batch(self):
+        """Flush the current batch of events."""
+        if not self.batch:
+            return
+            
+        # Process the batch
+        await process_event_batch(self.batch)
+        
+        # Reset batch
+        self.batch = []
+        self.last_flush = time.time()
+```
+
+### Extending the Event System for Custom Use Cases
+
+#### Custom Event Types
+
+You can extend the event system with custom event types:
+
+```python
+from naq.models import JobEvent, JobEventType
+
+# Add custom event type
+class CustomJobEventType(str, Enum):
+    CUSTOM_EVENT = "custom_event"
+    BUSINESS_LOGIC_COMPLETED = "business_logic_completed"
+
+# Create custom event
+custom_event = JobEvent(
+    job_id="job-123",
+    event_type=CustomJobEventType.CUSTOM_EVENT,
+    queue_name="custom_queue",
+    details={
+        "custom_field": "custom_value",
+        "business_metrics": {"metric1": 100, "metric2": 200}
+    }
+)
+
+# Log the custom event
+logger = get_shared_sync_logger()
+if logger:
+    logger.log_event(custom_event)
+```
+
+#### Custom Event Storage Backends
+
+You can implement custom storage backends by extending `BaseEventStorage`:
+
+```python
+from naq.events.storage import BaseEventStorage
+
+class CustomEventStorage(BaseEventStorage):
+    """Custom event storage backend."""
+    
+    async def store_event(self, event: JobEvent) -> None:
+        """Store event in custom backend."""
+        # Implement custom storage logic
+        await self._store_in_custom_backend(event)
+    
+    async def get_events(self, job_id: str) -> List[JobEvent]:
+        """Retrieve events for a job."""
+        # Implement custom retrieval logic
+        return await self._get_from_custom_backend(job_id)
+    
+    async def stream_events(self, job_id: str, **kwargs) -> AsyncIterator[JobEvent]:
+        """Stream events in real-time."""
+        # Implement custom streaming logic
+        async for event in self._stream_from_custom_backend(job_id, **kwargs):
+            yield event
+```
+
+#### Custom Event Processors
+
+You can create specialized event processors for specific use cases:
+
+```python
+class AnalyticsEventProcessor:
+    """Event processor for analytics and metrics."""
+    
+    def __init__(self, storage):
+        self.storage = storage
+        self.metrics = {}
+    
+    async def start(self):
+        """Start processing events for analytics."""
+        async for event in self.storage.stream_events(job_id="*"):
+            await self.update_metrics(event)
+    
+    async def update_metrics(self, event):
+        """Update analytics metrics based on events."""
+        # Update queue metrics
+        queue = event.queue_name or "unknown"
+        if queue not in self.metrics:
+            self.metrics[queue] = {
+                "total": 0,
+                "completed": 0,
+                "failed": 0,
+                "avg_duration": 0
+            }
+        
+        self.metrics[queue]["total"] += 1
+        
+        if event.event_type == JobEventType.COMPLETED:
+            self.metrics[queue]["completed"] += 1
+            if event.duration_ms:
+                # Update average duration
+                current_avg = self.metrics[queue]["avg_duration"]
+                completed = self.metrics[queue]["completed"]
+                self.metrics[queue]["avg_duration"] = (
+                    (current_avg * (completed - 1) + event.duration_ms) / completed
+                )
+        elif event.event_type == JobEventType.FAILED:
+            self.metrics[queue]["failed"] += 1
+```
+
+### Performance Considerations for Event Logging
+
+#### 1. Buffering and Batching
+
+The shared event logger automatically handles buffering and batching, but you can optimize it for your use case:
+
+```python
+# Configure for high-throughput scenarios
+configure_shared_logger(
+    enabled=True,
+    batch_size=500,  # Larger batch size
+    flush_interval=1.0,  # More frequent flushes
+    max_buffer_size=50000  # Larger buffer
+)
+
+# Configure for low-latency scenarios
+configure_shared_logger(
+    enabled=True,
+    batch_size=10,  # Smaller batch size
+    flush_interval=0.1,  # Very frequent flushes
+    max_buffer_size=1000  # Smaller buffer
+)
+```
+
+#### 2. Connection Management
+
+Always use the shared event logger to avoid connection overhead:
+
+```python
+# Good - using shared logger
+logger = get_shared_sync_logger()
+if logger:
+    logger.log_job_completed(job_id="job-123", worker_id="worker-1", duration_ms=1000)
+
+# Avoid - creating new loggers
+from naq.events import JobEventLogger
+storage = NATSJobEventStorage()
+logger = JobEventLogger(storage)  # Creates new connection
+```
+
+#### 3. Event Filtering
+
+Filter events at the source to reduce processing overhead:
+
+```python
+# Good - filter by job_id
+async for event in storage.stream_events(job_id="specific-job"):
+    await process_event(event)
+
+# Good - filter by event type
+async for event in storage.stream_events(job_id="*", event_type=JobEventType.COMPLETED):
+    await process_event(event)
+
+# Avoid - processing all events and filtering manually
+async for event in storage.stream_events(job_id="*"):
+    if event.event_type == JobEventType.COMPLETED:
+        await process_event(event)
+```
+
+#### 4. Memory Management
+
+Be mindful of memory usage when processing large volumes of events:
+
+```python
+class MemoryEfficientProcessor:
+    def __init__(self):
+        self.recent_events = {}
+        self.max_events_per_job = 100
+    
+    async def process_event(self, event):
+        """Process events with memory constraints."""
+        job_id = event.job_id
+        
+        # Initialize job event list if needed
+        if job_id not in self.recent_events:
+            self.recent_events[job_id] = []
+        
+        # Add event
+        self.recent_events[job_id].append(event)
+        
+        # Prune old events if limit exceeded
+        if len(self.recent_events[job_id]) > self.max_events_per_job:
+            self.recent_events[job_id] = self.recent_events[job_id][-self.max_events_per_job:]
+        
+        # Process the event
+        await self._process_single_event(event)
+```
+
+By following these best practices and patterns, you can build efficient, scalable event-driven applications with naq that leverage the full power of the event system.
+
+## Event-Driven Architecture Patterns
+
+The event-driven architecture of naq enables the implementation of sophisticated patterns for workflow orchestration, monitoring, and system integration. This section explores advanced patterns and techniques for building robust event-driven systems.
+
+### Event-Driven Architecture Patterns
+
+#### 1. Event Sourcing Pattern
+
+Event sourcing is a pattern where state changes are captured as a sequence of events. naq's event system naturally supports this pattern:
+
+```python
+class JobEventSourcing:
+    """Event sourcing implementation for job state management."""
+    
+    def __init__(self, storage):
+        self.storage = storage
+    
+    async def get_job_state(self, job_id: str) -> dict:
+        """Reconstruct job state from events."""
+        events = await self.storage.get_events(job_id)
+        
+        state = {
+            "job_id": job_id,
+            "status": "unknown",
+            "start_time": None,
+            "end_time": None,
+            "error": None,
+            "worker_id": None,
+            "queue_name": None
+        }
+        
+        for event in events:
+            self._apply_event_to_state(state, event)
+        
+        return state
+    
+    def _apply_event_to_state(self, state: dict, event: JobEvent):
+        """Apply a single event to the state."""
+        if event.event_type == JobEventType.ENQUEUED:
+            state["status"] = "enqueued"
+            state["queue_name"] = event.queue_name
+        elif event.event_type == JobEventType.STARTED:
+            state["status"] = "running"
+            state["worker_id"] = event.worker_id
+            state["start_time"] = event.timestamp
+        elif event.event_type == JobEventType.COMPLETED:
+            state["status"] = "completed"
+            state["end_time"] = event.timestamp
+        elif event.event_type == JobEventType.FAILED:
+            state["status"] = "failed"
+            state["error"] = event.error_message
+            state["end_time"] = event.timestamp
+        elif event.event_type == JobEventType.CANCELLED:
+            state["status"] = "cancelled"
+            state["end_time"] = event.timestamp
+```
+
+#### 2. CQRS (Command Query Responsibility Segregation)
+
+CQRS separates read and write operations, using events to synchronize between them:
+
+```python
+class JobReadModel:
+    """Read model for job queries."""
+    
+    def __init__(self):
+        self.jobs = {}  # job_id -> job_data
+    
+    async def update_from_event(self, event: JobEvent):
+        """Update read model from events."""
+        if event.job_id not in self.jobs:
+            self.jobs[event.job_id] = {
+                "id": event.job_id,
+                "status": "unknown",
+                "created_at": event.timestamp,
+                "updated_at": event.timestamp,
+                "events": []
+            }
+        
+        job = self.jobs[event.job_id]
+        job["events"].append(event)
+        job["updated_at"] = event.timestamp
+        
+        # Update status based on event type
+        if event.event_type == JobEventType.ENQUEUED:
+            job["status"] = "enqueued"
+            job["queue_name"] = event.queue_name
+        elif event.event_type == JobEventType.STARTED:
+            job["status"] = "running"
+            job["worker_id"] = event.worker_id
+        elif event.event_type == JobEventType.COMPLETED:
+            job["status"] = "completed"
+            job["duration_ms"] = event.duration_ms
+        elif event.event_type == JobEventType.FAILED:
+            job["status"] = "failed"
+            job["error"] = event.error_message
+    
+    def get_job(self, job_id: str) -> Optional[dict]:
+        """Get job data from read model."""
+        return self.jobs.get(job_id)
+    
+    def get_jobs_by_status(self, status: str) -> List[dict]:
+        """Get jobs by status."""
+        return [job for job in self.jobs.values() if job["status"] == status]
+```
+
+### Event-Driven Workflow Orchestration
+
+Use events to orchestrate complex workflows with multiple steps:
+
+```python
+class WorkflowOrchestrator:
+    """Orchestrates complex workflows using events."""
+    
+    def __init__(self, storage, queue):
+        self.storage = storage
+        self.queue = queue
+        self.workflows = {}  # workflow_id -> workflow_state
+    
+    async def start_workflow(self, workflow_id: str, initial_job_data: dict):
+        """Start a new workflow."""
+        workflow_state = {
+            "id": workflow_id,
+            "status": "started",
+            "current_step": 0,
+            "steps": [
+                {"name": "data_processing", "status": "pending"},
+                {"name": "validation", "status": "pending"},
+                {"name": "enrichment", "status": "pending"},
+                {"name": "notification", "status": "pending"}
+            ],
+            "job_ids": {}
+        }
+        
+        self.workflows[workflow_id] = workflow_state
+        
+        # Enqueue first step
+        await self._enqueue_workflow_step(workflow_id, 0, initial_job_data)
+    
+    async def handle_job_event(self, event: JobEvent):
+        """Handle job events to advance workflow."""
+        # Find workflow that contains this job
+        for workflow_id, workflow in self.workflows.items():
+            if event.job_id in workflow["job_ids"].values():
+                await self._advance_workflow(workflow_id, event)
+                break
+    
+    async def _advance_workflow(self, workflow_id: str, event: JobEvent):
+        """Advance workflow based on job completion."""
+        workflow = self.workflows[workflow_id]
+        
+        if event.event_type == JobEventType.COMPLETED:
+            # Find which step this job belongs to
+            for i, step in enumerate(workflow["steps"]):
+                if step.get("job_id") == event.job_id:
+                    step["status"] = "completed"
+                    
+                    # Enqueue next step
+                    if i + 1 < len(workflow["steps"]):
+                        await self._enqueue_workflow_step(
+                            workflow_id,
+                            i + 1,
+                            {"previous_result": event.details}
+                        )
+                    else:
+                        # Workflow completed
+                        workflow["status"] = "completed"
+                    break
+        
+        elif event.event_type == JobEventType.FAILED:
+            # Handle workflow failure
+            workflow["status"] = "failed"
+            workflow["error"] = event.error_message
+    
+    async def _enqueue_workflow_step(self, workflow_id: str, step_index: int, data: dict):
+        """Enqueue a specific workflow step."""
+        workflow = self.workflows[workflow_id]
+        step = workflow["steps"][step_index]
+        
+        # Enqueue job for this step
+        job = await self.queue.enqueue(
+            workflow_step_function,
+            step_name=step["name"],
+            workflow_id=workflow_id,
+            data=data
+        )
+        
+        step["status"] = "running"
+        step["job_id"] = job.job_id
+        workflow["job_ids"][step["name"]] = job.job_id
+```
+
+### Event Correlation and Tracing
+
+#### 1. Distributed Tracing
+
+Implement distributed tracing to track requests across multiple services:
+
+```python
+class EventTracer:
+    """Distributed tracing for job events."""
+    
+    def __init__(self):
+        self.traces = {}  # trace_id -> trace_data
+    
+    def start_trace(self, trace_id: str, job_id: str, operation: str) -> str:
+        """Start a new trace."""
+        span_id = f"{trace_id}-{uuid.uuid4().hex[:8]}"
+        
+        if trace_id not in self.traces:
+            self.traces[trace_id] = {
+                "id": trace_id,
+                "root_job_id": job_id,
+                "spans": [],
+                "start_time": time.time()
+            }
+        
+        self.traces[trace_id]["spans"].append({
+            "id": span_id,
+            "job_id": job_id,
+            "operation": operation,
+            "start_time": time.time(),
+            "status": "running"
+        })
+        
+        return span_id
+    
+    def finish_span(self, trace_id: str, span_id: str, status: str = "completed"):
+        """Finish a span."""
+        if trace_id in self.traces:
+            for span in self.traces[trace_id]["spans"]:
+                if span["id"] == span_id:
+                    span["end_time"] = time.time()
+                    span["duration_ms"] = (span["end_time"] - span["start_time"]) * 1000
+                    span["status"] = status
+                    break
+    
+    def get_trace(self, trace_id: str) -> Optional[dict]:
+        """Get trace data."""
+        return self.traces.get(trace_id)
+    
+    async def trace_job_event(self, event: JobEvent):
+        """Trace job events with correlation."""
+        # Extract trace context from event details
+        trace_id = event.details.get("trace_id")
+        span_id = event.details.get("span_id")
+        
+        if trace_id and span_id:
+            if event.event_type in [JobEventType.STARTED]:
+                self.start_trace(trace_id, event.job_id, event.queue_name or "unknown")
+            elif event.event_type in [JobEventType.COMPLETED, JobEventType.FAILED]:
+                status = "completed" if event.event_type == JobEventType.COMPLETED else "failed"
+                self.finish_span(trace_id, span_id, status)
+```
+
+#### 2. Event Correlation
+
+Correlate related events across different jobs and workflows:
+
+```python
+class EventCorrelator:
+    """Correlates related events across jobs and workflows."""
+    
+    def __init__(self):
+        self.correlations = {}  # correlation_id -> related_events
+        self.event_index = {}   # job_id -> correlation_ids
+    
+    def create_correlation(self, correlation_id: str, job_ids: List[str]):
+        """Create a correlation between multiple jobs."""
+        self.correlations[correlation_id] = {
+            "id": correlation_id,
+            "job_ids": job_ids,
+            "events": [],
+            "created_at": time.time()
+        }
+        
+        # Index jobs by correlation
+        for job_id in job_ids:
+            if job_id not in self.event_index:
+                self.event_index[job_id] = []
+            self.event_index[job_id].append(correlation_id)
+    
+    async def add_event(self, event: JobEvent):
+        """Add an event to relevant correlations."""
+        if event.job_id in self.event_index:
+            for correlation_id in self.event_index[event.job_id]:
+                if correlation_id in self.correlations:
+                    self.correlations[correlation_id]["events"].append(event)
+    
+    def get_correlation(self, correlation_id: str) -> Optional[dict]:
+        """Get correlation data."""
+        return self.correlations.get(correlation_id)
+    
+    def get_correlated_jobs(self, job_id: str) -> List[str]:
+        """Get all jobs correlated with the given job."""
+        correlated_jobs = []
+        
+        if job_id in self.event_index:
+            for correlation_id in self.event_index[job_id]:
+                correlation = self.correlations.get(correlation_id)
+                if correlation:
+                    correlated_jobs.extend(correlation["job_ids"])
+        
+        # Remove the original job from the list
+        return [job for job in correlated_jobs if job != job_id]
+```
+
+### Building Monitoring and Alerting on Events
+
+#### 1. Real-time Dashboard
+
+Build a real-time dashboard that updates based on events:
+
+```python
+class DashboardMetrics:
+    """Real-time dashboard metrics based on events."""
+    
+    def __init__(self):
+        self.metrics = {
+            "total_jobs": 0,
+            "completed_jobs": 0,
+            "failed_jobs": 0,
+            "running_jobs": 0,
+            "queue_sizes": {},
+            "average_duration": {},
+            "error_rates": {}
+        }
+        self.recent_events = []
+    
+    async def update_from_event(self, event: JobEvent):
+        """Update metrics based on events."""
+        self.recent_events.append(event)
+        
+        # Keep only recent events (last 1000)
+        if len(self.recent_events) > 1000:
+            self.recent_events = self.recent_events[-1000:]
+        
+        # Update queue metrics
+        queue = event.queue_name or "unknown"
+        if queue not in self.metrics["queue_sizes"]:
+            self.metrics["queue_sizes"][queue] = 0
+            self.metrics["average_duration"][queue] = 0
+            self.metrics["error_rates"][queue] = 0
+        
+        # Update based on event type
+        if event.event_type == JobEventType.ENQUEUED:
+            self.metrics["total_jobs"] += 1
+            self.metrics["queue_sizes"][queue] += 1
+        elif event.event_type == JobEventType.STARTED:
+            self.metrics["running_jobs"] += 1
+        elif event.event_type == JobEventType.COMPLETED:
+            self.metrics["completed_jobs"] += 1
+            self.metrics["running_jobs"] -= 1
+            self.metrics["queue_sizes"][queue] -= 1
+            
+            # Update average duration
+            if event.duration_ms:
+                current_avg = self.metrics["average_duration"][queue]
+                completed_count = self.metrics["completed_jobs"]
+                self.metrics["average_duration"][queue] = (
+                    (current_avg * (completed_count - 1) + event.duration_ms) / completed_count
+                )
+        elif event.event_type == JobEventType.FAILED:
+            self.metrics["failed_jobs"] += 1
+            self.metrics["running_jobs"] -= 1
+            self.metrics["queue_sizes"][queue] -= 1
+            
+            # Update error rate
+            total_jobs = self.metrics["total_jobs"]
+            if total_jobs > 0:
+                self.metrics["error_rates"][queue] = (
+                    self.metrics["failed_jobs"] / total_jobs
+                ) * 100
+    
+    def get_dashboard_data(self) -> dict:
+        """Get current dashboard data."""
+        return {
+            "metrics": self.metrics,
+            "recent_events": self.recent_events[-50:],  # Last 50 events
+            "timestamp": time.time()
+        }
+```
+
+#### 2. Alerting System
+
+Implement an alerting system based on event patterns:
+
+```python
+class AlertingSystem:
+    """Alerting system based on event patterns."""
+    
+    def __init__(self):
+        self.alerts = []
+        self.rules = []
+        self.event_history = []
+    
+    def add_alert_rule(self, rule: dict):
+        """Add an alert rule."""
+        self.rules.append(rule)
+    
+    async def process_event(self, event: JobEvent):
+        """Process event against alert rules."""
+        self.event_history.append(event)
+        
+        # Keep history manageable
+        if len(self.event_history) > 10000:
+            self.event_history = self.event_history[-5000:]
+        
+        # Check each rule
+        for rule in self.rules:
+            if await self._evaluate_rule(rule, event):
+                await self._trigger_alert(rule, event)
+    
+    async def _evaluate_rule(self, rule: dict, event: JobEvent) -> bool:
+        """Evaluate if an alert rule is triggered."""
+        rule_type = rule.get("type")
+        
+        if rule_type == "threshold":
+            return await self._evaluate_threshold_rule(rule, event)
+        elif rule_type == "pattern":
+            return await self._evaluate_pattern_rule(rule, event)
+        elif rule_type == "rate":
+            return await self._evaluate_rate_rule(rule, event)
+        
+        return False
+    
+    async def _evaluate_threshold_rule(self, rule: dict, event: JobEvent) -> bool:
+        """Evaluate threshold-based alert rule."""
+        metric = rule.get("metric")
+        threshold = rule.get("threshold")
+        operator = rule.get("operator", ">")
+        
+        if metric == "failure_rate":
+            # Calculate failure rate for the queue
+            queue_events = [e for e in self.event_history
+                           if e.queue_name == event.queue_name]
+            if len(queue_events) > 0:
+                failures = len([e for e in queue_events
+                              if e.event_type == JobEventType.FAILED])
+                rate = (failures / len(queue_events)) * 100
+                
+                if operator == ">" and rate > threshold:
+                    return True
+                elif operator == "<" and rate < threshold:
+                    return True
+        
+        return False
+    
+    async def _evaluate_pattern_rule(self, rule: dict, event: JobEvent) -> bool:
+        """Evaluate pattern-based alert rule."""
+        pattern = rule.get("pattern")
+        time_window = rule.get("time_window", 300)  # 5 minutes
+        
+        # Look for patterns in recent events
+        recent_events = [e for e in self.event_history
+                        if time.time() - e.timestamp <= time_window]
+        
+        if pattern == "consecutive_failures":
+            # Check for consecutive failures
+            consecutive_failures = 0
+            for e in reversed(recent_events):
+                if e.event_type == JobEventType.FAILED:
+                    consecutive_failures += 1
+                    if consecutive_failures >= rule.get("count", 3):
+                        return True
+                else:
+                    break
+        
+        return False
+    
+    async def _evaluate_rate_rule(self, rule: dict, event: JobEvent) -> bool:
+        """Evaluate rate-based alert rule."""
+        metric = rule.get("metric")
+        threshold = rule.get("threshold")
+        time_window = rule.get("time_window", 60)  # 1 minute
+        
+        # Count events in time window
+        recent_events = [e for e in self.event_history
+                        if time.time() - e.timestamp <= time_window]
+        
+        if metric == "events_per_minute":
+            rate = len(recent_events) / (time_window / 60)
+            return rate > threshold
+        
+        return False
+    
+    async def _trigger_alert(self, rule: dict, event: JobEvent):
+        """Trigger an alert."""
+        alert = {
+            "id": f"alert-{uuid.uuid4().hex[:8]}",
+            "rule_id": rule.get("id"),
+            "rule_name": rule.get("name"),
+            "severity": rule.get("severity", "medium"),
+            "message": rule.get("message", "Alert triggered"),
+            "triggered_by": event.job_id,
+            "timestamp": time.time(),
+            "status": "active"
+        }
+        
+        self.alerts.append(alert)
+        
+        # Send notification
+        await self._send_notification(alert)
+    
+    async def _send_notification(self, alert: dict):
+        """Send alert notification."""
+        # Implement notification logic (email, Slack, PagerDuty, etc.)
+        print(f"ALERT: {alert['message']} (Severity: {alert['severity']})")
+        
+        # In a real implementation, you would integrate with notification services
+        # await send_slack_notification(alert)
+        # await send_email_notification(alert)
+        # await send_pagerduty_notification(alert)
+```
+
+#### 3. Event-Driven Auto-scaling
+
+Implement auto-scaling based on event metrics:
+
+```python
+class AutoScaler:
+    """Auto-scaling based on event metrics."""
+    
+    def __init__(self, min_workers=1, max_workers=10):
+        self.min_workers = min_workers
+        self.max_workers = max_workers
+        self.current_workers = min_workers
+        self.metrics_history = []
+    
+    async def process_event(self, event: JobEvent):
+        """Process events for auto-scaling decisions."""
+        # Update metrics
+        self._update_metrics(event)
+        
+        # Check scaling conditions every 10 events
+        if len(self.metrics_history) % 10 == 0:
+            await self._evaluate_scaling()
+    
+    def _update_metrics(self, event: JobEvent):
+        """Update scaling metrics."""
+        self.metrics_history.append({
+            "timestamp": time.time(),
+            "event_type": event.event_type,
+            "queue_name": event.queue_name,
+            "duration_ms": event.duration_ms
+        })
+        
+        # Keep only recent metrics (last hour)
+        one_hour_ago = time.time() - 3600
+        self.metrics_history = [
+            m for m in self.metrics_history
+            if m["timestamp"] > one_hour_ago
+        ]
+    
+    async def _evaluate_scaling(self):
+        """Evaluate if scaling is needed."""
+        if len(self.metrics_history) < 10:
+            return
+        
+        # Calculate current metrics
+        recent_metrics = [m for m in self.metrics_history
+                         if time.time() - m["timestamp"] <= 300]  # Last 5 minutes
+        
+        # Calculate queue depth
+        enqueued = len([m for m in recent_metrics if m["event_type"] == JobEventType.ENQUEUED])
+        processed = len([m for m in recent_metrics
+                        if m["event_type"] in [JobEventType.COMPLETED, JobEventType.FAILED]])
+        queue_depth = enqueued - processed
+        
+        # Calculate average processing time
+        completed_events = [m for m in recent_metrics
+                           if m["event_type"] == JobEventType.COMPLETED and m["duration_ms"]]
+        avg_duration = sum(m["duration_ms"] for m in completed_events) / len(completed_events) if completed_events else 0
+        
+        # Scaling decisions
+        if queue_depth > 50 and avg_duration > 5000:  # Scale up
+            await self._scale_up()
+        elif queue_depth < 10 and avg_duration < 1000:  # Scale down
+            await self._scale_down()
+    
+    async def _scale_up(self):
+        """Scale up worker count."""
+        if self.current_workers < self.max_workers:
+            self.current_workers += 1
+            await self._start_worker()
+            print(f"Scaled up to {self.current_workers} workers")
+    
+    async def _scale_down(self):
+        """Scale down worker count."""
+        if self.current_workers > self.min_workers:
+            self.current_workers -= 1
+            await self._stop_worker()
+            print(f"Scaled down to {self.current_workers} workers")
+    
+    async def _start_worker(self):
+        """Start a new worker."""
+        # Implement worker startup logic
+        pass
+    
+    async def _stop_worker(self):
+        """Stop a worker."""
+        # Implement worker shutdown logic
+        pass
+```
+
+These patterns and techniques demonstrate the power and flexibility of naq's event-driven architecture. By combining these patterns, you can build sophisticated, resilient, and scalable systems that can handle complex business requirements while maintaining excellent performance and reliability.

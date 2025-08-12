@@ -13,7 +13,7 @@ dependencies = [
     "typer>=0.9.0", # Keep typer[all] for CLI convenience
     "loguru>=0.7.0",
     "croniter>=1.4.0",
-    "rich>=13.3.0",      # For prettier CLI output (tables, etc.)
+    "rich>=13.3.0", # For prettier CLI output (tables, etc.)
     "anyio>=4.9.0",
     "msgspec>=0.18.0",
 ]

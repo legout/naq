@@ -25,9 +25,9 @@ from .connection import (
     get_nats_connection,
 )
 from .exceptions import NaqException, SerializationError
-from .job import Job
+from .events.shared_logger import get_shared_async_logger, configure_shared_logger
+from .models import Job, JOB_STATUS
 from .results import Results
-from .job import JOB_STATUS
 from .settings import (
     DEFAULT_NATS_URL,
     DEFAULT_RESULT_TTL_SECONDS,
@@ -624,8 +624,21 @@ class Worker:
         self._worker_status_manager = WorkerStatusManager(self)
         self._job_status_manager = JobStatusManager(self)
         self._failed_job_handler = FailedJobHandler(self)
+        
+        # Event logger (initialized lazily to avoid circular dependencies)
+        self._event_logger = None
 
         setup_logging()  # Setup logging
+        
+        # Configure shared event logger
+        configure_shared_logger(storage_url=nats_url)
+
+    async def _get_event_logger(self):
+        """Get the shared event logger instance."""
+        if self._event_logger is None:
+            # Get the shared event logger instance
+            self._event_logger = await get_shared_async_logger()
+        return self._event_logger
 
     async def _connect(self) -> None:
         """Establish NATS connection, JetStream context, and initialize components."""
@@ -774,6 +787,24 @@ class Worker:
                     await msg.nak()
                 return  # Do not process if shutdown is initiated
 
+            # Log job started event
+            logger_instance = await self._get_event_logger()
+            if logger_instance:
+                await logger_instance.log_job_started(
+                    job_id=job.job_id,
+                    worker_id=self.worker_id,
+                    queue_name=job.queue_name,
+                    nats_subject=msg.subject if hasattr(msg, 'subject') else None,
+                    nats_sequence=None,  # TODO: Extract proper sequence number from msg.metadata
+                    details={
+                        "function_name": job.function_name,
+                        "job_timeout": job.timeout,
+                        "max_retries": job.max_retries,
+                        "job_kwargs": job.kwargs,
+                        "dependency_ids": job.dependency_ids,
+                    }
+                )
+
             # Update worker status to busy with this job
             await self._worker_status_manager.update_status(
                 WORKER_STATUS.BUSY, job_id=job.job_id
@@ -789,8 +820,32 @@ class Worker:
                 job.error = f"Job timed out after {job.timeout} seconds"
                 job.traceback = traceback.format_exc()
 
+            # Calculate execution duration
+            import time
+            duration_ms = (time.time() - job._start_time) * 1000 if job._start_time else 0
+
             # Store result (which includes error/traceback if any)
             await self._job_status_manager.store_result(job)
+
+            # Log job completed event
+            logger_instance = await self._get_event_logger()
+            if logger_instance:
+                await logger_instance.log_job_completed(
+                    job_id=job.job_id,
+                    worker_id=self.worker_id,
+                    duration_ms=duration_ms,
+                    queue_name=job.queue_name,
+                    nats_subject=msg.subject if hasattr(msg, 'subject') else None,
+                    nats_sequence=None,  # TODO: Extract proper sequence number from msg.metadata
+                    details={
+                        "function_name": job.function_name,
+                        "job_timeout": job.timeout,
+                        "max_retries": job.max_retries,
+                        "job_kwargs": job.kwargs,
+                        "dependency_ids": job.dependency_ids,
+                        "result_type": type(job.result).__name__ if job.result is not None else None,
+                    }
+                )
 
             # Handle failure if needed (e.g., publish to dead-letter queue)
             if (
@@ -807,6 +862,32 @@ class Worker:
                 f"Error processing job {job.job_id if job else 'unknown'}: {e}",
                 exc_info=True,
             )
+            
+            # Log job failed event
+            if job:
+                import time
+                duration_ms = (time.time() - job._start_time) * 1000 if job._start_time else 0
+                logger_instance = await self._get_event_logger()
+                if logger_instance:
+                    await logger_instance.log_job_failed(
+                        job_id=job.job_id,
+                        worker_id=self.worker_id,
+                        error_type=type(e).__name__,
+                        error_message=str(e),
+                        duration_ms=duration_ms,
+                        queue_name=job.queue_name,
+                        nats_subject=msg.subject if hasattr(msg, 'subject') else None,
+                        nats_sequence=None,  # TODO: Extract proper sequence number from msg.metadata
+                        details={
+                            "function_name": job.function_name,
+                            "job_timeout": job.timeout,
+                            "max_retries": job.max_retries,
+                            "job_kwargs": job.kwargs,
+                            "dependency_ids": job.dependency_ids,
+                            "traceback": job.traceback,
+                        }
+                    )
+            
             # If we have a NATS message and it has a term() method, terminate it
             if hasattr(msg, "term"):
                 await msg.term()
@@ -835,6 +916,29 @@ class Worker:
                 f"Job {job.job_id} failed, scheduling retry {attempt}/{max_retries} "
                 f"after {delay:.2f}s delay."
             )
+            
+            # Log retry scheduled event
+            logger_instance = await self._get_event_logger()
+            if logger_instance:
+                await logger_instance.log_job_retry_scheduled(
+                    job_id=job.job_id,
+                    worker_id=self.worker_id,
+                    delay_seconds=delay,
+                    queue_name=job.queue_name,
+                    nats_subject=msg.subject if hasattr(msg, 'subject') else None,
+                    nats_sequence=None,  # TODO: Extract proper sequence number from msg.metadata
+                    details={
+                        "function_name": job.function_name,
+                        "job_timeout": job.timeout,
+                        "max_retries": job.max_retries,
+                        "job_kwargs": job.kwargs,
+                        "dependency_ids": job.dependency_ids,
+                        "retry_attempt": attempt,
+                        "retry_delay": delay,
+                        "error_message": job.error,
+                    }
+                )
+            
             try:
                 await msg.nak(delay=delay)
                 logger.debug(f"Message Nak'd for retry: Sid='{msg.sid}'")
@@ -849,6 +953,31 @@ class Worker:
             logger.error(
                 f"Job {job.job_id} failed after {attempt - 1} retries. Moving to failed queue."
             )
+            
+            # Log job failed event for terminal failure
+            duration_ms = (time.time() - job._start_time) * 1000 if job._start_time else 0
+            logger_instance = await self._get_event_logger()
+            if logger_instance:
+                await logger_instance.log_job_failed(
+                    job_id=job.job_id,
+                    worker_id=self.worker_id,
+                    error_type="MaxRetriesExceeded",
+                    error_message=job.error or "Job failed after maximum retries",
+                    duration_ms=duration_ms,
+                    queue_name=job.queue_name,
+                    nats_subject=msg.subject if hasattr(msg, 'subject') else None,
+                    nats_sequence=None,  # TODO: Extract proper sequence number from msg.metadata
+                    details={
+                        "function_name": job.function_name,
+                        "job_timeout": job.timeout,
+                        "max_retries": job.max_retries,
+                        "job_kwargs": job.kwargs,
+                        "dependency_ids": job.dependency_ids,
+                        "retry_attempt": attempt,
+                        "max_retries_exceeded": True,
+                    }
+                )
+            
             await self._job_status_manager.update_job_status(
                 job.job_id, JOB_STATUS.FAILED
             )
@@ -881,6 +1010,31 @@ class Worker:
                     f"Worker processing error: {error}"  # Assign error for storage
                 )
                 job.traceback = traceback.format_exc()
+                
+                # Log job failed event for unexpected error
+                duration_ms = (time.time() - job._start_time) * 1000 if job._start_time else 0
+                logger_instance = await self._get_event_logger()
+                if logger_instance:
+                    await logger_instance.log_job_failed(
+                        job_id=job.job_id,
+                        worker_id=self.worker_id,
+                        error_type=type(error).__name__,
+                        error_message=str(error),
+                        duration_ms=duration_ms,
+                        queue_name=job.queue_name,
+                        nats_subject=msg.subject if hasattr(msg, 'subject') else None,
+                        nats_sequence=None,  # TODO: Extract proper sequence number from msg.metadata
+                        details={
+                            "function_name": job.function_name,
+                            "job_timeout": job.timeout,
+                            "max_retries": job.max_retries,
+                            "job_kwargs": job.kwargs,
+                            "dependency_ids": job.dependency_ids,
+                            "unexpected_error": True,
+                            "traceback": job.traceback,
+                        }
+                    )
+                
                 await self._job_status_manager.update_job_status(
                     job.job_id, JOB_STATUS.FAILED
                 )
@@ -901,6 +1055,11 @@ class Worker:
 
         try:
             await self._connect()
+
+            # Start event logger
+            logger_instance = await self._get_event_logger()
+            if logger_instance:
+                await logger_instance.start()  # This is now async
 
             # Register worker initially
             await self._worker_status_manager.update_status(
@@ -980,6 +1139,13 @@ class Worker:
         # Set shutdown event first to prevent new message processing
         self._shutdown_event.set()
         self._running = False
+
+        # Stop event logger
+        try:
+            if self._event_logger:
+                await self._event_logger.stop()
+        except Exception as e:
+            logger.error(f"Error stopping event logger: {e}")
 
         # Stop heartbeat and update status first
         try:

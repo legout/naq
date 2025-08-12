@@ -237,3 +237,112 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+## Example 5: Custom Event Handlers
+
+The event system allows you to build powerful, reactive workflows by responding to job lifecycle events. This example demonstrates how to create a custom event handler that performs an action when a job of a certain type fails.
+
+To run this example, you will need:
+1. A NATS server running.
+2. Event logging enabled (`NAQ_EVENTS_ENABLED=true`).
+3. A worker running to process jobs.
+4. This script running to handle events.
+
+```python
+# custom_event_handler.py
+import asyncio
+import os
+from naq import enqueue
+from naq.events import AsyncJobEventProcessor, NATSJobEventStorage, JobEventType, JobEvent
+
+# Ensure event logging is enabled for this example to work
+os.environ["NAQ_EVENTS_ENABLED"] = "true"
+
+# A task that might fail
+async def flaky_task(task_id: str):
+    print(f"[Task {task_id}] Starting risky operation...")
+    await asyncio.sleep(1)
+    if task_id == "fail-on-purpose":
+        raise ValueError("This task was designed to fail!")
+    print(f"[Task {task_id}] Operation completed successfully.")
+    return f"Task {task_id} finished."
+
+# Our custom event handler
+async def on_job_failure(event: JobEvent):
+    """
+    This function is called whenever a job fails.
+    """
+    print("=" * 50)
+    print("🚨 CUSTOM HANDLER TRIGGERED: JOB FAILURE DETECTED! 🚨")
+    print("=" * 50)
+    print(f"  Job ID:       {event.job_id}")
+    print(f"  Error Type:    {event.error_type}")
+    print(f"  Error Message: {event.error_message}")
+    print(f"  Queue:         {event.queue_name}")
+    print(f"  Worker:        {event.worker_id}")
+    print(f"  Timestamp:     {event.timestamp}")
+    print("=" * 50)
+    # Here you could add more complex logic, like:
+    # - Sending a notification to Slack or PagerDuty
+    # - Writing to a database for analytics
+    # - Triggering a recovery workflow
+
+async def main():
+    # --- Setup ---
+    print("Setting up event processor and enqueuing jobs...")
+
+    # 1. Create the event storage and processor
+    storage = NATSJobEventStorage()
+    processor = AsyncJobEventProcessor(storage)
+
+    # 2. Register our custom handler for FAILED events
+    processor.add_handler(JobEventType.FAILED, on_job_failure)
+    
+    # 3. Start the processor in the background
+    # It will begin listening for events immediately.
+    processor_task = asyncio.create_task(processor.start())
+
+    # Give the processor a moment to start up
+    await asyncio.sleep(2)
+
+    # --- Enqueue Jobs ---
+    print("\nEnqueuing a successful job and a job that will fail...")
+    # Enqueue a job that will succeed
+    await enqueue(flaky_task, "success-1", queue_name="example_queue")
+    
+    # Enqueue a job that is designed to fail
+    await enqueue(flaky_task, "fail-on-purpose", queue_name="example_queue")
+
+    print("Jobs enqueued. Make sure a worker is running to process them.")
+    print("The custom handler will be called when the 'fail-on-purpose' job fails.")
+
+    # --- Keep Running ---
+    try:
+        # Keep the script running to allow the processor to handle events
+        print("\nWaiting for events... Press Ctrl+C to exit.")
+        while True:
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
+        print("\nShutting down...")
+    finally:
+        # Ensure the processor is stopped cleanly
+        await processor.stop()
+        await processor_task # Wait for the processor task to finish
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+To see this in action:
+
+1.  **Start a worker** in one terminal:
+    ```bash
+    NAQ_EVENTS_ENABLED=true naq worker example_queue
+    ```
+
+2.  **Run the custom handler script** in another terminal:
+    ```bash
+    python custom_event_handler.py
+    ```
+
+You will see the handler script enqueue two jobs. The worker will pick them up. When the `fail-on-purpose` job fails, you will see the custom "🚨 CUSTOM HANDLER TRIGGERED" message printed by the `on_job_failure` function in the handler script's terminal, demonstrating the reactive power of the event system.

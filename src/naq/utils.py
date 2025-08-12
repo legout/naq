@@ -53,7 +53,7 @@ def run_async_from_sync(
             raise
 
 
-def setup_logging(level: str = None):
+def setup_logging(level: str | None = None):
     """Configures logging based on environment variables or provided level string using loguru."""
     logger.remove()  # Remove all existing handlers
 

@@ -6,7 +6,7 @@ from dataclasses import asdict, is_dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union, Protocol
 
 from .exceptions import SerializationError
-from .job import JOB_STATUS
+from .models import JOB_STATUS, Job
 from .settings import (
     DEFAULT_QUEUE_NAME,
     JOB_SERIALIZER,
@@ -28,24 +28,24 @@ class Serializer(Protocol):
     """Protocol defining the interface for job serializers."""
 
     @staticmethod
-    def serialize_job(job: "Job") -> bytes:
+    def serialize_job(job: Job) -> bytes:
         """Serialize a job to bytes."""
         ...
 
     @staticmethod
-    def deserialize_job(data: bytes) -> "Job":
+    def deserialize_job(data: bytes) -> Job:
         """Deserialize bytes to a job."""
         ...
 
     @staticmethod
-    def serialize_failed_job(job: "Job") -> bytes:
+    def serialize_failed_job(job: Job) -> bytes:
         """Serialize a failed job to bytes."""
         ...
 
     @staticmethod
     def serialize_result(
         result: Any,
-        status: str,
+        status: JOB_STATUS,
         error: Optional[str] = None,
         traceback_str: Optional[str] = None,
     ) -> bytes:

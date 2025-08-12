@@ -19,7 +19,8 @@ from .connection import (
 from .exceptions import ConfigurationError
 from .exceptions import NaqConnectionError
 from .exceptions import JobNotFoundError, NaqException
-from .job import Job, RetryDelayType
+from .events.shared_logger import get_shared_sync_logger, configure_shared_logger
+from .models import Job, RetryDelayType
 from .settings import (
     DEFAULT_QUEUE_NAME,
     DEFAULT_NATS_URL,
@@ -135,9 +136,30 @@ class ScheduledJobManager:
         logger.info(f"Attempting to cancel scheduled job '{job_id}'")
         kv = await self.get_kv()
         try:
+            # Get job details before deletion for event logging
+            entry = await kv.get(job_id.encode("utf-8"))
+            if entry is None:
+                logger.warning(f"Scheduled job '{job_id}' not found. Cannot cancel.")
+                return False
+                
+            schedule_data = cloudpickle.loads(entry.value)
+            queue_name = schedule_data.get("queue_name", self.queue_name)
+            
             # Use delete with purge=True to ensure it's fully removed
             await kv.delete(job_id.encode("utf-8"), purge=True)
             logger.info(f"Scheduled job '{job_id}' cancelled successfully.")
+            
+            # Log job cancelled event
+            event_logger = get_shared_sync_logger()
+            if event_logger:
+                event_logger.log_job_cancelled(
+                    job_id=job_id,
+                    queue_name=queue_name,
+                    nats_subject=None,  # No NATS subject for KV operations
+                    nats_sequence=None,  # No NATS sequence for KV operations
+                    details={"cancelled_by": "user", "reason": "scheduled_job_cancellation"}
+                )
+            
             return True
         except KeyNotFoundError:
             logger.warning(f"Scheduled job '{job_id}' not found. Cannot cancel.")
@@ -168,16 +190,33 @@ class ScheduledJobManager:
                 raise JobNotFoundError(f"Scheduled job '{job_id}' not found.")
 
             schedule_data = cloudpickle.loads(entry.value)
-            if schedule_data.get("status") == status:
+            old_status = schedule_data.get("status")
+            if old_status == status:
                 logger.info(f"Scheduled job '{job_id}' already has status '{status}'.")
                 return True  # No change needed
 
+            queue_name = schedule_data.get("queue_name", self.queue_name)
+            
             schedule_data["status"] = status
             serialized_schedule_data = cloudpickle.dumps(schedule_data)
 
             # Use update with revision check for optimistic concurrency control
             await kv.update(entry.key, serialized_schedule_data, last=entry.revision)
             logger.info(f"Scheduled job '{job_id}' status updated to '{status}'.")
+            
+            # Log job status changed event
+            event_logger = get_shared_sync_logger()
+            if event_logger:
+                event_logger.log_job_status_changed(
+                    job_id=job_id,
+                    queue_name=queue_name,
+                    old_status=old_status,
+                    new_status=status,
+                    nats_subject=None,  # No NATS subject for KV operations
+                    nats_sequence=None,  # No NATS sequence for KV operations
+                    details={"updated_by": "user", "reason": "scheduled_job_status_update"}
+                )
+            
             return True
         except KeyNotFoundError:
             raise JobNotFoundError(f"Scheduled job '{job_id}' not found.")
@@ -376,6 +415,9 @@ class Queue:
         self._prefer_thread_local = prefer_thread_local
 
         setup_logging()  # Ensure logging is set up
+        
+        # Configure shared event logger
+        configure_shared_logger(storage_url=nats_url)
 
     async def __aenter__(self):
         """Async context manager entry."""
@@ -475,6 +517,18 @@ class Queue:
             logger.info(
                 f"Job {job.job_id} published successfully. Stream: {ack.stream}, Seq: {ack.seq}"
             )
+            
+            # Log job enqueued event
+            event_logger = get_shared_sync_logger()
+            if event_logger:
+                event_logger.log_job_enqueued(
+                    job_id=job.job_id,
+                    queue_name=self.name,
+                    nats_subject=self.subject,
+                    nats_sequence=ack.seq,
+                    details={"function_name": getattr(job.function, "__name__", str(job.function))}
+                )
+            
             return job
         except Exception as e:
             logger.error(f"Error enqueueing job {job.job_id}: {e}", exc_info=True)
@@ -532,6 +586,19 @@ class Queue:
         logger.info(
             f"Scheduled job {job.job_id} ({func.__name__}) to run at {dt} on queue '{self.name}'"
         )
+        
+        # Log job scheduled event
+        event_logger = get_shared_sync_logger()
+        if event_logger:
+            event_logger.log_job_scheduled(
+                job_id=job.job_id,
+                queue_name=self.name,
+                scheduled_timestamp_utc=scheduled_timestamp,
+                nats_subject=None,  # No NATS subject for KV operations
+                nats_sequence=None,  # No NATS sequence for KV operations
+                details={"function_name": getattr(job.function, "__name__", str(job.function))}
+            )
+        
         return job
 
     async def enqueue_in(
@@ -670,6 +737,24 @@ class Queue:
             f"Scheduled recurring job {job.job_id} ({func.__name__}) starting at "
             f"{datetime.datetime.fromtimestamp(first_run_ts, timezone.utc)} on queue '{self.name}'"
         )
+        
+        # Log job scheduled event
+        event_logger = get_shared_sync_logger()
+        if event_logger:
+            event_logger.log_job_scheduled(
+                job_id=job.job_id,
+                queue_name=self.name,
+                scheduled_timestamp_utc=first_run_ts,
+                nats_subject=None,  # No NATS subject for KV operations
+                nats_sequence=None,  # No NATS sequence for KV operations
+                details={
+                    "function_name": getattr(job.function, "__name__", str(job.function)),
+                    "cron": cron,
+                    "interval_seconds": interval_seconds,
+                    "repeat": repeat
+                }
+            )
+        
         return job
 
     async def purge(self) -> int:

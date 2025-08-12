@@ -19,8 +19,9 @@ Ready to dive in? Check out the [**Quickstart Guide**](quickstart.qmd) to get yo
 *   **Simple API**: Familiar and easy-to-use API, similar to RQ.
 *   **Asynchronous Core**: Built with `asyncio` and `nats-py` for high performance.
 *   **Persistent & Reliable**: Uses NATS JetStream for robust job persistence and guaranteed delivery.
+*   **Event Logging & Monitoring**: Comprehensive event system for tracking job lifecycles and building reactive applications.
 *   **Scheduled & Recurring Jobs**: Supports cron-style, interval-based, and one-time scheduled tasks.
 *   **Job Dependencies**: Create complex workflows by defining dependencies between jobs.
 *   **Automatic Retries**: Configurable retry mechanism with exponential backoff for failed jobs.
 *   **Web Dashboard**: An optional, real-time dashboard for monitoring queues, workers, and jobs.
-*   **CLI**: A powerful command-line interface for managing your queues and workers.
+*   **CLI**: A powerful command-line interface for managing your queues and workers, including real-time event monitoring.

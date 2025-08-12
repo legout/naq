@@ -1,0 +1,398 @@
+---
+title: "Events API"
+---
+
+The `naq.events` module provides a comprehensive event logging and monitoring system for `naq`. It allows you to track the entire lifecycle of your jobs, from enqueuing to completion or failure, and react to these events in real-time.
+
+This module is built on top of NATS JetStream, ensuring that events are durable and can be processed even if consumers are offline.
+
+## Core Components
+
+### `naq.events.JobEventType`
+
+An enumeration of all possible event types in a job's lifecycle.
+
+```python
+class JobEventType(str, Enum):
+    ENQUEUED = "enqueued"
+    STARTED = "started"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    RETRY_SCHEDULED = "retry_scheduled"
+    SCHEDULED = "scheduled"
+    SCHEDULE_TRIGGERED = "schedule_triggered"
+    CANCELLED = "cancelled"
+    STATUS_CHANGED = "status_changed"
+```
+
+#### Event Type Descriptions
+
+| Event Type | Description | Triggered By |
+|------------|-------------|--------------|
+| `ENQUEUED` | Job has been added to a queue | Client/Queue |
+| `STARTED` | Job has begun execution by a worker | Worker |
+| `COMPLETED` | Job finished successfully | Worker |
+| `FAILED` | Job failed during execution | Worker |
+| `RETRY_SCHEDULED` | Job failed and will be retried | Worker |
+| `SCHEDULED` | Job has been scheduled for future execution | Scheduler |
+| `SCHEDULE_TRIGGERED` | Scheduled job is now being enqueued | Scheduler |
+| `CANCELLED` | Job was cancelled before or during execution | Worker/Client |
+| `STATUS_CHANGED` | Job status has changed (any transition) | All Components |
+
+### `naq.events.JobEvent`
+
+A `msgspec.Struct` representing a single event in a job's lifecycle. This is the primary data structure for all event information.
+
+#### Properties
+
+| Property          | Type                               | Description                                                                 |
+| ----------------- | ---------------------------------- | --------------------------------------------------------------------------- |
+| `job_id`          | `str`                              | The unique identifier of the job this event belongs to.                      |
+| `event_type`      | `JobEventType`                     | The type of event that occurred.                                            |
+| `timestamp`       | `float`                            | The UTC timestamp when the event was generated.                             |
+| `worker_id`       | `str \| None`                      | The ID of the worker that processed the job (if applicable).                |
+| `queue_name`      | `str \| None`                      | The name of the queue the job was in.                                       |
+| `message`         | `str \| None`                      | A human-readable message describing the event.                              |
+| `details`         | `dict \| None`                     | Additional structured details about the event.                              |
+| `error_type`      | `str \| None`                      | The type of error if the event represents a failure.                       |
+| `error_message`   | `str \| None`                      | The error message if the event represents a failure.                       |
+| `duration_ms`     | `int \| None`                      | The duration of the job execution in milliseconds (if applicable).          |
+| `nats_subject`    | `str \| None`                      | The NATS subject the event was published to.                                |
+| `nats_sequence`   | `int \| None`                      | The NATS stream sequence number of the event.                               |
+
+#### Convenience Methods
+
+The `JobEvent` class provides several class methods for easily creating specific event types:
+
+-   `JobEvent.enqueued(job_id: str, queue_name: str, **kwargs) -> JobEvent`
+-   `JobEvent.started(job_id: str, worker_id: str, queue_name: str, **kwargs) -> JobEvent`
+-   `JobEvent.completed(job_id: str, worker_id: str, queue_name: str, duration_ms: int, **kwargs) -> JobEvent`
+-   `JobEvent.failed(job_id: str, worker_id: str, queue_name: str, error_type: str, error_message: str, **kwargs) -> JobEvent`
+-   `JobEvent.retry_scheduled(job_id: str, worker_id: str, queue_name: str, **kwargs) -> JobEvent`
+-   `JobEvent.scheduled(job_id: str, **kwargs) -> JobEvent`
+-   `JobEvent.schedule_triggered(job_id: str, **kwargs) -> JobEvent`
+-   `JobEvent.cancelled(job_id: str, queue_name: str, **kwargs) -> JobEvent`
+-   `JobEvent.status_changed(job_id: str, queue_name: str, old_status: str, new_status: str, **kwargs) -> JobEvent`
+
+### `naq.events.NATSJobEventStorage`
+
+A storage backend for job events using NATS JetStream. This class is responsible for persisting and retrieving events. You typically won't need to interact with this class directly unless you are building custom tools.
+
+#### Initialization
+
+```python
+async def __init__(
+    self,
+    nats_url: str = DEFAULT_NATS_URL,
+    stream_name: str = "NAQ_JOB_EVENTS",
+    subject_prefix: str = "naq.jobs.events",
+    stream_config: Optional[StreamConfig] = None
+)
+```
+
+| Parameter        | Type                      | Description                                                              |
+| ---------------- | ------------------------- | ------------------------------------------------------------------------ |
+| `nats_url`       | `str`                     | The URL of the NATS server.                                               |
+| `stream_name`    | `str`                     | The name of the JetStream stream to use for events.                       |
+| `subject_prefix` | `str`                     | The prefix for NATS subjects used for events.                             |
+| `stream_config`  | `Optional[StreamConfig]` | Custom JetStream stream configuration. If `None`, defaults are used.      |
+
+#### Key Methods
+
+-   `async def store_event(self, event: JobEvent) -> None`: Stores a single event.
+-   `async def get_events(self, job_id: str) -> List[JobEvent]`: Retrieves all events for a given job ID.
+-   `async def stream_events(self, **kwargs) -> AsyncIterator[JobEvent]`: Streams new events in real-time. Accepts filters like `context`, `event_type`, etc.
+
+### `naq.events.AsyncJobEventLogger`
+
+A high-performance, non-blocking logger that buffers events in memory and flushes them periodically to the `NATSJobEventStorage`. This is the primary interface for logging events from your application.
+
+#### Initialization
+
+```python
+async def __init__(
+    self,
+    storage: NATSJobEventStorage,
+    batch_size: int = 100,
+    flush_interval: float = 5.0,
+    max_buffer_size: int = 10000
+)
+```
+
+| Parameter         | Type                 | Description                                                                |
+| ----------------- | -------------------- | -------------------------------------------------------------------------- |
+| `storage`         | `NATSJobEventStorage`| The storage backend instance to use.                                        |
+| `batch_size`      | `int`                | The number of events to buffer before flushing.                            |
+| `flush_interval`  | `float`              | The interval in seconds to flush buffered events.                          |
+| `max_buffer_size` | `int`                | The maximum number of events to hold in the buffer before dropping new ones.|
+
+#### Key Methods
+
+-   `async def start(self) -> None`: Starts the background flush task.
+-   `async def stop(self) -> None`: Stops the background flush task and flushes any remaining events.
+-   `async def log_event(self, event: JobEvent) -> None`: Logs a generic `JobEvent`.
+-   `async def log_job_enqueued(self, job_id: str, queue_name: str, **kwargs) -> None`: Logs an `ENQUEUED` event.
+-   `async def log_job_started(self, job_id: str, worker_id: str, queue_name: str, **kwargs) -> None`: Logs a `STARTED` event.
+-   `async def log_job_completed(self, job_id: str, worker_id: str, queue_name: str, duration_ms: int, **kwargs) -> None`: Logs a `COMPLETED` event.
+-   `async def log_job_failed(self, job_id: str, worker_id: str, queue_name: str, error_type: str, error_message: str, **kwargs) -> None`: Logs a `FAILED` event.
+-   `async def log_job_retry_scheduled(self, job_id: str, worker_id: str, queue_name: str, **kwargs) -> None`: Logs a `RETRY_SCHEDULED` event.
+-   `async def log_job_scheduled(self, job_id: str, **kwargs) -> None`: Logs a `SCHEDULED` event.
+-   `async def log_job_schedule_triggered(self, job_id: str, **kwargs) -> None`: Logs a `SCHEDULE_TRIGGERED` event.
+-   `async def log_job_cancelled(self, job_id: str, queue_name: str, **kwargs) -> None`: Logs a `CANCELLED` event.
+-   `async def log_job_status_changed(self, job_id: str, queue_name: str, old_status: str, new_status: str, **kwargs) -> None`: Logs a `STATUS_CHANGED` event.
+
+### `naq.events.JobEventLogger`
+
+A synchronous wrapper around `AsyncJobEventLogger`, following the `_sync` pattern used elsewhere in `naq`. It provides the same interface but can be used in synchronous contexts.
+
+#### Initialization
+
+```python
+def __init__(
+    self,
+    nats_url: str = DEFAULT_NATS_URL,
+    **logger_kwargs
+)
+```
+
+| Parameter       | Type  | Description                                                      |
+| --------------- | ----- | ---------------------------------------------------------------- |
+| `nats_url`      | `str` | The URL of the NATS server.                                       |
+| `logger_kwargs` | `dict`| Keyword arguments to pass to the `AsyncJobEventLogger` constructor. |
+
+The methods are the same as `AsyncJobEventLogger` but without the `async`/`await` keywords.
+
+### `naq.events.SharedEventLoggerManager`
+
+A singleton manager for shared event logger instances that provides a centralized way to create, manage, and share event logger instances across different components in the NAQ system.
+
+#### Key Features
+
+- **Singleton Pattern**: Ensures a single instance across the application
+- **Thread-safe**: Safe for use in multi-threaded environments
+- **Dual Support**: Manages both synchronous and asynchronous loggers
+- **Centralized Configuration**: Configure event logging once for all components
+
+#### Initialization
+
+The `SharedEventLoggerManager` is a singleton and should be accessed through the global instance:
+
+```python
+from naq.events import get_shared_event_logger_manager
+
+# Get the global instance
+manager = get_shared_event_logger_manager()
+```
+
+#### Configuration
+
+```python
+def configure(
+    self,
+    enabled: Optional[bool] = None,
+    storage_type: Optional[str] = None,
+    storage_url: Optional[str] = None,
+    stream_name: Optional[str] = None,
+    subject_prefix: Optional[str] = None,
+    **kwargs: Any
+) -> None
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `enabled` | `Optional[bool]` | Whether event logging is enabled |
+| `storage_type` | `Optional[str]` | Type of storage backend ('nats', etc.) |
+| `storage_url` | `Optional[str]` | URL for the storage backend |
+| `stream_name` | `Optional[str]` | Name of the stream for events |
+| `subject_prefix` | `Optional[str]` | Base subject for events |
+| `**kwargs` | `Any` | Additional configuration options |
+
+#### Key Methods
+
+-   `get_sync_logger() -> Optional[JobEventLogger]`: Get the shared synchronous event logger instance.
+-   `async get_async_logger() -> Optional[AsyncJobEventLogger]`: Get the shared asynchronous event logger instance.
+-   `configure(**kwargs) -> None`: Configure the shared event logger manager.
+-   `reset() -> None`: Reset the shared event logger manager (synchronous).
+-   `async async_reset() -> None`: Reset the shared event logger manager (asynchronous).
+-   `get_config() -> Dict[str, Any]`: Get the current configuration.
+-   `is_enabled() -> bool`: Check if event logging is enabled.
+
+#### Convenience Functions
+
+For easier access, the module provides global convenience functions:
+
+```python
+from naq.events import (
+    get_shared_sync_logger,
+    get_shared_async_logger,
+    configure_shared_logger,
+)
+
+# Configure the shared logger
+configure_shared_logger(enabled=True, storage_url="nats://localhost:4222")
+
+# Get loggers
+sync_logger = get_shared_sync_logger()
+async_logger = await get_shared_async_logger()
+```
+
+### Using the Shared Event Logger
+
+The shared event logger is automatically used by all naq components (Queue, Worker, Scheduler) when event logging is enabled. You can also use it in your own applications:
+
+```python
+from naq.events import get_shared_sync_logger, configure_shared_logger
+
+# Configure event logging
+configure_shared_logger(enabled=True)
+
+# Get the shared logger
+logger = get_shared_sync_logger()
+if logger:
+    # Log events
+    logger.log_job_enqueued(
+        job_id="job-123",
+        queue_name="default",
+        details={"custom_field": "value"}
+    )
+```
+
+### `naq.events.AsyncJobEventProcessor`
+
+A real-time event processor that subscribes to the NATS event stream and dispatches events to registered handlers. This allows you to build reactive, event-driven logic based on job lifecycles.
+
+#### Initialization
+
+```python
+async def __init__(self, storage: NATJobEventStorage)
+```
+
+| Parameter | Type                 | Description                                      |
+| --------- | -------------------- | ------------------------------------------------ |
+| `storage` | `NATSJobEventStorage` | The storage backend instance to stream events from. |
+
+#### Key Methods
+
+-   `async def start(self) -> None`: Starts the event processing loop.
+-   `async def stop(self) -> None`: Stops the event processing loop.
+-   `def add_handler(self, event_type: JobEventType, handler: Callable[[JobEvent], Any]) -> None`: Registers a handler function for a specific event type.
+-   `def add_global_handler(self, handler: Callable[[JobEvent], Any]) -> None`: Registers a handler function that will be called for all events.
+
+Handlers can be either synchronous or asynchronous functions that accept a single `JobEvent` argument. Synchronous handlers are automatically executed in a thread pool to avoid blocking the event loop.
+
+### Event Consumption Examples
+
+#### Basic Event Processing
+
+```python
+import asyncio
+from naq.events import AsyncJobEventProcessor, NATSJobEventStorage, JobEventType
+
+async def handle_job_completion(event: JobEvent):
+    """Handle job completion events."""
+    print(f"Job {event.job_id} completed in {event.duration_ms}ms")
+    # Update your application state here
+
+async def main():
+    # Create storage and processor
+    storage = NATSJobEventStorage()
+    processor = AsyncJobEventProcessor(storage)
+    
+    # Register handlers
+    processor.add_handler(JobEventType.COMPLETED, handle_job_completion)
+    
+    # Start processing
+    await processor.start()
+    
+    try:
+        # Keep running
+        while True:
+            await asyncio.sleep(1)
+    finally:
+        await processor.stop()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+#### Advanced Event Processing with Filtering
+
+```python
+import asyncio
+from naq.events import AsyncJobEventProcessor, NATSJobEventStorage, JobEventType
+
+async def handle_failed_jobs(event: JobEvent):
+    """Handle failed job events with retry logic."""
+    if event.queue_name == "critical":
+        # Send alert for critical queue failures
+        await send_alert(f"Critical job failed: {event.job_id}")
+        
+        # Check if we should retry
+        if event.details and event.details.get("retry_count", 0) < 3:
+            print(f"Retrying job {event.job_id}")
+            await retry_job(event.job_id)
+
+async def handle_all_events(event: JobEvent):
+    """Global handler for all events."""
+    # Log all events to external monitoring system
+    await log_to_monitoring_system(event)
+
+async def main():
+    storage = NATSJobEventStorage()
+    processor = AsyncJobEventProcessor(storage)
+    
+    # Register specific handler
+    processor.add_handler(JobEventType.FAILED, handle_failed_jobs)
+    
+    # Register global handler
+    processor.add_global_handler(handle_all_events)
+    
+    async with processor:  # Use context manager for automatic cleanup
+        # Keep running
+        while True:
+            await asyncio.sleep(1)
+```
+
+#### Using Event Details for Custom Logic
+
+```python
+async def handle_status_changes(event: JobEvent):
+    """Handle status change events with custom logic."""
+    if event.event_type == JobEventType.STATUS_CHANGED:
+        old_status = event.details.get("old_status")
+        new_status = event.details.get("new_status")
+        
+        print(f"Job {event.job_id} changed from {old_status} to {new_status}")
+        
+        # Trigger specific actions based on status transitions
+        if old_status == "running" and new_status == "failed":
+            await notify_team_about_failure(event)
+        elif old_status == "pending" and new_status == "running":
+            await update_job_start_time(event.job_id)
+```
+
+### Event Stream Processing
+
+The `NATSJobEventStorage` provides methods for both retrieving historical events and streaming real-time events:
+
+```python
+# Get all events for a specific job
+events = await storage.get_events("job-123")
+
+# Stream events for a specific job in real-time
+async for event in storage.stream_events("job-123"):
+    print(f"New event: {event.event_type}")
+    
+    # Process the event
+    await process_event(event)
+```
+
+### Performance Considerations
+
+When working with events, consider these performance best practices:
+
+1. **Use Shared Loggers**: Always use the shared event logger to avoid creating multiple connections.
+2. **Batch Processing**: The shared logger automatically batches events for better performance.
+3. **Async Handlers**: Use async handlers for event processing to avoid blocking.
+4. **Selective Subscriptions**: Only subscribe to events you need to process.
+5. **Error Handling**: Implement proper error handling in your event handlers to prevent processing failures.

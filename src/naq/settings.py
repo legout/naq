@@ -127,6 +127,23 @@ class RETRY_STRATEGY(Enum):
     EXPONENTIAL = "exponential"
 
 
+# --- Event Logging Settings ---
+# Whether to enable the event logging system
+NAQ_EVENTS_ENABLED = os.getenv("NAQ_EVENTS_ENABLED", "True").lower() == "true"
+
+# Type of storage backend for events (defaults to 'nats')
+NAQ_EVENT_STORAGE_TYPE = os.getenv("NAQ_EVENT_STORAGE_TYPE", "nats")
+
+# NATS URL for the event system (defaults to DEFAULT_NATS_URL)
+NAQ_EVENT_STORAGE_URL = os.getenv("NAQ_EVENT_STORAGE_URL", DEFAULT_NATS_URL)
+
+# Name of the JetStream stream for events
+NAQ_EVENT_STREAM_NAME = os.getenv("NAQ_EVENT_STREAM_NAME", "NAQ_JOB_EVENTS")
+
+# Base subject for events
+NAQ_EVENT_SUBJECT_PREFIX = os.getenv("NAQ_EVENT_SUBJECT_PREFIX", "naq.jobs.events")
+
+
 # --- Logging Settings ---
 # Default log level for the application. Can be one of:
 # "TRACE", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"

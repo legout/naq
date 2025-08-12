@@ -24,6 +24,9 @@ from .connection import (
     get_jetstream_context,
     get_nats_connection,
 )
+from .events.processor import AsyncJobEventProcessor
+from .events.storage import NATSJobEventStorage
+from .models import JobEvent
 from .queue import Queue
 from .scheduler import Scheduler
 from .settings import DEFAULT_WORKER_TTL_SECONDS  # Import statuses
@@ -736,6 +739,109 @@ def list_workers_command(
             asyncio.run(close_nats_connection())
         except Exception:
             pass
+
+
+@app.command()
+def events(
+    nats_url: str = typer.Option(
+        DEFAULT_NATS_URL,
+        "--nats-url",
+        "-u",
+        help="URL of the NATS server.",
+        envvar="NAQ_NATS_URL",
+    ),
+    log_level: Optional[str] = typer.Option(
+        None,
+        "--log-level",
+        "-l",
+        help="Set logging level (e.g., DEBUG, INFO, WARNING, ERROR). Defaults to NAQ_LOG_LEVEL env var or CRITICAL.",
+    ),
+):
+    """
+    Monitor job events in real-time using the event processor.
+    """
+    setup_logging(log_level if log_level else None)
+    logger.info(f"Starting event processor for NATS at {nats_url}")
+    
+    # Create storage and processor
+    storage = NATSJobEventStorage(nats_url=nats_url)
+    processor = AsyncJobEventProcessor(storage)
+    
+    # Add a global handler that prints formatted events
+    def print_event(event: "JobEvent") -> None:
+        """Print a formatted representation of the event using rich."""
+        from rich.console import Console
+        from rich.table import Table
+        from rich.panel import Panel
+        from rich.text import Text
+        from rich.json import JSON
+        from datetime import datetime
+        import json
+        
+        console = Console()
+        
+        # Create a table for event details
+        table = Table(title=f"Job Event: {event.event_type.value}", show_header=False)
+        table.add_column("Property", style="cyan")
+        table.add_column("Value", style="white")
+        
+        # Add event details
+        table.add_row("Job ID", event.job_id)
+        table.add_row("Event Type", event.event_type.value)
+        table.add_row("Timestamp", datetime.fromtimestamp(event.timestamp).strftime('%Y-%m-%d %H:%M:%S UTC'))
+        
+        if event.worker_id:
+            table.add_row("Worker ID", event.worker_id)
+        if event.queue_name:
+            table.add_row("Queue", event.queue_name)
+        if event.message:
+            table.add_row("Message", event.message)
+        if event.duration_ms:
+            table.add_row("Duration", f"{event.duration_ms:.2f} ms")
+        if event.error_type:
+            table.add_row("Error Type", event.error_type)
+        if event.error_message:
+            table.add_row("Error Message", event.error_message)
+        if event.nats_subject:
+            table.add_row("NATS Subject", event.nats_subject)
+        if event.nats_sequence:
+            table.add_row("NATS Sequence", str(event.nats_sequence))
+        
+        # Add details if present
+        if event.details:
+            # Create a nicely formatted JSON representation of details
+            details_json = json.dumps(event.details, indent=2, default=str)
+            table.add_row("Details", JSON(details_json))
+        
+        # Print the event
+        console.print(table)
+        console.print()
+    
+    processor.add_global_handler(print_event)
+    
+    # Run the processor
+    try:
+        # Use asyncio.run to start the processor
+        asyncio.run(_run_event_processor(processor))
+    except KeyboardInterrupt:
+        logger.info("Event processor interrupted by user (KeyboardInterrupt). Shutting down.")
+    except Exception as e:
+        logger.exception(f"Event processor failed unexpectedly: {e}")
+        raise typer.Exit(code=1)
+    finally:
+        logger.info("Event processor finished.")
+
+
+async def _run_event_processor(processor: AsyncJobEventProcessor) -> None:
+    """Run the event processor with proper async context management."""
+    async with processor:
+        console = Console()
+        console.print("[green]Event processor started. Listening for events...[/green]")
+        console.print("[yellow]Press Ctrl+C to stop[/yellow]")
+        
+        # Keep running until cancelled
+        while True:
+            await asyncio.sleep(1)
 
 
 # --- Dashboard Command (Optional) ---

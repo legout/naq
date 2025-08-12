@@ -19,7 +19,7 @@ from .exceptions import (
     NaqException,
     SerializationError,
 )
-from .job import Job, RetryDelayType
+from .models import Job, RetryDelayType, JOB_STATUS
 from .results import Results
 
 # Make key classes and functions available directly from the 'naq' package
@@ -44,11 +44,13 @@ from .queue import (
     schedule,
     schedule_sync,
 )
-from .job import JOB_STATUS
 from .scheduler import Scheduler
 
 from .settings import SCHEDULED_JOB_STATUS, WORKER_STATUS
 from .worker import Worker
+
+# Import events module to make it available via naq.events
+from . import events
 
 __version__ = "0.1.3"  # Bump version for worker monitoring
 
@@ -56,19 +58,6 @@ __version__ = "0.1.3"  # Bump version for worker monitoring
 # Basic configuration/convenience
 # setup_logging is now centralized in src/naq/utils.py
 
-# Global connection management (optional convenience)
-_default_loop = None
-
-
-def _get_loop():
-    global _default_loop
-    if _default_loop is None:
-        try:
-            _default_loop = asyncio.get_running_loop()
-        except RuntimeError:
-            _default_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(_default_loop)
-    return _default_loop
 
 
 async def connect(url: str = DEFAULT_NATS_URL):
@@ -83,12 +72,12 @@ async def disconnect():
 
 # --- Make result fetching available ---
 # Expose static methods directly if desired, or users can use Job.fetch_result
-fetch_job_result = Job.fetch_result
-fetch_job_result_sync = Job.fetch_result_sync
+# fetch_job_result = Job.fetch_result
+# fetch_job_result_sync = Job.fetch_result_sync
 
-# Make Results class available for direct use
-Results = Results
+# # Make Results class available for direct use
+# Results = Results
 
-# --- Make worker listing available ---
-list_workers = Worker.list_workers
-list_workers_sync = Worker.list_workers_sync
+# # --- Make worker listing available ---
+# list_workers = Worker.list_workers
+# list_workers_sync = Worker.list_workers_sync

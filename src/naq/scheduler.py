@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 import cloudpickle
 import nats
 from loguru import logger
+from nats.aio.client import Client as NATSClient
 from nats.js import JetStreamContext
 from nats.js.errors import KeyNotFoundError
 from nats.js.kv import KeyValue
@@ -30,6 +31,7 @@ from .connection import (
 )
 from .exceptions import NaqConnectionError
 from .exceptions import SerializationError
+from .events.shared_logger import get_shared_sync_logger, configure_shared_logger
 from .settings import DEFAULT_NATS_URL
 from .settings import (
     MAX_SCHEDULE_FAILURES,
@@ -105,7 +107,7 @@ class LeaderElection:
                 entry = await self._lock_kv.get(SCHEDULER_LOCK_KEY)
                 if entry:
                     # Lock exists - see if it's expired
-                    lock_data = cloudpickle.loads(entry.value)
+                    lock_data = cloudpickle.loads(entry.value) if entry.value else {}
                     lock_time = lock_data.get("timestamp", 0)
                     lock_owner = lock_data.get("instance_id", "unknown")
 
@@ -218,9 +220,10 @@ class ScheduledJobProcessor:
     Handles the processing of scheduled jobs from the NATS KV store.
     """
 
-    def __init__(self, js: JetStreamContext, kv: KeyValue):
+    def __init__(self, js: JetStreamContext, kv: KeyValue, nats_url: str):
         self._js = js
         self._kv = kv
+        self._nats_url = nats_url
 
     async def _enqueue_job(self, queue_name: str, subject: str, payload: bytes) -> bool:
         """
@@ -313,7 +316,7 @@ class ScheduledJobProcessor:
                 processed_count += processed
                 error_count += had_error
 
-        except nats.errors.Error as e:
+        except Exception as e:
             # Handle the "no keys found" error as a normal case
             error_message = str(e).lower()
             if "no keys found" in error_message:
@@ -323,14 +326,11 @@ class ScheduledJobProcessor:
             else:
                 logger.error(f"NATS error during scheduler check: {e}")
                 error_count += 1
-        except Exception as e:
-            logger.exception(f"Unexpected error during scheduler check: {e}")
-            error_count += 1
 
         return processed_count, error_count
 
     async def _process_single_job(
-        self, key_bytes: bytes, now_ts: float
+        self, key_bytes: bytes | str, now_ts: float
     ) -> tuple[int, int]:
         """
         Process a single scheduled job.
@@ -344,23 +344,23 @@ class ScheduledJobProcessor:
         """
         processed = 0
         errors = 0
-        key = key_bytes.decode("utf-8") if isinstance(key_bytes, bytes) else key_bytes
+        key = str(key_bytes.decode("utf-8") if isinstance(key_bytes, bytes) else key_bytes)
 
         try:
-            entry = await self._kv.get(key_bytes)
+            entry = await self._kv.get(key)
             if entry is None:
                 return 0, 0
 
-            schedule_data: Dict[str, Any] = cloudpickle.loads(entry.value)
+            schedule_data: Dict[str, Any] = cloudpickle.loads(entry.value) if entry.value else {}
 
             # Skip paused jobs
             status = schedule_data.get("status")
-            if status == SCHEDULED_JOB_STATUS.PAUSED:
+            if status == SCHEDULED_JOB_STATUS.PAUSED.value:
                 logger.debug(f"Skipping paused job '{key}'")
                 return 0, 0
 
             # Skip failed jobs that exceeded retry attempts
-            if status == SCHEDULED_JOB_STATUS.FAILED:
+            if status == SCHEDULED_JOB_STATUS.FAILED.value:
                 logger.debug(f"Skipping failed job '{key}' that exceeded retry limits")
                 return 0, 0
 
@@ -382,7 +382,7 @@ class ScheduledJobProcessor:
                 logger.error(
                     f"Invalid schedule data for key '{key}' (missing queue_name or payload). Deleting."
                 )
-                await self._kv.delete(key_bytes)
+                await self._kv.delete(key)
                 return 0, 1
 
             # Enqueue the job
@@ -392,6 +392,66 @@ class ScheduledJobProcessor:
             enqueue_success = await self._enqueue_job(
                 queue_name, target_subject, original_payload
             )
+            
+            # Log job schedule triggered event
+            if enqueue_success:
+                # Try to use async logger first, fall back to sync logger
+                try:
+                    from .events.shared_logger import get_shared_async_logger
+                    import asyncio
+                    
+                    async def log_event_async():
+                        async_logger = await get_shared_async_logger()
+                        if async_logger:
+                            await async_logger.log_job_schedule_triggered(
+                                job_id=job_id,
+                                queue_name=queue_name,
+                                nats_subject=target_subject,
+                                nats_sequence=None,  # We don't have the sequence number here
+                                details={
+                                    "scheduled_timestamp_utc": scheduled_ts,
+                                    "cron": cron,
+                                    "interval_seconds": interval_seconds,
+                                    "repeat": repeat
+                                }
+                            )
+                    
+                    # Check if we're in an async context
+                    try:
+                        # If in an async context, await the async logger call
+                        await log_event_async()
+                    except RuntimeError:
+                        # Fallback for sync context (e.g., direct script execution, though tests run in async)
+                        event_logger = get_shared_sync_logger()
+                        if event_logger:
+                            event_logger.log_job_schedule_triggered(
+                                job_id=job_id,
+                                queue_name=queue_name,
+                                nats_subject=target_subject,
+                                nats_sequence=None,  # We don't have the sequence number here
+                                details={
+                                    "scheduled_timestamp_utc": scheduled_ts,
+                                    "cron": cron,
+                                    "interval_seconds": interval_seconds,
+                                    "repeat": repeat
+                                }
+                            )
+                except ImportError:
+                    # Fall back to sync logger if import fails
+                    event_logger = get_shared_sync_logger()
+                    if event_logger:
+                        event_logger.log_job_schedule_triggered(
+                            job_id=job_id,
+                            queue_name=queue_name,
+                            nats_subject=target_subject,
+                            nats_sequence=None,  # We don't have the sequence number here
+                            details={
+                                "scheduled_timestamp_utc": scheduled_ts,
+                                "cron": cron,
+                                "interval_seconds": interval_seconds,
+                                "repeat": repeat
+                            }
+                        )
 
             # Track success/failure
             if enqueue_success:
@@ -412,7 +472,7 @@ class ScheduledJobProcessor:
                     )
                     schedule_data["status"] = SCHEDULED_JOB_STATUS.FAILED
                     serialized_data = cloudpickle.dumps(schedule_data)
-                    await self._kv.put(key_bytes, serialized_data)
+                    await self._kv.put(key, serialized_data)
                     return 0, 1
                 else:
                     # Just log and continue - will retry on next check cycle
@@ -421,7 +481,7 @@ class ScheduledJobProcessor:
                         f"Will retry on next cycle."
                     )
                     serialized_data = cloudpickle.dumps(schedule_data)
-                    await self._kv.put(key_bytes, serialized_data)
+                    await self._kv.put(key, serialized_data)
                     return 0, 1
 
             # Handle recurrence or deletion
@@ -461,11 +521,11 @@ class ScheduledJobProcessor:
             # Update or delete the KV entry
             if delete_entry:
                 logger.debug(f"Deleting schedule entry for job {job_id}.")
-                await self._kv.delete(key_bytes)
+                await self._kv.delete(key)
             else:
                 logger.debug(f"Updating schedule entry for job {job_id}.")
                 updated_payload = cloudpickle.dumps(schedule_data)
-                await self._kv.put(key_bytes, updated_payload)
+                await self._kv.put(key, updated_payload)
 
             return processed, errors
 
@@ -474,7 +534,7 @@ class ScheduledJobProcessor:
                 f"Failed to deserialize schedule data for key '{key}': {e}. Deleting entry."
             )
             try:
-                await self._kv.delete(key_bytes)
+                await self._kv.delete(key)
             except Exception as del_e:
                 logger.error(
                     f"Failed to delete corrupted schedule entry '{key}': {del_e}"
@@ -500,7 +560,7 @@ class Scheduler:
     ):
         self._nats_url = nats_url
         self._poll_interval = poll_interval
-        self._nc: Optional[nats.aio.client.Client] = None
+        self._nc: Optional[NATSClient] = None
         self._js: Optional[JetStreamContext] = None
         self._kv: Optional[KeyValue] = None
         self._running = False
@@ -521,6 +581,9 @@ class Scheduler:
         self._job_processor: Optional[ScheduledJobProcessor] = None
 
         setup_logging()  # Set up logging
+        
+        # Configure shared event logger
+        configure_shared_logger(storage_url=nats_url)
 
     async def _connect(self) -> None:
         """Establish NATS connection, JetStream context, and KV handles."""
@@ -556,7 +619,7 @@ class Scheduler:
 
             # Create job processor
             if self._js and self._kv:
-                self._job_processor = ScheduledJobProcessor(self._js, self._kv)
+                self._job_processor = ScheduledJobProcessor(self._js, self._kv, self._nats_url)
 
     async def run(self) -> None:
         """Starts the scheduler loop with leader election."""

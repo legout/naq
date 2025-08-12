@@ -2,7 +2,7 @@
 title: "Architecture Overview"
 ---
 
-`naq` is designed to be a simple yet powerful distributed task queue. Its architecture is fundamentally built around [NATS](https://nats.io) and its persistence layer, [JetStream](https://docs.nats.io/jetstream/jetstream), which serve as the central nervous system for communication between clients, workers, and the scheduler.
+`naq` is designed to be a simple yet powerful distributed task queue with a comprehensive event-driven architecture. Its architecture is fundamentally built around [NATS](https://nats.io) and its persistence layer, [JetStream](https://docs.nats.io/jetstream/jetstream), which serve as the central nervous system for communication between clients, workers, and the scheduler.
 
 ## Core Components
 
@@ -15,7 +15,7 @@ The `naq` ecosystem consists of four main components:
 
 ## How It Works: The Job Lifecycle
 
-Here is a high-level overview of what happens when a job is enqueued and processed:
+Here is a high-level overview of what happens when a job is enqueued and processed, including the comprehensive event-driven architecture:
 
 
 ```{mermaid}
@@ -23,40 +23,106 @@ graph TD
     subgraph "Your Application"
         Client[Client]
         PythonCode[Python Code]
+        EventHandler[Event Handler]
     end
 
     subgraph "NAQ Processes"
         Worker[Worker]
         Scheduler[Scheduler]
+        EventProcessor[Event Processor]
     end
 
     subgraph "NATS Server (JetStream)"
         QueueStream[Queue Stream]
         ResultStore[Result KV Store]
         ScheduledJobs[Scheduled Jobs KV]
+        EventStream[Event Stream]
     end
 
     Client -- "1. Enqueue Job" --> QueueStream
-    Scheduler -- "7. Check for Due Jobs" --> ScheduledJobs
+    Scheduler -- "8. Check for Due Jobs" --> ScheduledJobs
     ScheduledJobs -- "Job is Due" --> Scheduler
-    Scheduler -- "8. Enqueue Due Job" --> QueueStream
+    Scheduler -- "9. Enqueue Due Job" --> QueueStream
     Worker -- "3. Fetch Job" --> QueueStream
     Worker -- "4. Execute Function" --> PythonCode
     PythonCode -- "5. Return Result" --> Worker
     Worker -- "6. Store Result" --> ResultStore
+    
+    Client -- "2. Log ENQUEUED Event" --> EventStream
+    Worker -- "Log STARTED/COMPLETED/FAILED Events" --> EventStream
+    Scheduler -- "Log SCHEDULED Event" --> EventStream
+    Worker -- "Log RETRY_SCHEDULED Event" --> EventStream
+    Scheduler -- "Log SCHEDULE_TRIGGERED Event" --> EventStream
+    Worker -- "Log CANCELLED Event" --> EventStream
+    All Components -- "Log STATUS_CHANGED Events" --> EventStream
+    
+    EventStream -- "Stream Events" --> EventProcessor
+    EventProcessor -- "Dispatch to Handlers" --> EventHandler
 ```
+
+## The Central Event Stream Approach
+
+At the heart of naq's architecture is a centralized event stream that captures all job lifecycle events. This event-driven approach enables:
+
+- **Complete visibility**: Every job state change is captured and stored durably
+- **Real-time monitoring**: Events are available immediately as they occur
+- **Decoupled processing**: Components can react to events without direct coupling
+- **Shared event logging**: All components use the same event logging infrastructure
+
+### Shared Event Logging
+
+All naq components (Client, Worker, Scheduler) use the shared event logging system provided by the `SharedEventLoggerManager`. This ensures:
+
+- **Consistency**: All events follow the same format and structure
+- **Reliability**: Events are buffered and flushed efficiently to prevent loss
+- **Performance**: Non-blocking logging with configurable batching
+- **Centralized configuration**: Event logging is managed through a single point
+
+### The Complete Event Lifecycle
 
 1.  **Enqueueing**: The client calls an `enqueue` function (e.g., `enqueue_sync`). The function, its arguments, and other metadata are serialized into a job payload. This payload is then published as a message to a NATS subject that corresponds to the target queue.
 
-2.  **Persistence**: NATS JetStream receives this message and persists it in a **Stream**. Each queue in `naq` maps directly to a JetStream Stream. This ensures that even if no workers are online, the job is safely stored and will be processed later.
+2.  **Event Logging (Enqueue)**: Upon successful enqueuing, the client (or `Queue` instance) logs an `ENQUEUED` event to the dedicated **Event Stream** using the shared event logger.
 
-3.  **Fetching**: A `naq` worker process is constantly listening on the queue's Stream. When a new job is available, the worker consumes the message, acknowledging it to NATS so that it isn't delivered to another worker.
+3.  **Persistence**: NATS JetStream receives this message and persists it in a **Stream**. Each queue in `naq` maps directly to a JetStream Stream. This ensures that even if no workers are online, the job is safely stored and will be processed later.
 
-4.  **Execution**: The worker deserializes the job payload and executes the specified Python function with the provided arguments.
+4.  **Fetching**: A `naq` worker process is constantly listening on the queue's Stream. When a new job is available, the worker consumes the message, acknowledging it to NATS so that it isn't delivered to another worker.
 
-5.  **Result Handling**: Once the function completes, its return value is serialized. The worker then stores this result in a NATS **Key-Value (KV) Store**, using the unique job ID as the key. This result has a configurable Time-To-Live (TTL), after which it is automatically purged by NATS.
+5.  **Status Change**: As the worker begins processing, it logs a `STATUS_CHANGED` event to indicate the job has moved from PENDING to RUNNING state.
 
-6.  **Scheduled Jobs**: The `naq scheduler` process periodically scans a dedicated KV store for jobs that are due to run. When it finds one, it enqueues it into the appropriate queue, and the job follows the normal lifecycle from there.
+6.  **Event Logging (Worker - Start)**: The worker logs a `STARTED` event when it begins processing a job.
+
+7.  **Execution**: The worker deserializes the job payload and executes the specified Python function with the provided arguments.
+
+8.  **Result Handling**: Once the function completes, its return value is serialized. The worker then stores this result in a NATS **Key-Value (KV) Store**, using the unique job ID as the key. This result has a configurable Time-To-Live (TTL), after which it is automatically purged by NATS.
+
+9.  **Status Change**: Upon completion, the worker logs another `STATUS_CHANGED` event to indicate the final state (COMPLETED or FAILED).
+
+10. **Event Logging (Worker - Completion)**: The worker logs `COMPLETED` events when jobs finish successfully, or `FAILED` events when jobs encounter errors. If a job fails and is configured for retry, a `RETRY_SCHEDULED` event is logged. If a job is cancelled, a `CANCELLED` event is logged.
+
+11. **Scheduled Jobs**: The `naq scheduler` process periodically scans a dedicated KV store for jobs that are due to run. When it finds one, it enqueues it into the appropriate queue, and the job follows the normal lifecycle from there.
+
+12. **Event Logging (Scheduler)**: The scheduler logs `SCHEDULED` events when a new scheduled job is created and `SCHEDULE_TRIGGERED` events when a scheduled job is enqueued for execution.
+
+13. **Event Processing**: The `AsyncJobEventProcessor` subscribes to the **Event Stream**. It reads events in real-time and dispatches them to any registered event handlers, allowing for reactive, event-driven applications.
+
+### New Event Types
+
+The event-driven architecture includes several new event types that provide comprehensive visibility into job processing:
+
+- **CANCELLED**: Logged when a job is cancelled before or during execution
+- **STATUS_CHANGED**: Logged whenever a job's status changes, providing detailed state transition tracking
+
+These new events, combined with the existing event types (ENQUEUED, STARTED, COMPLETED, FAILED, RETRY_SCHEDULED, SCHEDULED, SCHEDULE_TRIGGERED), provide a complete picture of the job lifecycle from creation to completion.
+
+### Event Correlation
+
+All events include the job ID, enabling easy correlation of events across the entire lifecycle. This allows you to:
+
+- Track the complete journey of a single job
+- Measure timing between different stages
+- Identify bottlenecks in processing
+- Build comprehensive monitoring and alerting systems
 
 ## Why NATS?
 

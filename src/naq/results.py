@@ -6,7 +6,6 @@ from nats.js.errors import KeyNotFoundError
 
 from .connection import close_nats_connection, get_jetstream_context, get_nats_connection
 from .exceptions import JobNotFoundError, NaqException
-from .job import Job
 from .settings import DEFAULT_NATS_URL, DEFAULT_RESULT_TTL_SECONDS, RESULT_KV_NAME
 
 
@@ -53,6 +52,7 @@ class Results:
             kv = await js.key_value(bucket=RESULT_KV_NAME)
             
             # Serialize the result data
+            from .models import Job
             serialized_result = Job.serialize_result(
                 result=result_data.get("result"),
                 status=result_data.get("status"),
@@ -95,6 +95,7 @@ class Results:
             
             try:
                 entry = await kv.get(job_id)
+                from .models import Job
                 result_data = Job.deserialize_result(entry.value)
                 return result_data
             except KeyNotFoundError:
