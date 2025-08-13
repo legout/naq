@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 import cloudpickle
 
 from naq.worker import Worker
-from naq.job import Job
+from naq.models import Job
 from naq.settings import (
     WORKER_STATUS,
     JOB_STATUS,

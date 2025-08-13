@@ -7,7 +7,7 @@ from typing import Any, Dict
 import nats
 from nats.js.api import ConsumerConfig
 
-from naq.job import Job
+from naq.models import Job
 from naq.queue import Queue
 from naq.worker import Worker
 from naq.settings import (

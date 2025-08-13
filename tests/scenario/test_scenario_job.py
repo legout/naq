@@ -1,11 +1,8 @@
 """Scenario tests for the Job module."""
 from freezegun import freeze_time
 
-from naq.job import Job
-from naq.settings import (
-    RETRY_STRATEGY
-)
-from naq.job import JOB_STATUS
+from naq.models import Job, JOB_STATUS
+from naq.settings import RETRY_STRATEGY
 
 
 # --- Helper Functions ---

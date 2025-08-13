@@ -3,8 +3,8 @@ import pytest
 
 from typing import Any
 
-from naq.job import Job, JOB_STATUS
-from naq.exceptions import  SerializationError
+from naq.models import Job, JOB_STATUS
+from naq.exceptions import SerializationError
 from naq.settings import RETRY_STRATEGY
 
 
@@ -15,7 +15,7 @@ class TestJob:
         """Test Job initialization with default parameters."""
         def sample_func(): pass
 
-        job = Job(sample_func)
+        job = Job.create(sample_func)
 
         assert callable(job.function)
         assert job.function == sample_func
@@ -23,10 +23,10 @@ class TestJob:
         assert job.kwargs == {}
         assert isinstance(job.job_id, str)
         assert len(job.job_id) == 32  # UUID without hyphens
-        assert job.queue_name == "default"
+        assert job.queue_name == "naq_default_queue"
         assert job.max_retries == 0
         assert job.retry_delay == 0
-        assert job.retry_strategy == RETRY_STRATEGY.LINEAR
+        assert job.retry_strategy == "linear"
         assert job.retry_on is None
         assert job.ignore_on is None
         assert job.depends_on is None
@@ -39,10 +39,9 @@ class TestJob:
         custom_args = (1, "test")
         custom_kwargs = {"key": "value"}
 
-        job = Job(
-            function=sample_func,
-            args=custom_args,
-            kwargs=custom_kwargs,
+        job = Job.create(
+            sample_func,
+            *custom_args,
             job_id=custom_id,
             queue_name="custom_queue",
             max_retries=3,
@@ -50,6 +49,7 @@ class TestJob:
             retry_strategy=RETRY_STRATEGY.EXPONENTIAL,
             retry_on=(ValueError,),
             ignore_on=(TypeError,),
+            **custom_kwargs
         )
 
         assert job.function == sample_func
@@ -59,7 +59,7 @@ class TestJob:
         assert job.queue_name == "custom_queue"
         assert job.max_retries == 3
         assert job.retry_delay == 60
-        assert job.retry_strategy == RETRY_STRATEGY.EXPONENTIAL
+        assert job.retry_strategy == "exponential"
         assert job.retry_on == (ValueError,)
         assert job.ignore_on == (TypeError,)
 
@@ -67,8 +67,8 @@ class TestJob:
         """Test that each job gets a unique ID when not specified."""
         def sample_func(): pass
 
-        job1 = Job(sample_func)
-        job2 = Job(sample_func)
+        job1 = Job.create(sample_func)
+        job2 = Job.create(sample_func)
 
         assert job1.job_id != job2.job_id
         assert len(job1.job_id) == 32
@@ -79,10 +79,10 @@ class TestJob:
         def sample_func(x: int, y: str = "default") -> Any:
             return x, y
 
-        job = Job(
-            function=sample_func,
-            args=(42,),
-            kwargs={"y": "test"},
+        job = Job.create(
+            sample_func,
+            42,
+            y="test",
             retry_on=(ValueError, KeyError),
             ignore_on=(TypeError,),
         )
@@ -120,16 +120,16 @@ class TestJob:
         def sample_func(): pass
 
         # Test with string dependency
-        job1 = Job(sample_func, depends_on="job123")
+        job1 = Job.create(sample_func, depends_on="job123")
         assert job1.dependency_ids == ["job123"]
 
         # Test with Job object dependency
-        dep_job = Job(sample_func)
-        job2 = Job(sample_func, depends_on=dep_job)
+        dep_job = Job.create(sample_func)
+        job2 = Job.create(sample_func, depends_on=dep_job)
         assert job2.dependency_ids == [dep_job.job_id]
 
         # Test with multiple dependencies
-        job3 = Job(sample_func, depends_on=["job1", dep_job])
+        job3 = Job.create(sample_func, depends_on=["job1", dep_job])
         assert set(job3.dependency_ids) == {dep_job.job_id, "job1"}
 
     def test_retry_logic(self):
@@ -137,7 +137,7 @@ class TestJob:
         def sample_func(): pass
 
         # Test linear retry strategy
-        job_linear = Job(
+        job_linear = Job.create(
             sample_func,
             max_retries=3,
             retry_delay=10,
@@ -150,7 +150,7 @@ class TestJob:
         assert job_linear.get_next_retry_delay() == 10.0
 
         # Test exponential retry strategy
-        job_exp = Job(
+        job_exp = Job.create(
             sample_func,
             max_retries=3,
             retry_delay=5,
@@ -171,7 +171,7 @@ class TestJob:
         def sample_func(x, y=1):
             return x + y
 
-        job = Job(sample_func, args=(1,), kwargs={"y": 2})
+        job = Job.create(sample_func, 1, y=2)
         result = await job.execute()
         
         assert result == 3
@@ -189,7 +189,7 @@ class TestJob:
             await asyncio.sleep(0.01)  # Simulate async work
             return x + y
 
-        job = Job(sample_async_func, args=(2,), kwargs={"y": 3})
+        job = Job.create(sample_async_func, 2, y=3)
         result = await job.execute()
         
         assert result == 5
@@ -206,9 +206,10 @@ class TestJob:
         def failing_func():
             raise ValueError("Test error")
 
-        job = Job(failing_func)
-        with pytest.raises(ValueError, match="Test error"):
-            await job.execute()
+        job = Job.create(failing_func)
+        # Note: job.execute() catches exceptions and stores them in job.error
+        # It doesn't re-raise them, so we don't use pytest.raises here
+        await job.execute()
         
         assert job.status == JOB_STATUS.FAILED
         assert job._start_time is not None

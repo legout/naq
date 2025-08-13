@@ -8,7 +8,7 @@ from typing import List, Set
 import pytest
 from nats.aio.client import Client as NATS
 
-from naq.job import Job
+from naq.models import Job
 from naq.queue import Queue
 from naq.worker import Worker
 

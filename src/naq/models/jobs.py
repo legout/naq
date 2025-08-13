@@ -61,7 +61,7 @@ class Job(msgspec.Struct):
     job_id: str = msgspec.field(
         default_factory=lambda: str(uuid.uuid4()).replace("-", "")
     )
-    function: Callable = msgspec.field(default=None)
+    function: Optional[Callable] = msgspec.field(default=None)
     args: Tuple = msgspec.field(default_factory=tuple)
     kwargs: Dict = msgspec.field(default_factory=dict)
     queue_name: str = msgspec.field(default=DEFAULT_QUEUE_NAME)
@@ -293,6 +293,50 @@ class Job(msgspec.Struct):
 
         serializer = get_serializer()
         return serializer.serialize_job(self)
+
+    @classmethod
+    def create(cls, function: Callable, *args, **kwargs) -> "Job":
+        """
+        Create a Job with backward compatibility for positional function argument.
+        
+        This method allows creating a Job with the function as the first positional
+        argument, maintaining compatibility with older code and tests.
+        
+        Args:
+            function: The function to execute
+            *args: Positional arguments to pass to the function
+            **kwargs: Keyword arguments including job configuration and function kwargs
+            
+        Returns:
+            Job: A new Job instance
+        """
+        # Separate job configuration from function kwargs
+        job_config = {}
+        func_kwargs = {}
+        
+        # Job configuration parameters
+        job_params = {
+            "job_id", "queue_name", "max_retries", "retry_delay", 
+            "retry_strategy", "retry_on", "ignore_on", "depends_on",
+            "result_ttl", "timeout"
+        }
+        
+        # Split kwargs into job config and function kwargs
+        for key, value in kwargs.items():
+            if key in job_params:
+                job_config[key] = value
+            else:
+                func_kwargs[key] = value
+                
+        # Create the job
+        job_kwargs = {
+            "function": function,
+            "args": args,
+            "kwargs": func_kwargs,
+            **job_config
+        }
+        
+        return cls(**job_kwargs)
 
     @classmethod
     def deserialize(cls, data: bytes) -> "Job":

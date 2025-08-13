@@ -8,7 +8,7 @@ import socket
 import os
 
 from naq.worker import Worker
-from naq.job import Job, JOB_STATUS
+from naq.models import Job, JOB_STATUS
 from naq.settings import (
     WORKER_STATUS,
     NAQ_PREFIX,
@@ -105,7 +105,7 @@ class TestWorker:
 
         # Create mock message with job data
         mock_msg = AsyncMock()
-        mock_msg.data = cloudpickle.dumps(job.__dict__)
+        mock_msg.data = cloudpickle.dumps(job)
         
         # Process the message
         await worker.process_message(mock_msg)

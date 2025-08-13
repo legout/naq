@@ -1,6 +1,5 @@
 
-from naq.job import Job
-from naq.job import JOB_STATUS
+from naq.models import Job, JOB_STATUS
 
 def test_basic_job_instantiation():
     """Test basic Job instantiation with minimal parameters."""
@@ -8,7 +7,7 @@ def test_basic_job_instantiation():
         return x * 2
 
     # Create a basic job
-    job = Job(sample_func, args=(42,))
+    job = Job.create(sample_func, 42)
 
     # Verify basic attributes
     assert callable(job.function)
@@ -25,7 +24,7 @@ def test_job_id_uniqueness():
     def noop(): pass
 
     # Create multiple jobs and verify unique IDs
-    jobs = [Job(noop) for _ in range(3)]
+    jobs = [Job.create(noop) for _ in range(3)]
     job_ids = [job.job_id for job in jobs]
     
     assert len(set(job_ids)) == len(jobs)  # All IDs should be unique
@@ -36,10 +35,10 @@ def test_job_serialization_roundtrip():
     def test_func(x: int, y: str = "default") -> str:
         return f"{x}-{y}"
 
-    original_job = Job(
+    original_job = Job.create(
         test_func,
-        args=(42,),
-        kwargs={"y": "test"},
+        42,
+        y="test",
         queue_name="test_queue"
     )
 
@@ -61,7 +60,7 @@ def test_job_lifecycle_status(mock_nats):
     def sample_task(): 
         return "test_result"
     
-    job = Job(sample_task)
+    job = Job.create(sample_task)
 
     # Initial state
     assert not hasattr(job, "start_time")
