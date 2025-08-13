@@ -42,12 +42,6 @@ class MockEventStorage(BaseEventStorage):
 @pytest.mark.asyncio
 async def test_scheduler_schedule_triggered_event_logging():
     """Test that SCHEDULE_TRIGGERED events are logged when scheduled jobs are enqueued."""
-    # Create mock storage
-    mock_storage = MockEventStorage()
-    
-    # Configure shared logger with mock storage
-    configure_shared_logger(storage_instance=mock_storage)
-    
     # Create mock JetStream context and KV store
     mock_js = MagicMock()
     mock_kv = MagicMock()
@@ -56,10 +50,14 @@ async def test_scheduler_schedule_triggered_event_logging():
     processor = ScheduledJobProcessor(mock_js, mock_kv, "nats://localhost:4222")
     
     # Mock the _enqueue_job method to return success
-    with patch.object(processor, '_enqueue_job', return_value=True) as mock_enqueue:
+    with patch.object(processor, '_enqueue_job', return_value=True) as mock_enqueue, \
+         patch('naq.events.shared_logger.get_shared_async_logger') as mock_get_async_logger:
+        
+        mock_async_logger_instance = AsyncMock()
+        mock_get_async_logger.return_value = mock_async_logger_instance
+        
         # Mock KV store entry
         mock_entry = MagicMock()
-        # Create a proper job dict and pickle it
         job_data = {
             "job_id": "test-job-123",
             "queue_name": "test-queue",
@@ -84,14 +82,19 @@ async def test_scheduler_schedule_triggered_event_logging():
         assert errors == 0
         
         # Verify SCHEDULE_TRIGGERED event was logged
-        triggered_events = [e for e in mock_storage.events if e.event_type == JobEventType.SCHEDULE_TRIGGERED]
-        assert len(triggered_events) == 1
-        
-        event = triggered_events[0]
-        assert event.job_id == "test-job-123"
-        assert event.queue_name == "test-queue"
-        assert event.details["scheduled_timestamp_utc"] == 1640995200.0
-        assert event.details["cron"] == "0 * * * *"
+        mock_get_async_logger.assert_awaited_once()
+        mock_async_logger_instance.log_job_schedule_triggered.assert_awaited_once_with(
+            job_id="test-job-123",
+            queue_name="test-queue",
+            nats_subject="naq.queue.test-queue",
+            nats_sequence=None,
+            details={
+                "scheduled_timestamp_utc": 1640995200.0,
+                "cron": "0 * * * *",
+                "interval_seconds": None,
+                "repeat": None
+            }
+        )
 
 
 @pytest.mark.asyncio
@@ -144,12 +147,6 @@ async def test_scheduler_schedule_triggered_event_logging_with_failure():
 @pytest.mark.asyncio
 async def test_scheduler_schedule_triggered_event_logging_with_metadata():
     """Test that SCHEDULE_TRIGGERED events include proper metadata."""
-    # Create mock storage
-    mock_storage = MockEventStorage()
-    
-    # Configure shared logger with mock storage
-    configure_shared_logger(storage_instance=mock_storage)
-    
     # Create mock JetStream context and KV store
     mock_js = MagicMock()
     mock_kv = MagicMock()
@@ -158,10 +155,14 @@ async def test_scheduler_schedule_triggered_event_logging_with_metadata():
     processor = ScheduledJobProcessor(mock_js, mock_kv, "nats://localhost:4222")
     
     # Mock the _enqueue_job method to return success
-    with patch.object(processor, '_enqueue_job', return_value=True) as mock_enqueue:
+    with patch.object(processor, '_enqueue_job', return_value=True) as mock_enqueue, \
+         patch('naq.events.shared_logger.get_shared_async_logger') as mock_get_async_logger:
+        
+        mock_async_logger_instance = AsyncMock()
+        mock_get_async_logger.return_value = mock_async_logger_instance
+        
         # Mock KV store entry with interval-based scheduling
         mock_entry = MagicMock()
-        # Create a proper job dict with interval scheduling and pickle it
         job_data = {
             "job_id": "test-job-456",
             "queue_name": "test-queue",
@@ -186,27 +187,24 @@ async def test_scheduler_schedule_triggered_event_logging_with_metadata():
         assert errors == 0
         
         # Verify SCHEDULE_TRIGGERED event was logged with correct metadata
-        triggered_events = [e for e in mock_storage.events if e.event_type == JobEventType.SCHEDULE_TRIGGERED]
-        assert len(triggered_events) == 1
-        
-        event = triggered_events[0]
-        assert event.job_id == "test-job-456"
-        assert event.queue_name == "test-queue"
-        assert event.details["scheduled_timestamp_utc"] == 1640995200.0
-        assert event.details["interval_seconds"] == 3600
-        assert event.details["repeat"] == 5
-        assert "cron" not in event.details  # Should not be present for interval-based jobs
+        mock_get_async_logger.assert_awaited_once()
+        mock_async_logger_instance.log_job_schedule_triggered.assert_awaited_once_with(
+            job_id="test-job-456",
+            queue_name="test-queue",
+            nats_subject="naq.queue.test-queue",
+            nats_sequence=None,
+            details={
+                "scheduled_timestamp_utc": 1640995200.0,
+                "cron": None,
+                "interval_seconds": 3600,
+                "repeat": 5
+            }
+        )
 
 
 @pytest.mark.asyncio
 async def test_scheduler_schedule_triggered_event_logging_paused_job():
     """Test that SCHEDULE_TRIGGERED events are not logged for paused jobs."""
-    # Create mock storage
-    mock_storage = MockEventStorage()
-    
-    # Configure shared logger with mock storage
-    configure_shared_logger(storage_instance=mock_storage)
-    
     # Create mock JetStream context and KV store
     mock_js = MagicMock()
     mock_kv = MagicMock()
@@ -215,10 +213,14 @@ async def test_scheduler_schedule_triggered_event_logging_paused_job():
     processor = ScheduledJobProcessor(mock_js, mock_kv, "nats://localhost:4222")
     
     # Mock the _enqueue_job method to return success
-    with patch.object(processor, '_enqueue_job', return_value=True) as mock_enqueue:
+    with patch.object(processor, '_enqueue_job', return_value=True) as mock_enqueue, \
+         patch('naq.events.shared_logger.get_shared_async_logger') as mock_get_async_logger:
+        
+        mock_async_logger_instance = AsyncMock()
+        mock_get_async_logger.return_value = mock_async_logger_instance
+        
         # Mock KV store entry for paused job
         mock_entry = MagicMock()
-        # Create a proper job dict with paused status and pickle it
         job_data = {
             "job_id": "test-job-789",
             "queue_name": "test-queue",
@@ -227,7 +229,7 @@ async def test_scheduler_schedule_triggered_event_logging_paused_job():
             "interval_seconds": None,
             "repeat": None,
             "_orig_job_payload": b"test-payload",
-            "status": "paused"
+            "status": SCHEDULED_JOB_STATUS.PAUSED.value # Use the enum value
         }
         mock_entry.value = cloudpickle.dumps(job_data)
         mock_kv.get = AsyncMock(return_value=mock_entry)
@@ -243,19 +245,13 @@ async def test_scheduler_schedule_triggered_event_logging_paused_job():
         assert errors == 0
         
         # Verify no SCHEDULE_TRIGGERED event was logged
-        triggered_events = [e for e in mock_storage.events if e.event_type == JobEventType.SCHEDULE_TRIGGERED]
-        assert len(triggered_events) == 0
+        mock_get_async_logger.assert_not_awaited()
+        mock_async_logger_instance.log_job_schedule_triggered.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_scheduler_schedule_triggered_event_logging_failed_job():
     """Test that SCHEDULE_TRIGGERED events are not logged for failed jobs."""
-    # Create mock storage
-    mock_storage = MockEventStorage()
-    
-    # Configure shared logger with mock storage
-    configure_shared_logger(storage_instance=mock_storage)
-    
     # Create mock JetStream context and KV store
     mock_js = MagicMock()
     mock_kv = MagicMock()
@@ -264,10 +260,14 @@ async def test_scheduler_schedule_triggered_event_logging_failed_job():
     processor = ScheduledJobProcessor(mock_js, mock_kv, "nats://localhost:4222")
     
     # Mock the _enqueue_job method to return success
-    with patch.object(processor, '_enqueue_job', return_value=True) as mock_enqueue:
+    with patch.object(processor, '_enqueue_job', return_value=True) as mock_enqueue, \
+         patch('naq.events.shared_logger.get_shared_async_logger') as mock_get_async_logger:
+        
+        mock_async_logger_instance = AsyncMock()
+        mock_get_async_logger.return_value = mock_async_logger_instance
+        
         # Mock KV store entry for failed job
         mock_entry = MagicMock()
-        # Create a proper job dict with failed status and pickle it
         job_data = {
             "job_id": "test-job-999",
             "queue_name": "test-queue",
@@ -276,7 +276,7 @@ async def test_scheduler_schedule_triggered_event_logging_failed_job():
             "interval_seconds": None,
             "repeat": None,
             "_orig_job_payload": b"test-payload",
-            "status": "failed"
+            "status": SCHEDULED_JOB_STATUS.FAILED.value # Use the enum value
         }
         mock_entry.value = cloudpickle.dumps(job_data)
         mock_kv.get = AsyncMock(return_value=mock_entry)
@@ -292,19 +292,13 @@ async def test_scheduler_schedule_triggered_event_logging_failed_job():
         assert errors == 0
         
         # Verify no SCHEDULE_TRIGGERED event was logged
-        triggered_events = [e for e in mock_storage.events if e.event_type == JobEventType.SCHEDULE_TRIGGERED]
-        assert len(triggered_events) == 0
+        mock_get_async_logger.assert_not_awaited()
+        mock_async_logger_instance.log_job_schedule_triggered.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_scheduler_schedule_triggered_event_logging_future_job():
     """Test that SCHEDULE_TRIGGERED events are not logged for jobs scheduled in the future."""
-    # Create mock storage
-    mock_storage = MockEventStorage()
-    
-    # Configure shared logger with mock storage
-    configure_shared_logger(storage_instance=mock_storage)
-    
     # Create mock JetStream context and KV store
     mock_js = MagicMock()
     mock_kv = MagicMock()
@@ -313,11 +307,15 @@ async def test_scheduler_schedule_triggered_event_logging_future_job():
     processor = ScheduledJobProcessor(mock_js, mock_kv, "nats://localhost:4222")
     
     # Mock the _enqueue_job method to return success
-    with patch.object(processor, '_enqueue_job', return_value=True) as mock_enqueue:
+    with patch.object(processor, '_enqueue_job', return_value=True) as mock_enqueue, \
+         patch('naq.events.shared_logger.get_shared_async_logger') as mock_get_async_logger:
+        
+        mock_async_logger_instance = AsyncMock()
+        mock_get_async_logger.return_value = mock_async_logger_instance
+        
         # Mock KV store entry for job scheduled in the future
         future_timestamp = 9999999999.0  # Far in the future
         mock_entry = MagicMock()
-        # Create a proper job dict with future timestamp and pickle it
         job_data = {
             "job_id": "test-job-future",
             "queue_name": "test-queue",
@@ -340,19 +338,13 @@ async def test_scheduler_schedule_triggered_event_logging_future_job():
         assert errors == 0
         
         # Verify no SCHEDULE_TRIGGERED event was logged
-        triggered_events = [e for e in mock_storage.events if e.event_type == JobEventType.SCHEDULE_TRIGGERED]
-        assert len(triggered_events) == 0
+        mock_get_async_logger.assert_not_awaited()
+        mock_async_logger_instance.log_job_schedule_triggered.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_scheduler_schedule_triggered_event_logging_non_leader():
     """Test that SCHEDULE_TRIGGERED events are not logged when not leader."""
-    # Create mock storage
-    mock_storage = MockEventStorage()
-    
-    # Configure shared logger with mock storage
-    configure_shared_logger(storage_instance=mock_storage)
-    
     # Create mock JetStream context and KV store
     mock_js = MagicMock()
     mock_kv = MagicMock()
@@ -361,10 +353,14 @@ async def test_scheduler_schedule_triggered_event_logging_non_leader():
     processor = ScheduledJobProcessor(mock_js, mock_kv, "nats://localhost:4222")
     
     # Mock the _enqueue_job method to return success
-    with patch.object(processor, '_enqueue_job', return_value=True) as mock_enqueue:
+    with patch.object(processor, '_enqueue_job', return_value=True) as mock_enqueue, \
+         patch('naq.events.shared_logger.get_shared_async_logger') as mock_get_async_logger:
+        
+        mock_async_logger_instance = AsyncMock()
+        mock_get_async_logger.return_value = mock_async_logger_instance
+        
         # Mock KV store entry
         mock_entry = MagicMock()
-        # Create a proper job dict and pickle it
         job_data = {
             "job_id": "test-job-123",
             "queue_name": "test-queue",
@@ -387,8 +383,8 @@ async def test_scheduler_schedule_triggered_event_logging_non_leader():
         assert errors == 0
         
         # Verify no SCHEDULE_TRIGGERED event was logged
-        triggered_events = [e for e in mock_storage.events if e.event_type == JobEventType.SCHEDULE_TRIGGERED]
-        assert len(triggered_events) == 0
+        mock_get_async_logger.assert_not_awaited()
+        mock_async_logger_instance.log_job_schedule_triggered.assert_not_awaited()
 
 
 if __name__ == "__main__":

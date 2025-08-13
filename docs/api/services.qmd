@@ -1,0 +1,832 @@
+---
+title: "Services API"
+---
+
+The `services` package provides the core infrastructure for the service layer architecture in `naq`. It includes base classes for service implementation and a service manager for dependency injection and lifecycle management.
+
+## Package Overview
+
+The services package is designed to eliminate connection duplication and provide centralized resource management throughout the `naq` system. It consists of:
+
+- **Base Classes**: Abstract base classes for service implementation
+- **Service Manager**: Central registry and dependency injection container
+- **Core Services**: Specialized services for different aspects of the system
+
+## Base Classes
+
+### `BaseService`
+
+The abstract base class for all services in `naq`.
+
+```python
+class BaseService(ABC):
+    """Base class for all NAQ services."""
+    
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self._initialized = False
+        
+    async def initialize(self) -> None:
+        """Initialize the service."""
+        if not self._initialized:
+            await self._do_initialize()
+            self._initialized = True
+            
+    @abstractmethod
+    async def _do_initialize(self) -> None:
+        """Implement service-specific initialization."""
+        
+    async def cleanup(self) -> None:
+        """Cleanup service resources."""
+        self._initialized = False
+        
+    async def __aenter__(self):
+        await self.initialize()
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.cleanup()
+```
+
+#### Usage Example
+
+```python
+from naq.services.base import BaseService
+
+class MyCustomService(BaseService):
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        self._resource = None
+    
+    async def _do_initialize(self) -> None:
+        """Initialize the custom service."""
+        self._resource = await self._create_resource()
+    
+    async def _create_resource(self):
+        """Create a resource for the service."""
+        # Implementation-specific resource creation
+        return {"status": "initialized"}
+    
+    async def cleanup(self) -> None:
+        """Cleanup the custom service."""
+        if self._resource:
+            await self._cleanup_resource(self._resource)
+        await super().cleanup()
+    
+    async def _cleanup_resource(self, resource):
+        """Cleanup a specific resource."""
+        # Implementation-specific resource cleanup
+        pass
+
+# Using the custom service
+async def use_custom_service():
+    config = {"setting1": "value1"}
+    service = MyCustomService(config)
+    
+    async with service:
+        # Service is automatically initialized
+        result = await service.do_work()
+        # Service is automatically cleaned up
+```
+
+### `ServiceManager`
+
+The central component that manages service instances and their dependencies.
+
+```python
+class ServiceManager:
+    """Manages service instances and dependencies."""
+    
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self._services: Dict[str, BaseService] = {}
+        
+    async def get_service(self, service_type: type) -> BaseService:
+        """Get or create service instance."""
+        # Implementation handles service creation and dependency injection
+        
+    async def cleanup_all(self) -> None:
+        """Clean up all registered services."""
+        
+    async def __aenter__(self):
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.cleanup_all()
+```
+
+#### Usage Example
+
+```python
+from naq.services import ServiceManager, ConnectionService, StreamService
+
+async def service_manager_example():
+    config = {
+        'nats': {
+            'url': 'nats://localhost:4222',
+            'max_reconnect_attempts': 5
+        }
+    }
+    
+    async with ServiceManager(config) as services:
+        # Get services - they are created and initialized on demand
+        connection_service = await services.get_service(ConnectionService)
+        stream_service = await services.get_service(StreamService)
+        
+        # Use the services
+        js = await connection_service.get_jetstream()
+        stream_info = await stream_service.get_stream_info("my_stream")
+        
+        # All services are automatically cleaned up when exiting the context
+```
+
+## Core Services
+
+### `ConnectionService`
+
+Manages NATS connections and JetStream contexts with connection pooling, retry logic, and health monitoring.
+
+#### Key Features
+
+- **Connection Pooling**: Reuses existing connections to avoid duplication
+- **Retry Logic**: Implements exponential backoff for connection failures
+- **Health Monitoring**: Provides connection status and health checks
+- **Configuration Management**: Centralized connection configuration
+
+#### API Reference
+
+```python
+class ConnectionService(BaseService):
+    """Centralized NATS connection management service."""
+    
+    async def get_connection(self, url: Optional[str] = None) -> NATSClient:
+        """Get a pooled NATS connection."""
+        
+    async def get_jetstream(self, url: Optional[str] = None) -> JetStreamContext:
+        """Get a JetStream context for a specific connection."""
+        
+    @asynccontextmanager
+    async def connection_scope(self, url: Optional[str] = None) -> AsyncGenerator[NATSClient, None]:
+        """Context manager for connection operations."""
+        
+    async def check_connection_health(self, url: Optional[str] = None) -> bool:
+        """Check if a connection is healthy."""
+        
+    def get_connection_status(self, url: Optional[str] = None) -> Dict[str, Any]:
+        """Get status information about connections."""
+```
+
+#### Usage Example
+
+```python
+from naq.services import ServiceManager, ConnectionService
+
+async def connection_service_example():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        connection_service = await services.get_service(ConnectionService)
+        
+        # Get a connection
+        nc = await connection_service.get_connection()
+        
+        # Use the connection
+        await nc.publish("subject", b"message")
+        
+        # Get JetStream context
+        js = await connection_service.get_jetstream()
+        
+        # Check connection health
+        is_healthy = await connection_service.check_connection_health()
+        
+        # Get connection status
+        status = connection_service.get_connection_status()
+```
+
+### `StreamService`
+
+Handles NATS JetStream stream operations including creation, configuration, and management.
+
+#### Key Features
+
+- **Stream Management**: Create, configure, and manage JetStream streams
+- **Stream Information**: Retrieve metadata and statistics about streams
+- **Stream Operations**: Purge, delete, and list streams
+- **Message Counting**: Get message counts for streams
+
+#### API Reference
+
+```python
+class StreamService(BaseService):
+    """Service for managing NATS JetStream streams."""
+    
+    async def ensure_stream(
+        self,
+        name: str,
+        subjects: List[str],
+        **config
+    ) -> StreamInfo:
+        """Ensure a stream exists with the specified configuration."""
+        
+    async def get_stream_info(self, name: str) -> StreamInfo:
+        """Get information about a stream."""
+        
+    async def delete_stream(self, name: str) -> None:
+        """Delete a stream."""
+        
+    async def purge_stream(self, name: str, subject: Optional[str] = None) -> None:
+        """Purge messages from a stream."""
+        
+    async def list_streams(self) -> List[str]:
+        """List all streams."""
+        
+    async def get_stream_message_count(self, name: str) -> int:
+        """Get the number of messages in a stream."""
+```
+
+#### Usage Example
+
+```python
+from naq.services import ServiceManager, StreamService
+
+async def stream_service_example():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        stream_service = await services.get_service(StreamService)
+        
+        # Ensure a stream exists
+        stream_info = await stream_service.ensure_stream(
+            name="my_stream",
+            subjects=["my.subject.*"],
+            retention="limits",
+            max_msgs=10000
+        )
+        
+        # Get stream information
+        info = await stream_service.get_stream_info("my_stream")
+        
+        # List all streams
+        streams = await stream_service.list_streams()
+        
+        # Get message count
+        count = await stream_service.get_stream_message_count("my_stream")
+        
+        # Purge the stream
+        await stream_service.purge_stream("my_stream")
+```
+
+### `KVStoreService`
+
+Manages NATS Key-Value store operations with TTL support and transaction capabilities.
+
+#### Key Features
+
+- **KV Store Management**: Create and manage Key-Value stores
+- **TTL Support**: Automatic expiration of stored values
+- **Transaction Support**: Atomic operations on multiple keys
+- **Batch Operations**: Efficient bulk operations
+
+#### API Reference
+
+```python
+class KVStoreService(BaseService):
+    """Service for managing NATS Key-Value stores."""
+    
+    async def get_kv_store(self, bucket: str, **config) -> KeyValue:
+        """Get a Key-Value store instance."""
+        
+    async def put(self, bucket: str, key: str, value: bytes, ttl: Optional[int] = None) -> None:
+        """Put a value into the Key-Value store."""
+        
+    async def get(self, bucket: str, key: str) -> Optional[bytes]:
+        """Get a value from the Key-Value store."""
+        
+    async def delete(self, bucket: str, key: str) -> None:
+        """Delete a key from the Key-Value store."""
+        
+    @asynccontextmanager
+    async def kv_transaction(self, bucket: str) -> AsyncGenerator[KeyValue, None]:
+        """Context manager for KV store transactions."""
+        
+    async def list_keys(self, bucket: str) -> list:
+        """List all keys in a bucket."""
+        
+    async def purge_bucket(self, bucket: str) -> None:
+        """Purge all keys from a bucket."""
+        
+    async def delete_bucket(self, bucket: str) -> None:
+        """Delete a bucket."""
+```
+
+#### Usage Example
+
+```python
+from naq.services import ServiceManager, KVStoreService
+
+async def kv_store_service_example():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        kv_service = await services.get_service(KVStoreService)
+        
+        # Put a value with TTL
+        await kv_service.put("my_bucket", "key1", b"value1", ttl=3600)
+        
+        # Get a value
+        value = await kv_service.get("my_bucket", "key1")
+        
+        # Use transaction for atomic operations
+        async with kv_service.kv_transaction("my_bucket") as kv:
+            await kv.put("key2", b"value2")
+            await kv.put("key3", b"value3")
+        
+        # List all keys
+        keys = await kv_service.list_keys("my_bucket")
+        
+        # Delete a key
+        await kv_service.delete("my_bucket", "key1")
+        
+        # Purge the bucket
+        await kv_service.purge_bucket("my_bucket")
+```
+
+### `JobService`
+
+Handles job execution, result storage, and failure handling with proper error management.
+
+#### Key Features
+
+- **Job Execution**: Execute jobs with proper error handling
+- **Result Storage**: Store and retrieve job results
+- **Failure Handling**: Handle job failures with retry logic
+- **Cleanup Operations**: Automatic cleanup of old results
+
+#### API Reference
+
+```python
+class JobService(BaseService):
+    """Service for handling job execution and results."""
+    
+    async def execute_job(self, job: Job) -> JobResult:
+        """Execute a job and return the result."""
+        
+    async def store_result(self, job_id: str, result: JobResult) -> None:
+        """Store a job result."""
+        
+    async def get_result(self, job_id: str) -> Optional[JobResult]:
+        """Get a job result."""
+        
+    async def handle_job_failure(self, job: Job, error: Exception) -> None:
+        """Handle a job failure."""
+        
+    async def delete_result(self, job_id: str) -> bool:
+        """Delete a job result."""
+        
+    async def cleanup_old_results(self, max_age_seconds: float) -> int:
+        """Clean up old job results."""
+```
+
+#### Usage Example
+
+```python
+from naq.services import ServiceManager, JobService
+from naq.models import Job
+
+async def job_service_example():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        job_service = await services.get_service(JobService)
+        
+        # Create a job
+        job = Job(
+            function=lambda x: x * 2,
+            args=(5,),
+            queue_name="test"
+        )
+        
+        # Execute the job
+        result = await job_service.execute_job(job)
+        
+        # Store the result
+        await job_service.store_result(job.job_id, result)
+        
+        # Retrieve the result
+        stored_result = await job_service.get_result(job.job_id)
+        
+        # Clean up old results
+        cleaned_count = await job_service.cleanup_old_results(max_age_seconds=86400)
+```
+
+### `EventService`
+
+Manages event logging, batching, and processing with efficient buffering and streaming.
+
+#### Key Features
+
+- **Event Logging**: Log job events with structured data
+- **Batching**: Efficient batch processing of events
+- **Streaming**: Real-time event streaming
+- **Buffer Management**: Configurable buffering for high-throughput scenarios
+
+#### API Reference
+
+```python
+class EventService(BaseService):
+    """Service for managing event logging and processing."""
+    
+    async def log_event(self, event: JobEvent) -> None:
+        """Log an event."""
+        
+    async def log_job_started(
+        self,
+        job_id: str,
+        worker_id: str,
+        queue_name: str,
+        **kwargs
+    ) -> None:
+        """Log a job started event."""
+        
+    async def stream_events(
+        self,
+        job_id: str,
+        event_type: Optional[JobEventType] = None,
+        **kwargs
+    ) -> AsyncIterator[JobEvent]:
+        """Stream events for a job."""
+        
+    async def get_event_history(self, job_id: str) -> List[JobEvent]:
+        """Get the event history for a job."""
+        
+    async def flush_events(self) -> None:
+        """Flush buffered events."""
+        
+    def get_logger_stats(self) -> Dict[str, Any]:
+        """Get logger statistics."""
+        
+    def get_buffer_size(self) -> int:
+        """Get the current buffer size."""
+```
+
+#### Usage Example
+
+```python
+from naq.services import ServiceManager, EventService
+from naq.models import JobEvent, JobEventType
+
+async def event_service_example():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        event_service = await services.get_service(EventService)
+        
+        # Create and log an event
+        event = JobEvent(
+            job_id="job-123",
+            event_type=JobEventType.STARTED,
+            queue_name="test",
+            worker_id="worker-1"
+        )
+        await event_service.log_event(event)
+        
+        # Log a job started event
+        await event_service.log_job_started(
+            job_id="job-123",
+            worker_id="worker-1",
+            queue_name="test"
+        )
+        
+        # Stream events for a job
+        async for event in event_service.stream_events("job-123"):
+            print(f"Event: {event.event_type} at {event.timestamp}")
+        
+        # Get event history
+        history = await event_service.get_event_history("job-123")
+        
+        # Flush buffered events
+        await event_service.flush_events()
+        
+        # Get logger statistics
+        stats = event_service.get_logger_stats()
+```
+
+### `SchedulerService`
+
+Handles scheduled job management, triggering, and persistence.
+
+#### Key Features
+
+- **Job Scheduling**: Schedule jobs for future execution
+- **Triggering**: Automatically trigger due jobs
+- **Persistence**: Store and retrieve scheduled jobs
+- **Management**: Pause, resume, and modify scheduled jobs
+
+#### API Reference
+
+```python
+class SchedulerService(BaseService):
+    """Service for managing scheduled jobs."""
+    
+    async def schedule_job(self, job: Job, schedule: Schedule) -> str:
+        """Schedule a job."""
+        
+    async def trigger_due_jobs(self) -> List[str]:
+        """Trigger jobs that are due for execution."""
+        
+    async def cancel_scheduled_job(self, job_id: str) -> bool:
+        """Cancel a scheduled job."""
+        
+    async def pause_scheduled_job(self, job_id: str) -> bool:
+        """Pause a scheduled job."""
+        
+    async def resume_scheduled_job(self, job_id: str) -> bool:
+        """Resume a paused scheduled job."""
+        
+    async def get_scheduled_job(self, job_id: str) -> Optional[Dict[str, Any]]:
+        """Get information about a scheduled job."""
+        
+    async def list_scheduled_jobs(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List scheduled jobs."""
+        
+    async def get_scheduler_stats(self) -> Dict[str, Any]:
+        """Get scheduler statistics."""
+```
+
+#### Usage Example
+
+```python
+from naq.services import ServiceManager, SchedulerService
+from naq.models import Job, Schedule
+import datetime
+
+async def scheduler_service_example():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        scheduler_service = await services.get_service(SchedulerService)
+        
+        # Create a job
+        job = Job(
+            function=lambda: "Hello, World!",
+            queue_name="test"
+        )
+        
+        # Create a schedule
+        schedule = Schedule(
+            run_at=datetime.datetime.now() + datetime.timedelta(hours=1)
+        )
+        
+        # Schedule the job
+        job_id = await scheduler_service.schedule_job(job, schedule)
+        
+        # List scheduled jobs
+        jobs = await scheduler_service.list_scheduled_jobs()
+        
+        # Get scheduler statistics
+        stats = await scheduler_service.get_scheduler_stats()
+        
+        # Cancel a scheduled job
+        await scheduler_service.cancel_scheduled_job(job_id)
+```
+
+## Service Configuration
+
+Services are configured through a centralized configuration dictionary that is passed to the `ServiceManager`. This configuration is then distributed to the individual services based on their needs.
+
+### Configuration Structure
+
+```python
+config = {
+    'nats': {
+        'url': 'nats://localhost:4222',
+        'max_reconnect_attempts': 5,
+        'reconnect_delay': 1.0,
+        'connection_timeout': 10.0,
+        'ping_interval': 60,
+        'max_outstanding_pings': 2
+    },
+    'events': {
+        'enabled': True,
+        'batch_size': 100,
+        'flush_interval': 1.0,
+        'max_buffer_size': 10000
+    },
+    'jobs': {
+        'default_timeout': 3600,
+        'result_ttl': 604800
+    },
+    'scheduler': {
+        'poll_interval': 1.0,
+        'enable_ha': True
+    }
+}
+```
+
+### Environment Variables
+
+Configuration can also be loaded from environment variables:
+
+```python
+import os
+
+def config_from_env():
+    return {
+        'nats': {
+            'url': os.getenv('NAQ_NATS_URL', 'nats://localhost:4222'),
+            'max_reconnect_attempts': int(os.getenv('NAQ_MAX_RECONNECT', '5')),
+            'reconnect_delay': float(os.getenv('NAQ_RECONNECT_DELAY', '1.0'))
+        },
+        'events': {
+            'enabled': os.getenv('NAQ_EVENTS_ENABLED', 'false').lower() == 'true',
+            'batch_size': int(os.getenv('NAQ_EVENT_BATCH_SIZE', '100'))
+        }
+    }
+```
+
+## Best Practices
+
+### 1. Use ServiceManager for Lifecycle Management
+
+Always use the `ServiceManager` as a context manager to ensure proper initialization and cleanup of services:
+
+```python
+# Good - using context manager
+async with ServiceManager(config) as services:
+    queue = Queue(name='test', services=services)
+    # Use the queue
+
+# Avoid - manual management
+services = ServiceManager(config)
+await services.initialize()
+try:
+    queue = Queue(name='test', services=services)
+    # Use the queue
+finally:
+    await services.cleanup_all()
+```
+
+### 2. Share ServiceManager Instances
+
+When possible, share a single `ServiceManager` instance across components in the same process:
+
+```python
+# Good - shared ServiceManager
+async def application():
+    config = get_config()
+    
+    async with ServiceManager(config) as services:
+        queue1 = Queue(name='queue1', services=services)
+        queue2 = Queue(name='queue2', services=services)
+        # Both queues share the same services
+```
+
+### 3. Handle Service Errors
+
+Implement proper error handling for service-related exceptions:
+
+```python
+from naq.services.base import ServiceError, ServiceInitializationError
+
+async def robust_service_usage():
+    config = get_config()
+    
+    try:
+        async with ServiceManager(config) as services:
+            connection_service = await services.get_service(ConnectionService)
+            # Use the service
+    except ServiceInitializationError as e:
+        logger.error(f"Failed to initialize services: {e}")
+        # Handle initialization failure
+    except ServiceError as e:
+        logger.error(f"Service error: {e}")
+        # Handle service error
+```
+
+### 4. Use Dependency Injection
+
+Leverage the service dependency system rather than manually creating service instances:
+
+```python
+# Good - using dependency injection
+async def using_services():
+    async with ServiceManager(config) as services:
+        stream_service = await services.get_service(StreamService)
+        # StreamService automatically gets ConnectionService as dependency
+
+# Avoid - manual dependency management
+async def manual_dependencies():
+    connection_service = ConnectionService(config)
+    await connection_service.initialize()
+    stream_service = StreamService(config, connection_service)
+    await stream_service.initialize()
+    try:
+        # Use the services
+    finally:
+        await stream_service.cleanup()
+        await connection_service.cleanup()
+```
+
+### 5. Configure Services Properly
+
+Provide appropriate configuration for connection parameters, retry logic, and timeouts:
+
+```python
+# Good - comprehensive configuration
+config = {
+    'nats': {
+        'url': 'nats://localhost:4222',
+        'max_reconnect_attempts': 10,
+        'reconnect_delay': 2.0,
+        'connection_timeout': 30.0,
+        'ping_interval': 60,
+        'max_outstanding_pings': 3
+    }
+}
+
+# Avoid - minimal configuration
+config = {'nats': {'url': 'nats://localhost:4222'}}
+```
+
+## Migration Guide
+
+### From Direct Connection Management
+
+#### Before
+
+```python
+class OldQueue:
+    def __init__(self, name, nats_url):
+        self.name = name
+        self.nats_url = nats_url
+        self._nc = None
+        self._js = None
+    
+    async def _get_js(self):
+        if self._js is None:
+            self._nc = await nats.connect(self.nats_url)
+            self._js = self._nc.jetstream()
+        return self._js
+    
+    async def close(self):
+        if self._nc:
+            await self._nc.close()
+```
+
+#### After
+
+```python
+class NewQueue:
+    def __init__(self, name, nats_url, services=None):
+        self.name = name
+        self.nats_url = nats_url
+        self._services = services or ServiceManager({'nats': {'url': nats_url}})
+        self._js = None
+    
+    async def _get_js(self):
+        if self._js is None:
+            connection_service = await self._services.get_service(ConnectionService)
+            self._js = await connection_service.get_jetstream(self.nats_url)
+        return self._js
+    
+    async def close(self):
+        await self._services.cleanup_all()
+```
+
+### From Manual Service Creation
+
+#### Before
+
+```python
+async def old_approach():
+    # Create services manually
+    connection_service = ConnectionService(config)
+    await connection_service.initialize()
+    
+    stream_service = StreamService(config, connection_service)
+    await stream_service.initialize()
+    
+    try:
+        # Use services
+        pass
+    finally:
+        await stream_service.cleanup()
+        await connection_service.cleanup()
+```
+
+#### After
+
+```python
+async def new_approach():
+    # Use ServiceManager
+    async with ServiceManager(config) as services:
+        # Services are created and managed automatically
+        connection_service = await services.get_service(ConnectionService)
+        stream_service = await services.get_service(StreamService)
+        
+        # Use services
+        pass
+        # Services are automatically cleaned up
+```
+
+The services package provides a robust foundation for building applications with `naq`, eliminating connection duplication and providing clean, maintainable resource management throughout the system.

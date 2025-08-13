@@ -132,3 +132,328 @@ Using NATS and JetStream as the foundation provides several key advantages:
 -   **Scalability**: You can add more workers at any time to increase your processing capacity. NATS handles the load balancing of jobs to available workers automatically.
 -   **Resilience**: If a worker crashes, JetStream ensures that the job it was processing will be re-delivered to another worker after a timeout. If the entire `naq` system goes down, the jobs are safe in the NATS stream, ready to be processed when the system comes back online.
 -   **Simplicity**: By offloading the complexities of persistence, delivery guarantees, and storage to NATS, the `naq` codebase can remain focused on the core logic of job execution and scheduling.
+
+## Service Layer Architecture
+
+The service layer architecture is a recent addition to `naq` that addresses the challenge of connection management and resource utilization across the system. Previously, the codebase suffered from over 44+ duplicated NATS connection patterns, leading to inefficient resource usage and complex connection management.
+
+### The Problem: Connection Pattern Duplication
+
+Before the service layer, each component in `naq` (Queue, Worker, Scheduler, etc.) was responsible for creating and managing its own NATS connections. This approach led to several issues:
+
+- **Resource Inefficiency**: Multiple connections to the same NATS server from the same process
+- **Code Duplication**: Similar connection logic repeated across 44+ locations in the codebase
+- **Inconsistent Configuration**: Connection parameters and retry logic varied between components
+- **Difficult Maintenance**: Changes to connection handling required updates in multiple files
+- **Connection Leaks**: No centralized management for connection lifecycle
+
+### The Solution: Centralized Service Layer
+
+The service layer architecture introduces a centralized approach to managing resources and dependencies through a set of specialized services:
+
+#### Core Services
+
+1. **ConnectionService**: Manages NATS connections and JetStream contexts
+   - Provides connection pooling and reuse
+   - Handles connection retries with exponential backoff
+   - Centralizes connection configuration
+   - Manages connection lifecycle and health checks
+
+2. **StreamService**: Handles NATS JetStream stream operations
+   - Stream creation, configuration, and management
+   - Stream purging and message deletion
+   - Stream information retrieval
+
+3. **KVStoreService**: Manages NATS Key-Value store operations
+   - Centralized KV store access patterns
+   - TTL management for stored values
+   - Transaction support for atomic operations
+
+4. **JobService**: Handles job execution and result management
+   - Job execution with proper error handling
+   - Result storage and retrieval
+   - Job failure handling and retry logic
+
+5. **EventService**: Manages event logging and processing
+   - Event batching and buffering
+   - Event stream management
+   - Event correlation and tracking
+
+6. **SchedulerService**: Handles scheduled job management
+   - Job scheduling and triggering
+   - Recurring job management
+   - Schedule persistence and retrieval
+
+#### Service Manager
+
+The [`ServiceManager`](src/naq/services/base.py:61) is the central component that:
+- Creates and manages service instances
+- Handles service dependencies
+- Ensures proper initialization and cleanup
+- Provides a unified interface for accessing services
+
+### Benefits of the Service Layer
+
+#### 1. Connection Pooling and Reuse
+
+The service layer eliminates connection duplication by maintaining a pool of connections that can be shared across components:
+
+```python
+# Before: Each component creates its own connection
+class Queue:
+    async def _get_js(self):
+        self._nc = await nats.connect(self._nats_url)
+        self._js = self._nc.jetstream()
+        return self._js
+
+# After: Use centralized ConnectionService
+class Queue:
+    async def _get_js(self):
+        if self._services is None:
+            self._services = ServiceManager(self._config)
+        
+        connection_service = await self._services.get_service(ConnectionService)
+        self._js = await connection_service.get_jetstream(self._nats_url)
+        return self._js
+```
+
+#### 2. Centralized Error Handling
+
+All services implement consistent error handling patterns with proper logging and retry logic:
+
+```python
+async def get_connection(self, url: Optional[str] = None) -> NATSClient:
+    target_url = url if url is not None else self._default_url
+    
+    # Check if we already have a connection
+    async with self._lock:
+        if target_url in self._connections and self._connections[target_url].is_connected:
+            return self._connections[target_url]
+    
+    # Create a new connection with retry logic
+    return await self._create_connection_with_retry(target_url)
+```
+
+#### 3. Dependency Injection
+
+Services can depend on other services, creating a clean dependency graph:
+
+```python
+# StreamService depends on ConnectionService
+async def get_service(self, service_type: type) -> BaseService:
+    if service_type == StreamService:
+        # Get ConnectionService dependency
+        connection_service = await self.get_service(ConnectionService)
+        service = service_type(self.config, connection_service)
+    # ... other service types
+```
+
+#### 4. Resource Lifecycle Management
+
+The service layer ensures proper initialization and cleanup of all resources:
+
+```python
+async def __aenter__(self):
+    await self.initialize()
+    return self
+    
+async def __aexit__(self, exc_type, exc_val, exc_tb):
+    await self.cleanup()
+```
+
+### Migration from Old Patterns
+
+#### Before: Direct Connection Management
+
+```python
+# Old pattern - direct connection management
+class OldQueue:
+    def __init__(self, name, nats_url):
+        self.name = name
+        self.nats_url = nats_url
+        self._nc = None
+        self._js = None
+    
+    async def _get_js(self):
+        if self._js is None:
+            self._nc = await nats.connect(self.nats_url)
+            self._js = self._nc.jetstream()
+        return self._js
+    
+    async def close(self):
+        if self._nc:
+            await self._nc.close()
+```
+
+#### After: Service-Based Architecture
+
+```python
+# New pattern - service-based architecture
+class NewQueue:
+    def __init__(self, name, nats_url, services=None):
+        self.name = name
+        self.nats_url = nats_url
+        self._services = services or ServiceManager({'nats': {'url': nats_url}})
+        self._js = None
+    
+    async def _get_js(self):
+        if self._js is None:
+            connection_service = await self._services.get_service(ConnectionService)
+            self._js = await connection_service.get_jetstream(self.nats_url)
+        return self._js
+    
+    async def close(self):
+        await self._services.cleanup_all()
+```
+
+### Service Layer in Action
+
+Here's how the service layer works across different components:
+
+```python
+# Queue using services
+async def enqueue_example():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        queue = Queue(name='example', services=services)
+        job = await queue.enqueue(my_function, arg1, arg2)
+        
+        # All connections managed by the service layer
+        # No need to manually close connections
+
+# Worker using services
+async def worker_example():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        worker = Worker(queues=['example'], services=services)
+        await worker.run()
+        
+        # Services automatically cleaned up when context exits
+```
+
+### Best Practices for Using the Service Layer
+
+1. **Use ServiceManager for Lifecycle Management**: Always use the ServiceManager as a context manager to ensure proper cleanup.
+
+2. **Share ServiceManager Instances**: When possible, share a single ServiceManager instance across components in the same process.
+
+3. **Configure Services Properly**: Provide appropriate configuration for connection parameters, retry logic, and timeouts.
+
+4. **Handle Service Errors**: Implement proper error handling for service-related exceptions.
+
+5. **Use Dependency Injection**: Leverage the service dependency system rather than manually creating service instances.
+
+The service layer architecture represents a significant improvement in the design of `naq`, eliminating code duplication, improving resource efficiency, and providing a solid foundation for future enhancements.
+
+## Connection Management
+
+The connection management system has been completely refactored to provide:
+
+1. **Context Manager API**: Modern, resource-safe connection management
+2. **Service Integration**: Seamless integration with the service layer
+3. **Monitoring Capabilities**: Built-in connection metrics and health monitoring
+4. **Configuration-Driven**: All connection parameters driven by configuration
+
+### Architecture Flow
+
+```
+Application Code
+    ↓ (Context Managers or Decorators)
+Connection Module (context_managers.py, utils.py, decorators.py)
+    ↓ (Optional Service Integration)
+ConnectionService (services/connection.py)
+    ↓
+NATS Client
+```
+
+### Key Benefits
+
+- **Automatic Resource Management**: Context managers ensure proper cleanup
+- **Reduced Boilerplate**: Eliminates manual connection handling code
+- **Consistent Patterns**: Uniform connection handling across all modules
+- **Production Ready**: Built-in monitoring and health checking
+
+### Context Manager Implementation
+
+The new connection management system provides several context managers for different use cases:
+
+```python
+# Basic NATS connection
+async with nats_connection() as conn:
+    await conn.publish("subject", b"message")
+
+# JetStream context
+async with nats_jetstream() as (conn, js):
+    await js.add_stream(name="stream", subjects=["stream.*"])
+
+# KeyValue operations
+async with nats_kv_store("bucket") as kv:
+    await kv.put("key", "value")
+```
+
+### Connection Monitoring
+
+The system includes comprehensive monitoring capabilities:
+
+```python
+from naq.connection import connection_monitor
+
+# Track connection metrics
+print(f"Total connections: {connection_monitor.metrics.total_connections}")
+print(f"Active connections: {connection_monitor.metrics.active_connections}")
+print(f"Failed connections: {connection_monitor.metrics.failed_connections}")
+```
+
+### Integration with Service Layer
+
+The connection management system integrates seamlessly with the service layer:
+
+```python
+# Using context managers with services
+async with ServiceManager(config) as services:
+    connection_service = await services.get_service(ConnectionService)
+    
+    # Context managers can use the same underlying connections
+    async with nats_connection() as conn:
+        # Connection is managed by both the context manager and service layer
+        await conn.publish("subject", b"message")
+```
+
+### Migration Path
+
+The connection management system provides a clear migration path from legacy patterns:
+
+#### Legacy Pattern
+```python
+# Old approach - manual connection management
+nc = await get_nats_connection(url)
+try:
+    js = await get_jetstream_context(nc)
+    await js.add_stream(config)
+finally:
+    await close_nats_connection(nc)
+```
+
+#### Modern Pattern
+```python
+# New approach - automatic resource management
+async with nats_jetstream(config) as (conn, js):
+    await js.add_stream(config)
+```
+
+### Backward Compatibility
+
+The new connection management system maintains full backward compatibility with existing code. All legacy functions continue to work unchanged, while new code can benefit from the improved context manager API.
+
+### Production Considerations
+
+For production deployments, the connection management system provides:
+
+1. **Connection Pooling**: Efficient reuse of connections across components
+2. **Health Monitoring**: Built-in connection health checks and metrics
+3. **Error Handling**: Comprehensive error handling and retry logic
+4. **Configuration Management**: Centralized configuration for all connection parameters
+
+This refactored connection management system significantly improves the reliability and maintainability of `naq` while providing a modern, Pythonic API for developers.

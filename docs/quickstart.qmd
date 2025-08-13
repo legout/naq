@@ -77,8 +77,66 @@ Found 25 words.
 
 Congratulations! You've successfully enqueued and processed your first background job with `naq`.
 
+## Connection Management
+
+### Using Context Managers (Recommended)
+
+The recommended way to manage NATS connections in `naq` is through context managers. They provide automatic resource management and ensure proper cleanup.
+
+```python
+import asyncio
+from naq.connection import nats_connection, nats_jetstream, nats_kv_store
+
+async def basic_example():
+    # Simple connection
+    async with nats_connection() as conn:
+        await conn.publish("hello", b"world")
+    
+    # With JetStream
+    async with nats_jetstream() as (conn, js):
+        stream = await js.add_stream(name="mystream", subjects=["mystream.*"])
+    
+    # With KeyValue store
+    async with nats_kv_store("mybucket") as kv:
+        await kv.put("key", "value")
+```
+
+### Using Decorators
+
+For functions that need NATS connections, you can use decorators to automatically inject connections:
+
+```python
+from naq.connection import with_nats_connection, with_jetstream_context
+
+@with_nats_connection()
+async def publish(conn, subject: str, data: bytes):
+    await conn.publish(subject, data)
+
+@with_jetstream_context()
+async def create_stream(js, name: str):
+    await js.add_stream(name=name, subjects=[f"{name}.*"])
+```
+
+### Connection Testing and Monitoring
+
+In production environments, you can test and monitor your connections:
+
+```python
+from naq.connection import test_nats_connection, wait_for_nats_connection, connection_monitor
+
+# Test if connection is available
+is_healthy = await test_nats_connection()
+
+# Wait for connection to be ready
+await wait_for_nats_connection(timeout=30)
+
+# Monitor connection usage
+print(f"Active connections: {connection_monitor.metrics.active_connections}")
+```
+
 ## What's Next?
 
 -   Explore how to [schedule jobs](examples.qmd) to run in the future.
 -   Learn about the [architecture](architecture.qmd) of `naq`.
 -   Check out more complex [examples](examples.qmd).
+-   Read the [Connection Management API](api/connection.qmd) documentation for advanced usage.

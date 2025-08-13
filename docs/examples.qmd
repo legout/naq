@@ -346,3 +346,328 @@ To see this in action:
     ```
 
 You will see the handler script enqueue two jobs. The worker will pick them up. When the `fail-on-purpose` job fails, you will see the custom "🚨 CUSTOM HANDLER TRIGGERED" message printed by the `on_job_failure` function in the handler script's terminal, demonstrating the reactive power of the event system.
+
+## Example 6: Connection Management with Context Managers
+
+The new connection management system provides context managers for automatic resource management. These examples demonstrate how to use the different context managers available in `naq`.
+
+### Basic Connection Management
+
+```python
+# connection_example.py
+import asyncio
+from naq.connection import nats_connection, nats_jetstream, nats_kv_store
+
+async def basic_connection_example():
+    """Example of basic NATS connection management."""
+    
+    # Simple connection for publishing messages
+    async with nats_connection() as conn:
+        await conn.publish("hello.world", b"Hello from context manager!")
+        print("Message published successfully")
+    
+    # Connection is automatically closed when exiting the context
+
+async def jetstream_example():
+    """Example of JetStream context management."""
+    
+    # Combined connection and JetStream context
+    async with nats_jetstream() as (conn, js):
+        # Create a stream
+        await js.add_stream(
+            name="example_stream",
+            subjects=["example.*"]
+        )
+        print("Stream created successfully")
+        
+        # Publish a message to the stream
+        await js.publish("example.data", b"Stream data")
+        print("Message published to stream")
+    
+    # Both connection and JetStream context are automatically closed
+
+async def kv_store_example():
+    """Example of KeyValue store management."""
+    
+    # KeyValue store context
+    async with nats_kv_store("example_bucket") as kv:
+        # Store a value
+        await kv.put("user:123", '{"name": "Alice", "role": "admin"}')
+        print("Value stored in KV bucket")
+        
+        # Retrieve the value
+        result = await kv.get("user:123")
+        print(f"Retrieved value: {result.value.decode()}")
+        
+        # List all keys
+        keys = await kv.keys()
+        print(f"Keys in bucket: {list(keys)}")
+    
+    # KV store context is automatically closed
+
+if __name__ == "__main__":
+    asyncio.run(basic_connection_example())
+    asyncio.run(jetstream_example())
+    asyncio.run(kv_store_example())
+```
+
+### Connection Management with Decorators
+
+```python
+# decorator_example.py
+import asyncio
+from naq.connection import with_nats_connection, with_jetstream_context
+
+@with_nats_connection()
+async def publish_message(conn, subject: str, message: str):
+    """Publish a message using the injected connection."""
+    await conn.publish(subject, message.encode())
+    print(f"Message published to {subject}")
+
+@with_jetstream_context()
+async def create_consumer(js, stream_name: str, consumer_name: str):
+    """Create a consumer using the injected JetStream context."""
+    await js.add_consumer(
+        stream_name,
+        durable_name=consumer_name,
+        ack_policy="explicit"
+    )
+    print(f"Consumer '{consumer_name}' created for stream '{stream_name}'")
+
+async def decorator_example():
+    """Example of using connection decorators."""
+    
+    # Publish a message - connection is automatically injected
+    await publish_message("decorator.test", "Hello from decorator!")
+    
+    # Create a consumer - JetStream context is automatically injected
+    await create_consumer("example_stream", "example_consumer")
+
+if __name__ == "__main__":
+    asyncio.run(decorator_example())
+```
+
+### Connection Testing and Monitoring
+
+```python
+# monitoring_example.py
+import asyncio
+from naq.connection import (
+    test_nats_connection,
+    wait_for_nats_connection,
+    connection_monitor,
+    nats_connection
+)
+
+async def monitoring_example():
+    """Example of connection testing and monitoring."""
+    
+    # Test if connection is available
+    is_healthy = await test_nats_connection()
+    print(f"Connection healthy: {is_healthy}")
+    
+    # Wait for connection to be ready (useful in production)
+    is_ready = await wait_for_nats_connection(timeout=10)
+    print(f"Connection ready: {is_ready}")
+    
+    # Use connection and monitor metrics
+    async with nats_connection() as conn:
+        # Do some work
+        await conn.publish("monitoring.test", b"Test message")
+        
+        # Check connection metrics
+        metrics = connection_monitor.metrics
+        print(f"Total connections: {metrics.total_connections}")
+        print(f"Active connections: {metrics.active_connections}")
+        print(f"Failed connections: {metrics.failed_connections}")
+        print(f"Average connection time: {metrics.average_connection_time:.2f}s")
+
+if __name__ == "__main__":
+    asyncio.run(monitoring_example())
+```
+
+### Custom Configuration
+
+```python
+# custom_config_example.py
+import asyncio
+from naq.connection import Config, nats_connection, nats_jetstream
+
+async def custom_config_example():
+    """Example of using custom connection configuration."""
+    
+    # Create custom configuration
+    config = Config(
+        servers=["nats://localhost:4222", "nats://localhost:4223"],
+        client_name="my-custom-app",
+        max_reconnect_attempts=10,
+        reconnect_time_wait=5.0
+    )
+    
+    # Use custom configuration
+    async with nats_connection(config) as conn:
+        await conn.publish("config.test", b"Using custom config")
+        print("Message published with custom configuration")
+    
+    # Use with JetStream
+    async with nats_jetstream(config) as (conn, js):
+        await js.add_stream(
+            name="config_stream",
+            subjects=["config.*"]
+        )
+        print("Stream created with custom configuration")
+
+if __name__ == "__main__":
+    asyncio.run(custom_config_example())
+```
+
+### Migration from Legacy Patterns
+
+```python
+# migration_example.py
+import asyncio
+from naq.connection import (
+    # Legacy functions (still work)
+    get_nats_connection,
+    get_jetstream_context,
+    close_nats_connection,
+    
+    # New context managers
+    nats_connection,
+    nats_jetstream
+)
+
+async def legacy_pattern():
+    """Old way of managing connections."""
+    print("=== Legacy Pattern ===")
+    
+    nc = await get_nats_connection()
+    try:
+        js = await get_jetstream_context(nc)
+        await js.add_stream(name="legacy_stream", subjects=["legacy.*"])
+        print("Stream created using legacy pattern")
+    finally:
+        await close_nats_connection(nc)
+        print("Connection closed manually")
+
+async def modern_pattern():
+    """New way of managing connections."""
+    print("=== Modern Pattern ===")
+    
+    async with nats_jetstream() as (conn, js):
+        await js.add_stream(name="modern_stream", subjects=["modern.*"])
+        print("Stream created using modern pattern")
+    
+    print("Connection closed automatically")
+
+async def migration_example():
+    """Example showing both patterns."""
+    
+    # Legacy pattern (still works)
+    await legacy_pattern()
+    
+    # Modern pattern (recommended)
+    await modern_pattern()
+
+if __name__ == "__main__":
+    asyncio.run(migration_example())
+```
+
+### Production-Ready Connection Management
+
+```python
+# production_example.py
+import asyncio
+from naq.connection import (
+    nats_connection,
+    nats_jetstream,
+    test_nats_connection,
+    wait_for_nats_connection,
+    connection_monitor,
+    Config
+)
+
+class ProductionService:
+    """Example of production-ready connection management."""
+    
+    def __init__(self, config: Config):
+        self.config = config
+    
+    async def ensure_connection(self):
+        """Ensure connection is available before proceeding."""
+        if not await test_nats_connection(self.config):
+            print("Waiting for connection...")
+            if not await wait_for_nats_connection(self.config, timeout=30):
+                raise ConnectionError("Failed to establish connection")
+    
+    async def process_data(self):
+        """Process data with robust connection management."""
+        
+        # Ensure connection is available
+        await self.ensure_connection()
+        
+        try:
+            # Use JetStream with automatic connection management
+            async with nats_jetstream(self.config) as (conn, js):
+                # Create stream if it doesn't exist
+                try:
+                    await js.add_stream(
+                        name="production_stream",
+                        subjects=["production.*"]
+                    )
+                except Exception as e:
+                    print(f"Stream might already exist: {e}")
+                
+                # Process and publish data
+                for i in range(5):
+                    data = f"Production data {i}"
+                    await js.publish("production.data", data.encode())
+                    print(f"Published: {data}")
+                
+                # Log connection metrics
+                metrics = connection_monitor.metrics
+                print(f"Connection metrics - Total: {metrics.total_connections}, "
+                      f"Active: {metrics.active_connections}, "
+                      f"Failed: {metrics.failed_connections}")
+        
+        except Exception as e:
+            print(f"Error in production processing: {e}")
+            raise
+
+async def production_example():
+    """Example of production-ready connection management."""
+    
+    # Production configuration
+    config = Config(
+        servers=["nats://localhost:4222"],
+        client_name="production-service",
+        max_reconnect_attempts=10,
+        reconnect_time_wait=5.0
+    )
+    
+    # Create and run production service
+    service = ProductionService(config)
+    await service.process_data()
+
+if __name__ == "__main__":
+    asyncio.run(production_example())
+```
+
+To run these examples:
+
+1.  **Start a NATS server** in one terminal:
+    ```bash
+    nats-server
+    ```
+
+2.  **Run the examples** in another terminal:
+    ```bash
+    python connection_example.py
+    python decorator_example.py
+    python monitoring_example.py
+    python custom_config_example.py
+    python migration_example.py
+    python production_example.py
+    ```
+
+These examples demonstrate the various ways to use the new connection management system in `naq`, from basic usage to production-ready patterns. The context managers provide automatic resource management, while the decorators offer a convenient way to inject connections into functions.

@@ -10,7 +10,7 @@ from nats.aio.client import Client as NATSClient
 from nats.js import JetStreamContext
 from nats.js.api import ConsumerConfig, DeliverPolicy, RetentionPolicy, StorageType
 
-from ..connection import ConnectionManager, get_jetstream_context
+from ..connection import ConnectionManager, get_jetstream_context, nats_connection, Config
 from ..exceptions import NaqConnectionError
 from ..models import JobEvent, JobEventType
 
@@ -88,8 +88,20 @@ class NATSJobEventStorage(BaseEventStorage):
             return
             
         try:
-            self._nc = await self._connection_manager.get_connection(self.nats_url)
-            self._js = await get_jetstream_context(self._nc)
+            # Create a config with the specific NATS URL
+            config = Config()
+            config.nats.servers = [self.nats_url]
+            
+            # Create a connection using the new connection approach
+            # We need to create a connection that persists beyond the context manager
+            import nats
+            self._nc = await nats.connect(
+                servers=config.nats.servers,
+                name=config.nats.client_name,
+                max_reconnect_attempts=config.nats.max_reconnect_attempts,
+                reconnect_time_wait=config.nats.reconnect_time_wait,
+            )
+            self._js = self._nc.jetstream()
             await self._setup_stream()
             self._connected = True
         except Exception as e:

@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any
 from loguru import logger
 
 from .logger import JobEventLogger, AsyncJobEventLogger
-from .storage import NATSJobEventStorage
+from .storage import NATSJobEventStorage, BaseEventStorage
 from ..settings import (
     NAQ_EVENTS_ENABLED,
     NAQ_EVENT_STORAGE_TYPE,
@@ -51,7 +51,7 @@ class SharedEventLoggerManager:
             
         self._sync_logger: Optional[JobEventLogger] = None
         self._async_logger: Optional[AsyncJobEventLogger] = None
-        self._storage: Optional[NATSJobEventStorage] = None
+        self._storage: Optional[BaseEventStorage] = None
         self._config: Dict[str, Any] = {}
         self._lock = threading.Lock()
         self._async_lock = asyncio.Lock()
@@ -104,9 +104,16 @@ class SharedEventLoggerManager:
         with self._lock:
             if self._sync_logger is None:
                 try:
-                    self._storage = NATSJobEventStorage(
-                        nats_url=self._config.get('storage_url', NAQ_EVENT_STORAGE_URL)
-                    )
+                    storage_instance = self._config.get('storage_instance')
+                    if storage_instance and isinstance(storage_instance, BaseEventStorage):
+                        self._storage = storage_instance
+                        logger.debug("Using provided storage_instance for synchronous event logger")
+                    else:
+                        self._storage = NATSJobEventStorage(
+                            nats_url=self._config.get('storage_url', NAQ_EVENT_STORAGE_URL)
+                        )
+                        logger.debug("Created NATSJobEventStorage for synchronous event logger")
+                    
                     self._sync_logger = JobEventLogger(storage=self._storage)
                     logger.debug("Created shared synchronous event logger")
                 except Exception as e:
@@ -128,9 +135,16 @@ class SharedEventLoggerManager:
         async with self._async_lock:
             if self._async_logger is None:
                 try:
-                    self._storage = NATSJobEventStorage(
-                        nats_url=self._config.get('storage_url', NAQ_EVENT_STORAGE_URL)
-                    )
+                    storage_instance = self._config.get('storage_instance')
+                    if storage_instance and isinstance(storage_instance, BaseEventStorage):
+                        self._storage = storage_instance
+                        logger.debug("Using provided storage_instance for asynchronous event logger")
+                    else:
+                        self._storage = NATSJobEventStorage(
+                            nats_url=self._config.get('storage_url', NAQ_EVENT_STORAGE_URL)
+                        )
+                        logger.debug("Created NATSJobEventStorage for asynchronous event logger")
+                    
                     self._async_logger = AsyncJobEventLogger(storage=self._storage)
                     logger.debug("Created shared asynchronous event logger")
                 except Exception as e:
@@ -196,8 +210,8 @@ class SharedEventLoggerManager:
             
             if self._storage:
                 try:
-                    # Cleanup storage using the close method
-                    if hasattr(self._storage, 'close'):
+                    # Cleanup storage using the close method if it's a NATSJobEventStorage
+                    if isinstance(self._storage, NATSJobEventStorage) and hasattr(self._storage, 'close'):
                         await self._storage.close()
                 except Exception as e:
                     logger.error(f"Error during storage cleanup: {e}")

@@ -12,13 +12,15 @@ The `Queue` class represents a job queue and is the main entry point for enqueui
 For simple, one-off enqueueing, you might prefer the helper functions like [`enqueue`](#enqueue-functions) which manage the `Queue` instance for you.
 :::
 
-### `naq.queue.Queue(name, nats_url, default_timeout)`
+### `naq.queue.Queue(name, nats_url, default_timeout, prefer_thread_local, services)`
 
-| Parameter         | Type                | Description                                                               |
-| ----------------- | ------------------- | ------------------------------------------------------------------------- |
-| `name`            | `str`               | The name of the queue. Defaults to `naq_default_queue`.                   |
-| `nats_url`        | `str`               | The URL of the NATS server. Defaults to `nats://localhost:4222`.          |
-| `default_timeout` | `int` &#124; `None` | The default timeout in seconds for jobs in this queue.                    |
+| Parameter            | Type                               | Description                                                               |
+| -------------------- | ---------------------------------- | ------------------------------------------------------------------------- |
+| `name`               | `str`                              | The name of the queue. Defaults to `naq_default_queue`.                   |
+| `nats_url`           | `str`                              | The URL of the NATS server. Defaults to `nats://localhost:4222`.          |
+| `default_timeout`    | `int` &#124; `None`                | The default timeout in seconds for jobs in this queue.                    |
+| `prefer_thread_local` | `bool`                             | When True, reuse a thread-local connection/JS context.                    |
+| `services`           | `ServiceManager` &#124; `None`     | Optional ServiceManager instance for dependency injection.                 |
 
 ### Methods
 
@@ -108,6 +110,126 @@ async def cancel_scheduled_job(self, job_id: str) -> bool
 ```
 
 Returns `True` if the job was found and canceled.
+
+## Service Layer Integration
+
+The `Queue` class integrates with the service layer architecture to provide efficient resource management and connection pooling. When using the service layer, the queue automatically leverages centralized services for NATS connections, stream management, and other resources.
+
+### Using Queue with ServiceManager
+
+The recommended way to use the `Queue` class with the service layer is to provide a `ServiceManager` instance:
+
+```python
+import asyncio
+from naq.queue import Queue
+from naq.services import ServiceManager
+
+async def queue_with_services():
+    # Create service configuration
+    config = {
+        'nats': {
+            'url': 'nats://localhost:4222',
+            'max_reconnect_attempts': 5,
+            'reconnect_delay': 1.0
+        }
+    }
+    
+    # Use ServiceManager for lifecycle management
+    async with ServiceManager(config) as services:
+        # Create Queue with ServiceManager
+        queue = Queue(name='example', services=services)
+        
+        # Use the queue - it will automatically use the services
+        job = await queue.enqueue(my_function, arg1, arg2)
+        
+        # Services are automatically managed and cleaned up
+```
+
+### Benefits of Service Layer Integration
+
+1. **Connection Pooling**: Multiple queue instances can share the same NATS connection, reducing resource usage.
+
+2. **Centralized Configuration**: Connection parameters, retry logic, and timeouts are configured in one place.
+
+3. **Automatic Resource Management**: Services are automatically initialized and cleaned up by the ServiceManager.
+
+4. **Dependency Injection**: Services can depend on each other, creating a clean dependency graph.
+
+### Migration from Direct Connection Management
+
+#### Before (Direct Connection Management)
+
+```python
+# Old approach - direct connection management
+async def old_queue_usage():
+    queue = Queue(name='example', nats_url='nats://localhost:4222')
+    
+    try:
+        job = await queue.enqueue(my_function, arg1, arg2)
+        # Use the queue
+    finally:
+        await queue.close()  # Manual cleanup
+```
+
+#### After (Service Layer)
+
+```python
+# New approach - service layer
+async def new_queue_usage():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        queue = Queue(name='example', services=services)
+        
+        job = await queue.enqueue(my_function, arg1, arg2)
+        # No need to manually close - services are automatically managed
+```
+
+### Advanced Service Configuration
+
+You can provide detailed configuration for the services used by the queue:
+
+```python
+async def advanced_service_config():
+    config = {
+        'nats': {
+            'url': 'nats://localhost:4222',
+            'max_reconnect_attempts': 10,
+            'reconnect_delay': 2.0,
+            'connection_timeout': 30.0,
+            'ping_interval': 60,
+            'max_outstanding_pings': 3
+        },
+        'events': {
+            'enabled': True,
+            'batch_size': 100,
+            'flush_interval': 1.0,
+            'max_buffer_size': 10000
+        }
+    }
+    
+    async with ServiceManager(config) as services:
+        queue = Queue(name='production', services=services)
+        # Queue will use the configured services
+```
+
+### Sharing ServiceManager Across Queues
+
+Multiple queues can share the same ServiceManager for efficient resource usage:
+
+```python
+async def shared_services_example():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        # Create multiple queues sharing the same services
+        high_priority_queue = Queue(name='high_priority', services=services)
+        low_priority_queue = Queue(name='low_priority', services=services)
+        
+        # Both queues share the same connection and other services
+        job1 = await high_priority_queue.enqueue(urgent_task)
+        job2 = await low_priority_queue.enqueue(background_task)
+```
 
 ## Enqueue Functions
 

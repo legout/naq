@@ -8,14 +8,15 @@ The `scheduler` module contains the `Scheduler` class, which is responsible for 
 
 You typically run the scheduler from the command line using `naq scheduler`, but you can also create and run a `Scheduler` instance programmatically.
 
-### `naq.scheduler.Scheduler(nats_url, poll_interval, instance_id, enable_ha)`
+### `naq.scheduler.Scheduler(nats_url, poll_interval, instance_id, enable_ha, services)`
 
-| Parameter       | Type                | Description                                                                                             |
-| --------------- | ------------------- | ------------------------------------------------------------------------------------------------------- |
-| `nats_url`      | `str`               | The URL of the NATS server.                                                                             |
-| `poll_interval` | `float`             | The interval (in seconds) at which the scheduler checks for due jobs. Defaults to `1.0`.                  |
-| `instance_id`   | `str` &#124; `None` | A unique ID for the scheduler instance, used for High Availability. A unique ID is generated if not provided. |
-| `enable_ha`     | `bool`              | Whether to enable High Availability (HA) mode with leader election. Defaults to `True`.                  |
+| Parameter       | Type                               | Description                                                                                             |
+| --------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `nats_url`      | `str`                              | The URL of the NATS server.                                                                             |
+| `poll_interval` | `float`                            | The interval (in seconds) at which the scheduler checks for due jobs. Defaults to `1.0`.                  |
+| `instance_id`   | `str` &#124; `None`                 | A unique ID for the scheduler instance, used for High Availability. A unique ID is generated if not provided. |
+| `enable_ha`     | `bool`                             | Whether to enable High Availability (HA) mode with leader election. Defaults to `True`.                  |
+| `services`      | `ServiceManager` &#124; `None`     | Optional ServiceManager instance for dependency injection.                                               |
 
 ### Methods
 
@@ -32,3 +33,318 @@ The scheduler will connect to NATS and, if it becomes the leader (or if HA is di
 ### High Availability (HA)
 
 When `enable_ha` is `True`, you can run multiple `Scheduler` instances for redundancy. They will use a leader election protocol built on a NATS KV store to ensure that only one instance is actively scheduling jobs at any given time. If the leader instance goes down, another instance will automatically take over.
+
+## Service Layer Integration
+
+The `Scheduler` class integrates with the service layer architecture to provide efficient resource management and connection pooling. When using the service layer, the scheduler automatically leverages centralized services for NATS connections, KV store operations, and event logging.
+
+### Using Scheduler with ServiceManager
+
+The recommended way to use the `Scheduler` class with the service layer is to provide a `ServiceManager` instance:
+
+```python
+import asyncio
+from naq.scheduler import Scheduler
+from naq.services import ServiceManager
+
+async def scheduler_with_services():
+    # Create service configuration
+    config = {
+        'nats': {
+            'url': 'nats://localhost:4222',
+            'max_reconnect_attempts': 5,
+            'reconnect_delay': 1.0
+        },
+        'scheduler': {
+            'poll_interval': 1.0,
+            'enable_ha': True
+        },
+        'events': {
+            'enabled': True,
+            'batch_size': 100,
+            'flush_interval': 1.0
+        }
+    }
+    
+    # Use ServiceManager for lifecycle management
+    async with ServiceManager(config) as services:
+        # Create Scheduler with ServiceManager
+        scheduler = Scheduler(
+            services=services,
+            poll_interval=1.0,
+            enable_ha=True,
+            instance_id='scheduler-1'
+        )
+        
+        # Run the scheduler - it will automatically use the services
+        await scheduler.run()
+        
+        # Services are automatically managed and cleaned up
+```
+
+### Benefits of Service Layer Integration
+
+1. **Connection Pooling**: Multiple scheduler instances can share the same NATS connection, reducing resource usage.
+
+2. **Centralized KV Store Operations**: Scheduled job storage and retrieval is handled by the KVStoreService, providing consistent access patterns.
+
+3. **Event Logging**: Scheduler events are automatically logged through the EventService, providing comprehensive monitoring.
+
+4. **Automatic Resource Management**: Services are automatically initialized and cleaned up by the ServiceManager.
+
+### Migration from Direct Connection Management
+
+#### Before (Direct Connection Management)
+
+```python
+# Old approach - direct connection management
+async def old_scheduler_usage():
+    scheduler = Scheduler(
+        nats_url='nats://localhost:4222',
+        poll_interval=1.0,
+        enable_ha=True
+    )
+    
+    try:
+        await scheduler.run()
+    finally:
+        # Manual cleanup was required
+        pass
+```
+
+#### After (Service Layer)
+
+```python
+# New approach - service layer
+async def new_scheduler_usage():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        scheduler = Scheduler(
+            services=services,
+            poll_interval=1.0,
+            enable_ha=True
+        )
+        
+        await scheduler.run()
+        # No need to manually manage connections - services are automatically managed
+```
+
+### Advanced Service Configuration
+
+You can provide detailed configuration for the services used by the scheduler:
+
+```python
+async def advanced_scheduler_config():
+    config = {
+        'nats': {
+            'url': 'nats://localhost:4222',
+            'max_reconnect_attempts': 10,
+            'reconnect_delay': 2.0,
+            'connection_timeout': 30.0
+        },
+        'scheduler': {
+            'poll_interval': 0.5,  # Poll every 500ms for lower latency
+            'enable_ha': True,
+            'leader_lock_ttl': 30  # Leader lock TTL in seconds
+        },
+        'events': {
+            'enabled': True,
+            'batch_size': 50,
+            'flush_interval': 0.5,
+            'max_buffer_size': 5000
+        }
+    }
+    
+    async with ServiceManager(config) as services:
+        scheduler = Scheduler(
+            services=services,
+            poll_interval=0.5,
+            enable_ha=True,
+            instance_id='production-scheduler-1'
+        )
+        
+        await scheduler.run()
+```
+
+### High Availability with Service Layer
+
+When using the service layer with HA mode, multiple scheduler instances can share the same ServiceManager:
+
+```python
+async def ha_scheduler_with_services():
+    config = {
+        'nats': {'url': 'nats://localhost:4222'},
+        'scheduler': {'enable_ha': True}
+    }
+    
+    async with ServiceManager(config) as services:
+        # Create multiple scheduler instances for HA
+        scheduler1 = Scheduler(
+            services=services,
+            instance_id='scheduler-1',
+            enable_ha=True
+        )
+        
+        scheduler2 = Scheduler(
+            services=services,
+            instance_id='scheduler-2',
+            enable_ha=True
+        )
+        
+        # Run schedulers concurrently
+        scheduler1_task = asyncio.create_task(scheduler1.run())
+        scheduler2_task = asyncio.create_task(scheduler2.run())
+        
+        # One scheduler will become the leader, the other will be a follower
+        await asyncio.sleep(30)
+        
+        # Stop the leader scheduler
+        scheduler1_task.cancel()
+        
+        try:
+            await scheduler1_task
+        except asyncio.CancelledError:
+            pass
+        
+        # The follower (scheduler2) will automatically become the new leader
+        await asyncio.sleep(30)
+        
+        # Clean up
+        scheduler2_task.cancel()
+        try:
+            await scheduler2_task
+        except asyncio.CancelledError:
+            pass
+```
+
+### Scheduler Event Integration
+
+When using the service layer, schedulers automatically integrate with the event system:
+
+```python
+async def scheduler_with_events():
+    config = {
+        'nats': {'url': 'nats://localhost:4222'},
+        'scheduler': {'enable_ha': False},
+        'events': {
+            'enabled': True,
+            'batch_size': 25,
+            'flush_interval': 0.25
+        }
+    }
+    
+    async with ServiceManager(config) as services:
+        scheduler = Scheduler(
+            services=services,
+            poll_interval=1.0
+        )
+        
+        # The scheduler will automatically log:
+        # - SCHEDULED events when jobs are scheduled
+        # - SCHEDULE_TRIGGERED events when jobs are triggered for execution
+        # - STATUS_CHANGED events for scheduler state transitions
+        
+        await scheduler.run()
+```
+
+### Custom Scheduler with Services
+
+For advanced use cases, you can create custom scheduler classes that leverage the service layer:
+
+```python
+from naq.scheduler import Scheduler
+from naq.services import ServiceManager, SchedulerService, EventService
+
+class CustomScheduler(Scheduler):
+    """Custom scheduler with enhanced service integration."""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._scheduler_service = None
+        self._event_service = None
+    
+    async def _setup_services(self):
+        """Set up service references."""
+        if self._services:
+            self._scheduler_service = await self._services.get_service(SchedulerService)
+            self._event_service = await self._services.get_service(EventService)
+    
+    async def trigger_due_jobs(self) -> List[str]:
+        """Override to add custom triggering logic with services."""
+        await self._setup_services()
+        
+        # Log custom event before triggering
+        if self._event_service:
+            from naq.models import JobEvent, JobEventType
+            custom_event = JobEvent(
+                job_id=f"scheduler-{self.instance_id}",
+                event_type="custom_trigger_start",
+                queue_name="scheduler",
+                worker_id=self.instance_id,
+                details={"timestamp": time.time()}
+            )
+            await self._event_service.log_event(custom_event)
+        
+        # Use the scheduler service to trigger jobs
+        triggered_jobs = await self._scheduler_service.trigger_due_jobs()
+        
+        # Log custom event after triggering
+        if self._event_service:
+            custom_event = JobEvent(
+                job_id=f"scheduler-{self.instance_id}",
+                event_type="custom_trigger_complete",
+                queue_name="scheduler",
+                worker_id=self.instance_id,
+                details={
+                    "triggered_count": len(triggered_jobs),
+                    "triggered_jobs": triggered_jobs
+                }
+            )
+            await self._event_service.log_event(custom_event)
+        
+        return triggered_jobs
+
+# Using the custom scheduler
+async def custom_scheduler_example():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        scheduler = CustomScheduler(
+            services=services,
+            poll_interval=1.0,
+            instance_id='custom-scheduler-1'
+        )
+        
+        await scheduler.run()
+```
+
+### Scheduler Statistics with Services
+
+The service layer provides enhanced statistics and monitoring capabilities for schedulers:
+
+```python
+async def scheduler_stats_example():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        scheduler = Scheduler(
+            services=services,
+            poll_interval=1.0
+        )
+        
+        # Get scheduler statistics from the service
+        scheduler_service = await services.get_service(SchedulerService)
+        stats = await scheduler_service.get_scheduler_stats()
+        
+        print(f"Scheduler statistics: {stats}")
+        # Stats might include:
+        # - Total scheduled jobs
+        # - Jobs triggered in the last interval
+        # - Average trigger latency
+        # - HA status (leader/follower)
+        
+        await scheduler.run()
+```
+
+The service layer integration provides a robust foundation for building efficient, maintainable scheduler applications with `naq`, eliminating connection duplication and providing clean resource management throughout the system.

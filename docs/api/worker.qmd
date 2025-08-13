@@ -8,7 +8,7 @@ The `worker` module contains the `Worker` class, which is responsible for fetchi
 
 You can start a worker from the command line using `naq worker`, but you can also create and run a `Worker` instance programmatically.
 
-### `naq.worker.Worker(queues, nats_url, concurrency, worker_name, ...)`
+### `naq.worker.Worker(queues, nats_url, concurrency, worker_name, services, ...)`
 
 | Parameter            | Type                               | Description                                                                                             |
 | -------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -16,6 +16,7 @@ You can start a worker from the command line using `naq worker`, but you can als
 | `nats_url`           | `str`                              | The URL of the NATS server.                                                                             |
 | `concurrency`        | `int`                              | The maximum number of jobs to process concurrently. Defaults to `10`.                                     |
 | `worker_name`        | `str` &#124; `None`                 | A name for the worker, used for creating durable consumer names. A unique ID is generated if not provided. |
+| `services`           | `ServiceManager` &#124; `None`     | Optional ServiceManager instance for dependency injection.                                               |
 | `heartbeat_interval` | `int`                              | The interval (in seconds) at which the worker sends a heartbeat. Defaults to `15`.                      |
 | `worker_ttl`         | `int`                              | The time-to-live (in seconds) for the worker's heartbeat. Defaults to `60`.                             |
 | `ack_wait`           | `int` &#124; `dict` &#124; `None`   | The time (in seconds) the worker has to acknowledge a job before it's re-delivered. Can be a global value or a per-queue dictionary. |
@@ -57,3 +58,278 @@ Returns a list of dictionaries, where each dictionary contains information about
 #### `list_workers_sync()`
 
 A synchronous version of `list_workers()`.
+
+## Service Layer Integration
+
+The `Worker` class integrates with the service layer architecture to provide efficient resource management and connection pooling. When using the service layer, the worker automatically leverages centralized services for NATS connections, job execution, and event logging.
+
+### Using Worker with ServiceManager
+
+The recommended way to use the `Worker` class with the service layer is to provide a `ServiceManager` instance:
+
+```python
+import asyncio
+from naq.worker import Worker
+from naq.services import ServiceManager
+
+async def worker_with_services():
+    # Create service configuration
+    config = {
+        'nats': {
+            'url': 'nats://localhost:4222',
+            'max_reconnect_attempts': 5,
+            'reconnect_delay': 1.0
+        },
+        'jobs': {
+            'default_timeout': 3600,
+            'result_ttl': 604800
+        },
+        'events': {
+            'enabled': True,
+            'batch_size': 100,
+            'flush_interval': 1.0
+        }
+    }
+    
+    # Use ServiceManager for lifecycle management
+    async with ServiceManager(config) as services:
+        # Create Worker with ServiceManager
+        worker = Worker(
+            queues=['high_priority', 'low_priority'],
+            services=services,
+            concurrency=5
+        )
+        
+        # Run the worker - it will automatically use the services
+        await worker.run()
+        
+        # Services are automatically managed and cleaned up
+```
+
+### Benefits of Service Layer Integration
+
+1. **Connection Pooling**: Multiple workers can share the same NATS connection, reducing resource usage.
+
+2. **Centralized Job Execution**: Job execution is handled by the JobService, providing consistent error handling and result management.
+
+3. **Event Logging**: Worker events are automatically logged through the EventService, providing comprehensive monitoring.
+
+4. **Automatic Resource Management**: Services are automatically initialized and cleaned up by the ServiceManager.
+
+### Migration from Direct Connection Management
+
+#### Before (Direct Connection Management)
+
+```python
+# Old approach - direct connection management
+async def old_worker_usage():
+    worker = Worker(
+        queues=['example'],
+        nats_url='nats://localhost:4222',
+        concurrency=10
+    )
+    
+    try:
+        await worker.run()
+    finally:
+        # Manual cleanup was required
+        pass
+```
+
+#### After (Service Layer)
+
+```python
+# New approach - service layer
+async def new_worker_usage():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        worker = Worker(
+            queues=['example'],
+            services=services,
+            concurrency=10
+        )
+        
+        await worker.run()
+        # No need to manually manage connections - services are automatically managed
+```
+
+### Advanced Service Configuration
+
+You can provide detailed configuration for the services used by the worker:
+
+```python
+async def advanced_worker_config():
+    config = {
+        'nats': {
+            'url': 'nats://localhost:4222',
+            'max_reconnect_attempts': 10,
+            'reconnect_delay': 2.0,
+            'connection_timeout': 30.0
+        },
+        'jobs': {
+            'default_timeout': 3600,
+            'result_ttl': 604800,
+            'cleanup_interval': 3600  # Clean up old results every hour
+        },
+        'events': {
+            'enabled': True,
+            'batch_size': 100,
+            'flush_interval': 1.0,
+            'max_buffer_size': 10000
+        }
+    }
+    
+    async with ServiceManager(config) as services:
+        worker = Worker(
+            queues=['production'],
+            services=services,
+            concurrency=20,
+            worker_name='production-worker-1'
+        )
+        
+        await worker.run()
+```
+
+### Sharing ServiceManager Across Workers
+
+Multiple workers can share the same ServiceManager for efficient resource usage:
+
+```python
+async def shared_worker_services():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        # Create multiple workers sharing the same services
+        worker1 = Worker(
+            queues=['high_priority'],
+            services=services,
+            concurrency=5,
+            worker_name='high-priority-worker'
+        )
+        
+        worker2 = Worker(
+            queues=['low_priority'],
+            services=services,
+            concurrency=10,
+            worker_name='low-priority-worker'
+        )
+        
+        # Run workers concurrently
+        worker1_task = asyncio.create_task(worker1.run())
+        worker2_task = asyncio.create_task(worker2.run())
+        
+        # Wait for both workers (in a real scenario, you might run them indefinitely)
+        await asyncio.sleep(10)
+        
+        # Cancel worker tasks
+        worker1_task.cancel()
+        worker2_task.cancel()
+        
+        try:
+            await worker1_task
+            await worker2_task
+        except asyncio.CancelledError:
+            pass
+```
+
+### Worker Event Integration
+
+When using the service layer, workers automatically integrate with the event system:
+
+```python
+async def worker_with_events():
+    config = {
+        'nats': {'url': 'nats://localhost:4222'},
+        'events': {
+            'enabled': True,
+            'batch_size': 50,
+            'flush_interval': 0.5
+        }
+    }
+    
+    async with ServiceManager(config) as services:
+        worker = Worker(
+            queues=['example'],
+            services=services,
+            concurrency=3
+        )
+        
+        # The worker will automatically log:
+        # - STARTED events when jobs begin processing
+        # - COMPLETED events when jobs finish successfully
+        # - FAILED events when jobs encounter errors
+        # - STATUS_CHANGED events for job state transitions
+        
+        await worker.run()
+```
+
+### Custom Worker with Services
+
+For advanced use cases, you can create custom worker classes that leverage the service layer:
+
+```python
+from naq.worker import Worker
+from naq.services import ServiceManager, JobService, EventService
+
+class CustomWorker(Worker):
+    """Custom worker with enhanced service integration."""
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._job_service = None
+        self._event_service = None
+    
+    async def _setup_services(self):
+        """Set up service references."""
+        if self._services:
+            self._job_service = await self._services.get_service(JobService)
+            self._event_service = await self._services.get_service(EventService)
+    
+    async def process_job(self, job):
+        """Override to add custom processing with services."""
+        await self._setup_services()
+        
+        # Log custom event before processing
+        if self._event_service:
+            from naq.models import JobEvent, JobEventType
+            custom_event = JobEvent(
+                job_id=job.job_id,
+                event_type="custom_processing_started",
+                queue_name=job.queue_name,
+                worker_id=self.worker_name,
+                details={"custom_data": "pre-processing"}
+            )
+            await self._event_service.log_event(custom_event)
+        
+        # Process the job using the job service
+        result = await self._job_service.execute_job(job)
+        
+        # Log custom event after processing
+        if self._event_service:
+            custom_event = JobEvent(
+                job_id=job.job_id,
+                event_type="custom_processing_completed",
+                queue_name=job.queue_name,
+                worker_id=self.worker_name,
+                details={"duration_ms": result.duration_ms}
+            )
+            await self._event_service.log_event(custom_event)
+        
+        return result
+
+# Using the custom worker
+async def custom_worker_example():
+    config = {'nats': {'url': 'nats://localhost:4222'}}
+    
+    async with ServiceManager(config) as services:
+        worker = CustomWorker(
+            queues=['example'],
+            services=services,
+            concurrency=2
+        )
+        
+        await worker.run()
+```
+
+The service layer integration provides a robust foundation for building efficient, maintainable worker applications with `naq`, eliminating connection duplication and providing clean resource management throughout the system.

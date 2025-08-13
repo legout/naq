@@ -6,7 +6,7 @@ import socket
 import time
 import uuid
 from datetime import timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 import cloudpickle
 import nats
@@ -24,14 +24,10 @@ try:
 except ImportError:
     croniter = None  # type: ignore
 
-from .connection import (
-    close_nats_connection,
-    get_jetstream_context,
-    get_nats_connection,
-)
 from .exceptions import NaqConnectionError
 from .exceptions import SerializationError
 from .events.shared_logger import get_shared_sync_logger, configure_shared_logger
+from .services import ServiceManager, ConnectionService, KVStoreService
 from .settings import DEFAULT_NATS_URL
 from .settings import (
     MAX_SCHEDULE_FAILURES,
@@ -557,6 +553,7 @@ class Scheduler:
         poll_interval: float = 1.0,  # Check for jobs every second
         instance_id: Optional[str] = None,  # For HA leader election
         enable_ha: bool = True,  # Whether to enable HA leader election
+        services: Optional[ServiceManager] = None,
     ):
         self._nats_url = nats_url
         self._poll_interval = poll_interval
@@ -584,12 +581,49 @@ class Scheduler:
         
         # Configure shared event logger
         configure_shared_logger(storage_url=nats_url)
+        
+        # Service configuration
+        self._config = {
+            'nats': {
+                'url': nats_url,
+            },
+            'scheduler': {
+                'poll_interval': poll_interval,
+                'enable_ha': enable_ha,
+            },
+            'events': {
+                'nats_url': nats_url,
+                'stream_name': 'NAQ_JOB_EVENTS',
+                'subject_prefix': 'naq.jobs.events',
+                'batch_size': 100,
+                'flush_interval': 5.0,
+                'max_buffer_size': 10000,
+            }
+        }
+        
+        # Use provided ServiceManager or create our own
+        self._services = services
+        self._connection_service = None
+        self._kv_store_service = None
 
     async def _connect(self) -> None:
         """Establish NATS connection, JetStream context, and KV handles."""
         if self._nc is None or not self._nc.is_connected:
-            self._nc = await get_nats_connection(url=self._nats_url)
-            self._js = await get_jetstream_context(nc=self._nc)
+            # Get or create services
+            if self._services is None:
+                self._services = ServiceManager(self._config)
+            
+            # Get connection service
+            connection_service = await self._services.get_service(ConnectionService)
+            self._connection_service = cast(ConnectionService, connection_service)
+            
+            # Get KV store service
+            kv_store_service = await self._services.get_service(KVStoreService)
+            self._kv_store_service = cast(KVStoreService, kv_store_service)
+            
+            # Get NATS connection and JetStream context
+            self._nc = await self._connection_service.get_connection(self._nats_url)
+            self._js = await self._connection_service.get_jetstream(self._nats_url)
 
             # Connect to the scheduled jobs KV store
             try:
@@ -708,7 +742,10 @@ class Scheduler:
 
     async def _close(self) -> None:
         """Closes NATS connection and cleans up resources."""
-        await close_nats_connection()  # Use the shared close function
+        # Clean up services if we created them
+        if self._services is not None:
+            await self._services.cleanup_all()
+        
         self._nc = None
         self._js = None
         self._kv = None

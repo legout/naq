@@ -19,3 +19,61 @@ The API is organized into modules, each providing specific functionality.
 -   [**`events` Module**](events.qmd): Provides the event logging and monitoring system, including `JobEvent`, `AsyncJobEventLogger`, and `AsyncJobEventProcessor`.
 
 -   [**`exceptions` Module**](exceptions.qmd): Defines custom exceptions raised by `naq`.
+
+## Service Layer
+
+The service layer provides a centralized architecture for managing resources and dependencies in `naq`. It eliminates connection duplication and provides a clean, maintainable way to handle NATS connections, streams, KV stores, and other resources.
+
+-   [**`services` Package**](services.qmd): Core service infrastructure including base classes and service manager.
+
+### Core Services
+
+-   [**`ConnectionService`**](services/connection.py): Manages NATS connections and JetStream contexts with connection pooling, retry logic, and health monitoring.
+
+-   [**`StreamService`**](services/streams.py): Handles NATS JetStream stream operations including creation, configuration, and management.
+
+-   [**`KVStoreService`**](services/kv_stores.py): Manages NATS Key-Value store operations with TTL support and transaction capabilities.
+
+-   [**`JobService`**](services/jobs.py): Handles job execution, result storage, and failure handling with proper error management.
+
+-   [**`EventService`**](services/events.py): Manages event logging, batching, and processing with efficient buffering and streaming.
+
+-   [**`SchedulerService`**](services/scheduler.py): Handles scheduled job management, triggering, and persistence.
+
+### Service Infrastructure
+
+-   [**`BaseService`**](services/base.py): Abstract base class for all services with lifecycle management.
+
+-   [**`ServiceManager`**](services/base.py): Central service registry and dependency injection container.
+
+### Service Usage
+
+The service layer is designed to be used transparently by the core `naq` components, but can also be used directly for advanced use cases:
+
+```python
+import asyncio
+from naq.services import ServiceManager, ConnectionService, StreamService
+from naq.queue import Queue
+
+async def service_example():
+    # Create service configuration
+    config = {
+        'nats': {
+            'url': 'nats://localhost:4222',
+            'max_reconnect_attempts': 5,
+            'reconnect_delay': 1.0
+        }
+    }
+    
+    # Use ServiceManager for lifecycle management
+    async with ServiceManager(config) as services:
+        # Services are automatically created and managed
+        queue = Queue(name='example', services=services)
+        
+        # Queue uses services internally for all operations
+        job = await queue.enqueue(my_function, arg1, arg2)
+        
+        # Services are automatically cleaned up when context exits
+```
+
+For more detailed information about the service layer architecture and advanced usage patterns, see the [Service Layer Architecture](../architecture.qmd#service-layer-architecture) section in the architecture documentation.

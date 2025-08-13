@@ -1,4 +1,5 @@
 # src/naq/__init__.py
+import importlib.metadata
 import asyncio
 import logging
 from typing import Optional
@@ -9,6 +10,8 @@ from .connection import (
     close_nats_connection,
     get_jetstream_context,
     get_nats_connection,
+    nats_connection,
+    Config,
 )
 from .settings import DEFAULT_NATS_URL
 from .exceptions import (
@@ -19,7 +22,8 @@ from .exceptions import (
     NaqException,
     SerializationError,
 )
-from .models import Job, RetryDelayType, JOB_STATUS
+from .models import RetryDelayType, JOB_STATUS
+from .models import Job
 from .results import Results
 
 # Make key classes and functions available directly from the 'naq' package
@@ -52,7 +56,10 @@ from .worker import Worker
 # Import events module to make it available via naq.events
 from . import events
 
-__version__ = "0.1.3"  # Bump version for worker monitoring
+# Import CLI app to make it available via naq.cli
+from .cli import app
+
+__version__ = importlib.metadata.version("naq")  # Bump version for worker monitoring
 
 
 # Basic configuration/convenience
@@ -62,7 +69,19 @@ __version__ = "0.1.3"  # Bump version for worker monitoring
 
 async def connect(url: str = DEFAULT_NATS_URL):
     """Convenience function to establish default NATS connection."""
-    return await get_nats_connection(url=url)
+    # Create a config with the specific NATS URL
+    config = Config()
+    config.nats.servers = [url]
+    
+    # Create a connection using the new connection approach
+    import nats
+    conn = await nats.connect(
+        servers=config.nats.servers,
+        name=config.nats.client_name,
+        max_reconnect_attempts=config.nats.max_reconnect_attempts,
+        reconnect_time_wait=config.nats.reconnect_time_wait,
+    )
+    return conn
 
 
 async def disconnect():

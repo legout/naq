@@ -23,6 +23,9 @@ from .connection import (
     close_nats_connection,
     get_jetstream_context,
     get_nats_connection,
+    nats_jetstream,
+    nats_kv_store,
+    Config,
 )
 from .events.processor import AsyncJobEventProcessor
 from .events.storage import NATSJobEventStorage
@@ -328,161 +331,158 @@ def list_scheduled_jobs(
 
     async def _list_scheduled_jobs_async():
         try:
-            nc = await get_nats_connection(url=nats_url)
-            js = await get_jetstream_context(nc=nc)
-
-            try:
-                kv = await js.key_value(bucket=SCHEDULED_JOBS_KV_NAME)
-            except Exception as e:
-                logger.error(
-                    f"Failed to access KV store '{SCHEDULED_JOBS_KV_NAME}': {e}"
-                )
-                console.print(
-                    "[yellow]No scheduled jobs found or cannot access job store.[/yellow]"
-                )
-                return
-
-            # Get all keys
-            try:
-                keys = await kv.keys()
-                if not keys:
+            # Use the new context manager for KV store operations
+            config = Config()
+            config.nats.servers = [nats_url]
+            
+            async with nats_kv_store(SCHEDULED_JOBS_KV_NAME, config) as kv:
+                try:
+                    # Get all keys
+                    keys = await kv.keys()
+                    if not keys:
+                        console.print("[yellow]No scheduled jobs found.[/yellow]")
+                        return
+                except nats.js.errors.NoKeysError:
                     console.print("[yellow]No scheduled jobs found.[/yellow]")
                     return
-            except nats.js.errors.NoKeysError:
-                console.print("[yellow]No scheduled jobs found.[/yellow]")
-                return
-
-            jobs_data = []
-
-            for key_bytes in keys:
-                key = None
-                try:
-                    key = (
-                        key_bytes.decode("utf-8")
-                        if isinstance(key_bytes, bytes)
-                        else key_bytes
-                    )
-                    if job_id and job_id != key:
-                        continue
-
-                    entry = await kv.get(key_bytes)
-                    if not entry:
-                        continue
-
-                    job_data = cloudpickle.loads(entry.value)
-
-                    current_status = job_data.get("status")
-                    if status and current_status != status:
-                        continue
-                    if queue and job_data.get("queue_name") != queue:
-                        continue
-
-                    jobs_data.append(job_data)
                 except Exception as e:
-                    key_repr = key if key is not None else repr(key_bytes)
                     logger.error(
-                        f"Error processing scheduled job entry '{key_repr}': {e}"
+                        f"Failed to access KV store '{SCHEDULED_JOBS_KV_NAME}': {e}"
                     )
-                    continue
+                    console.print(
+                        "[yellow]No scheduled jobs found or cannot access job store.[/yellow]"
+                    )
+                    return
 
-            jobs_data.sort(key=lambda j: j.get("scheduled_timestamp_utc", 0))
+                jobs_data = []
 
-            if detailed:
-                table = Table(
-                    title="NAQ Scheduled Jobs",
-                    show_header=True,
-                    header_style="bold cyan",
-                )
-                table.add_column("JOB ID", style="dim", width=36)
-                table.add_column("QUEUE", width=15)
-                table.add_column("STATUS", width=10)
-                table.add_column("NEXT RUN", width=25)
-                table.add_column("SCHEDULE TYPE", width=15)
-                table.add_column("REPEATS LEFT", width=12)
-                table.add_column("DETAILS")
-            else:
-                table = Table(
-                    title="NAQ Scheduled Jobs",
-                    show_header=True,
-                    header_style="bold cyan",
-                )
-                table.add_column("JOB ID", style="dim", width=36)
-                table.add_column("QUEUE", width=15)
-                table.add_column("STATUS", width=10)
-                table.add_column("NEXT RUN", width=25)
-                table.add_column("SCHEDULE TYPE", width=15)
+                for key_bytes in keys:
+                    key = None
+                    try:
+                        key = (
+                            key_bytes.decode("utf-8")
+                            if isinstance(key_bytes, bytes)
+                            else key_bytes
+                        )
+                        if job_id and job_id != key:
+                            continue
 
-            for job in jobs_data:
-                job_id_local = job.get("job_id", "unknown")
-                queue_name = job.get("queue_name", "unknown")
-                current_job_status = job.get("status", SCHEDULED_JOB_STATUS.ACTIVE)
+                        entry = await kv.get(key_bytes)
+                        if not entry or not entry.value:
+                            continue
 
-                status_style = "green"
-                if current_job_status == SCHEDULED_JOB_STATUS.PAUSED:
-                    status_style = "yellow"
-                elif current_job_status == SCHEDULED_JOB_STATUS.FAILED:
-                    status_style = "red"
+                        job_data = cloudpickle.loads(entry.value)
 
-                next_run_ts = job.get("scheduled_timestamp_utc")
-                if next_run_ts:
-                    next_run = datetime.datetime.fromtimestamp(
-                        next_run_ts, timezone.utc
-                    ).strftime("%Y-%m-%d %H:%M:%S UTC")
-                else:
-                    next_run = "unknown"
+                        current_status = job_data.get("status")
+                        if status and current_status != status:
+                            continue
+                        if queue and job_data.get("queue_name") != queue:
+                            continue
 
-                if job.get("cron"):
-                    schedule_type = "cron"
-                elif job.get("interval_seconds"):
-                    schedule_type = "interval"
-                else:
-                    schedule_type = "one-time"
+                        jobs_data.append(job_data)
+                    except Exception as e:
+                        key_repr = key if key is not None else repr(key_bytes)
+                        logger.error(
+                            f"Error processing scheduled job entry '{key_repr}': {e}"
+                        )
+                        continue
+
+                jobs_data.sort(key=lambda j: j.get("scheduled_timestamp_utc", 0))
 
                 if detailed:
-                    repeats = (
-                        "infinite"
-                        if job.get("repeat") is None
-                        else str(job.get("repeat", 0))
+                    table = Table(
+                        title="NAQ Scheduled Jobs",
+                        show_header=True,
+                        header_style="bold cyan",
                     )
-                    details = []
-                    if job.get("cron"):
-                        details.append(f"cron='{job.get('cron')}'")
-                    if job.get("interval_seconds"):
-                        details.append(f"interval={job.get('interval_seconds')}s")
-                    if job.get("schedule_failure_count", 0) > 0:
-                        details.append(f"failures={job.get('schedule_failure_count')}")
-                    if job.get("last_enqueued_utc"):
-                        last_run = datetime.datetime.fromtimestamp(
-                            job.get("last_enqueued_utc"), timezone.utc
-                        ).strftime("%Y-%m-%d %H:%M:%S UTC")
-                        details.append(f"last_run={last_run}")
-
-                    details_str = ", ".join(details)
-                    table.add_row(
-                        job_id_local,
-                        queue_name,
-                        f"[{status_style}]{current_job_status}[/{status_style}]",
-                        next_run,
-                        schedule_type,
-                        repeats,
-                        details_str,
-                    )
+                    table.add_column("JOB ID", style="dim", width=36)
+                    table.add_column("QUEUE", width=15)
+                    table.add_column("STATUS", width=10)
+                    table.add_column("NEXT RUN", width=25)
+                    table.add_column("SCHEDULE TYPE", width=15)
+                    table.add_column("REPEATS LEFT", width=12)
+                    table.add_column("DETAILS")
                 else:
-                    table.add_row(
-                        job_id_local,
-                        queue_name,
-                        f"[{status_style}]{current_job_status}[/{status_style}]",
-                        next_run,
-                        schedule_type,
+                    table = Table(
+                        title="NAQ Scheduled Jobs",
+                        show_header=True,
+                        header_style="bold cyan",
                     )
+                    table.add_column("JOB ID", style="dim", width=36)
+                    table.add_column("QUEUE", width=15)
+                    table.add_column("STATUS", width=10)
+                    table.add_column("NEXT RUN", width=25)
+                    table.add_column("SCHEDULE TYPE", width=15)
 
-            console.print(table)
-            console.print(f"\n[bold]Total:[/bold] {len(jobs_data)} scheduled job(s)")
+                for job in jobs_data:
+                    job_id_local = job.get("job_id", "unknown")
+                    queue_name = job.get("queue_name", "unknown")
+                    current_job_status = job.get("status", SCHEDULED_JOB_STATUS.ACTIVE)
+
+                    status_style = "green"
+                    if current_job_status == SCHEDULED_JOB_STATUS.PAUSED:
+                        status_style = "yellow"
+                    elif current_job_status == SCHEDULED_JOB_STATUS.FAILED:
+                        status_style = "red"
+
+                    next_run_ts = job.get("scheduled_timestamp_utc")
+                    if next_run_ts:
+                        next_run = datetime.datetime.fromtimestamp(
+                            next_run_ts, timezone.utc
+                        ).strftime("%Y-%m-%d %H:%M:%S UTC")
+                    else:
+                        next_run = "unknown"
+
+                    if job.get("cron"):
+                        schedule_type = "cron"
+                    elif job.get("interval_seconds"):
+                        schedule_type = "interval"
+                    else:
+                        schedule_type = "one-time"
+
+                    if detailed:
+                        repeats = (
+                            "infinite"
+                            if job.get("repeat") is None
+                            else str(job.get("repeat", 0))
+                        )
+                        details = []
+                        if job.get("cron"):
+                            details.append(f"cron='{job.get('cron')}'")
+                        if job.get("interval_seconds"):
+                            details.append(f"interval={job.get('interval_seconds')}s")
+                        if job.get("schedule_failure_count", 0) > 0:
+                            details.append(f"failures={job.get('schedule_failure_count')}")
+                        if job.get("last_enqueued_utc"):
+                            last_run = datetime.datetime.fromtimestamp(
+                                job.get("last_enqueued_utc"), timezone.utc
+                            ).strftime("%Y-%m-%d %H:%M:%S UTC")
+                            details.append(f"last_run={last_run}")
+
+                        details_str = ", ".join(details)
+                        table.add_row(
+                            job_id_local,
+                            queue_name,
+                            f"[{status_style}]{current_job_status}[/{status_style}]",
+                            next_run,
+                            schedule_type,
+                            repeats,
+                            details_str,
+                        )
+                    else:
+                        table.add_row(
+                            job_id_local,
+                            queue_name,
+                            f"[{status_style}]{current_job_status}[/{status_style}]",
+                            next_run,
+                            schedule_type,
+                        )
+
+                console.print(table)
+                console.print(f"\n[bold]Total:[/bold] {len(jobs_data)} scheduled job(s)")
         except Exception as e:
             logger.exception(f"Error listing scheduled jobs: {e}")
             console.print(f"[red]Error listing scheduled jobs: {str(e)}[/red]")
-        finally:
-            await close_nats_connection()
 
     # Run the async routine
     asyncio.run(_list_scheduled_jobs_async())

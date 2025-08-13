@@ -652,8 +652,11 @@ test = [
 [package.dev-dependencies]
 dev = [
     { name = "anyio" },
+    { name = "freezegun" },
     { name = "ipython" },
     { name = "nest-asyncio" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
     { name = "quarto" },
     { name = "rq" },
 ]
@@ -698,8 +701,11 @@ provides-extras = ["test", "dev", "dashboard"]
 [package.metadata.requires-dev]
 dev = [
     { name = "anyio", specifier = ">=4.9.0" },
+    { name = "freezegun", specifier = ">=1.5.5" },
     { name = "ipython", specifier = ">=9.4.0" },
     { name = "nest-asyncio", specifier = ">=1.6.0" },
+    { name = "pytest", specifier = ">=8.4.1" },
+    { name = "pytest-asyncio", specifier = ">=1.1.0" },
     { name = "quarto", specifier = ">=0.1.0" },
     { name = "rq", specifier = ">=2.4.1" },
 ]

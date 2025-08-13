@@ -1216,3 +1216,642 @@ class AutoScaler:
 ```
 
 These patterns and techniques demonstrate the power and flexibility of naq's event-driven architecture. By combining these patterns, you can build sophisticated, resilient, and scalable systems that can handle complex business requirements while maintaining excellent performance and reliability.
+
+## Advanced Service Layer Usage
+
+The service layer architecture in `naq` provides a powerful foundation for building advanced applications with efficient resource management and clean separation of concerns. This section explores advanced patterns and techniques for leveraging the service layer in production environments.
+
+### Custom Service Implementation
+
+You can extend the service layer by implementing custom services that integrate with the existing service ecosystem.
+
+#### Creating a Custom Service
+
+```python
+from typing import Dict, Any, Optional
+from naq.services.base import BaseService
+from naq.services import ServiceManager
+
+class AnalyticsService(BaseService):
+    """Custom service for collecting and analyzing job metrics."""
+    
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        self._metrics = {}
+        self._event_service = None
+        self._job_service = None
+    
+    async def _do_initialize(self) -> None:
+        """Initialize the analytics service."""
+        # Initialize metrics storage
+        self._metrics = {
+            'queue_stats': {},
+            'job_timings': {},
+            'error_rates': {},
+            'throughput': {}
+        }
+        
+        # Get required services from ServiceManager
+        # Note: In a real implementation, these would be injected
+        logger.info("AnalyticsService initialized")
+    
+    async def cleanup(self) -> None:
+        """Cleanup analytics service resources."""
+        await super().cleanup()
+        # Persist metrics if needed
+        logger.info("AnalyticsService cleaned up")
+    
+    async def record_job_timing(self, queue_name: str, duration_ms: float) -> None:
+        """Record job execution timing."""
+        if queue_name not in self._metrics['job_timings']:
+            self._metrics['job_timings'][queue_name] = []
+        
+        self._metrics['job_timings'][queue_name].append(duration_ms)
+        
+        # Keep only recent timings (last 1000)
+        if len(self._metrics['job_timings'][queue_name]) > 1000:
+            self._metrics['job_timings'][queue_name] = self._metrics['job_timings'][queue_name][-1000:]
+    
+    async def get_queue_stats(self, queue_name: str) -> Dict[str, Any]:
+        """Get statistics for a specific queue."""
+        timings = self._metrics['job_timings'].get(queue_name, [])
+        
+        if not timings:
+            return {
+                'queue_name': queue_name,
+                'job_count': 0,
+                'avg_duration_ms': 0,
+                'min_duration_ms': 0,
+                'max_duration_ms': 0
+            }
+        
+        return {
+            'queue_name': queue_name,
+            'job_count': len(timings),
+            'avg_duration_ms': sum(timings) / len(timings),
+            'min_duration_ms': min(timings),
+            'max_duration_ms': max(timings)
+        }
+    
+    async def get_system_stats(self) -> Dict[str, Any]:
+        """Get system-wide statistics."""
+        all_stats = {
+            'total_queues': len(self._metrics['job_timings']),
+            'total_jobs': sum(len(timings) for timings in self._metrics['job_timings'].values()),
+            'queue_stats': {}
+        }
+        
+        # Collect stats for each queue
+        for queue_name in self._metrics['job_timings']:
+            all_stats['queue_stats'][queue_name] = await self.get_queue_stats(queue_name)
+        
+        return all_stats
+```
+
+#### Registering Custom Services
+
+```python
+from naq.services import ServiceManager
+
+async def custom_service_example():
+    """Example of using a custom service with ServiceManager."""
+    
+    # Create configuration
+    config = {
+        'nats': {
+            'url': 'nats://localhost:4222',
+            'max_reconnect_attempts': 5,
+            'reconnect_delay': 1.0
+        },
+        'analytics': {
+            'retention_period_hours': 24,
+            'metrics_batch_size': 100
+        }
+    }
+    
+    async with ServiceManager(config) as services:
+        # Manually create and register custom service
+        analytics_service = AnalyticsService(config.get('analytics', {}))
+        await analytics_service.initialize()
+        
+        # Use the service
+        await analytics_service.record_job_timing('high_priority', 150.5)
+        await analytics_service.record_job_timing('high_priority', 120.3)
+        
+        stats = await analytics_service.get_queue_stats('high_priority')
+        print(f"Queue stats: {stats}")
+        
+        # Cleanup
+        await analytics_service.cleanup()
+```
+
+### Service Configuration Patterns
+
+#### Environment-Based Configuration
+
+```python
+import os
+from typing import Dict, Any
+
+def get_service_config() -> Dict[str, Any]:
+    """Build service configuration from environment variables."""
+    config = {
+        'nats': {
+            'url': os.getenv('NAQ_NATS_URL', 'nats://localhost:4222'),
+            'max_reconnect_attempts': int(os.getenv('NAQ_MAX_RECONNECT', '5')),
+            'reconnect_delay': float(os.getenv('NAQ_RECONNECT_DELAY', '1.0')),
+            'connection_timeout': float(os.getenv('NAQ_CONNECTION_TIMEOUT', '10.0')),
+            'ping_interval': int(os.getenv('NAQ_PING_INTERVAL', '60')),
+            'max_outstanding_pings': int(os.getenv('NAQ_MAX_OUTSTANDING_PINGS', '2'))
+        },
+        'events': {
+            'enabled': os.getenv('NAQ_EVENTS_ENABLED', 'false').lower() == 'true',
+            'batch_size': int(os.getenv('NAQ_EVENT_BATCH_SIZE', '100')),
+            'flush_interval': float(os.getenv('NAQ_EVENT_FLUSH_INTERVAL', '1.0')),
+            'max_buffer_size': int(os.getenv('NAQ_EVENT_MAX_BUFFER', '10000'))
+        },
+        'jobs': {
+            'default_timeout': int(os.getenv('NAQ_DEFAULT_TIMEOUT', '3600')),
+            'result_ttl': int(os.getenv('NAQ_RESULT_TTL', '604800'))
+        }
+    }
+    
+    return config
+
+async def environment_configured_example():
+    """Example using environment-based configuration."""
+    config = get_service_config()
+    
+    async with ServiceManager(config) as services:
+        queue = Queue(name='production', services=services)
+        # Queue will use environment-configured services
+        job = await queue.enqueue(process_data, data_item)
+```
+
+#### Multi-Environment Configuration
+
+```python
+def get_environment_config(env: str) -> Dict[str, Any]:
+    """Get configuration for different environments."""
+    configs = {
+        'development': {
+            'nats': {
+                'url': 'nats://localhost:4222',
+                'max_reconnect_attempts': 3,
+                'reconnect_delay': 1.0
+            },
+            'events': {
+                'enabled': True,
+                'batch_size': 10,
+                'flush_interval': 0.5
+            }
+        },
+        'staging': {
+            'nats': {
+                'url': 'nats://staging.example.com:4222',
+                'max_reconnect_attempts': 5,
+                'reconnect_delay': 2.0
+            },
+            'events': {
+                'enabled': True,
+                'batch_size': 50,
+                'flush_interval': 1.0
+            }
+        },
+        'production': {
+            'nats': {
+                'url': 'nats://prod.example.com:4222',
+                'max_reconnect_attempts': 10,
+                'reconnect_delay': 5.0
+            },
+            'events': {
+                'enabled': True,
+                'batch_size': 100,
+                'flush_interval': 2.0
+            }
+        }
+    }
+    
+    return configs.get(env, configs['development'])
+
+async def multi_environment_example():
+    """Example of multi-environment configuration."""
+    env = os.getenv('NAQ_ENVIRONMENT', 'development')
+    config = get_environment_config(env)
+    
+    async with ServiceManager(config) as services:
+        # Services configured for the specific environment
+        queue = Queue(name='app_queue', services=services)
+        # ...
+```
+
+### Advanced Service Patterns
+
+#### Service Inter-Communication
+
+```python
+class MonitoringService(BaseService):
+    """Service that monitors other services."""
+    
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        self._connection_service = None
+        self._event_service = None
+        self._health_checks = {}
+    
+    async def _do_initialize(self) -> None:
+        """Initialize monitoring service."""
+        # Set up health checks for other services
+        self._health_checks = {
+            'connection': self._check_connection_health,
+            'events': self._check_event_health,
+            'jobs': self._check_job_health
+        }
+        
+        logger.info("MonitoringService initialized")
+    
+    async def _check_connection_health(self) -> Dict[str, Any]:
+        """Check connection service health."""
+        if not self._connection_service:
+            return {'status': 'error', 'message': 'Connection service not available'}
+        
+        try:
+            status = self._connection_service.get_connection_status()
+            healthy = all(conn.get('connected', False) for conn in status.values())
+            return {
+                'status': 'healthy' if healthy else 'unhealthy',
+                'connections': status
+            }
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}
+    
+    async def _check_event_health(self) -> Dict[str, Any]:
+        """Check event service health."""
+        if not self._event_service:
+            return {'status': 'error', 'message': 'Event service not available'}
+        
+        try:
+            stats = self._event_service.get_logger_stats()
+            buffer_size = self._event_service.get_buffer_size()
+            return {
+                'status': 'healthy',
+                'stats': stats,
+                'buffer_size': buffer_size
+            }
+        except Exception as e:
+            return {'status': 'error', 'message': str(e)}
+    
+    async def _check_job_health(self) -> Dict[str, Any]:
+        """Check job service health."""
+        # Implementation depends on job service metrics
+        return {'status': 'healthy', 'message': 'Job service operational'}
+    
+    async def get_system_health(self) -> Dict[str, Any]:
+        """Get overall system health."""
+        health_report = {
+            'timestamp': time.time(),
+            'services': {}
+        }
+        
+        for service_name, check_func in self._health_checks.items():
+            try:
+                health_report['services'][service_name] = await check_func()
+            except Exception as e:
+                health_report['services'][service_name] = {
+                    'status': 'error',
+                    'message': str(e)
+                }
+        
+        # Determine overall system status
+        all_healthy = all(
+            service.get('status') == 'healthy'
+            for service in health_report['services'].values()
+        )
+        
+        health_report['overall_status'] = 'healthy' if all_healthy else 'unhealthy'
+        
+        return health_report
+```
+
+#### Service Decorators for Enhanced Functionality
+
+```python
+from functools import wraps
+from typing import Callable, Any
+
+def with_service_retry(max_retries: int = 3, delay: float = 1.0):
+    """Decorator to add retry logic to service methods."""
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def wrapper(self, *args, **kwargs):
+            last_error = None
+            
+            for attempt in range(max_retries):
+                try:
+                    return await func(self, *args, **kwargs)
+                except Exception as e:
+                    last_error = e
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(delay * (2 ** attempt))  # Exponential backoff
+                    else:
+                        break
+            
+            # All retries failed
+            raise ServiceError(f"Service operation failed after {max_retries} retries: {last_error}") from last_error
+        
+        return wrapper
+    return decorator
+
+def with_service_metrics(metric_name: str):
+    """Decorator to collect metrics for service operations."""
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def wrapper(self, *args, **kwargs):
+            start_time = time.time()
+            
+            try:
+                result = await func(self, *args, **kwargs)
+                duration_ms = (time.time() - start_time) * 1000
+                
+                # Record success metric
+                if hasattr(self, '_metrics_collector'):
+                    await self._metrics_collector.record_success(
+                        metric_name, duration_ms
+                    )
+                
+                return result
+            except Exception as e:
+                duration_ms = (time.time() - start_time) * 1000
+                
+                # Record failure metric
+                if hasattr(self, '_metrics_collector'):
+                    await self._metrics_collector.record_failure(
+                        metric_name, duration_ms, str(e)
+                    )
+                
+                raise
+        
+        return wrapper
+    return decorator
+
+# Usage example
+class EnhancedConnectionService(ConnectionService):
+    """Connection service with enhanced functionality."""
+    
+    @with_service_retry(max_retries=5, delay=2.0)
+    @with_service_metrics('get_connection')
+    async def get_connection(self, url: Optional[str] = None) -> NATSClient:
+        """Get connection with retry and metrics."""
+        return await super().get_connection(url)
+```
+
+### Service Testing Strategies
+
+#### Mock Services for Testing
+
+```python
+class MockConnectionService(BaseService):
+    """Mock connection service for testing."""
+    
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        self._connections = {}
+        self._should_fail = False
+    
+    async def _do_initialize(self) -> None:
+        """Initialize mock service."""
+        pass
+    
+    def set_failure_mode(self, should_fail: bool):
+        """Set whether the service should fail."""
+        self._should_fail = should_fail
+    
+    async def get_connection(self, url: Optional[str] = None) -> Any:
+        """Mock connection method."""
+        if self._should_fail:
+            raise NaqConnectionError("Mock connection failure")
+        
+        target_url = url or self.config.get('nats', {}).get('url', 'nats://localhost:4222')
+        if target_url not in self._connections:
+            self._connections[target_url] = {'mock': True, 'url': target_url}
+        
+        return self._connections[target_url]
+
+async def test_with_mock_services():
+    """Example of testing with mock services."""
+    config = {'nats': {'url': 'nats://test:4222'}}
+    
+    # Create mock service
+    mock_connection = MockConnectionService(config)
+    await mock_connection.initialize()
+    
+    # Test success case
+    conn = await mock_connection.get_connection()
+    assert conn['mock'] is True
+    
+    # Test failure case
+    mock_connection.set_failure_mode(True)
+    try:
+        await mock_connection.get_connection()
+        assert False, "Should have raised an exception"
+    except NaqConnectionError:
+        pass  # Expected
+    
+    await mock_connection.cleanup()
+```
+
+#### Service Integration Testing
+
+```python
+import pytest
+
+class ServiceIntegrationTest:
+    """Integration tests for service layer."""
+    
+    @pytest.mark.asyncio
+    async def test_service_lifecycle(self):
+        """Test service initialization and cleanup."""
+        config = {'nats': {'url': 'nats://localhost:4222'}}
+        
+        async with ServiceManager(config) as services:
+            # Get services
+            connection_service = await services.get_service(ConnectionService)
+            stream_service = await services.get_service(StreamService)
+            
+            # Verify services are initialized
+            assert connection_service._initialized is True
+            assert stream_service._initialized is True
+            
+            # Use services
+            js = await connection_service.get_jetstream()
+            assert js is not None
+        
+        # Verify services are cleaned up
+        assert connection_service._initialized is False
+        assert stream_service._initialized is False
+    
+    @pytest.mark.asyncio
+    async def test_service_dependency_injection(self):
+        """Test that service dependencies are properly injected."""
+        config = {'nats': {'url': 'nats://localhost:4222'}}
+        
+        async with ServiceManager(config) as services:
+            # Get StreamService which depends on ConnectionService
+            stream_service = await services.get_service(StreamService)
+            
+            # Verify dependency is injected
+            assert stream_service._connection_service is not None
+            assert isinstance(stream_service._connection_service, ConnectionService)
+            
+            # Verify both services share the same connection
+            conn_service = await services.get_service(ConnectionService)
+            assert stream_service._connection_service is conn_service
+```
+
+### Performance Optimization with Services
+
+#### Connection Pool Tuning
+
+```python
+class TunedConnectionService(ConnectionService):
+    """Connection service with performance tuning."""
+    
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        self._connection_pool_size = config.get('pool_size', 10)
+        self._connection_timeout = config.get('connection_timeout', 30.0)
+        self._connection_idle_timeout = config.get('idle_timeout', 300.0)
+        self._last_used = {}
+    
+    async def _do_initialize(self) -> None:
+        """Initialize with performance tuning."""
+        await super()._do_initialize()
+        
+        # Start connection cleanup task
+        asyncio.create_task(self._cleanup_idle_connections())
+    
+    async def _cleanup_idle_connections(self):
+        """Clean up idle connections."""
+        while True:
+            try:
+                await asyncio.sleep(60)  # Check every minute
+                
+                current_time = time.time()
+                idle_connections = []
+                
+                async with self._lock:
+                    for url, last_used in self._last_used.items():
+                        if current_time - last_used > self._connection_idle_timeout:
+                            idle_connections.append(url)
+                    
+                    # Close idle connections
+                    for url in idle_connections:
+                        if url in self._connections:
+                            try:
+                                await self._connections[url].close()
+                                del self._connections[url]
+                                del self._last_used[url]
+                                logger.info(f"Closed idle connection to {url}")
+                            except Exception as e:
+                                logger.error(f"Error closing idle connection to {url}: {e}")
+            
+            except Exception as e:
+                logger.error(f"Error in connection cleanup task: {e}")
+    
+    async def get_connection(self, url: Optional[str] = None) -> NATSClient:
+        """Get connection with performance tracking."""
+        target_url = url if url is not None else self._default_url
+        
+        # Update last used time
+        self._last_used[target_url] = time.time()
+        
+        return await super().get_connection(target_url)
+```
+
+#### Batch Processing with Services
+
+```python
+class BatchJobService(JobService):
+    """Job service optimized for batch processing."""
+    
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        self._batch_size = config.get('batch_size', 100)
+        self._batch_timeout = config.get('batch_timeout', 5.0)
+        self._pending_jobs = []
+        self._batch_event = asyncio.Event()
+    
+    async def _do_initialize(self) -> None:
+        """Initialize batch processing."""
+        await super()._do_initialize()
+        
+        # Start batch processing task
+        asyncio.create_task(self._process_batches())
+    
+    async def _process_batches(self):
+        """Process jobs in batches."""
+        while True:
+            try:
+                # Wait for batch to fill or timeout
+                await asyncio.wait_for(
+                    self._batch_event.wait(),
+                    timeout=self._batch_timeout
+                )
+                
+                # Process batch
+                async with self._lock:
+                    if not self._pending_jobs:
+                        self._batch_event.clear()
+                        continue
+                    
+                    batch = self._pending_jobs[:self._batch_size]
+                    self._pending_jobs = self._pending_jobs[self._batch_size:]
+                    self._batch_event.clear()
+                
+                # Execute batch
+                await self._execute_batch(batch)
+                
+            except asyncio.TimeoutError:
+                # Timeout is normal, process any pending jobs
+                async with self._lock:
+                    if self._pending_jobs:
+                        batch = self._pending_jobs[:]
+                        self._pending_jobs = []
+                        await self._execute_batch(batch)
+            except Exception as e:
+                logger.error(f"Error in batch processing: {e}")
+    
+    async def _execute_batch(self, batch: List[Job]):
+        """Execute a batch of jobs."""
+        logger.info(f"Executing batch of {len(batch)} jobs")
+        
+        # Execute jobs concurrently
+        tasks = [self.execute_job(job) for job in batch]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Process results
+        for job, result in zip(batch, results):
+            if isinstance(result, Exception):
+                logger.error(f"Job {job.job_id} failed: {result}")
+            else:
+                logger.debug(f"Job {job.job_id} completed successfully")
+    
+    async def execute_job(self, job: Job) -> JobResult:
+        """Execute a single job (overridden for batch processing)."""
+        # For batch processing, add to pending queue
+        async with self._lock:
+            self._pending_jobs.append(job)
+            self._batch_event.set()
+        
+        # Return a placeholder result
+        return JobResult(
+            job_id=job.job_id,
+            status="pending",
+            result=None,
+            error=None,
+            start_time=time.time(),
+            end_time=time.time()
+        )
+```
+
+These advanced patterns demonstrate the flexibility and power of the service layer architecture in `naq`. By leveraging these techniques, you can build sophisticated, high-performance applications that make the most of the service layer's capabilities while maintaining clean, maintainable code.
