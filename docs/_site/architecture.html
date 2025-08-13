@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.32">
+<meta name="generator" content="quarto-1.7.33">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -20,6 +20,41 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
 </style>
 
 
@@ -36,14 +71,14 @@ ul.task-list li input[type="checkbox"] {
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-2fef5ea3f8957b3e4ecc936fc74692ca.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-bc185b5c5bdbcb35c2eb49d8a876ef70.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="site_libs/bootstrap/bootstrap-dark-08799928d293638fe9563d5c5a2794e5.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-ccd81253fefb92e9cd3f9eb5b5d87b54.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -309,7 +344,43 @@ ul.task-list li input[type="checkbox"] {
   <ul>
   <li><a href="#core-components" id="toc-core-components" class="nav-link active" data-scroll-target="#core-components">Core Components</a></li>
   <li><a href="#how-it-works-the-job-lifecycle" id="toc-how-it-works-the-job-lifecycle" class="nav-link" data-scroll-target="#how-it-works-the-job-lifecycle">How It Works: The Job Lifecycle</a></li>
+  <li><a href="#the-central-event-stream-approach" id="toc-the-central-event-stream-approach" class="nav-link" data-scroll-target="#the-central-event-stream-approach">The Central Event Stream Approach</a>
+  <ul class="collapse">
+  <li><a href="#shared-event-logging" id="toc-shared-event-logging" class="nav-link" data-scroll-target="#shared-event-logging">Shared Event Logging</a></li>
+  <li><a href="#the-complete-event-lifecycle" id="toc-the-complete-event-lifecycle" class="nav-link" data-scroll-target="#the-complete-event-lifecycle">The Complete Event Lifecycle</a></li>
+  <li><a href="#new-event-types" id="toc-new-event-types" class="nav-link" data-scroll-target="#new-event-types">New Event Types</a></li>
+  <li><a href="#event-correlation" id="toc-event-correlation" class="nav-link" data-scroll-target="#event-correlation">Event Correlation</a></li>
+  </ul></li>
   <li><a href="#why-nats" id="toc-why-nats" class="nav-link" data-scroll-target="#why-nats">Why NATS?</a></li>
+  <li><a href="#service-layer-architecture" id="toc-service-layer-architecture" class="nav-link" data-scroll-target="#service-layer-architecture">Service Layer Architecture</a>
+  <ul class="collapse">
+  <li><a href="#the-problem-connection-pattern-duplication" id="toc-the-problem-connection-pattern-duplication" class="nav-link" data-scroll-target="#the-problem-connection-pattern-duplication">The Problem: Connection Pattern Duplication</a></li>
+  <li><a href="#the-solution-centralized-service-layer" id="toc-the-solution-centralized-service-layer" class="nav-link" data-scroll-target="#the-solution-centralized-service-layer">The Solution: Centralized Service Layer</a></li>
+  <li><a href="#benefits-of-the-service-layer" id="toc-benefits-of-the-service-layer" class="nav-link" data-scroll-target="#benefits-of-the-service-layer">Benefits of the Service Layer</a></li>
+  <li><a href="#migration-from-old-patterns" id="toc-migration-from-old-patterns" class="nav-link" data-scroll-target="#migration-from-old-patterns">Migration from Old Patterns</a></li>
+  <li><a href="#service-layer-in-action" id="toc-service-layer-in-action" class="nav-link" data-scroll-target="#service-layer-in-action">Service Layer in Action</a></li>
+  <li><a href="#best-practices-for-using-the-service-layer" id="toc-best-practices-for-using-the-service-layer" class="nav-link" data-scroll-target="#best-practices-for-using-the-service-layer">Best Practices for Using the Service Layer</a></li>
+  </ul></li>
+  <li><a href="#connection-management" id="toc-connection-management" class="nav-link" data-scroll-target="#connection-management">Connection Management</a>
+  <ul class="collapse">
+  <li><a href="#architecture-flow" id="toc-architecture-flow" class="nav-link" data-scroll-target="#architecture-flow">Architecture Flow</a></li>
+  <li><a href="#key-benefits" id="toc-key-benefits" class="nav-link" data-scroll-target="#key-benefits">Key Benefits</a></li>
+  <li><a href="#context-manager-implementation" id="toc-context-manager-implementation" class="nav-link" data-scroll-target="#context-manager-implementation">Context Manager Implementation</a></li>
+  <li><a href="#connection-monitoring" id="toc-connection-monitoring" class="nav-link" data-scroll-target="#connection-monitoring">Connection Monitoring</a></li>
+  <li><a href="#integration-with-service-layer" id="toc-integration-with-service-layer" class="nav-link" data-scroll-target="#integration-with-service-layer">Integration with Service Layer</a></li>
+  <li><a href="#migration-path" id="toc-migration-path" class="nav-link" data-scroll-target="#migration-path">Migration Path</a></li>
+  <li><a href="#backward-compatibility" id="toc-backward-compatibility" class="nav-link" data-scroll-target="#backward-compatibility">Backward Compatibility</a></li>
+  <li><a href="#production-considerations" id="toc-production-considerations" class="nav-link" data-scroll-target="#production-considerations">Production Considerations</a></li>
+  </ul></li>
+  <li><a href="#utils-package-architecture" id="toc-utils-package-architecture" class="nav-link" data-scroll-target="#utils-package-architecture">Utils Package Architecture</a>
+  <ul class="collapse">
+  <li><a href="#package-structure" id="toc-package-structure" class="nav-link" data-scroll-target="#package-structure">Package Structure</a></li>
+  <li><a href="#core-utilities" id="toc-core-utilities" class="nav-link" data-scroll-target="#core-utilities">Core Utilities</a></li>
+  <li><a href="#integration-with-core-components" id="toc-integration-with-core-components" class="nav-link" data-scroll-target="#integration-with-core-components">Integration with Core Components</a></li>
+  <li><a href="#benefits-of-the-utils-package" id="toc-benefits-of-the-utils-package" class="nav-link" data-scroll-target="#benefits-of-the-utils-package">Benefits of the Utils Package</a></li>
+  <li><a href="#migration-path-1" id="toc-migration-path-1" class="nav-link" data-scroll-target="#migration-path-1">Migration Path</a></li>
+  <li><a href="#best-practices" id="toc-best-practices" class="nav-link" data-scroll-target="#best-practices">Best Practices</a></li>
+  </ul></li>
   </ul>
 </nav>
     </div>
@@ -336,7 +407,7 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<p><code>naq</code> is designed to be a simple yet powerful distributed task queue. Its architecture is fundamentally built around <a href="https://nats.io">NATS</a> and its persistence layer, <a href="https://docs.nats.io/jetstream/jetstream">JetStream</a>, which serve as the central nervous system for communication between clients, workers, and the scheduler.</p>
+<p><code>naq</code> is designed to be a simple yet powerful distributed task queue with a comprehensive event-driven architecture. Its architecture is fundamentally built around <a href="https://nats.io">NATS</a> and its persistence layer, <a href="https://docs.nats.io/jetstream/jetstream">JetStream</a>, which serve as the central nervous system for communication between clients, workers, and the scheduler.</p>
 <section id="core-components" class="level2">
 <h2 class="anchored" data-anchor-id="core-components">Core Components</h2>
 <p>The <code>naq</code> ecosystem consists of four main components:</p>
@@ -349,7 +420,7 @@ ul.task-list li input[type="checkbox"] {
 </section>
 <section id="how-it-works-the-job-lifecycle" class="level2">
 <h2 class="anchored" data-anchor-id="how-it-works-the-job-lifecycle">How It Works: The Job Lifecycle</h2>
-<p>Here is a high-level overview of what happens when a job is enqueued and processed:</p>
+<p>Here is a high-level overview of what happens when a job is enqueued and processed, including the comprehensive event-driven architecture:</p>
 <div class="cell" data-layout-align="default">
 <div class="cell-output-display">
 <div>
@@ -359,41 +430,104 @@ ul.task-list li input[type="checkbox"] {
     subgraph "Your Application"
         Client[Client]
         PythonCode[Python Code]
+        EventHandler[Event Handler]
     end
 
     subgraph "NAQ Processes"
         Worker[Worker]
         Scheduler[Scheduler]
+        EventProcessor[Event Processor]
     end
 
     subgraph "NATS Server (JetStream)"
         QueueStream[Queue Stream]
         ResultStore[Result KV Store]
         ScheduledJobs[Scheduled Jobs KV]
+        EventStream[Event Stream]
     end
 
     Client -- "1. Enqueue Job" --&gt; QueueStream
-    Scheduler -- "7. Check for Due Jobs" --&gt; ScheduledJobs
+    Scheduler -- "8. Check for Due Jobs" --&gt; ScheduledJobs
     ScheduledJobs -- "Job is Due" --&gt; Scheduler
-    Scheduler -- "8. Enqueue Due Job" --&gt; QueueStream
+    Scheduler -- "9. Enqueue Due Job" --&gt; QueueStream
     Worker -- "3. Fetch Job" --&gt; QueueStream
     Worker -- "4. Execute Function" --&gt; PythonCode
     PythonCode -- "5. Return Result" --&gt; Worker
     Worker -- "6. Store Result" --&gt; ResultStore
+    
+    Client -- "2. Log ENQUEUED Event" --&gt; EventStream
+    Worker -- "Log STARTED/COMPLETED/FAILED Events" --&gt; EventStream
+    Scheduler -- "Log SCHEDULED Event" --&gt; EventStream
+    Worker -- "Log RETRY_SCHEDULED Event" --&gt; EventStream
+    Scheduler -- "Log SCHEDULE_TRIGGERED Event" --&gt; EventStream
+    Worker -- "Log CANCELLED Event" --&gt; EventStream
+    All Components -- "Log STATUS_CHANGED Events" --&gt; EventStream
+    
+    EventStream -- "Stream Events" --&gt; EventProcessor
+    EventProcessor -- "Dispatch to Handlers" --&gt; EventHandler
 </pre>
 </div>
 <p></p></figure><p></p>
 </div>
 </div>
 </div>
+</section>
+<section id="the-central-event-stream-approach" class="level2">
+<h2 class="anchored" data-anchor-id="the-central-event-stream-approach">The Central Event Stream Approach</h2>
+<p>At the heart of naq’s architecture is a centralized event stream that captures all job lifecycle events. This event-driven approach enables:</p>
+<ul>
+<li><strong>Complete visibility</strong>: Every job state change is captured and stored durably</li>
+<li><strong>Real-time monitoring</strong>: Events are available immediately as they occur</li>
+<li><strong>Decoupled processing</strong>: Components can react to events without direct coupling</li>
+<li><strong>Shared event logging</strong>: All components use the same event logging infrastructure</li>
+</ul>
+<section id="shared-event-logging" class="level3">
+<h3 class="anchored" data-anchor-id="shared-event-logging">Shared Event Logging</h3>
+<p>All naq components (Client, Worker, Scheduler) use the shared event logging system provided by the <code>SharedEventLoggerManager</code>. This ensures:</p>
+<ul>
+<li><strong>Consistency</strong>: All events follow the same format and structure</li>
+<li><strong>Reliability</strong>: Events are buffered and flushed efficiently to prevent loss</li>
+<li><strong>Performance</strong>: Non-blocking logging with configurable batching</li>
+<li><strong>Centralized configuration</strong>: Event logging is managed through a single point</li>
+</ul>
+</section>
+<section id="the-complete-event-lifecycle" class="level3">
+<h3 class="anchored" data-anchor-id="the-complete-event-lifecycle">The Complete Event Lifecycle</h3>
 <ol type="1">
 <li><p><strong>Enqueueing</strong>: The client calls an <code>enqueue</code> function (e.g., <code>enqueue_sync</code>). The function, its arguments, and other metadata are serialized into a job payload. This payload is then published as a message to a NATS subject that corresponds to the target queue.</p></li>
+<li><p><strong>Event Logging (Enqueue)</strong>: Upon successful enqueuing, the client (or <code>Queue</code> instance) logs an <code>ENQUEUED</code> event to the dedicated <strong>Event Stream</strong> using the shared event logger.</p></li>
 <li><p><strong>Persistence</strong>: NATS JetStream receives this message and persists it in a <strong>Stream</strong>. Each queue in <code>naq</code> maps directly to a JetStream Stream. This ensures that even if no workers are online, the job is safely stored and will be processed later.</p></li>
 <li><p><strong>Fetching</strong>: A <code>naq</code> worker process is constantly listening on the queue’s Stream. When a new job is available, the worker consumes the message, acknowledging it to NATS so that it isn’t delivered to another worker.</p></li>
+<li><p><strong>Status Change</strong>: As the worker begins processing, it logs a <code>STATUS_CHANGED</code> event to indicate the job has moved from PENDING to RUNNING state.</p></li>
+<li><p><strong>Event Logging (Worker - Start)</strong>: The worker logs a <code>STARTED</code> event when it begins processing a job.</p></li>
 <li><p><strong>Execution</strong>: The worker deserializes the job payload and executes the specified Python function with the provided arguments.</p></li>
 <li><p><strong>Result Handling</strong>: Once the function completes, its return value is serialized. The worker then stores this result in a NATS <strong>Key-Value (KV) Store</strong>, using the unique job ID as the key. This result has a configurable Time-To-Live (TTL), after which it is automatically purged by NATS.</p></li>
+<li><p><strong>Status Change</strong>: Upon completion, the worker logs another <code>STATUS_CHANGED</code> event to indicate the final state (COMPLETED or FAILED).</p></li>
+<li><p><strong>Event Logging (Worker - Completion)</strong>: The worker logs <code>COMPLETED</code> events when jobs finish successfully, or <code>FAILED</code> events when jobs encounter errors. If a job fails and is configured for retry, a <code>RETRY_SCHEDULED</code> event is logged. If a job is cancelled, a <code>CANCELLED</code> event is logged.</p></li>
 <li><p><strong>Scheduled Jobs</strong>: The <code>naq scheduler</code> process periodically scans a dedicated KV store for jobs that are due to run. When it finds one, it enqueues it into the appropriate queue, and the job follows the normal lifecycle from there.</p></li>
+<li><p><strong>Event Logging (Scheduler)</strong>: The scheduler logs <code>SCHEDULED</code> events when a new scheduled job is created and <code>SCHEDULE_TRIGGERED</code> events when a scheduled job is enqueued for execution.</p></li>
+<li><p><strong>Event Processing</strong>: The <code>AsyncJobEventProcessor</code> subscribes to the <strong>Event Stream</strong>. It reads events in real-time and dispatches them to any registered event handlers, allowing for reactive, event-driven applications.</p></li>
 </ol>
+</section>
+<section id="new-event-types" class="level3">
+<h3 class="anchored" data-anchor-id="new-event-types">New Event Types</h3>
+<p>The event-driven architecture includes several new event types that provide comprehensive visibility into job processing:</p>
+<ul>
+<li><strong>CANCELLED</strong>: Logged when a job is cancelled before or during execution</li>
+<li><strong>STATUS_CHANGED</strong>: Logged whenever a job’s status changes, providing detailed state transition tracking</li>
+</ul>
+<p>These new events, combined with the existing event types (ENQUEUED, STARTED, COMPLETED, FAILED, RETRY_SCHEDULED, SCHEDULED, SCHEDULE_TRIGGERED), provide a complete picture of the job lifecycle from creation to completion.</p>
+</section>
+<section id="event-correlation" class="level3">
+<h3 class="anchored" data-anchor-id="event-correlation">Event Correlation</h3>
+<p>All events include the job ID, enabling easy correlation of events across the entire lifecycle. This allows you to:</p>
+<ul>
+<li>Track the complete journey of a single job</li>
+<li>Measure timing between different stages</li>
+<li>Identify bottlenecks in processing</li>
+<li>Build comprehensive monitoring and alerting systems</li>
+</ul>
+</section>
 </section>
 <section id="why-nats" class="level2">
 <h2 class="anchored" data-anchor-id="why-nats">Why NATS?</h2>
@@ -404,8 +538,692 @@ ul.task-list li input[type="checkbox"] {
 <li><strong>Resilience</strong>: If a worker crashes, JetStream ensures that the job it was processing will be re-delivered to another worker after a timeout. If the entire <code>naq</code> system goes down, the jobs are safe in the NATS stream, ready to be processed when the system comes back online.</li>
 <li><strong>Simplicity</strong>: By offloading the complexities of persistence, delivery guarantees, and storage to NATS, the <code>naq</code> codebase can remain focused on the core logic of job execution and scheduling.</li>
 </ul>
+</section>
+<section id="service-layer-architecture" class="level2">
+<h2 class="anchored" data-anchor-id="service-layer-architecture">Service Layer Architecture</h2>
+<p>The service layer architecture is a recent addition to <code>naq</code> that addresses the challenge of connection management and resource utilization across the system. Previously, the codebase suffered from over 44+ duplicated NATS connection patterns, leading to inefficient resource usage and complex connection management.</p>
+<section id="the-problem-connection-pattern-duplication" class="level3">
+<h3 class="anchored" data-anchor-id="the-problem-connection-pattern-duplication">The Problem: Connection Pattern Duplication</h3>
+<p>Before the service layer, each component in <code>naq</code> (Queue, Worker, Scheduler, etc.) was responsible for creating and managing its own NATS connections. This approach led to several issues:</p>
+<ul>
+<li><strong>Resource Inefficiency</strong>: Multiple connections to the same NATS server from the same process</li>
+<li><strong>Code Duplication</strong>: Similar connection logic repeated across 44+ locations in the codebase</li>
+<li><strong>Inconsistent Configuration</strong>: Connection parameters and retry logic varied between components</li>
+<li><strong>Difficult Maintenance</strong>: Changes to connection handling required updates in multiple files</li>
+<li><strong>Connection Leaks</strong>: No centralized management for connection lifecycle</li>
+</ul>
+</section>
+<section id="the-solution-centralized-service-layer" class="level3">
+<h3 class="anchored" data-anchor-id="the-solution-centralized-service-layer">The Solution: Centralized Service Layer</h3>
+<p>The service layer architecture introduces a centralized approach to managing resources and dependencies through a set of specialized services:</p>
+<section id="core-services" class="level4">
+<h4 class="anchored" data-anchor-id="core-services">Core Services</h4>
+<ol type="1">
+<li><strong>ConnectionService</strong>: Manages NATS connections and JetStream contexts
+<ul>
+<li>Provides connection pooling and reuse</li>
+<li>Handles connection retries with exponential backoff</li>
+<li>Centralizes connection configuration</li>
+<li>Manages connection lifecycle and health checks</li>
+</ul></li>
+<li><strong>StreamService</strong>: Handles NATS JetStream stream operations
+<ul>
+<li>Stream creation, configuration, and management</li>
+<li>Stream purging and message deletion</li>
+<li>Stream information retrieval</li>
+</ul></li>
+<li><strong>KVStoreService</strong>: Manages NATS Key-Value store operations
+<ul>
+<li>Centralized KV store access patterns</li>
+<li>TTL management for stored values</li>
+<li>Transaction support for atomic operations</li>
+</ul></li>
+<li><strong>JobService</strong>: Handles job execution and result management
+<ul>
+<li>Job execution with proper error handling</li>
+<li>Result storage and retrieval</li>
+<li>Job failure handling and retry logic</li>
+</ul></li>
+<li><strong>EventService</strong>: Manages event logging and processing
+<ul>
+<li>Event batching and buffering</li>
+<li>Event stream management</li>
+<li>Event correlation and tracking</li>
+</ul></li>
+<li><strong>SchedulerService</strong>: Handles scheduled job management
+<ul>
+<li>Job scheduling and triggering</li>
+<li>Recurring job management</li>
+<li>Schedule persistence and retrieval</li>
+</ul></li>
+</ol>
+</section>
+<section id="service-manager" class="level4">
+<h4 class="anchored" data-anchor-id="service-manager">Service Manager</h4>
+<p>The <a href="src/naq/services/base.py:61"><code>ServiceManager</code></a> is the central component that: - Creates and manages service instances - Handles service dependencies - Ensures proper initialization and cleanup - Provides a unified interface for accessing services</p>
+</section>
+</section>
+<section id="benefits-of-the-service-layer" class="level3">
+<h3 class="anchored" data-anchor-id="benefits-of-the-service-layer">Benefits of the Service Layer</h3>
+<section id="connection-pooling-and-reuse" class="level4">
+<h4 class="anchored" data-anchor-id="connection-pooling-and-reuse">1. Connection Pooling and Reuse</h4>
+<p>The service layer eliminates connection duplication by maintaining a pool of connections that can be shared across components:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Before: Each component creates its own connection</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Queue:</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _get_js(<span class="va">self</span>):</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._nc <span class="op">=</span> <span class="cf">await</span> nats.<span class="ex">connect</span>(<span class="va">self</span>._nats_url)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._js <span class="op">=</span> <span class="va">self</span>._nc.jetstream()</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">self</span>._js</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co"># After: Use centralized ConnectionService</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Queue:</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _get_js(<span class="va">self</span>):</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>._services <span class="kw">is</span> <span class="va">None</span>:</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>._services <span class="op">=</span> ServiceManager(<span class="va">self</span>._config)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>        connection_service <span class="op">=</span> <span class="cf">await</span> <span class="va">self</span>._services.get_service(ConnectionService)</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._js <span class="op">=</span> <span class="cf">await</span> connection_service.get_jetstream(<span class="va">self</span>._nats_url)</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">self</span>._js</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="centralized-error-handling" class="level4">
+<h4 class="anchored" data-anchor-id="centralized-error-handling">2. Centralized Error Handling</h4>
+<p>All services implement consistent error handling patterns with proper logging and retry logic:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> get_connection(<span class="va">self</span>, url: Optional[<span class="bu">str</span>] <span class="op">=</span> <span class="va">None</span>) <span class="op">-&gt;</span> NATSClient:</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    target_url <span class="op">=</span> url <span class="cf">if</span> url <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span> <span class="cf">else</span> <span class="va">self</span>._default_url</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Check if we already have a connection</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> <span class="va">self</span>._lock:</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> target_url <span class="kw">in</span> <span class="va">self</span>._connections <span class="kw">and</span> <span class="va">self</span>._connections[target_url].is_connected:</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="va">self</span>._connections[target_url]</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create a new connection with retry logic</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="cf">await</span> <span class="va">self</span>._create_connection_with_retry(target_url)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="dependency-injection" class="level4">
+<h4 class="anchored" data-anchor-id="dependency-injection">3. Dependency Injection</h4>
+<p>Services can depend on other services, creating a clean dependency graph:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># StreamService depends on ConnectionService</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> get_service(<span class="va">self</span>, service_type: <span class="bu">type</span>) <span class="op">-&gt;</span> BaseService:</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> service_type <span class="op">==</span> StreamService:</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Get ConnectionService dependency</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>        connection_service <span class="op">=</span> <span class="cf">await</span> <span class="va">self</span>.get_service(ConnectionService)</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>        service <span class="op">=</span> service_type(<span class="va">self</span>.config, connection_service)</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ... other service types</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="resource-lifecycle-management" class="level4">
+<h4 class="anchored" data-anchor-id="resource-lifecycle-management">4. Resource Lifecycle Management</h4>
+<p>The service layer ensures proper initialization and cleanup of all resources:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> <span class="fu">__aenter__</span>(<span class="va">self</span>):</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> <span class="va">self</span>.initialize()</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">self</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> <span class="fu">__aexit__</span>(<span class="va">self</span>, exc_type, exc_val, exc_tb):</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> <span class="va">self</span>.cleanup()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="migration-from-old-patterns" class="level3">
+<h3 class="anchored" data-anchor-id="migration-from-old-patterns">Migration from Old Patterns</h3>
+<section id="before-direct-connection-management" class="level4">
+<h4 class="anchored" data-anchor-id="before-direct-connection-management">Before: Direct Connection Management</h4>
+<div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Old pattern - direct connection management</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> OldQueue:</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, name, nats_url):</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.name <span class="op">=</span> name</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.nats_url <span class="op">=</span> nats_url</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._nc <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._js <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _get_js(<span class="va">self</span>):</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>._js <span class="kw">is</span> <span class="va">None</span>:</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>._nc <span class="op">=</span> <span class="cf">await</span> nats.<span class="ex">connect</span>(<span class="va">self</span>.nats_url)</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>._js <span class="op">=</span> <span class="va">self</span>._nc.jetstream()</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">self</span>._js</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> close(<span class="va">self</span>):</span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>._nc:</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> <span class="va">self</span>._nc.close()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="after-service-based-architecture" class="level4">
+<h4 class="anchored" data-anchor-id="after-service-based-architecture">After: Service-Based Architecture</h4>
+<div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># New pattern - service-based architecture</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> NewQueue:</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, name, nats_url, services<span class="op">=</span><span class="va">None</span>):</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.name <span class="op">=</span> name</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.nats_url <span class="op">=</span> nats_url</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._services <span class="op">=</span> services <span class="kw">or</span> ServiceManager({<span class="st">'nats'</span>: {<span class="st">'url'</span>: nats_url}})</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._js <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _get_js(<span class="va">self</span>):</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>._js <span class="kw">is</span> <span class="va">None</span>:</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>            connection_service <span class="op">=</span> <span class="cf">await</span> <span class="va">self</span>._services.get_service(ConnectionService)</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>._js <span class="op">=</span> <span class="cf">await</span> connection_service.get_jetstream(<span class="va">self</span>.nats_url)</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">self</span>._js</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> close(<span class="va">self</span>):</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> <span class="va">self</span>._services.cleanup_all()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="service-layer-in-action" class="level3">
+<h3 class="anchored" data-anchor-id="service-layer-in-action">Service Layer in Action</h3>
+<p>Here’s how the service layer works across different components:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Queue using services</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> enqueue_example():</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    config <span class="op">=</span> {<span class="st">'nats'</span>: {<span class="st">'url'</span>: <span class="st">'nats://localhost:4222'</span>}}</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>        queue <span class="op">=</span> Queue(name<span class="op">=</span><span class="st">'example'</span>, services<span class="op">=</span>services)</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>        job <span class="op">=</span> <span class="cf">await</span> queue.enqueue(my_function, arg1, arg2)</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>        <span class="co"># All connections managed by the service layer</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># No need to manually close connections</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Worker using services</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> worker_example():</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>    config <span class="op">=</span> {<span class="st">'nats'</span>: {<span class="st">'url'</span>: <span class="st">'nats://localhost:4222'</span>}}</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>        worker <span class="op">=</span> Worker(queues<span class="op">=</span>[<span class="st">'example'</span>], services<span class="op">=</span>services)</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> worker.run()</span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Services automatically cleaned up when context exits</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="best-practices-for-using-the-service-layer" class="level3">
+<h3 class="anchored" data-anchor-id="best-practices-for-using-the-service-layer">Best Practices for Using the Service Layer</h3>
+<ol type="1">
+<li><p><strong>Use ServiceManager for Lifecycle Management</strong>: Always use the ServiceManager as a context manager to ensure proper cleanup.</p></li>
+<li><p><strong>Share ServiceManager Instances</strong>: When possible, share a single ServiceManager instance across components in the same process.</p></li>
+<li><p><strong>Configure Services Properly</strong>: Provide appropriate configuration for connection parameters, retry logic, and timeouts.</p></li>
+<li><p><strong>Handle Service Errors</strong>: Implement proper error handling for service-related exceptions.</p></li>
+<li><p><strong>Use Dependency Injection</strong>: Leverage the service dependency system rather than manually creating service instances.</p></li>
+</ol>
+<p>The service layer architecture represents a significant improvement in the design of <code>naq</code>, eliminating code duplication, improving resource efficiency, and providing a solid foundation for future enhancements.</p>
+</section>
+</section>
+<section id="connection-management" class="level2">
+<h2 class="anchored" data-anchor-id="connection-management">Connection Management</h2>
+<p>The connection management system has been completely refactored to provide:</p>
+<ol type="1">
+<li><strong>Context Manager API</strong>: Modern, resource-safe connection management</li>
+<li><strong>Service Integration</strong>: Seamless integration with the service layer</li>
+<li><strong>Monitoring Capabilities</strong>: Built-in connection metrics and health monitoring</li>
+<li><strong>Configuration-Driven</strong>: All connection parameters driven by configuration</li>
+</ol>
+<section id="architecture-flow" class="level3">
+<h3 class="anchored" data-anchor-id="architecture-flow">Architecture Flow</h3>
+<pre><code>Application Code
+    ↓ (Context Managers or Decorators)
+Connection Module (context_managers.py, utils.py, decorators.py)
+    ↓ (Optional Service Integration)
+ConnectionService (services/connection.py)
+    ↓
+NATS Client</code></pre>
+</section>
+<section id="key-benefits" class="level3">
+<h3 class="anchored" data-anchor-id="key-benefits">Key Benefits</h3>
+<ul>
+<li><strong>Automatic Resource Management</strong>: Context managers ensure proper cleanup</li>
+<li><strong>Reduced Boilerplate</strong>: Eliminates manual connection handling code</li>
+<li><strong>Consistent Patterns</strong>: Uniform connection handling across all modules</li>
+<li><strong>Production Ready</strong>: Built-in monitoring and health checking</li>
+</ul>
+</section>
+<section id="context-manager-implementation" class="level3">
+<h3 class="anchored" data-anchor-id="context-manager-implementation">Context Manager Implementation</h3>
+<p>The new connection management system provides several context managers for different use cases:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Basic NATS connection</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="cf">with</span> nats_connection() <span class="im">as</span> conn:</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> conn.publish(<span class="st">"subject"</span>, <span class="st">b"message"</span>)</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="co"># JetStream context</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="cf">with</span> nats_jetstream() <span class="im">as</span> (conn, js):</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> js.add_stream(name<span class="op">=</span><span class="st">"stream"</span>, subjects<span class="op">=</span>[<span class="st">"stream.*"</span>])</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="co"># KeyValue operations</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="cf">with</span> nats_kv_store(<span class="st">"bucket"</span>) <span class="im">as</span> kv:</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> kv.put(<span class="st">"key"</span>, <span class="st">"value"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="connection-monitoring" class="level3">
+<h3 class="anchored" data-anchor-id="connection-monitoring">Connection Monitoring</h3>
+<p>The system includes comprehensive monitoring capabilities:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.connection <span class="im">import</span> connection_monitor</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Track connection metrics</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Total connections: </span><span class="sc">{</span>connection_monitor<span class="sc">.</span>metrics<span class="sc">.</span>total_connections<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Active connections: </span><span class="sc">{</span>connection_monitor<span class="sc">.</span>metrics<span class="sc">.</span>active_connections<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Failed connections: </span><span class="sc">{</span>connection_monitor<span class="sc">.</span>metrics<span class="sc">.</span>failed_connections<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="integration-with-service-layer" class="level3">
+<h3 class="anchored" data-anchor-id="integration-with-service-layer">Integration with Service Layer</h3>
+<p>The connection management system integrates seamlessly with the service layer:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Using context managers with services</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    connection_service <span class="op">=</span> <span class="cf">await</span> services.get_service(ConnectionService)</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Context managers can use the same underlying connections</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> nats_connection() <span class="im">as</span> conn:</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Connection is managed by both the context manager and service layer</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> conn.publish(<span class="st">"subject"</span>, <span class="st">b"message"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="migration-path" class="level3">
+<h3 class="anchored" data-anchor-id="migration-path">Migration Path</h3>
+<p>The connection management system provides a clear migration path from legacy patterns:</p>
+<section id="legacy-pattern" class="level4">
+<h4 class="anchored" data-anchor-id="legacy-pattern">Legacy Pattern</h4>
+<div class="sourceCode" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Old approach - manual connection management</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>nc <span class="op">=</span> <span class="cf">await</span> get_nats_connection(url)</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span>:</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    js <span class="op">=</span> <span class="cf">await</span> get_jetstream_context(nc)</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> js.add_stream(config)</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="cf">finally</span>:</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> close_nats_connection(nc)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="modern-pattern" class="level4">
+<h4 class="anchored" data-anchor-id="modern-pattern">Modern Pattern</h4>
+<div class="sourceCode" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># New approach - automatic resource management</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="cf">with</span> nats_jetstream(config) <span class="im">as</span> (conn, js):</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> js.add_stream(config)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="backward-compatibility" class="level3">
+<h3 class="anchored" data-anchor-id="backward-compatibility">Backward Compatibility</h3>
+<p>The new connection management system maintains full backward compatibility with existing code. All legacy functions continue to work unchanged, while new code can benefit from the improved context manager API.</p>
+</section>
+<section id="production-considerations" class="level3">
+<h3 class="anchored" data-anchor-id="production-considerations">Production Considerations</h3>
+<p>For production deployments, the connection management system provides:</p>
+<ol type="1">
+<li><strong>Connection Pooling</strong>: Efficient reuse of connections across components</li>
+<li><strong>Health Monitoring</strong>: Built-in connection health checks and metrics</li>
+<li><strong>Error Handling</strong>: Comprehensive error handling and retry logic</li>
+<li><strong>Configuration Management</strong>: Centralized configuration for all connection parameters</li>
+</ol>
+<p>This refactored connection management system significantly improves the reliability and maintainability of <code>naq</code> while providing a modern, Pythonic API for developers.</p>
+</section>
+</section>
+<section id="utils-package-architecture" class="level2">
+<h2 class="anchored" data-anchor-id="utils-package-architecture">Utils Package Architecture</h2>
+<p>The <code>utils</code> package is a comprehensive collection of utilities extracted from various modules throughout the codebase as part of Task 08. It provides common functionality used across all components of <code>naq</code>, eliminating code duplication and providing a consistent set of tools for common operations.</p>
+<section id="package-structure" class="level3">
+<h3 class="anchored" data-anchor-id="package-structure">Package Structure</h3>
+<p>The <code>utils</code> package is organized into specialized modules, each focusing on a specific area of functionality:</p>
+<pre><code>src/naq/utils/
+├── __init__.py
+├── async_helpers.py      # Async/sync conversion utilities
+├── config.py            # Configuration management
+├── context_managers.py  # Common context managers
+├── decorators.py        # Reusable decorators
+├── error_handling.py    # Centralized error handling
+├── logging.py           # Logging utilities
+├── nats_helpers.py      # NATS-specific utilities
+├── retry.py             # Retry mechanisms
+├── serialization.py     # Serialization helpers
+├── timing.py            # Timing and benchmarking
+├── types.py             # Common type definitions
+└── validation.py        # Validation utilities</code></pre>
+</section>
+<section id="core-utilities" class="level3">
+<h3 class="anchored" data-anchor-id="core-utilities">Core Utilities</h3>
+<section id="async-helpers-async_helpers.py" class="level4">
+<h4 class="anchored" data-anchor-id="async-helpers-async_helpers.py">1. Async Helpers (<code>async_helpers.py</code>)</h4>
+<p>Provides utilities for bridging synchronous and asynchronous code:</p>
+<ul>
+<li><strong><code>run_async()</code></strong>: Execute async functions from sync code</li>
+<li><strong><code>run_sync()</code></strong>: Execute sync functions from async code</li>
+<li><strong><code>async_to_sync()</code></strong>: Convert async functions to sync functions</li>
+<li><strong><code>sync_to_async()</code></strong>: Convert sync functions to async functions</li>
+<li><strong><code>asyncify()</code></strong>: Decorator to make sync functions async-compatible</li>
+</ul>
+</section>
+<section id="configuration-management-config.py" class="level4">
+<h4 class="anchored" data-anchor-id="configuration-management-config.py">2. Configuration Management (<code>config.py</code>)</h4>
+<p>Centralized configuration system with multiple source support:</p>
+<ul>
+<li><strong><code>ConfigManager</code></strong>: Manages configuration from multiple sources with priority-based merging</li>
+<li><strong><code>ConfigSource</code></strong>: Base class for configuration sources</li>
+<li><strong>EnvironmentConfigSource`</strong>: Reads from environment variables</li>
+<li><strong><code>FileConfigSource</code></strong>: Reads from YAML/JSON files</li>
+<li><strong><code>DictConfigSource</code></strong>: Uses provided dictionaries</li>
+<li><strong>Configuration dataclasses</strong>: Predefined configuration structures for different components</li>
+</ul>
+</section>
+<section id="context-managers-context_managers.py" class="level4">
+<h4 class="anchored" data-anchor-id="context-managers-context_managers.py">3. Context Managers (<code>context_managers.py</code>)</h4>
+<p>Common context managers for resource management:</p>
+<ul>
+<li><strong><code>managed_resource()</code></strong>: Generic resource management with cleanup</li>
+<li><strong><code>timeout_context()</code></strong>: Timeout management for operations</li>
+<li><strong><code>retry_context()</code></strong>: Retry logic with context management</li>
+<li><strong><code>benchmark_context()</code></strong>: Performance benchmarking</li>
+</ul>
+</section>
+<section id="decorators-decorators.py" class="level4">
+<h4 class="anchored" data-anchor-id="decorators-decorators.py">4. Decorators (<code>decorators.py</code>)</h4>
+<p>Reusable decorators for common patterns:</p>
+<ul>
+<li><strong><code>retry_decorator()</code></strong>: Automatic retry logic with configurable strategies</li>
+<li><strong><code>timeout_decorator()</code></strong>: Timeout enforcement for functions</li>
+<li><strong><code>benchmark_decorator()</code></strong>: Performance measurement</li>
+<li><strong><code>log_errors()</code></strong>: Automatic error logging</li>
+<li><strong><code>validate_args()</code></strong>: Argument validation</li>
+</ul>
+</section>
+<section id="error-handling-error_handling.py" class="level4">
+<h4 class="anchored" data-anchor-id="error-handling-error_handling.py">5. Error Handling (<code>error_handling.py</code>)</h4>
+<p>Centralized error handling and reporting:</p>
+<ul>
+<li><strong><code>ErrorContext</code></strong>: Rich error context with metadata</li>
+<li><strong><code>ErrorCategory</code></strong>: Categorization of errors</li>
+<li><strong><code>ErrorHandler</code></strong>: Centralized error handling strategies</li>
+<li><strong><code>ErrorReporter</code></strong>: Structured error reporting</li>
+<li><strong>Recovery strategies</strong>: Configurable recovery mechanisms</li>
+</ul>
+</section>
+<section id="logging-logging.py" class="level4">
+<h4 class="anchored" data-anchor-id="logging-logging.py">6. Logging (<code>logging.py</code>)</h4>
+<p>Comprehensive logging utilities:</p>
+<ul>
+<li><strong>Structured logging</strong>: Context-aware logging with rich metadata</li>
+<li><strong>Performance logging</strong>: Specialized logging for performance metrics</li>
+<li><strong>Log handler management</strong>: Centralized log handler configuration</li>
+<li><strong>Log correlation</strong>: Request/operation ID tracking</li>
+</ul>
+</section>
+<section id="nats-helpers-nats_helpers.py" class="level4">
+<h4 class="anchored" data-anchor-id="nats-helpers-nats_helpers.py">7. NATS Helpers (<code>nats_helpers.py</code>)</h4>
+<p>NATS-specific utilities extracted from connection modules:</p>
+<ul>
+<li><strong>Connection management</strong>: Context managers for NATS connections</li>
+<li><strong>Stream operations</strong>: Stream creation and management utilities</li>
+<li><strong>KV store operations</strong>: Key-value store operations with retry logic</li>
+<li><strong>Subject utilities</strong>: Subject building and parsing</li>
+<li><strong>Message handling</strong>: Message publishing and subscription utilities</li>
+<li><strong>Connection monitoring</strong>: Connection metrics and health monitoring</li>
+</ul>
+</section>
+<section id="retry-mechanisms-retry.py" class="level4">
+<h4 class="anchored" data-anchor-id="retry-mechanisms-retry.py">8. Retry Mechanisms (<code>retry.py</code>)</h4>
+<p>Comprehensive retry system:</p>
+<ul>
+<li><strong><code>RetryConfig</code></strong>: Configurable retry strategies</li>
+<li><strong><code>retry_async()</code></strong>: Async retry with exponential backoff</li>
+<li><strong><code>retry()</code></strong>: Sync retry with exponential backoff</li>
+<li><strong>Retry strategies</strong>: Linear, exponential, custom strategies</li>
+<li><strong>Jitter support</strong>: Avoid thundering herd problems</li>
+</ul>
+</section>
+<section id="serialization-serialization.py" class="level4">
+<h4 class="anchored" data-anchor-id="serialization-serialization.py">9. Serialization (<code>serialization.py</code>)</h4>
+<p>Serialization utilities for jobs and results:</p>
+<ul>
+<li><strong><code>JobSerializer</code></strong>: Job serialization with multiple formats</li>
+<li><strong><code>ResultSerializer</code></strong>: Result serialization with TTL support</li>
+<li><strong><code>SecureSerializer</code></strong>: Security-focused serialization</li>
+<li><strong>Serializer protocol</strong>: Extensible serialization interface</li>
+</ul>
+</section>
+<section id="timing-and-benchmarking-timing.py" class="level4">
+<h4 class="anchored" data-anchor-id="timing-and-benchmarking-timing.py">10. Timing and Benchmarking (<code>timing.py</code>)</h4>
+<p>Performance measurement and timing utilities:</p>
+<ul>
+<li><strong><code>Timer</code></strong>: High-resolution timing for operations</li>
+<li><strong><code>AsyncTimer</code></strong>: Async-compatible timing</li>
+<li><strong><code>Benchmark</code></strong>: Comprehensive benchmarking tools</li>
+<li><strong><code>Scheduler</code></strong>: Time-based scheduling utilities</li>
+<li><strong>Performance tracking</strong>: Long-term performance monitoring</li>
+</ul>
+</section>
+<section id="type-definitions-types.py" class="level4">
+<h4 class="anchored" data-anchor-id="type-definitions-types.py">11. Type Definitions (<code>types.py</code>)</h4>
+<p>Comprehensive type definitions for the entire system:</p>
+<ul>
+<li><strong>Basic type aliases</strong>: Common types used throughout the codebase</li>
+<li><strong>Protocol definitions</strong>: Interface definitions for common patterns</li>
+<li><strong>Generic types</strong>: Reusable generic types</li>
+<li><strong>Type validation helpers</strong>: Runtime type checking utilities</li>
+<li><strong>Model types</strong>: Type definitions for core models</li>
+<li><strong>Configuration types</strong>: Type definitions for configuration</li>
+</ul>
+</section>
+<section id="validation-validation.py" class="level4">
+<h4 class="anchored" data-anchor-id="validation-validation.py">12. Validation (<code>validation.py</code>)</h4>
+<p>Comprehensive validation utilities:</p>
+<ul>
+<li><strong>Type validation</strong>: Runtime type checking</li>
+<li><strong>Range validation</strong>: Numeric range checking</li>
+<li><strong>Choice validation</strong>: Enum/value choice validation</li>
+<li><strong>String validation</strong>: String format validation</li>
+<li><strong>URL/email validation</strong>: Specialized string validation</li>
+<li><strong>Dictionary validation</strong>: Nested dictionary validation</li>
+<li><strong>Dataclass validation</strong>: Automatic dataclass validation</li>
+</ul>
+</section>
+</section>
+<section id="integration-with-core-components" class="level3">
+<h3 class="anchored" data-anchor-id="integration-with-core-components">Integration with Core Components</h3>
+<p>The utils package integrates seamlessly with all core components of <code>naq</code>:</p>
+<section id="queue-integration" class="level4">
+<h4 class="anchored" data-anchor-id="queue-integration">Queue Integration</h4>
+<div class="sourceCode" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils <span class="im">import</span> retry_async, ErrorContext, ErrorCategory</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.nats_helpers <span class="im">import</span> nats_jetstream_context</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Queue:</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> enqueue(<span class="va">self</span>, func, <span class="op">*</span>args, <span class="op">**</span>kwargs):</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">async</span> <span class="cf">with</span> nats_jetstream_context() <span class="im">as</span> (conn, js):</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="cf">await</span> retry_async(</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>                <span class="va">self</span>._enqueue_impl,</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>                func, args, kwargs, js</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>            )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="worker-integration" class="level4">
+<h4 class="anchored" data-anchor-id="worker-integration">Worker Integration</h4>
+<div class="sourceCode" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils <span class="im">import</span> Timer, ErrorContext</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.logging <span class="im">import</span> get_structured_logger</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Worker:</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> process_job(<span class="va">self</span>, job):</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> Timer() <span class="im">as</span> timer:</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>            logger <span class="op">=</span> get_structured_logger(<span class="st">"worker"</span>)</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>            <span class="cf">try</span>:</span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>                result <span class="op">=</span> <span class="cf">await</span> job.execute()</span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>                logger.info(<span class="st">"Job completed"</span>, job_id<span class="op">=</span>job.<span class="bu">id</span>, duration<span class="op">=</span>timer.duration)</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>                <span class="cf">return</span> result</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>            <span class="cf">except</span> <span class="pp">Exception</span> <span class="im">as</span> e:</span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>                error_context <span class="op">=</span> ErrorContext(</span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>                    operation<span class="op">=</span><span class="st">"job_execution"</span>,</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>                    exception<span class="op">=</span>e,</span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>                    job_id<span class="op">=</span>job.<span class="bu">id</span></span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>                )</span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>                error_context.category <span class="op">=</span> ErrorCategory.EXECUTION</span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>                logger.error(<span class="st">"Job failed"</span>, error_context<span class="op">=</span>error_context)</span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>                <span class="cf">raise</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="service-layer-integration" class="level4">
+<h4 class="anchored" data-anchor-id="service-layer-integration">Service Layer Integration</h4>
+<div class="sourceCode" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.config <span class="im">import</span> ConfigManager, load_naq_config</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.types <span class="im">import</span> Result, Error</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> ServiceManager:</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, config<span class="op">=</span><span class="va">None</span>):</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.config <span class="op">=</span> config <span class="kw">or</span> load_naq_config()</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._config_manager <span class="op">=</span> ConfigManager([DictConfigSource(<span class="va">self</span>.config)])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="benefits-of-the-utils-package" class="level3">
+<h3 class="anchored" data-anchor-id="benefits-of-the-utils-package">Benefits of the Utils Package</h3>
+<section id="code-consolidation" class="level4">
+<h4 class="anchored" data-anchor-id="code-consolidation">1. Code Consolidation</h4>
+<ul>
+<li>Eliminates duplication of common patterns across 44+ locations</li>
+<li>Provides single source of truth for common functionality</li>
+<li>Reduces maintenance burden and bug potential</li>
+</ul>
+</section>
+<section id="consistency" class="level4">
+<h4 class="anchored" data-anchor-id="consistency">2. Consistency</h4>
+<ul>
+<li>Unified error handling across all components</li>
+<li>Consistent logging formats and correlation</li>
+<li>Standardized retry and timeout behavior</li>
+</ul>
+</section>
+<section id="testability" class="level4">
+<h4 class="anchored" data-anchor-id="testability">3. Testability</h4>
+<ul>
+<li>All utilities are thoroughly tested</li>
+<li>Mockable interfaces for easy unit testing</li>
+<li>Clear separation of concerns</li>
+</ul>
+</section>
+<section id="extensibility" class="level4">
+<h4 class="anchored" data-anchor-id="extensibility">4. Extensibility</h4>
+<ul>
+<li>Protocol-based design allows easy extension</li>
+<li>Plugin architecture for custom serializers, validators, etc.</li>
+<li>Configurable behavior through settings</li>
+</ul>
+</section>
+<section id="performance" class="level4">
+<h4 class="anchored" data-anchor-id="performance">5. Performance</h4>
+<ul>
+<li>Optimized implementations for critical paths</li>
+<li>Minimal overhead for common operations</li>
+<li>Efficient resource management</li>
+</ul>
+</section>
+</section>
+<section id="migration-path-1" class="level3">
+<h3 class="anchored" data-anchor-id="migration-path-1">Migration Path</h3>
+<p>The utils package provides a clear migration path from the old scattered utilities:</p>
+<section id="before-scattered-utilities" class="level4">
+<h4 class="anchored" data-anchor-id="before-scattered-utilities">Before: Scattered Utilities</h4>
+<div class="sourceCode" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># In queue.py</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _get_nats_connection(<span class="va">self</span>):</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Custom connection logic</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">pass</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="co"># In worker.py</span></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _get_nats_connection(<span class="va">self</span>):</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Similar but slightly different connection logic</span></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">pass</span></span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a><span class="co"># In scheduler.py</span></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _get_nats_connection(<span class="va">self</span>):</span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Another variation of connection logic</span></span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">pass</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="after-centralized-utils" class="level4">
+<h4 class="anchored" data-anchor-id="after-centralized-utils">After: Centralized Utils</h4>
+<div class="sourceCode" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># In all components</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.nats_helpers <span class="im">import</span> nats_connection_context</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> _get_nats_connection(<span class="va">self</span>):</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> nats_connection_context() <span class="im">as</span> conn:</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> conn</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="best-practices" class="level3">
+<h3 class="anchored" data-anchor-id="best-practices">Best Practices</h3>
+<section id="using-utils-in-components" class="level4">
+<h4 class="anchored" data-anchor-id="using-utils-in-components">1. Using Utils in Components</h4>
+<div class="sourceCode" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Import specific utilities</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils <span class="im">import</span> retry_async, Timer, ErrorContext</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.nats_helpers <span class="im">import</span> nats_jetstream_context</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.logging <span class="im">import</span> get_structured_logger</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Use in component methods</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> process_request(<span class="va">self</span>, request):</span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">with</span> Timer() <span class="im">as</span> timer:</span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>        logger <span class="op">=</span> get_structured_logger(<span class="st">"component"</span>)</span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">try</span>:</span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>            <span class="cf">async</span> <span class="cf">with</span> nats_jetstream_context() <span class="im">as</span> (conn, js):</span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>                result <span class="op">=</span> <span class="cf">await</span> retry_async(</span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>                    <span class="va">self</span>._process_impl,</span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a>                    request, js</span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>                )</span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a>                </span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a>                logger.info(</span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a>                    <span class="st">"Request processed"</span>,</span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a>                    request_id<span class="op">=</span>request.<span class="bu">id</span>,</span>
+<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a>                    duration<span class="op">=</span>timer.duration</span>
+<span id="cb20-22"><a href="#cb20-22" aria-hidden="true" tabindex="-1"></a>                )</span>
+<span id="cb20-23"><a href="#cb20-23" aria-hidden="true" tabindex="-1"></a>                <span class="cf">return</span> result</span>
+<span id="cb20-24"><a href="#cb20-24" aria-hidden="true" tabindex="-1"></a>                </span>
+<span id="cb20-25"><a href="#cb20-25" aria-hidden="true" tabindex="-1"></a>        <span class="cf">except</span> <span class="pp">Exception</span> <span class="im">as</span> e:</span>
+<span id="cb20-26"><a href="#cb20-26" aria-hidden="true" tabindex="-1"></a>            error_context <span class="op">=</span> ErrorContext(</span>
+<span id="cb20-27"><a href="#cb20-27" aria-hidden="true" tabindex="-1"></a>                operation<span class="op">=</span><span class="st">"request_processing"</span>,</span>
+<span id="cb20-28"><a href="#cb20-28" aria-hidden="true" tabindex="-1"></a>                exception<span class="op">=</span>e,</span>
+<span id="cb20-29"><a href="#cb20-29" aria-hidden="true" tabindex="-1"></a>                request_id<span class="op">=</span>request.<span class="bu">id</span></span>
+<span id="cb20-30"><a href="#cb20-30" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb20-31"><a href="#cb20-31" aria-hidden="true" tabindex="-1"></a>            logger.error(<span class="st">"Request failed"</span>, error_context<span class="op">=</span>error_context)</span>
+<span id="cb20-32"><a href="#cb20-32" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="configuration-management" class="level4">
+<h4 class="anchored" data-anchor-id="configuration-management">2. Configuration Management</h4>
+<div class="sourceCode" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.config <span class="im">import</span> ConfigManager, EnvironmentConfigSource, FileConfigSource</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Create configuration manager with multiple sources</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>config_manager <span class="op">=</span> ConfigManager([</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    EnvironmentConfigSource(prefix<span class="op">=</span><span class="st">"MYAPP_"</span>),</span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>    FileConfigSource(<span class="st">"config.yaml"</span>),</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>    DictConfigSource({<span class="st">"default"</span>: <span class="st">"values"</span>})</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>])</span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Use typed configuration</span></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>max_retries <span class="op">=</span> config_manager.get_typed(<span class="st">"max_retries"</span>, <span class="bu">int</span>, <span class="dv">3</span>)</span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>timeout <span class="op">=</span> config_manager.get_required_typed(<span class="st">"timeout"</span>, <span class="bu">float</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="error-handling" class="level4">
+<h4 class="anchored" data-anchor-id="error-handling">3. Error Handling</h4>
+<div class="sourceCode" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils <span class="im">import</span> ErrorContext, ErrorCategory, ErrorReporter</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> risky_operation(<span class="va">self</span>):</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span>:</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="cf">await</span> <span class="va">self</span>._do_risky_thing()</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">except</span> <span class="pp">Exception</span> <span class="im">as</span> e:</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>        error_context <span class="op">=</span> ErrorContext(</span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>            operation<span class="op">=</span><span class="st">"risky_operation"</span>,</span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>            exception<span class="op">=</span>e,</span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>            component<span class="op">=</span><span class="va">self</span>.<span class="va">__class__</span>.<span class="va">__name__</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>        error_context.category <span class="op">=</span> ErrorCategory.EXECUTION</span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>        error_context.add_metadata({<span class="st">"attempt"</span>: <span class="va">self</span>._attempt})</span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>        reporter <span class="op">=</span> ErrorReporter()</span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> reporter.report_error(error_context)</span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="performance-monitoring" class="level4">
+<h4 class="anchored" data-anchor-id="performance-monitoring">4. Performance Monitoring</h4>
+<div class="sourceCode" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils <span class="im">import</span> Timer, Benchmark</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.timing <span class="im">import</span> Scheduler</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Time individual operations</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> process_item(<span class="va">self</span>, item):</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">with</span> Timer() <span class="im">as</span> timer:</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>        result <span class="op">=</span> <span class="cf">await</span> <span class="va">self</span>._process_item_impl(item)</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Log timing metrics</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.metrics.observe(<span class="st">"process_item_duration"</span>, timer.duration)</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> result</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Benchmark operations</span></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> benchmark_processing(<span class="va">self</span>):</span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>    benchmark <span class="op">=</span> Benchmark()</span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> benchmark:</span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">1000</span>):</span>
+<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> <span class="va">self</span>.process_item(<span class="ss">f"item_</span><span class="sc">{</span>i<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Processed 1000 items in </span><span class="sc">{</span>benchmark<span class="sc">.</span>total_time<span class="sc">:.2f}</span><span class="ss">s"</span>)</span>
+<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Average time: </span><span class="sc">{</span>benchmark<span class="sc">.</span>average_time<span class="sc">:.4f}</span><span class="ss">s"</span>)</span>
+<span id="cb23-23"><a href="#cb23-23" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Min time: </span><span class="sc">{</span>benchmark<span class="sc">.</span>min_time<span class="sc">:.4f}</span><span class="ss">s"</span>)</span>
+<span id="cb23-24"><a href="#cb23-24" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Max time: </span><span class="sc">{</span>benchmark<span class="sc">.</span>max_time<span class="sc">:.4f}</span><span class="ss">s"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>The utils package represents a significant architectural improvement for <code>naq</code>, providing a solid foundation of reusable, well-tested utilities that eliminate code duplication and ensure consistency across all components of the system.</p>
 
 
+</section>
+</section>
 </section>
 
 </main> <!-- /main -->

@@ -8,6 +8,10 @@ from loguru import logger
 from .storage import BaseEventStorage
 from ..models import JobEvent, JobEventType
 from ..utils import run_async_from_sync
+from ..utils.nats_helpers import (
+    batch_publish,
+    batch_publish_sync,
+)
 
 
 class AsyncJobEventLogger:
@@ -287,8 +291,7 @@ class AsyncJobEventLogger:
         Flush events from the buffer to the storage backend.
         
         This method acquires the lock, copies the current buffer, and clears it.
-        It then iterates over the copied events and calls storage.store_event()
-        for each one, with retry logic for failures.
+        It then uses batch_publish to send all events at once with retry logic.
         """
         async with self._lock:
             if not self._buffer:
@@ -304,51 +307,34 @@ class AsyncJobEventLogger:
         self._stats["flush_attempts"] += 1
         logger.debug(f"Flushing {len(events_to_flush)} events to storage")
         
-        # Process events with retry logic
-        successful_events = []
-        failed_events = []
-        
-        for event in events_to_flush:
-            retry_count = 0
-            max_retries = 3
-            last_error = None
+        try:
+            # Use batch_publish for more efficient event publishing
+            successful_events, failed_events = await batch_publish(
+                storage=self.storage,
+                events=events_to_flush,
+                max_retries=3,
+            )
             
-            while retry_count < max_retries:
-                try:
-                    await self.storage.store_event(event)
-                    successful_events.append(event)
-                    break
-                except Exception as e:
-                    last_error = e
-                    retry_count += 1
-                    if retry_count < max_retries:
-                        # Wait before retry with exponential backoff
-                        wait_time = 2 ** retry_count
-                        logger.warning(
-                            f"Failed to store event {event.job_id} (attempt {retry_count}/{max_retries}): {e}. "
-                            f"Retrying in {wait_time}s..."
-                        )
-                        await asyncio.sleep(wait_time)
-                    else:
-                        failed_events.append(event)
-                        logger.error(
-                            f"Failed to store event {event.job_id} after {max_retries} attempts: {e}"
-                        )
-        
-        # Update statistics
-        self._stats["events_flushed"] += len(successful_events)
-        self._stats["flush_failures"] += len(failed_events)
-        
-        # If there were failed events, add them back to the buffer for next attempt
-        if failed_events:
+            # Update statistics
+            self._stats["events_flushed"] += len(successful_events)
+            self._stats["flush_failures"] += len(failed_events)
+            
+            # If there were failed events, add them back to the buffer for next attempt
+            if failed_events:
+                async with self._lock:
+                    # Add failed events back to the front of the buffer
+                    self._buffer = failed_events + self._buffer
+                    
+            logger.debug(
+                f"Flush completed: {len(successful_events)} successful, "
+                f"{len(failed_events)} failed, {len(self._buffer)} remaining"
+            )
+        except Exception as e:
+            logger.error(f"Failed to flush events: {e}")
+            # Add all events back to the buffer on failure
             async with self._lock:
-                # Add failed events back to the front of the buffer
-                self._buffer = failed_events + self._buffer
-                
-        logger.debug(
-            f"Flush completed: {len(successful_events)} successful, "
-            f"{len(failed_events)} failed, {len(self._buffer)} remaining"
-        )
+                self._buffer = events_to_flush + self._buffer
+            self._stats["flush_failures"] += len(events_to_flush)
 
     async def start(self) -> None:
         """Start the event logger and background flush task."""
@@ -669,6 +655,51 @@ class JobEventLogger:
             return self._async_logger.flush()
         
         return run_async_from_sync(_async_flush)
+    
+    def flush_batch(self) -> None:
+        """Manually trigger a batch flush synchronously using batch_publish_sync."""
+        async with self._async_logger._lock:
+            if not self._async_logger._buffer:
+                return
+                
+            # Copy current buffer and clear it
+            events_to_flush = self._async_logger._buffer.copy()
+            self._async_logger._buffer.clear()
+            
+        if not events_to_flush:
+            return
+            
+        self._async_logger._stats["flush_attempts"] += 1
+        logger.debug(f"Flushing {len(events_to_flush)} events to storage (sync batch)")
+        
+        try:
+            # Use batch_publish_sync for more efficient event publishing
+            successful_events, failed_events = batch_publish_sync(
+                storage=self._async_logger.storage,
+                events=events_to_flush,
+                max_retries=3,
+            )
+            
+            # Update statistics
+            self._async_logger._stats["events_flushed"] += len(successful_events)
+            self._async_logger._stats["flush_failures"] += len(failed_events)
+            
+            # If there were failed events, add them back to the buffer for next attempt
+            if failed_events:
+                async with self._async_logger._lock:
+                    # Add failed events back to the front of the buffer
+                    self._async_logger._buffer = failed_events + self._async_logger._buffer
+                    
+            logger.debug(
+                f"Flush completed: {len(successful_events)} successful, "
+                f"{len(failed_events)} failed, {len(self._async_logger._buffer)} remaining"
+            )
+        except Exception as e:
+            logger.error(f"Failed to flush events: {e}")
+            # Add all events back to the buffer on failure
+            async with self._async_logger._lock:
+                self._async_logger._buffer = events_to_flush + self._async_logger._buffer
+            self._async_logger._stats["flush_failures"] += len(events_to_flush)
 
     def get_stats(self) -> Dict[str, Any]:
         """Get logger statistics."""

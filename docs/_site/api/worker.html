@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.32">
+<meta name="generator" content="quarto-1.7.33">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -71,14 +71,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="../site_libs/quarto-html/anchor.min.js"></script>
 <link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-dark-2fef5ea3f8957b3e4ecc936fc74692ca.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-dark-bc185b5c5bdbcb35c2eb49d8a876ef70.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="../site_libs/bootstrap/bootstrap-dark-08799928d293638fe9563d5c5a2794e5.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="../site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-dark-ccd81253fefb92e9cd3f9eb5b5d87b54.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="../site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -340,8 +340,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul>
   <li><a href="#naq.worker.worker" id="toc-naq.worker.worker" class="nav-link active" data-scroll-target="#naq.worker.worker"><code>naq.worker.Worker</code></a>
   <ul class="collapse">
-  <li><a href="#naq.worker.workerqueues-nats_url-concurrency-worker_name-..." id="toc-naq.worker.workerqueues-nats_url-concurrency-worker_name-..." class="nav-link" data-scroll-target="#naq.worker.workerqueues-nats_url-concurrency-worker_name-..."><code>naq.worker.Worker(queues, nats_url, concurrency, worker_name, ...)</code></a></li>
+  <li><a href="#naq.worker.workerqueues-nats_url-concurrency-worker_name-services-..." id="toc-naq.worker.workerqueues-nats_url-concurrency-worker_name-services-..." class="nav-link" data-scroll-target="#naq.worker.workerqueues-nats_url-concurrency-worker_name-services-..."><code>naq.worker.Worker(queues, nats_url, concurrency, worker_name, services, ...)</code></a></li>
   <li><a href="#methods" id="toc-methods" class="nav-link" data-scroll-target="#methods">Methods</a></li>
+  </ul></li>
+  <li><a href="#service-layer-integration" id="toc-service-layer-integration" class="nav-link" data-scroll-target="#service-layer-integration">Service Layer Integration</a>
+  <ul class="collapse">
+  <li><a href="#using-worker-with-servicemanager" id="toc-using-worker-with-servicemanager" class="nav-link" data-scroll-target="#using-worker-with-servicemanager">Using Worker with ServiceManager</a></li>
+  <li><a href="#benefits-of-service-layer-integration" id="toc-benefits-of-service-layer-integration" class="nav-link" data-scroll-target="#benefits-of-service-layer-integration">Benefits of Service Layer Integration</a></li>
+  <li><a href="#migration-from-direct-connection-management" id="toc-migration-from-direct-connection-management" class="nav-link" data-scroll-target="#migration-from-direct-connection-management">Migration from Direct Connection Management</a></li>
+  <li><a href="#advanced-service-configuration" id="toc-advanced-service-configuration" class="nav-link" data-scroll-target="#advanced-service-configuration">Advanced Service Configuration</a></li>
+  <li><a href="#sharing-servicemanager-across-workers" id="toc-sharing-servicemanager-across-workers" class="nav-link" data-scroll-target="#sharing-servicemanager-across-workers">Sharing ServiceManager Across Workers</a></li>
+  <li><a href="#worker-event-integration" id="toc-worker-event-integration" class="nav-link" data-scroll-target="#worker-event-integration">Worker Event Integration</a></li>
+  <li><a href="#custom-worker-with-services" id="toc-custom-worker-with-services" class="nav-link" data-scroll-target="#custom-worker-with-services">Custom Worker with Services</a></li>
   </ul></li>
   </ul>
 </nav>
@@ -373,8 +383,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="naq.worker.worker" class="level2">
 <h2 class="anchored" data-anchor-id="naq.worker.worker"><code>naq.worker.Worker</code></h2>
 <p>You can start a worker from the command line using <code>naq worker</code>, but you can also create and run a <code>Worker</code> instance programmatically.</p>
-<section id="naq.worker.workerqueues-nats_url-concurrency-worker_name-..." class="level3">
-<h3 class="anchored" data-anchor-id="naq.worker.workerqueues-nats_url-concurrency-worker_name-..."><code>naq.worker.Worker(queues, nats_url, concurrency, worker_name, ...)</code></h3>
+<section id="naq.worker.workerqueues-nats_url-concurrency-worker_name-services-..." class="level3">
+<h3 class="anchored" data-anchor-id="naq.worker.workerqueues-nats_url-concurrency-worker_name-services-..."><code>naq.worker.Worker(queues, nats_url, concurrency, worker_name, services, ...)</code></h3>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 12%">
@@ -410,21 +420,26 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td>A name for the worker, used for creating durable consumer names. A unique ID is generated if not provided.</td>
 </tr>
 <tr class="odd">
+<td><code>services</code></td>
+<td><code>ServiceManager</code> | <code>None</code></td>
+<td>Optional ServiceManager instance for dependency injection.</td>
+</tr>
+<tr class="even">
 <td><code>heartbeat_interval</code></td>
 <td><code>int</code></td>
 <td>The interval (in seconds) at which the worker sends a heartbeat. Defaults to <code>15</code>.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>worker_ttl</code></td>
 <td><code>int</code></td>
 <td>The time-to-live (in seconds) for the worker’s heartbeat. Defaults to <code>60</code>.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>ack_wait</code></td>
 <td><code>int</code> | <code>dict</code> | <code>None</code></td>
 <td>The time (in seconds) the worker has to acknowledge a job before it’s re-delivered. Can be a global value or a per-queue dictionary.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>module_paths</code></td>
 <td><code>list[str]</code> | <code>str</code> | <code>None</code></td>
 <td>A list of paths to add to <code>sys.path</code> to help the worker find your task modules.</td>
@@ -456,9 +471,264 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="list_workers_sync" class="level4">
 <h4 class="anchored" data-anchor-id="list_workers_sync"><code>list_workers_sync()</code></h4>
 <p>A synchronous version of <code>list_workers()</code>.</p>
-
-
 </section>
+</section>
+</section>
+<section id="service-layer-integration" class="level2">
+<h2 class="anchored" data-anchor-id="service-layer-integration">Service Layer Integration</h2>
+<p>The <code>Worker</code> class integrates with the service layer architecture to provide efficient resource management and connection pooling. When using the service layer, the worker automatically leverages centralized services for NATS connections, job execution, and event logging.</p>
+<section id="using-worker-with-servicemanager" class="level3">
+<h3 class="anchored" data-anchor-id="using-worker-with-servicemanager">Using Worker with ServiceManager</h3>
+<p>The recommended way to use the <code>Worker</code> class with the service layer is to provide a <code>ServiceManager</code> instance:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> asyncio</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.worker <span class="im">import</span> Worker</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services <span class="im">import</span> ServiceManager</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> worker_with_services():</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create service configuration</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    config <span class="op">=</span> {</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>        <span class="st">'nats'</span>: {</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>            <span class="st">'url'</span>: <span class="st">'nats://localhost:4222'</span>,</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>            <span class="st">'max_reconnect_attempts'</span>: <span class="dv">5</span>,</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>            <span class="st">'reconnect_delay'</span>: <span class="fl">1.0</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>        },</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>        <span class="st">'jobs'</span>: {</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>            <span class="st">'default_timeout'</span>: <span class="dv">3600</span>,</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>            <span class="st">'result_ttl'</span>: <span class="dv">604800</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>        },</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>        <span class="st">'events'</span>: {</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>            <span class="st">'enabled'</span>: <span class="va">True</span>,</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>            <span class="st">'batch_size'</span>: <span class="dv">100</span>,</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>            <span class="st">'flush_interval'</span>: <span class="fl">1.0</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Use ServiceManager for lifecycle management</span></span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Create Worker with ServiceManager</span></span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>        worker <span class="op">=</span> Worker(</span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>            queues<span class="op">=</span>[<span class="st">'high_priority'</span>, <span class="st">'low_priority'</span>],</span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>            services<span class="op">=</span>services,</span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>            concurrency<span class="op">=</span><span class="dv">5</span></span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Run the worker - it will automatically use the services</span></span>
+<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> worker.run()</span>
+<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Services are automatically managed and cleaned up</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="benefits-of-service-layer-integration" class="level3">
+<h3 class="anchored" data-anchor-id="benefits-of-service-layer-integration">Benefits of Service Layer Integration</h3>
+<ol type="1">
+<li><p><strong>Connection Pooling</strong>: Multiple workers can share the same NATS connection, reducing resource usage.</p></li>
+<li><p><strong>Centralized Job Execution</strong>: Job execution is handled by the JobService, providing consistent error handling and result management.</p></li>
+<li><p><strong>Event Logging</strong>: Worker events are automatically logged through the EventService, providing comprehensive monitoring.</p></li>
+<li><p><strong>Automatic Resource Management</strong>: Services are automatically initialized and cleaned up by the ServiceManager.</p></li>
+</ol>
+</section>
+<section id="migration-from-direct-connection-management" class="level3">
+<h3 class="anchored" data-anchor-id="migration-from-direct-connection-management">Migration from Direct Connection Management</h3>
+<section id="before-direct-connection-management" class="level4">
+<h4 class="anchored" data-anchor-id="before-direct-connection-management">Before (Direct Connection Management)</h4>
+<div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Old approach - direct connection management</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> old_worker_usage():</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    worker <span class="op">=</span> Worker(</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>        queues<span class="op">=</span>[<span class="st">'example'</span>],</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>        nats_url<span class="op">=</span><span class="st">'nats://localhost:4222'</span>,</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>        concurrency<span class="op">=</span><span class="dv">10</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span>:</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> worker.run()</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">finally</span>:</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Manual cleanup was required</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">pass</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="after-service-layer" class="level4">
+<h4 class="anchored" data-anchor-id="after-service-layer">After (Service Layer)</h4>
+<div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># New approach - service layer</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> new_worker_usage():</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    config <span class="op">=</span> {<span class="st">'nats'</span>: {<span class="st">'url'</span>: <span class="st">'nats://localhost:4222'</span>}}</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>        worker <span class="op">=</span> Worker(</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>            queues<span class="op">=</span>[<span class="st">'example'</span>],</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>            services<span class="op">=</span>services,</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>            concurrency<span class="op">=</span><span class="dv">10</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> worker.run()</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>        <span class="co"># No need to manually manage connections - services are automatically managed</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="advanced-service-configuration" class="level3">
+<h3 class="anchored" data-anchor-id="advanced-service-configuration">Advanced Service Configuration</h3>
+<p>You can provide detailed configuration for the services used by the worker:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> advanced_worker_config():</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    config <span class="op">=</span> {</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>        <span class="st">'nats'</span>: {</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>            <span class="st">'url'</span>: <span class="st">'nats://localhost:4222'</span>,</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>            <span class="st">'max_reconnect_attempts'</span>: <span class="dv">10</span>,</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>            <span class="st">'reconnect_delay'</span>: <span class="fl">2.0</span>,</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>            <span class="st">'connection_timeout'</span>: <span class="fl">30.0</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>        },</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">'jobs'</span>: {</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>            <span class="st">'default_timeout'</span>: <span class="dv">3600</span>,</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>            <span class="st">'result_ttl'</span>: <span class="dv">604800</span>,</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>            <span class="st">'cleanup_interval'</span>: <span class="dv">3600</span>  <span class="co"># Clean up old results every hour</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>        },</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>        <span class="st">'events'</span>: {</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>            <span class="st">'enabled'</span>: <span class="va">True</span>,</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>            <span class="st">'batch_size'</span>: <span class="dv">100</span>,</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>            <span class="st">'flush_interval'</span>: <span class="fl">1.0</span>,</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>            <span class="st">'max_buffer_size'</span>: <span class="dv">10000</span></span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>        worker <span class="op">=</span> Worker(</span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>            queues<span class="op">=</span>[<span class="st">'production'</span>],</span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>            services<span class="op">=</span>services,</span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>            concurrency<span class="op">=</span><span class="dv">20</span>,</span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>            worker_name<span class="op">=</span><span class="st">'production-worker-1'</span></span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> worker.run()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="sharing-servicemanager-across-workers" class="level3">
+<h3 class="anchored" data-anchor-id="sharing-servicemanager-across-workers">Sharing ServiceManager Across Workers</h3>
+<p>Multiple workers can share the same ServiceManager for efficient resource usage:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> shared_worker_services():</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    config <span class="op">=</span> {<span class="st">'nats'</span>: {<span class="st">'url'</span>: <span class="st">'nats://localhost:4222'</span>}}</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Create multiple workers sharing the same services</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>        worker1 <span class="op">=</span> Worker(</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>            queues<span class="op">=</span>[<span class="st">'high_priority'</span>],</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>            services<span class="op">=</span>services,</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>            concurrency<span class="op">=</span><span class="dv">5</span>,</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>            worker_name<span class="op">=</span><span class="st">'high-priority-worker'</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>        worker2 <span class="op">=</span> Worker(</span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>            queues<span class="op">=</span>[<span class="st">'low_priority'</span>],</span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>            services<span class="op">=</span>services,</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>            concurrency<span class="op">=</span><span class="dv">10</span>,</span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>            worker_name<span class="op">=</span><span class="st">'low-priority-worker'</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Run workers concurrently</span></span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>        worker1_task <span class="op">=</span> asyncio.create_task(worker1.run())</span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>        worker2_task <span class="op">=</span> asyncio.create_task(worker2.run())</span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Wait for both workers (in a real scenario, you might run them indefinitely)</span></span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> asyncio.sleep(<span class="dv">10</span>)</span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Cancel worker tasks</span></span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a>        worker1_task.cancel()</span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>        worker2_task.cancel()</span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a>        <span class="cf">try</span>:</span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> worker1_task</span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> worker2_task</span>
+<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a>        <span class="cf">except</span> asyncio.CancelledError:</span>
+<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a>            <span class="cf">pass</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="worker-event-integration" class="level3">
+<h3 class="anchored" data-anchor-id="worker-event-integration">Worker Event Integration</h3>
+<p>When using the service layer, workers automatically integrate with the event system:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> worker_with_events():</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    config <span class="op">=</span> {</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>        <span class="st">'nats'</span>: {<span class="st">'url'</span>: <span class="st">'nats://localhost:4222'</span>},</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>        <span class="st">'events'</span>: {</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>            <span class="st">'enabled'</span>: <span class="va">True</span>,</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>            <span class="st">'batch_size'</span>: <span class="dv">50</span>,</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>            <span class="st">'flush_interval'</span>: <span class="fl">0.5</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>        worker <span class="op">=</span> Worker(</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>            queues<span class="op">=</span>[<span class="st">'example'</span>],</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>            services<span class="op">=</span>services,</span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>            concurrency<span class="op">=</span><span class="dv">3</span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a>        <span class="co"># The worker will automatically log:</span></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>        <span class="co"># - STARTED events when jobs begin processing</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>        <span class="co"># - COMPLETED events when jobs finish successfully</span></span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>        <span class="co"># - FAILED events when jobs encounter errors</span></span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>        <span class="co"># - STATUS_CHANGED events for job state transitions</span></span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> worker.run()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="custom-worker-with-services" class="level3">
+<h3 class="anchored" data-anchor-id="custom-worker-with-services">Custom Worker with Services</h3>
+<p>For advanced use cases, you can create custom worker classes that leverage the service layer:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.worker <span class="im">import</span> Worker</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services <span class="im">import</span> ServiceManager, JobService, EventService</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> CustomWorker(Worker):</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Custom worker with enhanced service integration."""</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, <span class="op">*</span>args, <span class="op">**</span>kwargs):</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>(<span class="op">*</span>args, <span class="op">**</span>kwargs)</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._job_service <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._event_service <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _setup_services(<span class="va">self</span>):</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Set up service references."""</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>._services:</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>._job_service <span class="op">=</span> <span class="cf">await</span> <span class="va">self</span>._services.get_service(JobService)</span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>._event_service <span class="op">=</span> <span class="cf">await</span> <span class="va">self</span>._services.get_service(EventService)</span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> process_job(<span class="va">self</span>, job):</span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Override to add custom processing with services."""</span></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> <span class="va">self</span>._setup_services()</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Log custom event before processing</span></span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>._event_service:</span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>            <span class="im">from</span> naq.models <span class="im">import</span> JobEvent, JobEventType</span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>            custom_event <span class="op">=</span> JobEvent(</span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>                job_id<span class="op">=</span>job.job_id,</span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>                event_type<span class="op">=</span><span class="st">"custom_processing_started"</span>,</span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>                queue_name<span class="op">=</span>job.queue_name,</span>
+<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>                worker_id<span class="op">=</span><span class="va">self</span>.worker_name,</span>
+<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a>                details<span class="op">=</span>{<span class="st">"custom_data"</span>: <span class="st">"pre-processing"</span>}</span>
+<span id="cb10-31"><a href="#cb10-31" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb10-32"><a href="#cb10-32" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> <span class="va">self</span>._event_service.log_event(custom_event)</span>
+<span id="cb10-33"><a href="#cb10-33" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb10-34"><a href="#cb10-34" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Process the job using the job service</span></span>
+<span id="cb10-35"><a href="#cb10-35" aria-hidden="true" tabindex="-1"></a>        result <span class="op">=</span> <span class="cf">await</span> <span class="va">self</span>._job_service.execute_job(job)</span>
+<span id="cb10-36"><a href="#cb10-36" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb10-37"><a href="#cb10-37" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Log custom event after processing</span></span>
+<span id="cb10-38"><a href="#cb10-38" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>._event_service:</span>
+<span id="cb10-39"><a href="#cb10-39" aria-hidden="true" tabindex="-1"></a>            custom_event <span class="op">=</span> JobEvent(</span>
+<span id="cb10-40"><a href="#cb10-40" aria-hidden="true" tabindex="-1"></a>                job_id<span class="op">=</span>job.job_id,</span>
+<span id="cb10-41"><a href="#cb10-41" aria-hidden="true" tabindex="-1"></a>                event_type<span class="op">=</span><span class="st">"custom_processing_completed"</span>,</span>
+<span id="cb10-42"><a href="#cb10-42" aria-hidden="true" tabindex="-1"></a>                queue_name<span class="op">=</span>job.queue_name,</span>
+<span id="cb10-43"><a href="#cb10-43" aria-hidden="true" tabindex="-1"></a>                worker_id<span class="op">=</span><span class="va">self</span>.worker_name,</span>
+<span id="cb10-44"><a href="#cb10-44" aria-hidden="true" tabindex="-1"></a>                details<span class="op">=</span>{<span class="st">"duration_ms"</span>: result.duration_ms}</span>
+<span id="cb10-45"><a href="#cb10-45" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb10-46"><a href="#cb10-46" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> <span class="va">self</span>._event_service.log_event(custom_event)</span>
+<span id="cb10-47"><a href="#cb10-47" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb10-48"><a href="#cb10-48" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> result</span>
+<span id="cb10-49"><a href="#cb10-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-50"><a href="#cb10-50" aria-hidden="true" tabindex="-1"></a><span class="co"># Using the custom worker</span></span>
+<span id="cb10-51"><a href="#cb10-51" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> custom_worker_example():</span>
+<span id="cb10-52"><a href="#cb10-52" aria-hidden="true" tabindex="-1"></a>    config <span class="op">=</span> {<span class="st">'nats'</span>: {<span class="st">'url'</span>: <span class="st">'nats://localhost:4222'</span>}}</span>
+<span id="cb10-53"><a href="#cb10-53" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb10-54"><a href="#cb10-54" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb10-55"><a href="#cb10-55" aria-hidden="true" tabindex="-1"></a>        worker <span class="op">=</span> CustomWorker(</span>
+<span id="cb10-56"><a href="#cb10-56" aria-hidden="true" tabindex="-1"></a>            queues<span class="op">=</span>[<span class="st">'example'</span>],</span>
+<span id="cb10-57"><a href="#cb10-57" aria-hidden="true" tabindex="-1"></a>            services<span class="op">=</span>services,</span>
+<span id="cb10-58"><a href="#cb10-58" aria-hidden="true" tabindex="-1"></a>            concurrency<span class="op">=</span><span class="dv">2</span></span>
+<span id="cb10-59"><a href="#cb10-59" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb10-60"><a href="#cb10-60" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb10-61"><a href="#cb10-61" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> worker.run()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>The service layer integration provides a robust foundation for building efficient, maintainable worker applications with <code>naq</code>, eliminating connection duplication and providing clean resource management throughout the system.</p>
+
+
 </section>
 </section>
 

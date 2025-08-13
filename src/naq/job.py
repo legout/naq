@@ -12,7 +12,7 @@ from .settings import (
     DEFAULT_NATS_URL,
     DEFAULT_QUEUE_NAME,
 )
-from .serializers import get_serializer
+from .utils.serialization import get_serializer
 
 # Define retry strategies
 from .settings import RETRY_STRATEGY

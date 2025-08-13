@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.7.33">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Events API – naq</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-dark-bc185b5c5bdbcb35c2eb49d8a876ef70.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-dark-ccd81253fefb92e9cd3f9eb5b5d87b54.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="../site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+</head>
+
+<body class="nav-fixed quarto-light"><script id="quarto-html-before-body" type="application/javascript">
+    const toggleBodyColorMode = (bsSheetEl) => {
+      const mode = bsSheetEl.getAttribute("data-mode");
+      const bodyEl = window.document.querySelector("body");
+      if (mode === "dark") {
+        bodyEl.classList.add("quarto-dark");
+        bodyEl.classList.remove("quarto-light");
+      } else {
+        bodyEl.classList.add("quarto-light");
+        bodyEl.classList.remove("quarto-dark");
+      }
+    }
+    const toggleBodyColorPrimary = () => {
+      const bsSheetEl = window.document.querySelector("link#quarto-bootstrap:not([rel=disabled-stylesheet])");
+      if (bsSheetEl) {
+        toggleBodyColorMode(bsSheetEl);
+      }
+    }
+    const setColorSchemeToggle = (alternate) => {
+      const toggles = window.document.querySelectorAll('.quarto-color-scheme-toggle');
+      for (let i=0; i < toggles.length; i++) {
+        const toggle = toggles[i];
+        if (toggle) {
+          if (alternate) {
+            toggle.classList.add("alternate");
+          } else {
+            toggle.classList.remove("alternate");
+          }
+        }
+      }
+    };
+    const toggleColorMode = (alternate) => {
+      // Switch the stylesheets
+      const primaryStylesheets = window.document.querySelectorAll('link.quarto-color-scheme:not(.quarto-color-alternate)');
+      const alternateStylesheets = window.document.querySelectorAll('link.quarto-color-scheme.quarto-color-alternate');
+      manageTransitions('#quarto-margin-sidebar .nav-link', false);
+      if (alternate) {
+        // note: dark is layered on light, we don't disable primary!
+        enableStylesheet(alternateStylesheets);
+        for (const sheetNode of alternateStylesheets) {
+          if (sheetNode.id === "quarto-bootstrap") {
+            toggleBodyColorMode(sheetNode);
+          }
+        }
+      } else {
+        disableStylesheet(alternateStylesheets);
+        enableStylesheet(primaryStylesheets)
+        toggleBodyColorPrimary();
+      }
+      manageTransitions('#quarto-margin-sidebar .nav-link', true);
+      // Switch the toggles
+      setColorSchemeToggle(alternate)
+      // Hack to workaround the fact that safari doesn't
+      // properly recolor the scrollbar when toggling (#1455)
+      if (navigator.userAgent.indexOf('Safari') > 0 && navigator.userAgent.indexOf('Chrome') == -1) {
+        manageTransitions("body", false);
+        window.scrollTo(0, 1);
+        setTimeout(() => {
+          window.scrollTo(0, 0);
+          manageTransitions("body", true);
+        }, 40);
+      }
+    }
+    const disableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        stylesheet.rel = 'disabled-stylesheet';
+      }
+    }
+    const enableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        if(stylesheet.rel !== 'stylesheet') { // for Chrome, which will still FOUC without this check
+          stylesheet.rel = 'stylesheet';
+        }
+      }
+    }
+    const manageTransitions = (selector, allowTransitions) => {
+      const els = window.document.querySelectorAll(selector);
+      for (let i=0; i < els.length; i++) {
+        const el = els[i];
+        if (allowTransitions) {
+          el.classList.remove('notransition');
+        } else {
+          el.classList.add('notransition');
+        }
+      }
+    }
+    const isFileUrl = () => {
+      return window.location.protocol === 'file:';
+    }
+    const hasAlternateSentinel = () => {
+      let styleSentinel = getColorSchemeSentinel();
+      if (styleSentinel !== null) {
+        return styleSentinel === "alternate";
+      } else {
+        return false;
+      }
+    }
+    const setStyleSentinel = (alternate) => {
+      const value = alternate ? "alternate" : "default";
+      if (!isFileUrl()) {
+        window.localStorage.setItem("quarto-color-scheme", value);
+      } else {
+        localAlternateSentinel = value;
+      }
+    }
+    const getColorSchemeSentinel = () => {
+      if (!isFileUrl()) {
+        const storageValue = window.localStorage.getItem("quarto-color-scheme");
+        return storageValue != null ? storageValue : localAlternateSentinel;
+      } else {
+        return localAlternateSentinel;
+      }
+    }
+    const toggleGiscusIfUsed = (isAlternate, darkModeDefault) => {
+      const baseTheme = document.querySelector('#giscus-base-theme')?.value ?? 'light';
+      const alternateTheme = document.querySelector('#giscus-alt-theme')?.value ?? 'dark';
+      let newTheme = '';
+      if(authorPrefersDark) {
+        newTheme = isAlternate ? baseTheme : alternateTheme;
+      } else {
+        newTheme = isAlternate ? alternateTheme : baseTheme;
+      }
+      const changeGiscusTheme = () => {
+        // From: https://github.com/giscus/giscus/issues/336
+        const sendMessage = (message) => {
+          const iframe = document.querySelector('iframe.giscus-frame');
+          if (!iframe) return;
+          iframe.contentWindow.postMessage({ giscus: message }, 'https://giscus.app');
+        }
+        sendMessage({
+          setConfig: {
+            theme: newTheme
+          }
+        });
+      }
+      const isGiscussLoaded = window.document.querySelector('iframe.giscus-frame') !== null;
+      if (isGiscussLoaded) {
+        changeGiscusTheme();
+      }
+    };
+    const authorPrefersDark = false;
+    const darkModeDefault = authorPrefersDark;
+      document.querySelector('link#quarto-text-highlighting-styles.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+      document.querySelector('link#quarto-bootstrap.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+    let localAlternateSentinel = darkModeDefault ? 'alternate' : 'default';
+    // Dark / light mode switch
+    window.quartoToggleColorScheme = () => {
+      // Read the current dark / light value
+      let toAlternate = !hasAlternateSentinel();
+      toggleColorMode(toAlternate);
+      setStyleSentinel(toAlternate);
+      toggleGiscusIfUsed(toAlternate, darkModeDefault);
+      window.dispatchEvent(new Event('resize'));
+    };
+    // Switch to dark mode if need be
+    if (hasAlternateSentinel()) {
+      toggleColorMode(true);
+    } else {
+      toggleColorMode(false);
+    }
+  </script>
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="../index.html">
+    <span class="navbar-title">naq</span>
+    </a>
+  </div>
+            <div id="quarto-search" class="" title="Search"></div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" role="menu" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../index.html"> 
+<span class="menu-text">Home</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../installation.html"> 
+<span class="menu-text">Installation</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../quickstart.html"> 
+<span class="menu-text">Quickstart</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../architecture.html"> 
+<span class="menu-text">Architecture</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../examples.html"> 
+<span class="menu-text">Examples</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../advanced.html"> 
+<span class="menu-text">Advanced</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../api/index.html"> 
+<span class="menu-text">API</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../contributing.html"> 
+<span class="menu-text">Contributing</span></a>
+  </li>  
+</ul>
+          </div> <!-- /navcollapse -->
+            <div class="quarto-navbar-tools">
+  <a href="" class="quarto-color-scheme-toggle quarto-navigation-tool  px-1" onclick="window.quartoToggleColorScheme(); return false;" title="Toggle dark mode"><i class="bi"></i></a>
+</div>
+      </div> <!-- /container-fluid -->
+    </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#core-components" id="toc-core-components" class="nav-link active" data-scroll-target="#core-components">Core Components</a>
+  <ul class="collapse">
+  <li><a href="#naq.events.jobeventtype" id="toc-naq.events.jobeventtype" class="nav-link" data-scroll-target="#naq.events.jobeventtype"><code>naq.events.JobEventType</code></a></li>
+  <li><a href="#naq.events.jobevent" id="toc-naq.events.jobevent" class="nav-link" data-scroll-target="#naq.events.jobevent"><code>naq.events.JobEvent</code></a></li>
+  <li><a href="#naq.events.natsjobeventstorage" id="toc-naq.events.natsjobeventstorage" class="nav-link" data-scroll-target="#naq.events.natsjobeventstorage"><code>naq.events.NATSJobEventStorage</code></a></li>
+  <li><a href="#naq.events.asyncjobeventlogger" id="toc-naq.events.asyncjobeventlogger" class="nav-link" data-scroll-target="#naq.events.asyncjobeventlogger"><code>naq.events.AsyncJobEventLogger</code></a></li>
+  <li><a href="#naq.events.jobeventlogger" id="toc-naq.events.jobeventlogger" class="nav-link" data-scroll-target="#naq.events.jobeventlogger"><code>naq.events.JobEventLogger</code></a></li>
+  <li><a href="#naq.events.sharedeventloggermanager" id="toc-naq.events.sharedeventloggermanager" class="nav-link" data-scroll-target="#naq.events.sharedeventloggermanager"><code>naq.events.SharedEventLoggerManager</code></a></li>
+  <li><a href="#using-the-shared-event-logger" id="toc-using-the-shared-event-logger" class="nav-link" data-scroll-target="#using-the-shared-event-logger">Using the Shared Event Logger</a></li>
+  <li><a href="#naq.events.asyncjobeventprocessor" id="toc-naq.events.asyncjobeventprocessor" class="nav-link" data-scroll-target="#naq.events.asyncjobeventprocessor"><code>naq.events.AsyncJobEventProcessor</code></a></li>
+  <li><a href="#event-consumption-examples" id="toc-event-consumption-examples" class="nav-link" data-scroll-target="#event-consumption-examples">Event Consumption Examples</a></li>
+  <li><a href="#event-stream-processing" id="toc-event-stream-processing" class="nav-link" data-scroll-target="#event-stream-processing">Event Stream Processing</a></li>
+  <li><a href="#performance-considerations" id="toc-performance-considerations" class="nav-link" data-scroll-target="#performance-considerations">Performance Considerations</a></li>
+  </ul></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Events API</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>The <code>naq.events</code> module provides a comprehensive event logging and monitoring system for <code>naq</code>. It allows you to track the entire lifecycle of your jobs, from enqueuing to completion or failure, and react to these events in real-time.</p>
+<p>This module is built on top of NATS JetStream, ensuring that events are durable and can be processed even if consumers are offline.</p>
+<section id="core-components" class="level2">
+<h2 class="anchored" data-anchor-id="core-components">Core Components</h2>
+<section id="naq.events.jobeventtype" class="level3">
+<h3 class="anchored" data-anchor-id="naq.events.jobeventtype"><code>naq.events.JobEventType</code></h3>
+<p>An enumeration of all possible event types in a job’s lifecycle.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> JobEventType(<span class="bu">str</span>, Enum):</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    ENQUEUED <span class="op">=</span> <span class="st">"enqueued"</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    STARTED <span class="op">=</span> <span class="st">"started"</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    COMPLETED <span class="op">=</span> <span class="st">"completed"</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    FAILED <span class="op">=</span> <span class="st">"failed"</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    RETRY_SCHEDULED <span class="op">=</span> <span class="st">"retry_scheduled"</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    SCHEDULED <span class="op">=</span> <span class="st">"scheduled"</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    SCHEDULE_TRIGGERED <span class="op">=</span> <span class="st">"schedule_triggered"</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    CANCELLED <span class="op">=</span> <span class="st">"cancelled"</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    STATUS_CHANGED <span class="op">=</span> <span class="st">"status_changed"</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<section id="event-type-descriptions" class="level4">
+<h4 class="anchored" data-anchor-id="event-type-descriptions">Event Type Descriptions</h4>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 30%">
+<col style="width: 33%">
+<col style="width: 35%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Event Type</th>
+<th>Description</th>
+<th>Triggered By</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>ENQUEUED</code></td>
+<td>Job has been added to a queue</td>
+<td>Client/Queue</td>
+</tr>
+<tr class="even">
+<td><code>STARTED</code></td>
+<td>Job has begun execution by a worker</td>
+<td>Worker</td>
+</tr>
+<tr class="odd">
+<td><code>COMPLETED</code></td>
+<td>Job finished successfully</td>
+<td>Worker</td>
+</tr>
+<tr class="even">
+<td><code>FAILED</code></td>
+<td>Job failed during execution</td>
+<td>Worker</td>
+</tr>
+<tr class="odd">
+<td><code>RETRY_SCHEDULED</code></td>
+<td>Job failed and will be retried</td>
+<td>Worker</td>
+</tr>
+<tr class="even">
+<td><code>SCHEDULED</code></td>
+<td>Job has been scheduled for future execution</td>
+<td>Scheduler</td>
+</tr>
+<tr class="odd">
+<td><code>SCHEDULE_TRIGGERED</code></td>
+<td>Scheduled job is now being enqueued</td>
+<td>Scheduler</td>
+</tr>
+<tr class="even">
+<td><code>CANCELLED</code></td>
+<td>Job was cancelled before or during execution</td>
+<td>Worker/Client</td>
+</tr>
+<tr class="odd">
+<td><code>STATUS_CHANGED</code></td>
+<td>Job status has changed (any transition)</td>
+<td>All Components</td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="naq.events.jobevent" class="level3">
+<h3 class="anchored" data-anchor-id="naq.events.jobevent"><code>naq.events.JobEvent</code></h3>
+<p>A <code>msgspec.Struct</code> representing a single event in a job’s lifecycle. This is the primary data structure for all event information.</p>
+<section id="properties" class="level4">
+<h4 class="anchored" data-anchor-id="properties">Properties</h4>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 13%">
+<col style="width: 26%">
+<col style="width: 59%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Property</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>job_id</code></td>
+<td><code>str</code></td>
+<td>The unique identifier of the job this event belongs to.</td>
+</tr>
+<tr class="even">
+<td><code>event_type</code></td>
+<td><code>JobEventType</code></td>
+<td>The type of event that occurred.</td>
+</tr>
+<tr class="odd">
+<td><code>timestamp</code></td>
+<td><code>float</code></td>
+<td>The UTC timestamp when the event was generated.</td>
+</tr>
+<tr class="even">
+<td><code>worker_id</code></td>
+<td><code>str \| None</code></td>
+<td>The ID of the worker that processed the job (if applicable).</td>
+</tr>
+<tr class="odd">
+<td><code>queue_name</code></td>
+<td><code>str \| None</code></td>
+<td>The name of the queue the job was in.</td>
+</tr>
+<tr class="even">
+<td><code>message</code></td>
+<td><code>str \| None</code></td>
+<td>A human-readable message describing the event.</td>
+</tr>
+<tr class="odd">
+<td><code>details</code></td>
+<td><code>dict \| None</code></td>
+<td>Additional structured details about the event.</td>
+</tr>
+<tr class="even">
+<td><code>error_type</code></td>
+<td><code>str \| None</code></td>
+<td>The type of error if the event represents a failure.</td>
+</tr>
+<tr class="odd">
+<td><code>error_message</code></td>
+<td><code>str \| None</code></td>
+<td>The error message if the event represents a failure.</td>
+</tr>
+<tr class="even">
+<td><code>duration_ms</code></td>
+<td><code>int \| None</code></td>
+<td>The duration of the job execution in milliseconds (if applicable).</td>
+</tr>
+<tr class="odd">
+<td><code>nats_subject</code></td>
+<td><code>str \| None</code></td>
+<td>The NATS subject the event was published to.</td>
+</tr>
+<tr class="even">
+<td><code>nats_sequence</code></td>
+<td><code>int \| None</code></td>
+<td>The NATS stream sequence number of the event.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="convenience-methods" class="level4">
+<h4 class="anchored" data-anchor-id="convenience-methods">Convenience Methods</h4>
+<p>The <code>JobEvent</code> class provides several class methods for easily creating specific event types:</p>
+<ul>
+<li><code>JobEvent.enqueued(job_id: str, queue_name: str, **kwargs) -&gt; JobEvent</code></li>
+<li><code>JobEvent.started(job_id: str, worker_id: str, queue_name: str, **kwargs) -&gt; JobEvent</code></li>
+<li><code>JobEvent.completed(job_id: str, worker_id: str, queue_name: str, duration_ms: int, **kwargs) -&gt; JobEvent</code></li>
+<li><code>JobEvent.failed(job_id: str, worker_id: str, queue_name: str, error_type: str, error_message: str, **kwargs) -&gt; JobEvent</code></li>
+<li><code>JobEvent.retry_scheduled(job_id: str, worker_id: str, queue_name: str, **kwargs) -&gt; JobEvent</code></li>
+<li><code>JobEvent.scheduled(job_id: str, **kwargs) -&gt; JobEvent</code></li>
+<li><code>JobEvent.schedule_triggered(job_id: str, **kwargs) -&gt; JobEvent</code></li>
+<li><code>JobEvent.cancelled(job_id: str, queue_name: str, **kwargs) -&gt; JobEvent</code></li>
+<li><code>JobEvent.status_changed(job_id: str, queue_name: str, old_status: str, new_status: str, **kwargs) -&gt; JobEvent</code></li>
+</ul>
+</section>
+</section>
+<section id="naq.events.natsjobeventstorage" class="level3">
+<h3 class="anchored" data-anchor-id="naq.events.natsjobeventstorage"><code>naq.events.NATSJobEventStorage</code></h3>
+<p>A storage backend for job events using NATS JetStream. This class is responsible for persisting and retrieving events. You typically won’t need to interact with this class directly unless you are building custom tools.</p>
+<section id="initialization" class="level4">
+<h4 class="anchored" data-anchor-id="initialization">Initialization</h4>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> <span class="fu">__init__</span>(</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span>,</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    nats_url: <span class="bu">str</span> <span class="op">=</span> DEFAULT_NATS_URL,</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    stream_name: <span class="bu">str</span> <span class="op">=</span> <span class="st">"NAQ_JOB_EVENTS"</span>,</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    subject_prefix: <span class="bu">str</span> <span class="op">=</span> <span class="st">"naq.jobs.events"</span>,</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    stream_config: Optional[StreamConfig] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 14%">
+<col style="width: 22%">
+<col style="width: 63%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>nats_url</code></td>
+<td><code>str</code></td>
+<td>The URL of the NATS server.</td>
+</tr>
+<tr class="even">
+<td><code>stream_name</code></td>
+<td><code>str</code></td>
+<td>The name of the JetStream stream to use for events.</td>
+</tr>
+<tr class="odd">
+<td><code>subject_prefix</code></td>
+<td><code>str</code></td>
+<td>The prefix for NATS subjects used for events.</td>
+</tr>
+<tr class="even">
+<td><code>stream_config</code></td>
+<td><code>Optional[StreamConfig]</code></td>
+<td>Custom JetStream stream configuration. If <code>None</code>, defaults are used.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="key-methods" class="level4">
+<h4 class="anchored" data-anchor-id="key-methods">Key Methods</h4>
+<ul>
+<li><code>async def store_event(self, event: JobEvent) -&gt; None</code>: Stores a single event.</li>
+<li><code>async def get_events(self, job_id: str) -&gt; List[JobEvent]</code>: Retrieves all events for a given job ID.</li>
+<li><code>async def stream_events(self, **kwargs) -&gt; AsyncIterator[JobEvent]</code>: Streams new events in real-time. Accepts filters like <code>context</code>, <code>event_type</code>, etc.</li>
+</ul>
+</section>
+</section>
+<section id="naq.events.asyncjobeventlogger" class="level3">
+<h3 class="anchored" data-anchor-id="naq.events.asyncjobeventlogger"><code>naq.events.AsyncJobEventLogger</code></h3>
+<p>A high-performance, non-blocking logger that buffers events in memory and flushes them periodically to the <code>NATSJobEventStorage</code>. This is the primary interface for logging events from your application.</p>
+<section id="initialization-1" class="level4">
+<h4 class="anchored" data-anchor-id="initialization-1">Initialization</h4>
+<div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> <span class="fu">__init__</span>(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span>,</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    storage: NATSJobEventStorage,</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    batch_size: <span class="bu">int</span> <span class="op">=</span> <span class="dv">100</span>,</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    flush_interval: <span class="bu">float</span> <span class="op">=</span> <span class="fl">5.0</span>,</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    max_buffer_size: <span class="bu">int</span> <span class="op">=</span> <span class="dv">10000</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 15%">
+<col style="width: 18%">
+<col style="width: 66%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>storage</code></td>
+<td><code>NATSJobEventStorage</code></td>
+<td>The storage backend instance to use.</td>
+</tr>
+<tr class="even">
+<td><code>batch_size</code></td>
+<td><code>int</code></td>
+<td>The number of events to buffer before flushing.</td>
+</tr>
+<tr class="odd">
+<td><code>flush_interval</code></td>
+<td><code>float</code></td>
+<td>The interval in seconds to flush buffered events.</td>
+</tr>
+<tr class="even">
+<td><code>max_buffer_size</code></td>
+<td><code>int</code></td>
+<td>The maximum number of events to hold in the buffer before dropping new ones.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="key-methods-1" class="level4">
+<h4 class="anchored" data-anchor-id="key-methods-1">Key Methods</h4>
+<ul>
+<li><code>async def start(self) -&gt; None</code>: Starts the background flush task.</li>
+<li><code>async def stop(self) -&gt; None</code>: Stops the background flush task and flushes any remaining events.</li>
+<li><code>async def log_event(self, event: JobEvent) -&gt; None</code>: Logs a generic <code>JobEvent</code>.</li>
+<li><code>async def log_job_enqueued(self, job_id: str, queue_name: str, **kwargs) -&gt; None</code>: Logs an <code>ENQUEUED</code> event.</li>
+<li><code>async def log_job_started(self, job_id: str, worker_id: str, queue_name: str, **kwargs) -&gt; None</code>: Logs a <code>STARTED</code> event.</li>
+<li><code>async def log_job_completed(self, job_id: str, worker_id: str, queue_name: str, duration_ms: int, **kwargs) -&gt; None</code>: Logs a <code>COMPLETED</code> event.</li>
+<li><code>async def log_job_failed(self, job_id: str, worker_id: str, queue_name: str, error_type: str, error_message: str, **kwargs) -&gt; None</code>: Logs a <code>FAILED</code> event.</li>
+<li><code>async def log_job_retry_scheduled(self, job_id: str, worker_id: str, queue_name: str, **kwargs) -&gt; None</code>: Logs a <code>RETRY_SCHEDULED</code> event.</li>
+<li><code>async def log_job_scheduled(self, job_id: str, **kwargs) -&gt; None</code>: Logs a <code>SCHEDULED</code> event.</li>
+<li><code>async def log_job_schedule_triggered(self, job_id: str, **kwargs) -&gt; None</code>: Logs a <code>SCHEDULE_TRIGGERED</code> event.</li>
+<li><code>async def log_job_cancelled(self, job_id: str, queue_name: str, **kwargs) -&gt; None</code>: Logs a <code>CANCELLED</code> event.</li>
+<li><code>async def log_job_status_changed(self, job_id: str, queue_name: str, old_status: str, new_status: str, **kwargs) -&gt; None</code>: Logs a <code>STATUS_CHANGED</code> event.</li>
+</ul>
+</section>
+</section>
+<section id="naq.events.jobeventlogger" class="level3">
+<h3 class="anchored" data-anchor-id="naq.events.jobeventlogger"><code>naq.events.JobEventLogger</code></h3>
+<p>A synchronous wrapper around <code>AsyncJobEventLogger</code>, following the <code>_sync</code> pattern used elsewhere in <code>naq</code>. It provides the same interface but can be used in synchronous contexts.</p>
+<section id="initialization-2" class="level4">
+<h4 class="anchored" data-anchor-id="initialization-2">Initialization</h4>
+<div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> <span class="fu">__init__</span>(</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span>,</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    nats_url: <span class="bu">str</span> <span class="op">=</span> DEFAULT_NATS_URL,</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">**</span>logger_kwargs</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 17%">
+<col style="width: 5%">
+<col style="width: 76%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>nats_url</code></td>
+<td><code>str</code></td>
+<td>The URL of the NATS server.</td>
+</tr>
+<tr class="even">
+<td><code>logger_kwargs</code></td>
+<td><code>dict</code></td>
+<td>Keyword arguments to pass to the <code>AsyncJobEventLogger</code> constructor.</td>
+</tr>
+</tbody>
+</table>
+<p>The methods are the same as <code>AsyncJobEventLogger</code> but without the <code>async</code>/<code>await</code> keywords.</p>
+</section>
+</section>
+<section id="naq.events.sharedeventloggermanager" class="level3">
+<h3 class="anchored" data-anchor-id="naq.events.sharedeventloggermanager"><code>naq.events.SharedEventLoggerManager</code></h3>
+<p>A singleton manager for shared event logger instances that provides a centralized way to create, manage, and share event logger instances across different components in the NAQ system.</p>
+<section id="key-features" class="level4">
+<h4 class="anchored" data-anchor-id="key-features">Key Features</h4>
+<ul>
+<li><strong>Singleton Pattern</strong>: Ensures a single instance across the application</li>
+<li><strong>Thread-safe</strong>: Safe for use in multi-threaded environments</li>
+<li><strong>Dual Support</strong>: Manages both synchronous and asynchronous loggers</li>
+<li><strong>Centralized Configuration</strong>: Configure event logging once for all components</li>
+</ul>
+</section>
+<section id="initialization-3" class="level4">
+<h4 class="anchored" data-anchor-id="initialization-3">Initialization</h4>
+<p>The <code>SharedEventLoggerManager</code> is a singleton and should be accessed through the global instance:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.events <span class="im">import</span> get_shared_event_logger_manager</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Get the global instance</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>manager <span class="op">=</span> get_shared_event_logger_manager()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="configuration" class="level4">
+<h4 class="anchored" data-anchor-id="configuration">Configuration</h4>
+<div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> configure(</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span>,</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    enabled: Optional[<span class="bu">bool</span>] <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    storage_type: Optional[<span class="bu">str</span>] <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    storage_url: Optional[<span class="bu">str</span>] <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    stream_name: Optional[<span class="bu">str</span>] <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    subject_prefix: Optional[<span class="bu">str</span>] <span class="op">=</span> <span class="va">None</span>,</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">**</span>kwargs: Any</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>) <span class="op">-&gt;</span> <span class="va">None</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 36%">
+<col style="width: 20%">
+<col style="width: 43%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>enabled</code></td>
+<td><code>Optional[bool]</code></td>
+<td>Whether event logging is enabled</td>
+</tr>
+<tr class="even">
+<td><code>storage_type</code></td>
+<td><code>Optional[str]</code></td>
+<td>Type of storage backend (‘nats’, etc.)</td>
+</tr>
+<tr class="odd">
+<td><code>storage_url</code></td>
+<td><code>Optional[str]</code></td>
+<td>URL for the storage backend</td>
+</tr>
+<tr class="even">
+<td><code>stream_name</code></td>
+<td><code>Optional[str]</code></td>
+<td>Name of the stream for events</td>
+</tr>
+<tr class="odd">
+<td><code>subject_prefix</code></td>
+<td><code>Optional[str]</code></td>
+<td>Base subject for events</td>
+</tr>
+<tr class="even">
+<td><code>**kwargs</code></td>
+<td><code>Any</code></td>
+<td>Additional configuration options</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="key-methods-2" class="level4">
+<h4 class="anchored" data-anchor-id="key-methods-2">Key Methods</h4>
+<ul>
+<li><code>get_sync_logger() -&gt; Optional[JobEventLogger]</code>: Get the shared synchronous event logger instance.</li>
+<li><code>async get_async_logger() -&gt; Optional[AsyncJobEventLogger]</code>: Get the shared asynchronous event logger instance.</li>
+<li><code>configure(**kwargs) -&gt; None</code>: Configure the shared event logger manager.</li>
+<li><code>reset() -&gt; None</code>: Reset the shared event logger manager (synchronous).</li>
+<li><code>async async_reset() -&gt; None</code>: Reset the shared event logger manager (asynchronous).</li>
+<li><code>get_config() -&gt; Dict[str, Any]</code>: Get the current configuration.</li>
+<li><code>is_enabled() -&gt; bool</code>: Check if event logging is enabled.</li>
+</ul>
+</section>
+<section id="convenience-functions" class="level4">
+<h4 class="anchored" data-anchor-id="convenience-functions">Convenience Functions</h4>
+<p>For easier access, the module provides global convenience functions:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.events <span class="im">import</span> (</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    get_shared_sync_logger,</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    get_shared_async_logger,</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    configure_shared_logger,</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Configure the shared logger</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>configure_shared_logger(enabled<span class="op">=</span><span class="va">True</span>, storage_url<span class="op">=</span><span class="st">"nats://localhost:4222"</span>)</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Get loggers</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>sync_logger <span class="op">=</span> get_shared_sync_logger()</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>async_logger <span class="op">=</span> <span class="cf">await</span> get_shared_async_logger()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="using-the-shared-event-logger" class="level3">
+<h3 class="anchored" data-anchor-id="using-the-shared-event-logger">Using the Shared Event Logger</h3>
+<p>The shared event logger is automatically used by all naq components (Queue, Worker, Scheduler) when event logging is enabled. You can also use it in your own applications:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.events <span class="im">import</span> get_shared_sync_logger, configure_shared_logger</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Configure event logging</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>configure_shared_logger(enabled<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Get the shared logger</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>logger <span class="op">=</span> get_shared_sync_logger()</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> logger:</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Log events</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>    logger.log_job_enqueued(</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>        job_id<span class="op">=</span><span class="st">"job-123"</span>,</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>        queue_name<span class="op">=</span><span class="st">"default"</span>,</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>        details<span class="op">=</span>{<span class="st">"custom_field"</span>: <span class="st">"value"</span>}</span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>    )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="naq.events.asyncjobeventprocessor" class="level3">
+<h3 class="anchored" data-anchor-id="naq.events.asyncjobeventprocessor"><code>naq.events.AsyncJobEventProcessor</code></h3>
+<p>A real-time event processor that subscribes to the NATS event stream and dispatches events to registered handlers. This allows you to build reactive, event-driven logic based on job lifecycles.</p>
+<section id="initialization-4" class="level4">
+<h4 class="anchored" data-anchor-id="initialization-4">Initialization</h4>
+<div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, storage: NATJobEventStorage)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 11%">
+<col style="width: 25%">
+<col style="width: 62%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>storage</code></td>
+<td><code>NATSJobEventStorage</code></td>
+<td>The storage backend instance to stream events from.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="key-methods-3" class="level4">
+<h4 class="anchored" data-anchor-id="key-methods-3">Key Methods</h4>
+<ul>
+<li><code>async def start(self) -&gt; None</code>: Starts the event processing loop.</li>
+<li><code>async def stop(self) -&gt; None</code>: Stops the event processing loop.</li>
+<li><code>def add_handler(self, event_type: JobEventType, handler: Callable[[JobEvent], Any]) -&gt; None</code>: Registers a handler function for a specific event type.</li>
+<li><code>def add_global_handler(self, handler: Callable[[JobEvent], Any]) -&gt; None</code>: Registers a handler function that will be called for all events.</li>
+</ul>
+<p>Handlers can be either synchronous or asynchronous functions that accept a single <code>JobEvent</code> argument. Synchronous handlers are automatically executed in a thread pool to avoid blocking the event loop.</p>
+</section>
+</section>
+<section id="event-consumption-examples" class="level3">
+<h3 class="anchored" data-anchor-id="event-consumption-examples">Event Consumption Examples</h3>
+<section id="basic-event-processing" class="level4">
+<h4 class="anchored" data-anchor-id="basic-event-processing">Basic Event Processing</h4>
+<div class="sourceCode" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> asyncio</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.events <span class="im">import</span> AsyncJobEventProcessor, NATSJobEventStorage, JobEventType</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> handle_job_completion(event: JobEvent):</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Handle job completion events."""</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Job </span><span class="sc">{</span>event<span class="sc">.</span>job_id<span class="sc">}</span><span class="ss"> completed in </span><span class="sc">{</span>event<span class="sc">.</span>duration_ms<span class="sc">}</span><span class="ss">ms"</span>)</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Update your application state here</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> main():</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create storage and processor</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>    storage <span class="op">=</span> NATSJobEventStorage()</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>    processor <span class="op">=</span> AsyncJobEventProcessor(storage)</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Register handlers</span></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>    processor.add_handler(JobEventType.COMPLETED, handle_job_completion)</span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Start processing</span></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> processor.start()</span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span>:</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Keep running</span></span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>        <span class="cf">while</span> <span class="va">True</span>:</span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> asyncio.sleep(<span class="dv">1</span>)</span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>    <span class="cf">finally</span>:</span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> processor.stop()</span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">__name__</span> <span class="op">==</span> <span class="st">"__main__"</span>:</span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>    asyncio.run(main())</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="advanced-event-processing-with-filtering" class="level4">
+<h4 class="anchored" data-anchor-id="advanced-event-processing-with-filtering">Advanced Event Processing with Filtering</h4>
+<div class="sourceCode" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> asyncio</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.events <span class="im">import</span> AsyncJobEventProcessor, NATSJobEventStorage, JobEventType</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> handle_failed_jobs(event: JobEvent):</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Handle failed job events with retry logic."""</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> event.queue_name <span class="op">==</span> <span class="st">"critical"</span>:</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Send alert for critical queue failures</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> send_alert(<span class="ss">f"Critical job failed: </span><span class="sc">{</span>event<span class="sc">.</span>job_id<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Check if we should retry</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> event.details <span class="kw">and</span> event.details.get(<span class="st">"retry_count"</span>, <span class="dv">0</span>) <span class="op">&lt;</span> <span class="dv">3</span>:</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>            <span class="bu">print</span>(<span class="ss">f"Retrying job </span><span class="sc">{</span>event<span class="sc">.</span>job_id<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> retry_job(event.job_id)</span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> handle_all_events(event: JobEvent):</span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Global handler for all events."""</span></span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Log all events to external monitoring system</span></span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> log_to_monitoring_system(event)</span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> main():</span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>    storage <span class="op">=</span> NATSJobEventStorage()</span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>    processor <span class="op">=</span> AsyncJobEventProcessor(storage)</span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Register specific handler</span></span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>    processor.add_handler(JobEventType.FAILED, handle_failed_jobs)</span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Register global handler</span></span>
+<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a>    processor.add_global_handler(handle_all_events)</span>
+<span id="cb11-29"><a href="#cb11-29" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb11-30"><a href="#cb11-30" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> processor:  <span class="co"># Use context manager for automatic cleanup</span></span>
+<span id="cb11-31"><a href="#cb11-31" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Keep running</span></span>
+<span id="cb11-32"><a href="#cb11-32" aria-hidden="true" tabindex="-1"></a>        <span class="cf">while</span> <span class="va">True</span>:</span>
+<span id="cb11-33"><a href="#cb11-33" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> asyncio.sleep(<span class="dv">1</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="using-event-details-for-custom-logic" class="level4">
+<h4 class="anchored" data-anchor-id="using-event-details-for-custom-logic">Using Event Details for Custom Logic</h4>
+<div class="sourceCode" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> handle_status_changes(event: JobEvent):</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Handle status change events with custom logic."""</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> event.event_type <span class="op">==</span> JobEventType.STATUS_CHANGED:</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>        old_status <span class="op">=</span> event.details.get(<span class="st">"old_status"</span>)</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>        new_status <span class="op">=</span> event.details.get(<span class="st">"new_status"</span>)</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"Job </span><span class="sc">{</span>event<span class="sc">.</span>job_id<span class="sc">}</span><span class="ss"> changed from </span><span class="sc">{</span>old_status<span class="sc">}</span><span class="ss"> to </span><span class="sc">{</span>new_status<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Trigger specific actions based on status transitions</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> old_status <span class="op">==</span> <span class="st">"running"</span> <span class="kw">and</span> new_status <span class="op">==</span> <span class="st">"failed"</span>:</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> notify_team_about_failure(event)</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">elif</span> old_status <span class="op">==</span> <span class="st">"pending"</span> <span class="kw">and</span> new_status <span class="op">==</span> <span class="st">"running"</span>:</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> update_job_start_time(event.job_id)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="event-stream-processing" class="level3">
+<h3 class="anchored" data-anchor-id="event-stream-processing">Event Stream Processing</h3>
+<p>The <code>NATSJobEventStorage</code> provides methods for both retrieving historical events and streaming real-time events:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Get all events for a specific job</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>events <span class="op">=</span> <span class="cf">await</span> storage.get_events(<span class="st">"job-123"</span>)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Stream events for a specific job in real-time</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="cf">for</span> event <span class="kw">in</span> storage.stream_events(<span class="st">"job-123"</span>):</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"New event: </span><span class="sc">{</span>event<span class="sc">.</span>event_type<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Process the event</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> process_event(event)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="performance-considerations" class="level3">
+<h3 class="anchored" data-anchor-id="performance-considerations">Performance Considerations</h3>
+<p>When working with events, consider these performance best practices:</p>
+<ol type="1">
+<li><strong>Use Shared Loggers</strong>: Always use the shared event logger to avoid creating multiple connections.</li>
+<li><strong>Batch Processing</strong>: The shared logger automatically batches events for better performance.</li>
+<li><strong>Async Handlers</strong>: Use async handlers for event processing to avoid blocking.</li>
+<li><strong>Selective Subscriptions</strong>: Only subscribe to events you need to process.</li>
+<li><strong>Error Handling</strong>: Implement proper error handling in your event handlers to prevent processing failures.</li>
+</ol>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    // Ensure there is a toggle, if there isn't float one in the top right
+    if (window.document.querySelector('.quarto-color-scheme-toggle') === null) {
+      const a = window.document.createElement('a');
+      a.classList.add('top-right');
+      a.classList.add('quarto-color-scheme-toggle');
+      a.href = "";
+      a.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
+      const i = window.document.createElement("i");
+      i.classList.add('bi');
+      a.appendChild(i);
+      window.document.body.appendChild(a);
+    }
+    setColorSchemeToggle(hasAlternateSentinel())
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+        const codeEl = trigger.previousElementSibling.cloneNode(true);
+        for (const childEl of codeEl.children) {
+          if (isCodeAnnotation(childEl)) {
+            childEl.remove();
+          }
+        }
+        return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

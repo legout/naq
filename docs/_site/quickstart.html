@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.32">
+<meta name="generator" content="quarto-1.7.33">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -71,14 +71,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-2fef5ea3f8957b3e4ecc936fc74692ca.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-bc185b5c5bdbcb35c2eb49d8a876ef70.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="site_libs/bootstrap/bootstrap-dark-08799928d293638fe9563d5c5a2794e5.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-ccd81253fefb92e9cd3f9eb5b5d87b54.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -341,6 +341,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#define-a-task" id="toc-define-a-task" class="nav-link active" data-scroll-target="#define-a-task">1. Define a Task</a></li>
   <li><a href="#enqueue-the-job" id="toc-enqueue-the-job" class="nav-link" data-scroll-target="#enqueue-the-job">2. Enqueue the Job</a></li>
   <li><a href="#run-the-worker" id="toc-run-the-worker" class="nav-link" data-scroll-target="#run-the-worker">3. Run the Worker</a></li>
+  <li><a href="#connection-management" id="toc-connection-management" class="nav-link" data-scroll-target="#connection-management">Connection Management</a>
+  <ul class="collapse">
+  <li><a href="#using-context-managers-recommended" id="toc-using-context-managers-recommended" class="nav-link" data-scroll-target="#using-context-managers-recommended">Using Context Managers (Recommended)</a></li>
+  <li><a href="#using-decorators" id="toc-using-decorators" class="nav-link" data-scroll-target="#using-decorators">Using Decorators</a></li>
+  <li><a href="#connection-testing-and-monitoring" id="toc-connection-testing-and-monitoring" class="nav-link" data-scroll-target="#connection-testing-and-monitoring">Connection Testing and Monitoring</a></li>
+  </ul></li>
   <li><a href="#whats-next" id="toc-whats-next" class="nav-link" data-scroll-target="#whats-next">What’s Next?</a></li>
   </ul>
 </nav>
@@ -424,12 +430,62 @@ Found 25 words.
 14:30:18.245 INFO     Job 1a2b3c4d completed. Result: 25</code></pre>
 <p>Congratulations! You’ve successfully enqueued and processed your first background job with <code>naq</code>.</p>
 </section>
+<section id="connection-management" class="level2">
+<h2 class="anchored" data-anchor-id="connection-management">Connection Management</h2>
+<section id="using-context-managers-recommended" class="level3">
+<h3 class="anchored" data-anchor-id="using-context-managers-recommended">Using Context Managers (Recommended)</h3>
+<p>The recommended way to manage NATS connections in <code>naq</code> is through context managers. They provide automatic resource management and ensure proper cleanup.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> asyncio</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.connection <span class="im">import</span> nats_connection, nats_jetstream, nats_kv_store</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> basic_example():</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Simple connection</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> nats_connection() <span class="im">as</span> conn:</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> conn.publish(<span class="st">"hello"</span>, <span class="st">b"world"</span>)</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    <span class="co"># With JetStream</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> nats_jetstream() <span class="im">as</span> (conn, js):</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>        stream <span class="op">=</span> <span class="cf">await</span> js.add_stream(name<span class="op">=</span><span class="st">"mystream"</span>, subjects<span class="op">=</span>[<span class="st">"mystream.*"</span>])</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>    <span class="co"># With KeyValue store</span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> nats_kv_store(<span class="st">"mybucket"</span>) <span class="im">as</span> kv:</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> kv.put(<span class="st">"key"</span>, <span class="st">"value"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="using-decorators" class="level3">
+<h3 class="anchored" data-anchor-id="using-decorators">Using Decorators</h3>
+<p>For functions that need NATS connections, you can use decorators to automatically inject connections:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.connection <span class="im">import</span> with_nats_connection, with_jetstream_context</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="at">@with_nats_connection</span>()</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> publish(conn, subject: <span class="bu">str</span>, data: <span class="bu">bytes</span>):</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> conn.publish(subject, data)</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="at">@with_jetstream_context</span>()</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> create_stream(js, name: <span class="bu">str</span>):</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> js.add_stream(name<span class="op">=</span>name, subjects<span class="op">=</span>[<span class="ss">f"</span><span class="sc">{</span>name<span class="sc">}</span><span class="ss">.*"</span>])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="connection-testing-and-monitoring" class="level3">
+<h3 class="anchored" data-anchor-id="connection-testing-and-monitoring">Connection Testing and Monitoring</h3>
+<p>In production environments, you can test and monitor your connections:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.connection <span class="im">import</span> test_nats_connection, wait_for_nats_connection, connection_monitor</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Test if connection is available</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>is_healthy <span class="op">=</span> <span class="cf">await</span> test_nats_connection()</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Wait for connection to be ready</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="cf">await</span> wait_for_nats_connection(timeout<span class="op">=</span><span class="dv">30</span>)</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Monitor connection usage</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Active connections: </span><span class="sc">{</span>connection_monitor<span class="sc">.</span>metrics<span class="sc">.</span>active_connections<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
 <section id="whats-next" class="level2">
 <h2 class="anchored" data-anchor-id="whats-next">What’s Next?</h2>
 <ul>
 <li>Explore how to <a href="./examples.html">schedule jobs</a> to run in the future.</li>
 <li>Learn about the <a href="./architecture.html">architecture</a> of <code>naq</code>.</li>
 <li>Check out more complex <a href="./examples.html">examples</a>.</li>
+<li>Read the <a href="./api/connection.html">Connection Management API</a> documentation for advanced usage.</li>
 </ul>
 
 

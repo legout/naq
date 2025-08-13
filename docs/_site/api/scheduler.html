@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.32">
+<meta name="generator" content="quarto-1.7.33">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -71,14 +71,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="../site_libs/quarto-html/anchor.min.js"></script>
 <link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-dark-2fef5ea3f8957b3e4ecc936fc74692ca.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-dark-bc185b5c5bdbcb35c2eb49d8a876ef70.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="../site_libs/bootstrap/bootstrap-dark-08799928d293638fe9563d5c5a2794e5.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="../site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-dark-ccd81253fefb92e9cd3f9eb5b5d87b54.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="../site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -340,9 +340,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul>
   <li><a href="#naq.scheduler.scheduler" id="toc-naq.scheduler.scheduler" class="nav-link active" data-scroll-target="#naq.scheduler.scheduler"><code>naq.scheduler.Scheduler</code></a>
   <ul class="collapse">
-  <li><a href="#naq.scheduler.schedulernats_url-poll_interval-instance_id-enable_ha" id="toc-naq.scheduler.schedulernats_url-poll_interval-instance_id-enable_ha" class="nav-link" data-scroll-target="#naq.scheduler.schedulernats_url-poll_interval-instance_id-enable_ha"><code>naq.scheduler.Scheduler(nats_url, poll_interval, instance_id, enable_ha)</code></a></li>
+  <li><a href="#naq.scheduler.schedulernats_url-poll_interval-instance_id-enable_ha-services" id="toc-naq.scheduler.schedulernats_url-poll_interval-instance_id-enable_ha-services" class="nav-link" data-scroll-target="#naq.scheduler.schedulernats_url-poll_interval-instance_id-enable_ha-services"><code>naq.scheduler.Scheduler(nats_url, poll_interval, instance_id, enable_ha, services)</code></a></li>
   <li><a href="#methods" id="toc-methods" class="nav-link" data-scroll-target="#methods">Methods</a></li>
   <li><a href="#high-availability-ha" id="toc-high-availability-ha" class="nav-link" data-scroll-target="#high-availability-ha">High Availability (HA)</a></li>
+  </ul></li>
+  <li><a href="#service-layer-integration" id="toc-service-layer-integration" class="nav-link" data-scroll-target="#service-layer-integration">Service Layer Integration</a>
+  <ul class="collapse">
+  <li><a href="#using-scheduler-with-servicemanager" id="toc-using-scheduler-with-servicemanager" class="nav-link" data-scroll-target="#using-scheduler-with-servicemanager">Using Scheduler with ServiceManager</a></li>
+  <li><a href="#benefits-of-service-layer-integration" id="toc-benefits-of-service-layer-integration" class="nav-link" data-scroll-target="#benefits-of-service-layer-integration">Benefits of Service Layer Integration</a></li>
+  <li><a href="#migration-from-direct-connection-management" id="toc-migration-from-direct-connection-management" class="nav-link" data-scroll-target="#migration-from-direct-connection-management">Migration from Direct Connection Management</a></li>
+  <li><a href="#advanced-service-configuration" id="toc-advanced-service-configuration" class="nav-link" data-scroll-target="#advanced-service-configuration">Advanced Service Configuration</a></li>
+  <li><a href="#high-availability-with-service-layer" id="toc-high-availability-with-service-layer" class="nav-link" data-scroll-target="#high-availability-with-service-layer">High Availability with Service Layer</a></li>
+  <li><a href="#scheduler-event-integration" id="toc-scheduler-event-integration" class="nav-link" data-scroll-target="#scheduler-event-integration">Scheduler Event Integration</a></li>
+  <li><a href="#custom-scheduler-with-services" id="toc-custom-scheduler-with-services" class="nav-link" data-scroll-target="#custom-scheduler-with-services">Custom Scheduler with Services</a></li>
+  <li><a href="#scheduler-statistics-with-services" id="toc-scheduler-statistics-with-services" class="nav-link" data-scroll-target="#scheduler-statistics-with-services">Scheduler Statistics with Services</a></li>
   </ul></li>
   </ul>
 </nav>
@@ -374,13 +385,13 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="naq.scheduler.scheduler" class="level2">
 <h2 class="anchored" data-anchor-id="naq.scheduler.scheduler"><code>naq.scheduler.Scheduler</code></h2>
 <p>You typically run the scheduler from the command line using <code>naq scheduler</code>, but you can also create and run a <code>Scheduler</code> instance programmatically.</p>
-<section id="naq.scheduler.schedulernats_url-poll_interval-instance_id-enable_ha" class="level3">
-<h3 class="anchored" data-anchor-id="naq.scheduler.schedulernats_url-poll_interval-instance_id-enable_ha"><code>naq.scheduler.Scheduler(nats_url, poll_interval, instance_id, enable_ha)</code></h3>
+<section id="naq.scheduler.schedulernats_url-poll_interval-instance_id-enable_ha-services" class="level3">
+<h3 class="anchored" data-anchor-id="naq.scheduler.schedulernats_url-poll_interval-instance_id-enable_ha-services"><code>naq.scheduler.Scheduler(nats_url, poll_interval, instance_id, enable_ha, services)</code></h3>
 <table class="caption-top table">
 <colgroup>
-<col style="width: 10%">
-<col style="width: 13%">
-<col style="width: 75%">
+<col style="width: 9%">
+<col style="width: 22%">
+<col style="width: 67%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -410,6 +421,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td><code>bool</code></td>
 <td>Whether to enable High Availability (HA) mode with leader election. Defaults to <code>True</code>.</td>
 </tr>
+<tr class="odd">
+<td><code>services</code></td>
+<td><code>ServiceManager</code> | <code>None</code></td>
+<td>Optional ServiceManager instance for dependency injection.</td>
+</tr>
 </tbody>
 </table>
 </section>
@@ -425,6 +441,298 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="high-availability-ha" class="level3">
 <h3 class="anchored" data-anchor-id="high-availability-ha">High Availability (HA)</h3>
 <p>When <code>enable_ha</code> is <code>True</code>, you can run multiple <code>Scheduler</code> instances for redundancy. They will use a leader election protocol built on a NATS KV store to ensure that only one instance is actively scheduling jobs at any given time. If the leader instance goes down, another instance will automatically take over.</p>
+</section>
+</section>
+<section id="service-layer-integration" class="level2">
+<h2 class="anchored" data-anchor-id="service-layer-integration">Service Layer Integration</h2>
+<p>The <code>Scheduler</code> class integrates with the service layer architecture to provide efficient resource management and connection pooling. When using the service layer, the scheduler automatically leverages centralized services for NATS connections, KV store operations, and event logging.</p>
+<section id="using-scheduler-with-servicemanager" class="level3">
+<h3 class="anchored" data-anchor-id="using-scheduler-with-servicemanager">Using Scheduler with ServiceManager</h3>
+<p>The recommended way to use the <code>Scheduler</code> class with the service layer is to provide a <code>ServiceManager</code> instance:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> asyncio</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.scheduler <span class="im">import</span> Scheduler</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services <span class="im">import</span> ServiceManager</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> scheduler_with_services():</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create service configuration</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    config <span class="op">=</span> {</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>        <span class="st">'nats'</span>: {</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>            <span class="st">'url'</span>: <span class="st">'nats://localhost:4222'</span>,</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>            <span class="st">'max_reconnect_attempts'</span>: <span class="dv">5</span>,</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>            <span class="st">'reconnect_delay'</span>: <span class="fl">1.0</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>        },</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>        <span class="st">'scheduler'</span>: {</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>            <span class="st">'poll_interval'</span>: <span class="fl">1.0</span>,</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>            <span class="st">'enable_ha'</span>: <span class="va">True</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>        },</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>        <span class="st">'events'</span>: {</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>            <span class="st">'enabled'</span>: <span class="va">True</span>,</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>            <span class="st">'batch_size'</span>: <span class="dv">100</span>,</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>            <span class="st">'flush_interval'</span>: <span class="fl">1.0</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Use ServiceManager for lifecycle management</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Create Scheduler with ServiceManager</span></span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>        scheduler <span class="op">=</span> Scheduler(</span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>            services<span class="op">=</span>services,</span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>            poll_interval<span class="op">=</span><span class="fl">1.0</span>,</span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a>            enable_ha<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>            instance_id<span class="op">=</span><span class="st">'scheduler-1'</span></span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Run the scheduler - it will automatically use the services</span></span>
+<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> scheduler.run()</span>
+<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Services are automatically managed and cleaned up</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="benefits-of-service-layer-integration" class="level3">
+<h3 class="anchored" data-anchor-id="benefits-of-service-layer-integration">Benefits of Service Layer Integration</h3>
+<ol type="1">
+<li><p><strong>Connection Pooling</strong>: Multiple scheduler instances can share the same NATS connection, reducing resource usage.</p></li>
+<li><p><strong>Centralized KV Store Operations</strong>: Scheduled job storage and retrieval is handled by the KVStoreService, providing consistent access patterns.</p></li>
+<li><p><strong>Event Logging</strong>: Scheduler events are automatically logged through the EventService, providing comprehensive monitoring.</p></li>
+<li><p><strong>Automatic Resource Management</strong>: Services are automatically initialized and cleaned up by the ServiceManager.</p></li>
+</ol>
+</section>
+<section id="migration-from-direct-connection-management" class="level3">
+<h3 class="anchored" data-anchor-id="migration-from-direct-connection-management">Migration from Direct Connection Management</h3>
+<section id="before-direct-connection-management" class="level4">
+<h4 class="anchored" data-anchor-id="before-direct-connection-management">Before (Direct Connection Management)</h4>
+<div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Old approach - direct connection management</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> old_scheduler_usage():</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    scheduler <span class="op">=</span> Scheduler(</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>        nats_url<span class="op">=</span><span class="st">'nats://localhost:4222'</span>,</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>        poll_interval<span class="op">=</span><span class="fl">1.0</span>,</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>        enable_ha<span class="op">=</span><span class="va">True</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span>:</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> scheduler.run()</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">finally</span>:</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Manual cleanup was required</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">pass</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="after-service-layer" class="level4">
+<h4 class="anchored" data-anchor-id="after-service-layer">After (Service Layer)</h4>
+<div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># New approach - service layer</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> new_scheduler_usage():</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    config <span class="op">=</span> {<span class="st">'nats'</span>: {<span class="st">'url'</span>: <span class="st">'nats://localhost:4222'</span>}}</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>        scheduler <span class="op">=</span> Scheduler(</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>            services<span class="op">=</span>services,</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>            poll_interval<span class="op">=</span><span class="fl">1.0</span>,</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>            enable_ha<span class="op">=</span><span class="va">True</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> scheduler.run()</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>        <span class="co"># No need to manually manage connections - services are automatically managed</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="advanced-service-configuration" class="level3">
+<h3 class="anchored" data-anchor-id="advanced-service-configuration">Advanced Service Configuration</h3>
+<p>You can provide detailed configuration for the services used by the scheduler:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> advanced_scheduler_config():</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    config <span class="op">=</span> {</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>        <span class="st">'nats'</span>: {</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>            <span class="st">'url'</span>: <span class="st">'nats://localhost:4222'</span>,</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>            <span class="st">'max_reconnect_attempts'</span>: <span class="dv">10</span>,</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>            <span class="st">'reconnect_delay'</span>: <span class="fl">2.0</span>,</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>            <span class="st">'connection_timeout'</span>: <span class="fl">30.0</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>        },</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">'scheduler'</span>: {</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>            <span class="st">'poll_interval'</span>: <span class="fl">0.5</span>,  <span class="co"># Poll every 500ms for lower latency</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>            <span class="st">'enable_ha'</span>: <span class="va">True</span>,</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>            <span class="st">'leader_lock_ttl'</span>: <span class="dv">30</span>  <span class="co"># Leader lock TTL in seconds</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>        },</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>        <span class="st">'events'</span>: {</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>            <span class="st">'enabled'</span>: <span class="va">True</span>,</span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>            <span class="st">'batch_size'</span>: <span class="dv">50</span>,</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>            <span class="st">'flush_interval'</span>: <span class="fl">0.5</span>,</span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>            <span class="st">'max_buffer_size'</span>: <span class="dv">5000</span></span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a>        scheduler <span class="op">=</span> Scheduler(</span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>            services<span class="op">=</span>services,</span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a>            poll_interval<span class="op">=</span><span class="fl">0.5</span>,</span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a>            enable_ha<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a>            instance_id<span class="op">=</span><span class="st">'production-scheduler-1'</span></span>
+<span id="cb5-28"><a href="#cb5-28" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb5-29"><a href="#cb5-29" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb5-30"><a href="#cb5-30" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> scheduler.run()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="high-availability-with-service-layer" class="level3">
+<h3 class="anchored" data-anchor-id="high-availability-with-service-layer">High Availability with Service Layer</h3>
+<p>When using the service layer with HA mode, multiple scheduler instances can share the same ServiceManager:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> ha_scheduler_with_services():</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    config <span class="op">=</span> {</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>        <span class="st">'nats'</span>: {<span class="st">'url'</span>: <span class="st">'nats://localhost:4222'</span>},</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>        <span class="st">'scheduler'</span>: {<span class="st">'enable_ha'</span>: <span class="va">True</span>}</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Create multiple scheduler instances for HA</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>        scheduler1 <span class="op">=</span> Scheduler(</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>            services<span class="op">=</span>services,</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>            instance_id<span class="op">=</span><span class="st">'scheduler-1'</span>,</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>            enable_ha<span class="op">=</span><span class="va">True</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>        scheduler2 <span class="op">=</span> Scheduler(</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>            services<span class="op">=</span>services,</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>            instance_id<span class="op">=</span><span class="st">'scheduler-2'</span>,</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>            enable_ha<span class="op">=</span><span class="va">True</span></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Run schedulers concurrently</span></span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>        scheduler1_task <span class="op">=</span> asyncio.create_task(scheduler1.run())</span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>        scheduler2_task <span class="op">=</span> asyncio.create_task(scheduler2.run())</span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>        <span class="co"># One scheduler will become the leader, the other will be a follower</span></span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> asyncio.sleep(<span class="dv">30</span>)</span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Stop the leader scheduler</span></span>
+<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>        scheduler1_task.cancel()</span>
+<span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb6-31"><a href="#cb6-31" aria-hidden="true" tabindex="-1"></a>        <span class="cf">try</span>:</span>
+<span id="cb6-32"><a href="#cb6-32" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> scheduler1_task</span>
+<span id="cb6-33"><a href="#cb6-33" aria-hidden="true" tabindex="-1"></a>        <span class="cf">except</span> asyncio.CancelledError:</span>
+<span id="cb6-34"><a href="#cb6-34" aria-hidden="true" tabindex="-1"></a>            <span class="cf">pass</span></span>
+<span id="cb6-35"><a href="#cb6-35" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb6-36"><a href="#cb6-36" aria-hidden="true" tabindex="-1"></a>        <span class="co"># The follower (scheduler2) will automatically become the new leader</span></span>
+<span id="cb6-37"><a href="#cb6-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> asyncio.sleep(<span class="dv">30</span>)</span>
+<span id="cb6-38"><a href="#cb6-38" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb6-39"><a href="#cb6-39" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Clean up</span></span>
+<span id="cb6-40"><a href="#cb6-40" aria-hidden="true" tabindex="-1"></a>        scheduler2_task.cancel()</span>
+<span id="cb6-41"><a href="#cb6-41" aria-hidden="true" tabindex="-1"></a>        <span class="cf">try</span>:</span>
+<span id="cb6-42"><a href="#cb6-42" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> scheduler2_task</span>
+<span id="cb6-43"><a href="#cb6-43" aria-hidden="true" tabindex="-1"></a>        <span class="cf">except</span> asyncio.CancelledError:</span>
+<span id="cb6-44"><a href="#cb6-44" aria-hidden="true" tabindex="-1"></a>            <span class="cf">pass</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="scheduler-event-integration" class="level3">
+<h3 class="anchored" data-anchor-id="scheduler-event-integration">Scheduler Event Integration</h3>
+<p>When using the service layer, schedulers automatically integrate with the event system:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> scheduler_with_events():</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    config <span class="op">=</span> {</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>        <span class="st">'nats'</span>: {<span class="st">'url'</span>: <span class="st">'nats://localhost:4222'</span>},</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>        <span class="st">'scheduler'</span>: {<span class="st">'enable_ha'</span>: <span class="va">False</span>},</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>        <span class="st">'events'</span>: {</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>            <span class="st">'enabled'</span>: <span class="va">True</span>,</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>            <span class="st">'batch_size'</span>: <span class="dv">25</span>,</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>            <span class="st">'flush_interval'</span>: <span class="fl">0.25</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>        scheduler <span class="op">=</span> Scheduler(</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>            services<span class="op">=</span>services,</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>            poll_interval<span class="op">=</span><span class="fl">1.0</span></span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>        <span class="co"># The scheduler will automatically log:</span></span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>        <span class="co"># - SCHEDULED events when jobs are scheduled</span></span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>        <span class="co"># - SCHEDULE_TRIGGERED events when jobs are triggered for execution</span></span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>        <span class="co"># - STATUS_CHANGED events for scheduler state transitions</span></span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> scheduler.run()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="custom-scheduler-with-services" class="level3">
+<h3 class="anchored" data-anchor-id="custom-scheduler-with-services">Custom Scheduler with Services</h3>
+<p>For advanced use cases, you can create custom scheduler classes that leverage the service layer:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.scheduler <span class="im">import</span> Scheduler</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services <span class="im">import</span> ServiceManager, SchedulerService, EventService</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> CustomScheduler(Scheduler):</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Custom scheduler with enhanced service integration."""</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, <span class="op">*</span>args, <span class="op">**</span>kwargs):</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>(<span class="op">*</span>args, <span class="op">**</span>kwargs)</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._scheduler_service <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._event_service <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _setup_services(<span class="va">self</span>):</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Set up service references."""</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>._services:</span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>._scheduler_service <span class="op">=</span> <span class="cf">await</span> <span class="va">self</span>._services.get_service(SchedulerService)</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>._event_service <span class="op">=</span> <span class="cf">await</span> <span class="va">self</span>._services.get_service(EventService)</span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> trigger_due_jobs(<span class="va">self</span>) <span class="op">-&gt;</span> List[<span class="bu">str</span>]:</span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Override to add custom triggering logic with services."""</span></span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> <span class="va">self</span>._setup_services()</span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Log custom event before triggering</span></span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>._event_service:</span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>            <span class="im">from</span> naq.models <span class="im">import</span> JobEvent, JobEventType</span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>            custom_event <span class="op">=</span> JobEvent(</span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>                job_id<span class="op">=</span><span class="ss">f"scheduler-</span><span class="sc">{</span><span class="va">self</span><span class="sc">.</span>instance_id<span class="sc">}</span><span class="ss">"</span>,</span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>                event_type<span class="op">=</span><span class="st">"custom_trigger_start"</span>,</span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a>                queue_name<span class="op">=</span><span class="st">"scheduler"</span>,</span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>                worker_id<span class="op">=</span><span class="va">self</span>.instance_id,</span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>                details<span class="op">=</span>{<span class="st">"timestamp"</span>: time.time()}</span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> <span class="va">self</span>._event_service.log_event(custom_event)</span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Use the scheduler service to trigger jobs</span></span>
+<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a>        triggered_jobs <span class="op">=</span> <span class="cf">await</span> <span class="va">self</span>._scheduler_service.trigger_due_jobs()</span>
+<span id="cb8-36"><a href="#cb8-36" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb8-37"><a href="#cb8-37" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Log custom event after triggering</span></span>
+<span id="cb8-38"><a href="#cb8-38" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self</span>._event_service:</span>
+<span id="cb8-39"><a href="#cb8-39" aria-hidden="true" tabindex="-1"></a>            custom_event <span class="op">=</span> JobEvent(</span>
+<span id="cb8-40"><a href="#cb8-40" aria-hidden="true" tabindex="-1"></a>                job_id<span class="op">=</span><span class="ss">f"scheduler-</span><span class="sc">{</span><span class="va">self</span><span class="sc">.</span>instance_id<span class="sc">}</span><span class="ss">"</span>,</span>
+<span id="cb8-41"><a href="#cb8-41" aria-hidden="true" tabindex="-1"></a>                event_type<span class="op">=</span><span class="st">"custom_trigger_complete"</span>,</span>
+<span id="cb8-42"><a href="#cb8-42" aria-hidden="true" tabindex="-1"></a>                queue_name<span class="op">=</span><span class="st">"scheduler"</span>,</span>
+<span id="cb8-43"><a href="#cb8-43" aria-hidden="true" tabindex="-1"></a>                worker_id<span class="op">=</span><span class="va">self</span>.instance_id,</span>
+<span id="cb8-44"><a href="#cb8-44" aria-hidden="true" tabindex="-1"></a>                details<span class="op">=</span>{</span>
+<span id="cb8-45"><a href="#cb8-45" aria-hidden="true" tabindex="-1"></a>                    <span class="st">"triggered_count"</span>: <span class="bu">len</span>(triggered_jobs),</span>
+<span id="cb8-46"><a href="#cb8-46" aria-hidden="true" tabindex="-1"></a>                    <span class="st">"triggered_jobs"</span>: triggered_jobs</span>
+<span id="cb8-47"><a href="#cb8-47" aria-hidden="true" tabindex="-1"></a>                }</span>
+<span id="cb8-48"><a href="#cb8-48" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb8-49"><a href="#cb8-49" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> <span class="va">self</span>._event_service.log_event(custom_event)</span>
+<span id="cb8-50"><a href="#cb8-50" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb8-51"><a href="#cb8-51" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> triggered_jobs</span>
+<span id="cb8-52"><a href="#cb8-52" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-53"><a href="#cb8-53" aria-hidden="true" tabindex="-1"></a><span class="co"># Using the custom scheduler</span></span>
+<span id="cb8-54"><a href="#cb8-54" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> custom_scheduler_example():</span>
+<span id="cb8-55"><a href="#cb8-55" aria-hidden="true" tabindex="-1"></a>    config <span class="op">=</span> {<span class="st">'nats'</span>: {<span class="st">'url'</span>: <span class="st">'nats://localhost:4222'</span>}}</span>
+<span id="cb8-56"><a href="#cb8-56" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb8-57"><a href="#cb8-57" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb8-58"><a href="#cb8-58" aria-hidden="true" tabindex="-1"></a>        scheduler <span class="op">=</span> CustomScheduler(</span>
+<span id="cb8-59"><a href="#cb8-59" aria-hidden="true" tabindex="-1"></a>            services<span class="op">=</span>services,</span>
+<span id="cb8-60"><a href="#cb8-60" aria-hidden="true" tabindex="-1"></a>            poll_interval<span class="op">=</span><span class="fl">1.0</span>,</span>
+<span id="cb8-61"><a href="#cb8-61" aria-hidden="true" tabindex="-1"></a>            instance_id<span class="op">=</span><span class="st">'custom-scheduler-1'</span></span>
+<span id="cb8-62"><a href="#cb8-62" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb8-63"><a href="#cb8-63" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb8-64"><a href="#cb8-64" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> scheduler.run()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="scheduler-statistics-with-services" class="level3">
+<h3 class="anchored" data-anchor-id="scheduler-statistics-with-services">Scheduler Statistics with Services</h3>
+<p>The service layer provides enhanced statistics and monitoring capabilities for schedulers:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> scheduler_stats_example():</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    config <span class="op">=</span> {<span class="st">'nats'</span>: {<span class="st">'url'</span>: <span class="st">'nats://localhost:4222'</span>}}</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> ServiceManager(config) <span class="im">as</span> services:</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>        scheduler <span class="op">=</span> Scheduler(</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>            services<span class="op">=</span>services,</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>            poll_interval<span class="op">=</span><span class="fl">1.0</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Get scheduler statistics from the service</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>        scheduler_service <span class="op">=</span> <span class="cf">await</span> services.get_service(SchedulerService)</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>        stats <span class="op">=</span> <span class="cf">await</span> scheduler_service.get_scheduler_stats()</span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"Scheduler statistics: </span><span class="sc">{</span>stats<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Stats might include:</span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>        <span class="co"># - Total scheduled jobs</span></span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>        <span class="co"># - Jobs triggered in the last interval</span></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a>        <span class="co"># - Average trigger latency</span></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>        <span class="co"># - HA status (leader/follower)</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> scheduler.run()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>The service layer integration provides a robust foundation for building efficient, maintainable scheduler applications with <code>naq</code>, eliminating connection duplication and providing clean resource management throughout the system.</p>
 
 
 </section>

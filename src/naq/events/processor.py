@@ -2,8 +2,14 @@
 import asyncio
 from typing import Callable, Dict, List, Optional
 
+import msgspec
+
 from .storage import NATSJobEventStorage
 from ..models import JobEvent, JobEventType
+from ..utils.nats_helpers import (
+    jetstream_subscription,
+    nats_subscription,
+)
 
 
 class AsyncJobEventProcessor:
@@ -54,8 +60,23 @@ class AsyncJobEventProcessor:
         This method runs as a background task and continuously processes incoming events.
         """
         try:
-            async for event in self.storage.stream_events(job_id="*"):  # Stream all events
-                await self._dispatch_event(event)
+            # Use jetstream_subscription helper for better error handling and retry logic
+            async with jetstream_subscription(
+                js=self.storage._js,
+                stream_name=self.storage.stream_name,
+                subject=f"{self.storage.subject_prefix}.>",
+                consumer_name="event-processor",
+                deliver_policy="new",
+            ) as subscription:
+                async for msg in subscription.messages:
+                    try:
+                        event = msgspec.msgpack.decode(msg.data, type=JobEvent)
+                        await self._dispatch_event(event)
+                        await msg.ack()
+                    except Exception as e:
+                        # Log error but continue processing
+                        print(f"Error processing event: {e}")
+                        await msg.nak()
         except asyncio.CancelledError:
             # Task was cancelled, exit gracefully
             pass

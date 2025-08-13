@@ -13,6 +13,13 @@ from nats.js.api import ConsumerConfig, DeliverPolicy, RetentionPolicy, StorageT
 from ..connection import ConnectionManager, get_jetstream_context, nats_connection, Config
 from ..exceptions import NaqConnectionError
 from ..models import JobEvent, JobEventType
+from ..utils.nats_helpers import (
+    build_subject,
+    create_stream_with_retry,
+    create_consumer_with_retry,
+    publish_message_with_retry,
+    jetstream_context_from_connection,
+)
 
 
 class BaseEventStorage(ABC):
@@ -101,7 +108,7 @@ class NATSJobEventStorage(BaseEventStorage):
                 max_reconnect_attempts=config.nats.max_reconnect_attempts,
                 reconnect_time_wait=config.nats.reconnect_time_wait,
             )
-            self._js = self._nc.jetstream()
+            self._js = jetstream_context_from_connection(self._nc)
             await self._setup_stream()
             self._connected = True
         except Exception as e:
@@ -132,11 +139,12 @@ class NATSJobEventStorage(BaseEventStorage):
         except nats.errors.NotFoundError:
             # Create stream if it doesn't exist
             subjects = [f"{self.subject_prefix}.*.*.*"]
-            await self._js.add_stream(
-                name=self.stream_name,
+            await create_stream_with_retry(
+                js=self._js,
+                stream_name=self.stream_name,
                 subjects=subjects,
-                storage=self.storage_type,
-                retention=self.retention_policy,
+                storage_type=self.storage_type,
+                retention_policy=self.retention_policy,
                 max_age=self.max_age,
                 max_msgs=self.max_msgs,
             )
@@ -154,21 +162,23 @@ class NATSJobEventStorage(BaseEventStorage):
         Returns:
             str: NATS subject
         """
-        parts = [self.subject_prefix, event.job_id]
-        
         if context:
-            parts.append(context)
+            context_part = context
         else:
             # Try to infer context from event properties
             if event.worker_id:
-                parts.append("worker")
+                context_part = "worker"
             elif event.queue_name:
-                parts.append("queue")
+                context_part = "queue"
             else:
-                parts.append("general")
+                context_part = "general"
         
-        parts.append(event.event_type.value)
-        return ".".join(parts)
+        return build_subject(
+            base=self.subject_prefix,
+            job_id=event.job_id,
+            context=context_part,
+            event_type=event.event_type.value
+        )
 
     async def store_event(self, event: JobEvent) -> None:
         """
@@ -190,8 +200,12 @@ class NATSJobEventStorage(BaseEventStorage):
         data = msgspec.msgpack.encode(event)
         
         try:
-            # Publish to JetStream
-            ack = await self._js.publish(subject, data)
+            # Publish to JetStream with retry
+            ack = await publish_message_with_retry(
+                js=self._js,
+                subject=subject,
+                data=data,
+            )
             if hasattr(ack, 'seq'):
                 event.nats_sequence = ack.seq
         except Exception as e:
@@ -225,10 +239,11 @@ class NATSJobEventStorage(BaseEventStorage):
                 max_deliver=1,
             )
             
-            # Create consumer
-            consumer = await self._js.add_consumer(
-                self.stream_name,
-                config=consumer_config,
+            # Create consumer with retry
+            consumer = await create_consumer_with_retry(
+                js=self._js,
+                stream_name=self.stream_name,
+                consumer_config=consumer_config,
                 durable_name=consumer_name,
             )
             
@@ -295,10 +310,11 @@ class NATSJobEventStorage(BaseEventStorage):
                 replay_policy=nats.js.api.ReplayPolicy.INSTANT,
             )
             
-            # Create consumer
-            consumer = await self._js.add_consumer(
-                self.stream_name,
-                config=consumer_config,
+            # Create consumer with retry
+            consumer = await create_consumer_with_retry(
+                js=self._js,
+                stream_name=self.stream_name,
+                consumer_config=consumer_config,
                 durable_name=consumer_name,
             )
             

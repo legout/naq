@@ -362,7 +362,7 @@ class Job(msgspec.Struct):
         This method uses the configured serializer (pickle or JSON) to convert
         the job object into a byte representation that can be sent over NATS.
         """
-        from .serializers import get_serializer
+        from .utils.serialization import get_serializer
         serializer = get_serializer()
         return serializer.serialize_job(self)
 
@@ -380,7 +380,7 @@ class Job(msgspec.Struct):
         This method uses the configured serializer to reconstruct a Job object
         from its serialized byte representation.
         """
-        from .serializers import get_serializer
+        from .utils.serialization import get_serializer
         serializer = get_serializer()
         # Simplified per improvement plan: trust serializer to return a Job
         return serializer.deserialize_job(data)
@@ -395,7 +395,7 @@ class Job(msgspec.Struct):
         This method is used when a job fails and needs to be sent to the
         failed job queue for later analysis or retry.
         """
-        from .serializers import get_serializer
+        from .utils.serialization import get_serializer
         serializer = get_serializer()
         return serializer.serialize_failed_job(self)
 
@@ -421,7 +421,7 @@ class Job(msgspec.Struct):
         This method serializes the result of job execution, including any
         error information, for storage in the result backend.
         """
-        from .serializers import get_serializer
+        from .utils.serialization import get_serializer
         serializer = get_serializer()
         return serializer.serialize_result(result, status.value, error, traceback_str)
 
@@ -440,7 +440,7 @@ class Job(msgspec.Struct):
         This method reconstructs result data from its serialized representation
         for use by clients fetching job results.
         """
-        from .serializers import get_serializer
+        from .utils.serialization import get_serializer
         serializer = get_serializer()
         return serializer.deserialize_result(data)
 

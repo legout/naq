@@ -20,6 +20,12 @@ from ..settings import (
     NAQ_EVENT_STREAM_NAME,
     NAQ_EVENT_SUBJECT_PREFIX,
 )
+from ..utils.nats_helpers import (
+    test_nats_connection,
+    test_nats_connection_sync,
+    is_jetstream_enabled,
+    is_jetstream_enabled_sync,
+)
 
 
 class SharedEventLoggerManager:
@@ -104,14 +110,22 @@ class SharedEventLoggerManager:
         with self._lock:
             if self._sync_logger is None:
                 try:
+                    # Test NATS connection and JetStream availability
+                    nats_url = self._config.get('storage_url', NAQ_EVENT_STORAGE_URL)
+                    if not test_nats_connection_sync(nats_url):
+                        logger.warning(f"NATS connection test failed for {nats_url}")
+                        return None
+                    
+                    if not is_jetstream_enabled_sync(nats_url):
+                        logger.warning(f"JetStream is not available on {nats_url}")
+                        return None
+                    
                     storage_instance = self._config.get('storage_instance')
                     if storage_instance and isinstance(storage_instance, BaseEventStorage):
                         self._storage = storage_instance
                         logger.debug("Using provided storage_instance for synchronous event logger")
                     else:
-                        self._storage = NATSJobEventStorage(
-                            nats_url=self._config.get('storage_url', NAQ_EVENT_STORAGE_URL)
-                        )
+                        self._storage = NATSJobEventStorage(nats_url=nats_url)
                         logger.debug("Created NATSJobEventStorage for synchronous event logger")
                     
                     self._sync_logger = JobEventLogger(storage=self._storage)
@@ -135,14 +149,22 @@ class SharedEventLoggerManager:
         async with self._async_lock:
             if self._async_logger is None:
                 try:
+                    # Test NATS connection and JetStream availability
+                    nats_url = self._config.get('storage_url', NAQ_EVENT_STORAGE_URL)
+                    if not await test_nats_connection(nats_url):
+                        logger.warning(f"NATS connection test failed for {nats_url}")
+                        return None
+                    
+                    if not await is_jetstream_enabled(nats_url):
+                        logger.warning(f"JetStream is not available on {nats_url}")
+                        return None
+                    
                     storage_instance = self._config.get('storage_instance')
                     if storage_instance and isinstance(storage_instance, BaseEventStorage):
                         self._storage = storage_instance
                         logger.debug("Using provided storage_instance for asynchronous event logger")
                     else:
-                        self._storage = NATSJobEventStorage(
-                            nats_url=self._config.get('storage_url', NAQ_EVENT_STORAGE_URL)
-                        )
+                        self._storage = NATSJobEventStorage(nats_url=nats_url)
                         logger.debug("Created NATSJobEventStorage for asynchronous event logger")
                     
                     self._async_logger = AsyncJobEventLogger(storage=self._storage)

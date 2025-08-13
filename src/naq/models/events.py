@@ -244,6 +244,240 @@ class JobEvent(msgspec.Struct):
             nats_subject=nats_subject,
             nats_sequence=nats_sequence,
         )
+    
+    @classmethod
+    def retry_scheduled(
+        cls,
+        job_id: str,
+        worker_id: str,
+        delay_seconds: float,
+        queue_name: Optional[str] = None,
+        nats_subject: Optional[str] = None,
+        nats_sequence: Optional[int] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> "JobEvent":
+        """Create a RETRY_SCHEDULED event.
+        
+        Args:
+            job_id: The ID of the job that was scheduled for retry
+            worker_id: The ID of the worker that scheduled the retry
+            delay_seconds: The delay before the retry attempt in seconds
+            queue_name: Optional name of the queue the job will be retried on
+            nats_subject: Optional NATS subject where the job was published
+            nats_sequence: Optional NATS sequence number for the job
+            details: Optional additional details about the event
+            
+        Returns:
+            JobEvent: A new RETRY_SCHEDULED event instance
+            
+        Example:
+            ```python
+            event = JobEvent.retry_scheduled(
+                job_id="job-123",
+                worker_id="worker-456",
+                delay_seconds=30.0,
+                details={"retry_count": 2}
+            )
+            ```
+        """
+        return cls(
+            job_id=job_id,
+            event_type=JobEventType.RETRY_SCHEDULED,
+            worker_id=worker_id,
+            message=f"Retry scheduled in {delay_seconds} seconds",
+            queue_name=queue_name,
+            details={"delay_seconds": delay_seconds, **(details or {})},
+            nats_subject=nats_subject,
+            nats_sequence=nats_sequence,
+        )
+
+    @classmethod
+    def scheduled(
+        cls,
+        job_id: str,
+        queue_name: str,
+        scheduled_timestamp_utc: float,
+        worker_id: Optional[str] = None,
+        nats_subject: Optional[str] = None,
+        nats_sequence: Optional[int] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> "JobEvent":
+        """Create a SCHEDULED event.
+        
+        Args:
+            job_id: The ID of the job that was scheduled
+            queue_name: The name of the queue the job was scheduled for
+            scheduled_timestamp_utc: The UTC timestamp when the job is scheduled to run
+            worker_id: Optional ID of the worker that scheduled the job
+            nats_subject: Optional NATS subject where the job was published
+            nats_sequence: Optional NATS sequence number for the job
+            details: Optional additional details about the event
+            
+        Returns:
+            JobEvent: A new SCHEDULED event instance
+            
+        Example:
+            ```python
+            import time
+            future_time = time.time() + 3600  # 1 hour from now
+            
+            event = JobEvent.scheduled(
+                job_id="job-123",
+                queue_name="default",
+                scheduled_timestamp_utc=future_time,
+                details={"cron": "0 * * * *"}
+            )
+            ```
+        """
+        return cls(
+            job_id=job_id,
+            event_type=JobEventType.SCHEDULED,
+            queue_name=queue_name,
+            worker_id=worker_id,
+            details={"scheduled_timestamp_utc": scheduled_timestamp_utc, **(details or {})},
+            nats_subject=nats_subject,
+            nats_sequence=nats_sequence,
+        )
+
+    @classmethod
+    def schedule_triggered(
+        cls,
+        job_id: str,
+        queue_name: str,
+        worker_id: Optional[str] = None,
+        nats_subject: Optional[str] = None,
+        nats_sequence: Optional[int] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> "JobEvent":
+        """Create a SCHEDULE_TRIGGERED event.
+        
+        Args:
+            job_id: The ID of the job whose schedule was triggered
+            queue_name: The name of the queue the job was triggered for
+            worker_id: Optional ID of the worker that triggered the schedule
+            nats_subject: Optional NATS subject where the job was published
+            nats_sequence: Optional NATS sequence number for the job
+            details: Optional additional details about the event
+            
+        Returns:
+            JobEvent: A new SCHEDULE_TRIGGERED event instance
+            
+        Example:
+            ```python
+            event = JobEvent.schedule_triggered(
+                job_id="job-123",
+                queue_name="default",
+                worker_id="scheduler-001",
+                details={"trigger_type": "cron"}
+            )
+            ```
+        """
+        return cls(
+            job_id=job_id,
+            event_type=JobEventType.SCHEDULE_TRIGGERED,
+            queue_name=queue_name,
+            worker_id=worker_id,
+            details=details or {},
+            nats_subject=nats_subject,
+            nats_sequence=nats_sequence,
+        )
+
+    @classmethod
+    def cancelled(
+        cls,
+        job_id: str,
+        queue_name: str,
+        worker_id: Optional[str] = None,
+        nats_subject: Optional[str] = None,
+        nats_sequence: Optional[int] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> "JobEvent":
+        """Create a CANCELLED event.
+        
+        Args:
+            job_id: The ID of the job that was cancelled
+            queue_name: The name of the queue the job was cancelled from
+            worker_id: Optional ID of the worker that cancelled the job
+            nats_subject: Optional NATS subject where the job was published
+            nats_sequence: Optional NATS sequence number for the job
+            details: Optional additional details about the event
+            
+        Returns:
+            JobEvent: A new CANCELLED event instance
+            
+        Example:
+            ```python
+            event = JobEvent.cancelled(
+                job_id="job-123",
+                queue_name="default",
+                worker_id="admin-001",
+                details={"reason": "user_request"}
+            )
+            ```
+        """
+        return cls(
+            job_id=job_id,
+            event_type=JobEventType.CANCELLED,
+            queue_name=queue_name,
+            worker_id=worker_id,
+            nats_subject=nats_subject,
+            nats_sequence=nats_sequence,
+            message=f"Job cancelled",
+            details=details or {},
+        )
+
+    @classmethod
+    def status_changed(
+        cls,
+        job_id: str,
+        queue_name: str,
+        old_status: str,
+        new_status: str,
+        worker_id: Optional[str] = None,
+        nats_subject: Optional[str] = None,
+        nats_sequence: Optional[int] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> "JobEvent":
+        """Create a STATUS_CHANGED event.
+        
+        Args:
+            job_id: The ID of the job whose status changed
+            queue_name: The name of the queue the job belongs to
+            old_status: The previous status of the job
+            new_status: The new status of the job
+            worker_id: Optional ID of the worker that changed the status
+            nats_subject: Optional NATS subject where the job was published
+            nats_sequence: Optional NATS sequence number for the job
+            details: Optional additional details about the event
+            
+        Returns:
+            JobEvent: A new STATUS_CHANGED event instance
+            
+        Example:
+            ```python
+            event = JobEvent.status_changed(
+                job_id="job-123",
+                queue_name="default",
+                old_status="pending",
+                new_status="running",
+                worker_id="worker-456"
+            )
+            ```
+        """
+        return cls(
+            job_id=job_id,
+            event_type=JobEventType.STATUS_CHANGED,
+            queue_name=queue_name,
+            worker_id=worker_id,
+            nats_subject=nats_subject,
+            nats_sequence=nats_sequence,
+            message=f"Job status changed from {old_status} to {new_status}",
+            details={
+                "old_status": old_status,
+                "new_status": new_status,
+                **(details or {})
+            },
+        )
 
 
 class WorkerEvent(msgspec.Struct):
@@ -762,236 +996,4 @@ class WorkerEvent(msgspec.Struct):
             nats_sequence=nats_sequence,
         )
 
-    @classmethod
-    def retry_scheduled(
-        cls,
-        job_id: str,
-        worker_id: str,
-        delay_seconds: float,
-        queue_name: Optional[str] = None,
-        nats_subject: Optional[str] = None,
-        nats_sequence: Optional[int] = None,
-        details: Optional[Dict[str, Any]] = None,
-    ) -> "JobEvent":
-        """Create a RETRY_SCHEDULED event.
-        
-        Args:
-            job_id: The ID of the job that was scheduled for retry
-            worker_id: The ID of the worker that scheduled the retry
-            delay_seconds: The delay before the retry attempt in seconds
-            queue_name: Optional name of the queue the job will be retried on
-            nats_subject: Optional NATS subject where the job was published
-            nats_sequence: Optional NATS sequence number for the job
-            details: Optional additional details about the event
-            
-        Returns:
-            JobEvent: A new RETRY_SCHEDULED event instance
-            
-        Example:
-            ```python
-            event = JobEvent.retry_scheduled(
-                job_id="job-123",
-                worker_id="worker-456",
-                delay_seconds=30.0,
-                details={"retry_count": 2}
-            )
-            ```
-        """
-        return cls(
-            job_id=job_id,
-            event_type=JobEventType.RETRY_SCHEDULED,
-            worker_id=worker_id,
-            message=f"Retry scheduled in {delay_seconds} seconds",
-            queue_name=queue_name,
-            details={"delay_seconds": delay_seconds, **(details or {})},
-            nats_subject=nats_subject,
-            nats_sequence=nats_sequence,
-        )
-
-    @classmethod
-    def scheduled(
-        cls,
-        job_id: str,
-        queue_name: str,
-        scheduled_timestamp_utc: float,
-        worker_id: Optional[str] = None,
-        nats_subject: Optional[str] = None,
-        nats_sequence: Optional[int] = None,
-        details: Optional[Dict[str, Any]] = None,
-    ) -> "JobEvent":
-        """Create a SCHEDULED event.
-        
-        Args:
-            job_id: The ID of the job that was scheduled
-            queue_name: The name of the queue the job was scheduled for
-            scheduled_timestamp_utc: The UTC timestamp when the job is scheduled to run
-            worker_id: Optional ID of the worker that scheduled the job
-            nats_subject: Optional NATS subject where the job was published
-            nats_sequence: Optional NATS sequence number for the job
-            details: Optional additional details about the event
-            
-        Returns:
-            JobEvent: A new SCHEDULED event instance
-            
-        Example:
-            ```python
-            import time
-            future_time = time.time() + 3600  # 1 hour from now
-            
-            event = JobEvent.scheduled(
-                job_id="job-123",
-                queue_name="default",
-                scheduled_timestamp_utc=future_time,
-                details={"cron": "0 * * * *"}
-            )
-            ```
-        """
-        return cls(
-            job_id=job_id,
-            event_type=JobEventType.SCHEDULED,
-            queue_name=queue_name,
-            worker_id=worker_id,
-            details={"scheduled_timestamp_utc": scheduled_timestamp_utc, **(details or {})},
-            nats_subject=nats_subject,
-            nats_sequence=nats_sequence,
-        )
-
-    @classmethod
-    def schedule_triggered(
-        cls,
-        job_id: str,
-        queue_name: str,
-        worker_id: Optional[str] = None,
-        nats_subject: Optional[str] = None,
-        nats_sequence: Optional[int] = None,
-        details: Optional[Dict[str, Any]] = None,
-    ) -> "JobEvent":
-        """Create a SCHEDULE_TRIGGERED event.
-        
-        Args:
-            job_id: The ID of the job whose schedule was triggered
-            queue_name: The name of the queue the job was triggered for
-            worker_id: Optional ID of the worker that triggered the schedule
-            nats_subject: Optional NATS subject where the job was published
-            nats_sequence: Optional NATS sequence number for the job
-            details: Optional additional details about the event
-            
-        Returns:
-            JobEvent: A new SCHEDULE_TRIGGERED event instance
-            
-        Example:
-            ```python
-            event = JobEvent.schedule_triggered(
-                job_id="job-123",
-                queue_name="default",
-                worker_id="scheduler-001",
-                details={"trigger_type": "cron"}
-            )
-            ```
-        """
-        return cls(
-            job_id=job_id,
-            event_type=JobEventType.SCHEDULE_TRIGGERED,
-            queue_name=queue_name,
-            worker_id=worker_id,
-            details=details or {},
-            nats_subject=nats_subject,
-            nats_sequence=nats_sequence,
-        )
-
-    @classmethod
-    def cancelled(
-        cls,
-        job_id: str,
-        queue_name: str,
-        worker_id: Optional[str] = None,
-        nats_subject: Optional[str] = None,
-        nats_sequence: Optional[int] = None,
-        details: Optional[Dict[str, Any]] = None,
-    ) -> "JobEvent":
-        """Create a CANCELLED event.
-        
-        Args:
-            job_id: The ID of the job that was cancelled
-            queue_name: The name of the queue the job was cancelled from
-            worker_id: Optional ID of the worker that cancelled the job
-            nats_subject: Optional NATS subject where the job was published
-            nats_sequence: Optional NATS sequence number for the job
-            details: Optional additional details about the event
-            
-        Returns:
-            JobEvent: A new CANCELLED event instance
-            
-        Example:
-            ```python
-            event = JobEvent.cancelled(
-                job_id="job-123",
-                queue_name="default",
-                worker_id="admin-001",
-                details={"reason": "user_request"}
-            )
-            ```
-        """
-        return cls(
-            job_id=job_id,
-            event_type=JobEventType.CANCELLED,
-            queue_name=queue_name,
-            worker_id=worker_id,
-            nats_subject=nats_subject,
-            nats_sequence=nats_sequence,
-            message=f"Job cancelled",
-            details=details or {},
-        )
-
-    @classmethod
-    def status_changed(
-        cls,
-        job_id: str,
-        queue_name: str,
-        old_status: str,
-        new_status: str,
-        worker_id: Optional[str] = None,
-        nats_subject: Optional[str] = None,
-        nats_sequence: Optional[int] = None,
-        details: Optional[Dict[str, Any]] = None,
-    ) -> "JobEvent":
-        """Create a STATUS_CHANGED event.
-        
-        Args:
-            job_id: The ID of the job whose status changed
-            queue_name: The name of the queue the job belongs to
-            old_status: The previous status of the job
-            new_status: The new status of the job
-            worker_id: Optional ID of the worker that changed the status
-            nats_subject: Optional NATS subject where the job was published
-            nats_sequence: Optional NATS sequence number for the job
-            details: Optional additional details about the event
-            
-        Returns:
-            JobEvent: A new STATUS_CHANGED event instance
-            
-        Example:
-            ```python
-            event = JobEvent.status_changed(
-                job_id="job-123",
-                queue_name="default",
-                old_status="pending",
-                new_status="running",
-                worker_id="worker-456"
-            )
-            ```
-        """
-        return cls(
-            job_id=job_id,
-            event_type=JobEventType.STATUS_CHANGED,
-            queue_name=queue_name,
-            worker_id=worker_id,
-            nats_subject=nats_subject,
-            nats_sequence=nats_sequence,
-            message=f"Job status changed from {old_status} to {new_status}",
-            details={
-                "old_status": old_status,
-                "new_status": new_status,
-                **(details or {})
-            },
-        )
+    

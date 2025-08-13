@@ -457,3 +457,369 @@ For production deployments, the connection management system provides:
 4. **Configuration Management**: Centralized configuration for all connection parameters
 
 This refactored connection management system significantly improves the reliability and maintainability of `naq` while providing a modern, Pythonic API for developers.
+
+## Utils Package Architecture
+
+The `utils` package is a comprehensive collection of utilities extracted from various modules throughout the codebase as part of Task 08. It provides common functionality used across all components of `naq`, eliminating code duplication and providing a consistent set of tools for common operations.
+
+### Package Structure
+
+The `utils` package is organized into specialized modules, each focusing on a specific area of functionality:
+
+```
+src/naq/utils/
+├── __init__.py
+├── async_helpers.py      # Async/sync conversion utilities
+├── config.py            # Configuration management
+├── context_managers.py  # Common context managers
+├── decorators.py        # Reusable decorators
+├── error_handling.py    # Centralized error handling
+├── logging.py           # Logging utilities
+├── nats_helpers.py      # NATS-specific utilities
+├── retry.py             # Retry mechanisms
+├── serialization.py     # Serialization helpers
+├── timing.py            # Timing and benchmarking
+├── types.py             # Common type definitions
+└── validation.py        # Validation utilities
+```
+
+### Core Utilities
+
+#### 1. Async Helpers (`async_helpers.py`)
+
+Provides utilities for bridging synchronous and asynchronous code:
+
+- **`run_async()`**: Execute async functions from sync code
+- **`run_sync()`**: Execute sync functions from async code
+- **`async_to_sync()`**: Convert async functions to sync functions
+- **`sync_to_async()`**: Convert sync functions to async functions
+- **`asyncify()`**: Decorator to make sync functions async-compatible
+
+#### 2. Configuration Management (`config.py`)
+
+Centralized configuration system with multiple source support:
+
+- **`ConfigManager`**: Manages configuration from multiple sources with priority-based merging
+- **`ConfigSource`**: Base class for configuration sources
+- **EnvironmentConfigSource`**: Reads from environment variables
+- **`FileConfigSource`**: Reads from YAML/JSON files
+- **`DictConfigSource`**: Uses provided dictionaries
+- **Configuration dataclasses**: Predefined configuration structures for different components
+
+#### 3. Context Managers (`context_managers.py`)
+
+Common context managers for resource management:
+
+- **`managed_resource()`**: Generic resource management with cleanup
+- **`timeout_context()`**: Timeout management for operations
+- **`retry_context()`**: Retry logic with context management
+- **`benchmark_context()`**: Performance benchmarking
+
+#### 4. Decorators (`decorators.py`)
+
+Reusable decorators for common patterns:
+
+- **`retry_decorator()`**: Automatic retry logic with configurable strategies
+- **`timeout_decorator()`**: Timeout enforcement for functions
+- **`benchmark_decorator()`**: Performance measurement
+- **`log_errors()`**: Automatic error logging
+- **`validate_args()`**: Argument validation
+
+#### 5. Error Handling (`error_handling.py`)
+
+Centralized error handling and reporting:
+
+- **`ErrorContext`**: Rich error context with metadata
+- **`ErrorCategory`**: Categorization of errors
+- **`ErrorHandler`**: Centralized error handling strategies
+- **`ErrorReporter`**: Structured error reporting
+- **Recovery strategies**: Configurable recovery mechanisms
+
+#### 6. Logging (`logging.py`)
+
+Comprehensive logging utilities:
+
+- **Structured logging**: Context-aware logging with rich metadata
+- **Performance logging**: Specialized logging for performance metrics
+- **Log handler management**: Centralized log handler configuration
+- **Log correlation**: Request/operation ID tracking
+
+#### 7. NATS Helpers (`nats_helpers.py`)
+
+NATS-specific utilities extracted from connection modules:
+
+- **Connection management**: Context managers for NATS connections
+- **Stream operations**: Stream creation and management utilities
+- **KV store operations**: Key-value store operations with retry logic
+- **Subject utilities**: Subject building and parsing
+- **Message handling**: Message publishing and subscription utilities
+- **Connection monitoring**: Connection metrics and health monitoring
+
+#### 8. Retry Mechanisms (`retry.py`)
+
+Comprehensive retry system:
+
+- **`RetryConfig`**: Configurable retry strategies
+- **`retry_async()`**: Async retry with exponential backoff
+- **`retry()`**: Sync retry with exponential backoff
+- **Retry strategies**: Linear, exponential, custom strategies
+- **Jitter support**: Avoid thundering herd problems
+
+#### 9. Serialization (`serialization.py`)
+
+Serialization utilities for jobs and results:
+
+- **`JobSerializer`**: Job serialization with multiple formats
+- **`ResultSerializer`**: Result serialization with TTL support
+- **`SecureSerializer`**: Security-focused serialization
+- **Serializer protocol**: Extensible serialization interface
+
+#### 10. Timing and Benchmarking (`timing.py`)
+
+Performance measurement and timing utilities:
+
+- **`Timer`**: High-resolution timing for operations
+- **`AsyncTimer`**: Async-compatible timing
+- **`Benchmark`**: Comprehensive benchmarking tools
+- **`Scheduler`**: Time-based scheduling utilities
+- **Performance tracking**: Long-term performance monitoring
+
+#### 11. Type Definitions (`types.py`)
+
+Comprehensive type definitions for the entire system:
+
+- **Basic type aliases**: Common types used throughout the codebase
+- **Protocol definitions**: Interface definitions for common patterns
+- **Generic types**: Reusable generic types
+- **Type validation helpers**: Runtime type checking utilities
+- **Model types**: Type definitions for core models
+- **Configuration types**: Type definitions for configuration
+
+#### 12. Validation (`validation.py`)
+
+Comprehensive validation utilities:
+
+- **Type validation**: Runtime type checking
+- **Range validation**: Numeric range checking
+- **Choice validation**: Enum/value choice validation
+- **String validation**: String format validation
+- **URL/email validation**: Specialized string validation
+- **Dictionary validation**: Nested dictionary validation
+- **Dataclass validation**: Automatic dataclass validation
+
+### Integration with Core Components
+
+The utils package integrates seamlessly with all core components of `naq`:
+
+#### Queue Integration
+```python
+from naq.utils import retry_async, ErrorContext, ErrorCategory
+from naq.utils.nats_helpers import nats_jetstream_context
+
+class Queue:
+    async def enqueue(self, func, *args, **kwargs):
+        async with nats_jetstream_context() as (conn, js):
+            return await retry_async(
+                self._enqueue_impl,
+                func, args, kwargs, js
+            )
+```
+
+#### Worker Integration
+```python
+from naq.utils import Timer, ErrorContext
+from naq.utils.logging import get_structured_logger
+
+class Worker:
+    async def process_job(self, job):
+        with Timer() as timer:
+            logger = get_structured_logger("worker")
+            try:
+                result = await job.execute()
+                logger.info("Job completed", job_id=job.id, duration=timer.duration)
+                return result
+            except Exception as e:
+                error_context = ErrorContext(
+                    operation="job_execution",
+                    exception=e,
+                    job_id=job.id
+                )
+                error_context.category = ErrorCategory.EXECUTION
+                logger.error("Job failed", error_context=error_context)
+                raise
+```
+
+#### Service Layer Integration
+```python
+from naq.utils.config import ConfigManager, load_naq_config
+from naq.utils.types import Result, Error
+
+class ServiceManager:
+    def __init__(self, config=None):
+        self.config = config or load_naq_config()
+        self._config_manager = ConfigManager([DictConfigSource(self.config)])
+```
+
+### Benefits of the Utils Package
+
+#### 1. Code Consolidation
+- Eliminates duplication of common patterns across 44+ locations
+- Provides single source of truth for common functionality
+- Reduces maintenance burden and bug potential
+
+#### 2. Consistency
+- Unified error handling across all components
+- Consistent logging formats and correlation
+- Standardized retry and timeout behavior
+
+#### 3. Testability
+- All utilities are thoroughly tested
+- Mockable interfaces for easy unit testing
+- Clear separation of concerns
+
+#### 4. Extensibility
+- Protocol-based design allows easy extension
+- Plugin architecture for custom serializers, validators, etc.
+- Configurable behavior through settings
+
+#### 5. Performance
+- Optimized implementations for critical paths
+- Minimal overhead for common operations
+- Efficient resource management
+
+### Migration Path
+
+The utils package provides a clear migration path from the old scattered utilities:
+
+#### Before: Scattered Utilities
+```python
+# In queue.py
+def _get_nats_connection(self):
+    # Custom connection logic
+    pass
+
+# In worker.py
+def _get_nats_connection(self):
+    # Similar but slightly different connection logic
+    pass
+
+# In scheduler.py
+def _get_nats_connection(self):
+    # Another variation of connection logic
+    pass
+```
+
+#### After: Centralized Utils
+```python
+# In all components
+from naq.utils.nats_helpers import nats_connection_context
+
+async def _get_nats_connection(self):
+    async with nats_connection_context() as conn:
+        return conn
+```
+
+### Best Practices
+
+#### 1. Using Utils in Components
+```python
+# Import specific utilities
+from naq.utils import retry_async, Timer, ErrorContext
+from naq.utils.nats_helpers import nats_jetstream_context
+from naq.utils.logging import get_structured_logger
+
+# Use in component methods
+async def process_request(self, request):
+    with Timer() as timer:
+        logger = get_structured_logger("component")
+        
+        try:
+            async with nats_jetstream_context() as (conn, js):
+                result = await retry_async(
+                    self._process_impl,
+                    request, js
+                )
+                
+                logger.info(
+                    "Request processed",
+                    request_id=request.id,
+                    duration=timer.duration
+                )
+                return result
+                
+        except Exception as e:
+            error_context = ErrorContext(
+                operation="request_processing",
+                exception=e,
+                request_id=request.id
+            )
+            logger.error("Request failed", error_context=error_context)
+            raise
+```
+
+#### 2. Configuration Management
+```python
+from naq.utils.config import ConfigManager, EnvironmentConfigSource, FileConfigSource
+
+# Create configuration manager with multiple sources
+config_manager = ConfigManager([
+    EnvironmentConfigSource(prefix="MYAPP_"),
+    FileConfigSource("config.yaml"),
+    DictConfigSource({"default": "values"})
+])
+
+# Use typed configuration
+max_retries = config_manager.get_typed("max_retries", int, 3)
+timeout = config_manager.get_required_typed("timeout", float)
+```
+
+#### 3. Error Handling
+```python
+from naq.utils import ErrorContext, ErrorCategory, ErrorReporter
+
+async def risky_operation(self):
+    try:
+        return await self._do_risky_thing()
+    except Exception as e:
+        error_context = ErrorContext(
+            operation="risky_operation",
+            exception=e,
+            component=self.__class__.__name__
+        )
+        error_context.category = ErrorCategory.EXECUTION
+        error_context.add_metadata({"attempt": self._attempt})
+        
+        reporter = ErrorReporter()
+        await reporter.report_error(error_context)
+        raise
+```
+
+#### 4. Performance Monitoring
+```python
+from naq.utils import Timer, Benchmark
+from naq.utils.timing import Scheduler
+
+# Time individual operations
+async def process_item(self, item):
+    with Timer() as timer:
+        result = await self._process_item_impl(item)
+        
+        # Log timing metrics
+        self.metrics.observe("process_item_duration", timer.duration)
+        return result
+
+# Benchmark operations
+async def benchmark_processing(self):
+    benchmark = Benchmark()
+    
+    async with benchmark:
+        for i in range(1000):
+            await self.process_item(f"item_{i}")
+    
+    print(f"Processed 1000 items in {benchmark.total_time:.2f}s")
+    print(f"Average time: {benchmark.average_time:.4f}s")
+    print(f"Min time: {benchmark.min_time:.4f}s")
+    print(f"Max time: {benchmark.max_time:.4f}s")
+```
+
+The utils package represents a significant architectural improvement for `naq`, providing a solid foundation of reusable, well-tested utilities that eliminate code duplication and ensure consistency across all components of the system.

@@ -1,83 +1,226 @@
 # src/naq/utils.py
-import asyncio
-import sys
-from typing import Any, Callable, Coroutine, TypeVar
+"""
+NAQ Utilities - Backward Compatibility Layer
 
-import anyio
-from loguru import logger
+This module provides backward compatibility by re-exporting utilities from the new
+structured utils package. For new code, consider importing directly from the
+specific submodules (e.g., from naq.utils.retry import retry).
+"""
 
-from .settings import LOG_LEVEL, LOG_TO_FILE_ENABLED, LOG_FILE_PATH
+# Import from the new utils package structure
+from .utils.async_helpers import (
+    run_async,
+    run_async_in_thread,
+    run_sync,
+    run_sync_in_async,
+    AsyncToSyncBridge,
+    SyncToAsyncBridge,
+)
 
-T = TypeVar("T")
+from .utils.logging import (
+    setup_logging,
+    get_logger,
+    log_function_call,
+    log_performance,
+    log_errors,
+    LogContext,
+    PerformanceTimer,
+)
+from .utils.context_managers import (
+    # Connection context managers
+    nats_connection,
+    jetstream_context,
+    nats_jetstream,
+    nats_kv_store,
+    
+    # Retry context managers
+    retry_context,
+    retry_async_context,
+    
+    # Logging context managers
+    LogContext,
+    PerformanceTimer,
+    
+    # New context managers from Task 08
+    managed_resource,
+    managed_resource_sync,
+    timeout_context,
+    timeout_context_sync,
+    error_context,
+    error_context_sync,
+    operation_context,
+    operation_context_sync,
+    combined_context,
+    combined_context_sync,
+)
 
+from .utils.retry import (
+    RetryConfig,
+    RetryError,
+    retry,
+    retry_async,
+    retry_context,
+    retry_async_context,
+    with_retry,
+    with_retry_async,
+    calculate_backoff,
+    is_retryable_error,
+)
 
-def run_async_from_sync(
-    func: Callable[..., Coroutine[Any, Any, T]], *args: Any, **kwargs: Any
-) -> T:
-    """
-    Runs an async function from a synchronous context.
+from .utils.decorators import (
+    with_nats_connection,
+    with_jetstream_context,
+    retry_with_backoff,
+    timing,
+    error_handler,
+    log_function_call,
+    deprecated,
+    singleton,
+    BackoffStrategy,
+)
 
-    Handles event loop management by using anyio.run() which creates a new
-    event loop if one isn't already running. If an event loop is already running,
-    it raises an informative error directing the user to use the async interface.
+from .utils.validation import (
+    ValidationError,
+    validate_type,
+    validate_range,
+    validate_choice,
+    validate_required,
+    validate_string,
+    validate_url,
+    validate_email,
+    validate_dict,
+    validate_job_config,
+    validate_connection_config,
+    validate_event_config,
+    validate_dataclass,
+    Validator,
+)
 
-    Args:
-        func: The async function to run.
-        *args: Positional arguments to pass to the async function.
-        **kwargs: Keyword arguments to pass to the async function.
+from .utils.config import (
+    ConfigError,
+    ConfigSource,
+    EnvironmentConfigSource,
+    FileConfigSource,
+    DictConfigSource,
+    ConfigManager,
+    create_default_config_manager,
+    load_dataclass_from_config,
+    JobConfig,
+    ConnectionConfig,
+    EventConfig,
+    LoggingConfig,
+    NaqConfig,
+    load_naq_config,
+    validate_config,
+    DEFAULT_CONFIG_SCHEMA,
+)
+from .utils.serialization import (
+    Serializer,
+    PickleSerializer,
+    JsonSerializer,
+    get_serializer,
+    _normalize_retry_strategy,
+)
 
-    Returns:
-        The result of the async function.
+# Backward compatibility aliases
+# Keep the old function names for existing code
+run_async_from_sync = run_async
 
-    Raises:
-        RuntimeError: If called when an asyncio event loop is already running.
-    """
-    try:
-        # anyio.run() creates a new event loop if one isn't running,
-        # runs the coroutine to completion, and then closes the loop.
-        return anyio.run(func, *args, **kwargs)
-    except RuntimeError as e:
-        # Check for the specific error message from anyio when a loop is already running.
-        # The exact message might differ from asyncio.
-        if (
-            "cannot be called from a running event loop" in str(e).lower()
-            or "anyio.run() cannot be called from within a running event loop"
-            in str(e).lower()
-        ):
-            raise RuntimeError(
-                "Cannot run naq sync function when an event loop is already running. "
-                "Please use the async version of the function (e.g., `await naq.enqueue(...)`)."
-            ) from e
-        else:
-            # Re-raise other RuntimeErrors
-            raise
-
-
-def setup_logging(level: str | None = None):
-    """Configures logging based on environment variables or provided level string using loguru."""
-    logger.remove()  # Remove all existing handlers
-
-    # Determine the effective log level
-    # CLI argument takes precedence over environment variable
-    effective_level = level.upper() if level else LOG_LEVEL
-
-    # Add stdout handler
-    logger.add(
-        sys.stdout,
-        level=effective_level,
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-        colorize=True,
-    )
-
-    # Add file handler if enabled
-    if LOG_TO_FILE_ENABLED:
-        logger.add(
-            LOG_FILE_PATH,
-            level=effective_level,
-            format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
-            rotation="10 MB",
-            retention="1 week",  # Keep logs for 1 week
-            compression="zip",  # Compress rotated logs
-        )
-    # Optionally silence overly verbose libraries if needed
-    # logging.getLogger("nats").setLevel(logging.WARNING)
+# Re-export all utilities for backward compatibility
+__all__ = [
+    # Async utilities
+    "run_async",
+    "run_async_in_thread",
+    "run_sync",
+    "run_sync_in_async",
+    "AsyncToSyncBridge",
+    "SyncToAsyncBridge",
+    "run_async_from_sync",  # Backward compatibility alias
+    
+    # Logging utilities
+    "setup_logging",
+    "get_logger",
+    "log_function_call",
+    "log_performance",
+    "log_errors",
+    "LogContext",
+    "PerformanceTimer",
+    
+# Context managers
+    "nats_connection",
+    "jetstream_context",
+    "nats_jetstream",
+    "nats_kv_store",
+    "managed_resource",
+    "managed_resource_sync",
+    "timeout_context",
+    "timeout_context_sync",
+    "error_context",
+    "error_context_sync",
+    "operation_context",
+    "operation_context_sync",
+    "combined_context",
+    "combined_context_sync",
+    # Retry utilities
+    "RetryConfig",
+    "RetryError",
+    "retry",
+    "retry_async",
+    "retry_context",
+    "retry_async_context",
+    "with_retry",
+    "with_retry_async",
+    "calculate_backoff",
+    "is_retryable_error",
+    
+    # Decorators utilities
+    "with_nats_connection",
+    "with_jetstream_context",
+    "retry_with_backoff",
+    "timing",
+    "error_handler",
+    "log_function_call",
+    "deprecated",
+    "singleton",
+    "BackoffStrategy",
+    
+    # Validation utilities
+    "ValidationError",
+    "validate_type",
+    "validate_range",
+    "validate_choice",
+    "validate_required",
+    "validate_string",
+    "validate_url",
+    "validate_email",
+    "validate_dict",
+    "validate_job_config",
+    "validate_connection_config",
+    "validate_event_config",
+    "validate_dataclass",
+    "Validator",
+    
+    # Configuration utilities
+    "ConfigError",
+    "ConfigSource",
+    "EnvironmentConfigSource",
+    "FileConfigSource",
+    "DictConfigSource",
+    "ConfigManager",
+    "create_default_config_manager",
+    "load_dataclass_from_config",
+    "JobConfig",
+    "ConnectionConfig",
+# Serialization utilities
+    "Serializer",
+    "PickleSerializer",
+    "JsonSerializer",
+    "get_serializer",
+    "_normalize_retry_strategy",
+    "EventConfig",
+    "LoggingConfig",
+    "NaqConfig",
+    "load_naq_config",
+    "validate_config",
+    "DEFAULT_CONFIG_SCHEMA",
+]
