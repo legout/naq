@@ -9,7 +9,7 @@ from typing import Optional
 import typer
 from rich.console import Console
 
-from . import __version__
+from naq import __version__
 
 # Create the main Typer application
 app = typer.Typer(
