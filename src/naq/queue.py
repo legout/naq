@@ -19,7 +19,7 @@ from .connection import (
 from .exceptions import ConfigurationError
 from .exceptions import NaqConnectionError
 from .exceptions import JobNotFoundError, NaqException
-from .job import Job, RetryDelayType
+from .models import Job, RetryDelayType
 from .settings import (
     DEFAULT_QUEUE_NAME,
     DEFAULT_NATS_URL,

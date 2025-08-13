@@ -6,7 +6,7 @@ from dataclasses import asdict, is_dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union, Protocol
 
 from .exceptions import SerializationError
-from .models import JOB_STATUS
+from .models.enums import JOB_STATUS
 from .settings import (
     DEFAULT_QUEUE_NAME,
     JOB_SERIALIZER,

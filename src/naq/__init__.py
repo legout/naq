@@ -19,7 +19,7 @@ from .exceptions import (
     NaqException,
     SerializationError,
 )
-from .models import Job, RetryDelayType
+from .models import Job, RetryDelayType, JOB_STATUS
 from .results import Results
 
 # Make key classes and functions available directly from the 'naq' package
@@ -44,7 +44,6 @@ from .queue import (
     schedule,
     schedule_sync,
 )
-from .models import JOB_STATUS
 from .scheduler import Scheduler
 
 from .settings import SCHEDULED_JOB_STATUS, WORKER_STATUS

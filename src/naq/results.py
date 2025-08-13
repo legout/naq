@@ -6,7 +6,7 @@ from nats.js.errors import KeyNotFoundError
 
 from .connection import close_nats_connection, get_jetstream_context, get_nats_connection
 from .exceptions import JobNotFoundError, NaqException
-from .models import Job
+from .models.jobs import Job
 from .settings import DEFAULT_NATS_URL, DEFAULT_RESULT_TTL_SECONDS, RESULT_KV_NAME
 
 

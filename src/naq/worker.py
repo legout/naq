@@ -25,9 +25,9 @@ from .connection import (
     get_nats_connection,
 )
 from .exceptions import NaqException, SerializationError
-from .models import Job
+from .models.jobs import Job
 from .results import Results
-from .models import JOB_STATUS
+from .models.enums import JOB_STATUS
 from .settings import (
     DEFAULT_NATS_URL,
     DEFAULT_RESULT_TTL_SECONDS,
