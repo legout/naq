@@ -3,9 +3,9 @@ import pytest
 
 from typing import Any
 
-from naq.job import Job, JOB_STATUS
-from naq.exceptions import  SerializationError
-from naq.settings import RETRY_STRATEGY
+# Updated imports for new modular structure
+from naq import Job, JOB_STATUS, SerializationError
+from naq.models.enums import RetryDelayType as RETRY_STRATEGY
 
 
 class TestJob:

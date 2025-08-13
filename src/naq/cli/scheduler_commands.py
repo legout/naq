@@ -18,8 +18,9 @@ from loguru import logger
 from rich.table import Table
 
 from .main import console
-from ..connection import close_nats_connection, get_jetstream_context, get_nats_connection
 from ..scheduler import Scheduler
+from ..services import ServiceManager
+from ..services.kv_stores import KVStoreService
 from ..settings import (
     DEFAULT_NATS_URL,
     DEFAULT_QUEUE_NAME,
@@ -83,11 +84,16 @@ def start(
     logger.info(f"Poll interval: {poll_interval}s")
     logger.info(f"High availability mode: {'enabled' if enable_ha else 'disabled'}")
 
+    # Create configuration
+    config = {
+        'nats_url': nats_url,
+        'poll_interval': poll_interval,
+        'enable_ha': enable_ha,
+    }
+
     s = Scheduler(
-        nats_url=nats_url,
-        poll_interval=poll_interval,
+        config=config,
         instance_id=instance_id,
-        enable_ha=enable_ha,
     )
     try:
         asyncio.run(s.run())
@@ -147,12 +153,17 @@ def list_scheduled_jobs(
     logger.info(f"Listing scheduled jobs from NATS at {nats_url}")
 
     async def _list_scheduled_jobs_async():
+        service_manager = None
         try:
-            nc = await get_nats_connection(url=nats_url)
-            js = await get_jetstream_context(nc=nc)
-
+            service_manager = ServiceManager({'nats_url': nats_url})
+            kv_service = await service_manager.get_service(KVStoreService)
+            
             try:
-                kv = await js.key_value(bucket=SCHEDULED_JOBS_KV_NAME)
+                kv = await kv_service.get_kv_store(
+                    SCHEDULED_JOBS_KV_NAME,
+                    description="Scheduler job schedule storage",
+                    create_if_not_exists=False
+                )
             except Exception as e:
                 logger.error(
                     f"Failed to access KV store '{SCHEDULED_JOBS_KV_NAME}': {e}"
@@ -302,7 +313,8 @@ def list_scheduled_jobs(
             logger.exception(f"Error listing scheduled jobs: {e}")
             console.print(f"[red]Error listing scheduled jobs: {str(e)}[/red]")
         finally:
-            await close_nats_connection()
+            if service_manager:
+                await service_manager.cleanup_all()
 
     # Run the async routine
     asyncio.run(_list_scheduled_jobs_async())

@@ -5,12 +5,18 @@ from typing import Optional
 
 from loguru import logger
 
+# Import from new locations but expose as before
+from .models.jobs import Job, JobResult
+from .models.enums import JOB_STATUS, JobEventType, WorkerEventType, RetryDelayType
+from .models.events import JobEvent, WorkerEvent
+from .models.schedules import Schedule
+
 from .connection import (
     close_nats_connection,
     get_jetstream_context,
     get_nats_connection,
 )
-from .settings import DEFAULT_NATS_URL
+from .settings import DEFAULT_NATS_URL, DEFAULT_QUEUE_NAME, SCHEDULED_JOB_STATUS, WORKER_STATUS
 from .exceptions import (
     ConfigurationError,
     NaqConnectionError,
@@ -19,7 +25,6 @@ from .exceptions import (
     NaqException,
     SerializationError,
 )
-from .models import Job, RetryDelayType
 from .results import Results
 
 # Make key classes and functions available directly from the 'naq' package
@@ -44,16 +49,16 @@ from .queue import (
     schedule,
     schedule_sync,
 )
-from .models import JOB_STATUS
 from .scheduler import Scheduler
-
-from .settings import SCHEDULED_JOB_STATUS, WORKER_STATUS
 from .worker import Worker
 
 # Import events module for event logging capabilities
 from . import events
 
-__version__ = "0.1.3"  # Bump version for worker monitoring
+# Configuration (new)
+from .config import get_config, load_config
+
+__version__ = "0.2.0"  # Bump version for major refactoring
 
 
 # Basic configuration/convenience
@@ -84,14 +89,8 @@ async def disconnect():
     await close_nats_connection()
 
 
-# --- Make result fetching available ---
-# Expose static methods directly if desired, or users can use Job.fetch_result
+# Existing convenience functions maintained
 fetch_job_result = Job.fetch_result
 fetch_job_result_sync = Job.fetch_result_sync
-
-# Make Results class available for direct use
-Results = Results
-
-# --- Make worker listing available ---
 list_workers = Worker.list_workers
 list_workers_sync = Worker.list_workers_sync

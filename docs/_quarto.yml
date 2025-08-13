@@ -15,6 +15,12 @@ website:
         text: Installation
       - href: quickstart.qmd
         text: Quickstart
+      - href: configuration.qmd
+        text: Configuration
+      - href: import-migration.qmd
+        text: Import Migration
+      - href: testing.qmd
+        text: Testing Guide
       - href: architecture.qmd
         text: Architecture
       - href: examples.qmd

@@ -44,6 +44,7 @@ class JobEventType(str, Enum):
     SCHEDULE_RESUMED = "schedule_resumed"  
     SCHEDULE_CANCELLED = "schedule_cancelled"
     SCHEDULE_MODIFIED = "schedule_modified"
+    SCHEDULER_ERROR = "scheduler_error"
 
 
 class WorkerEventType(str, Enum):

@@ -11,12 +11,10 @@ from typing import Any, Dict, Optional
 import cloudpickle
 import nats
 from loguru import logger
-from nats.js import JetStreamContext
 from nats.js.errors import KeyNotFoundError
 from nats.js.kv import KeyValue
 
 from .utils import setup_logging
-from .events.logger import AsyncJobEventLogger
 
 # Attempt to import croniter only if needed later
 try:
@@ -24,13 +22,11 @@ try:
 except ImportError:
     croniter = None  # type: ignore
 
-from .connection import (
-    close_nats_connection,
-    get_jetstream_context,
-    get_nats_connection,
-)
-from .exceptions import NaqConnectionError
-from .exceptions import SerializationError
+from .services import ServiceManager
+from .services.kv_stores import KVStoreService
+from .services.connection import ConnectionService
+from .services.events import EventService
+from .exceptions import NaqConnectionError, SerializationError
 from .settings import DEFAULT_NATS_URL
 from .settings import (
     MAX_SCHEDULE_FAILURES,
@@ -52,10 +48,12 @@ class LeaderElection:
     def __init__(
         self,
         instance_id: str,
+        service_manager: ServiceManager,
         lock_ttl: int = SCHEDULER_LOCK_TTL_SECONDS,
         lock_renew_interval: int = SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS,
     ):
         self.instance_id = instance_id
+        self.service_manager = service_manager
         self.lock_ttl = lock_ttl
         self.lock_renew_interval = lock_renew_interval
         self._lock_kv: Optional[KeyValue] = None
@@ -63,31 +61,26 @@ class LeaderElection:
         self._is_leader = False
         self._lock_renewal_task: Optional[asyncio.Task] = None
 
-    async def initialize(self, js: JetStreamContext) -> None:
-        """Initialize the leader election system with a JetStream context."""
+    async def initialize(self) -> None:
+        """Initialize the leader election system using services."""
         try:
-            self._lock_kv = await js.key_value(bucket=SCHEDULER_LOCK_KV_NAME)
+            kv_service = await self.service_manager.get_service(KVStoreService)
+            self._lock_kv = await kv_service.get_kv_store(
+                SCHEDULER_LOCK_KV_NAME,
+                description="Scheduler leader election lock",
+                history=1,  # Only need latest value
+                create_if_not_exists=True
+            )
             logger.info(
-                f"Connected to leader election KV store '{SCHEDULER_LOCK_KV_NAME}'"
+                f"Initialized leader election KV store '{SCHEDULER_LOCK_KV_NAME}'"
             )
         except Exception as e:
-            try:
-                # Try to create the lock KV bucket
-                self._lock_kv = await js.create_key_value(
-                    bucket=SCHEDULER_LOCK_KV_NAME,
-                    description="Scheduler leader election lock",
-                    history=1,  # Only need latest value
-                )
-                logger.info(
-                    f"Created leader election KV store '{SCHEDULER_LOCK_KV_NAME}'"
-                )
-            except Exception as create_e:
-                logger.error(
-                    f"Failed to get or create lock KV store '{SCHEDULER_LOCK_KV_NAME}': {create_e}"
-                )
-                raise NaqConnectionError(
-                    f"Failed to access lock KV store: {create_e}"
-                ) from create_e
+            logger.error(
+                f"Failed to initialize lock KV store '{SCHEDULER_LOCK_KV_NAME}': {e}"
+            )
+            raise NaqConnectionError(
+                f"Failed to access lock KV store: {e}"
+            ) from e
 
     async def try_become_leader(self) -> bool:
         """
@@ -219,23 +212,24 @@ class ScheduledJobProcessor:
     Handles the processing of scheduled jobs from the NATS KV store.
     """
 
-    def __init__(self, js: JetStreamContext, kv: KeyValue, nats_url: str = DEFAULT_NATS_URL):
-        self._js = js
+    def __init__(self, service_manager: ServiceManager, kv: KeyValue):
+        self.service_manager = service_manager
         self._kv = kv
-        self._nats_url = nats_url
 
     async def _enqueue_job(self, queue_name: str, subject: str, payload: bytes) -> bool:
         """
-        Enqueue a job payload to the specified queue subject.
+        Enqueue a job payload to the specified queue subject using services.
 
         Returns:
             True if enqueuing was successful, False otherwise
         """
         try:
-            ack = await self._js.publish(subject=subject, payload=payload)
-            logger.debug(
-                f"Enqueued job to {subject}. Stream: {ack.stream}, Seq: {ack.seq}"
-            )
+            connection_service = await self.service_manager.get_service(ConnectionService)
+            async with connection_service.jetstream_scope() as js:
+                ack = await js.publish(subject=subject, payload=payload)
+                logger.debug(
+                    f"Enqueued job to {subject}. Stream: {ack.stream}, Seq: {ack.seq}"
+                )
             return True
         except Exception as e:
             logger.error(f"Failed to enqueue job payload to subject '{subject}': {e}")
@@ -402,15 +396,14 @@ class ScheduledJobProcessor:
                 schedule_data["schedule_failure_count"] = 0
                 schedule_data["last_enqueued_utc"] = now_ts
                 
-                # Log schedule triggered event
+                # Log schedule triggered event using service
                 try:
-                    event_logger = AsyncJobEventLogger(nats_url=self._nats_url)
-                    await event_logger.start()
-                    await event_logger.log_schedule_triggered(
+                    event_service = await self.service_manager.get_service(EventService)
+                    await event_service.log_schedule_triggered(
                         job_id=job_id,
                         queue_name=queue_name,
+                        trigger_timestamp=now_ts,
                     )
-                    await event_logger.stop()
                 except Exception as e:
                     logger.warning(f"Failed to log schedule triggered event for job {job_id}: {e}")
             else:
@@ -507,18 +500,36 @@ class Scheduler:
 
     def __init__(
         self,
-        nats_url: str = DEFAULT_NATS_URL,
+        config: Optional[Any] = None,
+        nats_url: str = DEFAULT_NATS_URL,  # Legacy parameter
         poll_interval: float = 1.0,  # Check for jobs every second
         instance_id: Optional[str] = None,  # For HA leader election
         enable_ha: bool = True,  # Whether to enable HA leader election
     ):
-        self._nats_url = nats_url
-        self._poll_interval = poll_interval
-        self._nc: Optional[nats.aio.client.Client] = None
-        self._js: Optional[JetStreamContext] = None
-        self._kv: Optional[KeyValue] = None
+        # Handle configuration - prefer passed config over legacy parameters
+        if config is not None:
+            self._config = config
+            # Extract values from config if available
+            self._nats_url = config.get('nats_url', nats_url)
+            if 'poll_interval' in config:
+                self._poll_interval = config['poll_interval']
+            else:
+                self._poll_interval = poll_interval
+        else:
+            # Fallback to legacy parameters for backward compatibility
+            self._config = {
+                'nats_url': nats_url,
+                'poll_interval': poll_interval,
+                'enable_ha': enable_ha,
+            }
+            self._nats_url = nats_url
+            self._poll_interval = poll_interval
+        
         self._running = False
         self._shutdown_event = asyncio.Event()
+        
+        # Initialize service manager
+        self._service_manager = ServiceManager(self._config)
 
         # Generate unique instance ID if none provided
         self._instance_id = (
@@ -529,48 +540,47 @@ class Scheduler:
         self._enable_ha = enable_ha
         self._leader_election = LeaderElection(
             instance_id=self._instance_id,
+            service_manager=self._service_manager,
             lock_ttl=SCHEDULER_LOCK_TTL_SECONDS,
             lock_renew_interval=SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS,
         )
         self._job_processor: Optional[ScheduledJobProcessor] = None
+        self._scheduled_jobs_kv = None
 
         setup_logging()  # Set up logging
 
     async def _connect(self) -> None:
-        """Establish NATS connection, JetStream context, and KV handles."""
-        if self._nc is None or not self._nc.is_connected:
-            self._nc = await get_nats_connection(url=self._nats_url)
-            self._js = await get_jetstream_context(nc=self._nc)
-
-            # Connect to the scheduled jobs KV store
-            try:
-                self._kv = await self._js.key_value(bucket=SCHEDULED_JOBS_KV_NAME)
-                logger.info(
-                    f"Scheduler connected to NATS and KV store '{SCHEDULED_JOBS_KV_NAME}'."
-                )
-            except Exception as e:
-                try:
-                    # Try to create the KV bucket if it doesn't exist
-                    self._kv = await self._js.create_key_value(
-                        bucket=SCHEDULED_JOBS_KV_NAME,
-                        description="Scheduler job schedule storage",
-                    )
-                    logger.info(f"Created KV store '{SCHEDULED_JOBS_KV_NAME}'")
-                except Exception as create_e:
-                    logger.error(
-                        f"Failed to get or create KV store '{SCHEDULED_JOBS_KV_NAME}': {create_e}"
-                    )
-                    raise NaqConnectionError(
-                        f"Failed to access KV store: {create_e}"
-                    ) from create_e
+        """Initialize services and components."""
+        try:
+            # Initialize the service manager
+            await self._service_manager.initialize_all()
+            
+            # Get the KV store service and initialize scheduled jobs KV
+            kv_service = await self._service_manager.get_service(KVStoreService)
+            self._scheduled_jobs_kv = await kv_service.get_kv_store(
+                SCHEDULED_JOBS_KV_NAME,
+                description="Scheduler job schedule storage",
+                create_if_not_exists=True
+            )
+            logger.info(
+                f"Scheduler connected to services and KV store '{SCHEDULED_JOBS_KV_NAME}'."
+            )
 
             # Initialize components
             if self._enable_ha:
-                await self._leader_election.initialize(self._js)
+                await self._leader_election.initialize()
 
             # Create job processor
-            if self._js and self._kv:
-                self._job_processor = ScheduledJobProcessor(self._js, self._kv, self._nats_url)
+            if self._scheduled_jobs_kv:
+                self._job_processor = ScheduledJobProcessor(self._service_manager, self._scheduled_jobs_kv)
+                
+        except Exception as e:
+            logger.error(
+                f"Failed to initialize scheduler services: {e}"
+            )
+            raise NaqConnectionError(
+                f"Failed to initialize services: {e}"
+            ) from e
 
     async def run(self) -> None:
         """Starts the scheduler loop with leader election."""
@@ -658,11 +668,9 @@ class Scheduler:
             logger.info("Scheduler shutdown complete.")
 
     async def _close(self) -> None:
-        """Closes NATS connection and cleans up resources."""
-        await close_nats_connection()  # Use the shared close function
-        self._nc = None
-        self._js = None
-        self._kv = None
+        """Clean up service manager and resources."""
+        await self._service_manager.cleanup_all()
+        self._scheduled_jobs_kv = None
         self._job_processor = None
 
     def signal_handler(self, sig, frame) -> None:

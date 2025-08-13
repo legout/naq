@@ -74,6 +74,12 @@ naq events --event-type failed
 
 # Output in JSON format for processing
 naq events --format json
+
+# Monitor worker status and activity
+naq events workers --refresh 5
+
+# Get event statistics and analytics
+naq events stats --hours 24 --by-queue
 ```
 
 This command connects to your NATS event stream and displays job lifecycle events as they occur, giving you instant visibility into your job processing.
@@ -91,6 +97,7 @@ NAQ captures every significant moment in a job's lifecycle:
 | `RETRY_SCHEDULED` | Job scheduled for retry | When a failed job will be retried |
 | `SCHEDULED` | Job scheduled for future | When using `schedule()` with cron or interval |
 | `SCHEDULE_TRIGGERED` | Scheduled job enqueued | When scheduler moves a scheduled job to active queue |
+| `SCHEDULER_ERROR` | Scheduler error occurred | When scheduler encounters errors during operation |
 
 Each event includes rich metadata like timestamps, worker IDs, queue names, error details, and execution duration.
 
@@ -273,9 +280,18 @@ Event logging can be configured via environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NAQ_EVENT_LOGGER_BATCH_SIZE` | `100` | Number of events to buffer before flushing |
-| `NAQ_EVENT_LOGGER_FLUSH_INTERVAL` | `5.0` | Seconds between automatic flushes |
-| `NAQ_EVENT_LOGGER_MAX_BUFFER_SIZE` | `10000` | Maximum events to buffer (prevents memory issues) |
+| `NAQ_EVENT_BATCH_SIZE` | `100` | Number of events to buffer before flushing |
+| `NAQ_EVENT_FLUSH_INTERVAL` | `5.0` | Seconds between automatic flushes |
+| `NAQ_EVENT_MAX_BUFFER_SIZE` | `10000` | Maximum events to buffer (prevents memory issues) |
+| `NAQ_EVENT_MAX_CONCURRENT_HANDLERS` | `10` | Maximum concurrent event handlers |
+| `NAQ_EVENT_BUFFER_SIZE` | `1000` | Event buffer size for batching |
+
+### Event Filtering
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NAQ_EVENT_EXCLUDE_HEARTBEATS` | `true` | Exclude worker heartbeat events from storage |
+| `NAQ_EVENT_MIN_JOB_DURATION` | `0` | Minimum job duration (ms) to log completion events |
 
 ### Example Configuration
 
@@ -338,6 +354,43 @@ export NAQ_EVENT_LOGGER_FLUSH_INTERVAL=10.0
 
 This reduces overhead but increases memory usage and potential data loss window.
 :::
+
+### Advanced Configuration
+
+For high-performance applications, configure event processing limits:
+
+```bash
+# Control event handler concurrency
+export NAQ_EVENT_MAX_CONCURRENT_HANDLERS=20
+
+# Adjust event buffer sizes
+export NAQ_EVENT_BUFFER_SIZE=2000
+
+# Filter out high-frequency events
+export NAQ_EVENT_EXCLUDE_HEARTBEATS=true
+export NAQ_EVENT_MIN_JOB_DURATION=100  # Only log jobs > 100ms
+```
+
+### Configuration in Code
+
+You can also configure events programmatically:
+
+```python
+from naq.config import NAQConfig, EventsConfig
+
+config = NAQConfig(
+    events=EventsConfig(
+        enabled=True,
+        batch_size=200,
+        flush_interval=2.0,
+        max_buffer_size=20000,
+        filters=EventFiltersConfig(
+            exclude_heartbeats=True,
+            min_job_duration=50  # ms
+        )
+    )
+)
+```
 
 ## Use Cases
 

@@ -14,6 +14,14 @@ It allows you to easily enqueue Python functions to be executed asynchronously b
 
 Ready to dive in? Check out the [**Quickstart Guide**](quickstart.qmd) to get your first worker up and running in minutes.
 
+### New in Version 0.2.0
+
+NAQ 0.2.0 introduces a **new modular structure** with complete backward compatibility:
+- All existing imports continue to work unchanged
+- New modular imports available for better organization
+- Enhanced service layer for advanced use cases
+- See the [**Import Migration Guide**](import-migration.qmd) for details
+
 ## What Makes NAQ Different
 
 NAQ isn't just another task queue - it's a **complete event-driven job processing platform** built on NATS. Every state change, from job enqueue to worker heartbeats, is captured as a structured event and stored in durable streams.

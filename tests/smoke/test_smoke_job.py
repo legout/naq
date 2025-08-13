@@ -1,6 +1,5 @@
 
-from naq.job import Job
-from naq.job import JOB_STATUS
+from naq import Job, JOB_STATUS
 
 def test_basic_job_instantiation():
     """Test basic Job instantiation with minimal parameters."""

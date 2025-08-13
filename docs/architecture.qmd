@@ -6,12 +6,13 @@ title: "Architecture Overview"
 
 ## Core Components
 
-The `naq` ecosystem consists of four main components:
+The `naq` ecosystem consists of five main components:
 
 1.  **The Client (Producer)**: Any application that enqueues jobs. This could be a web server, a script, or any other part of your system that needs to offload work.
 2.  **NATS Server (with JetStream)**: The message broker that provides persistence, message delivery, and storage for job results and worker metadata.
 3.  **The Worker(s)**: The processes that subscribe to queues, execute jobs, and report back their results. You can run as many workers as you need, on as many machines as you want.
 4.  **The Scheduler**: A dedicated process that handles time-based events, such as scheduled jobs and recurring tasks.
+5.  **The Service Layer**: A centralized service architecture that provides connection management, configuration integration, and resource lifecycle management across all NAQ components.
 
 ## How It Works: The Job Lifecycle
 
@@ -21,29 +22,80 @@ Here is a high-level overview of what happens when a job is enqueued and process
 ```{mermaid}
 graph TD
     subgraph "Your Application"
-        Client[Client]
-        PythonCode[Python Code]
+        Client[Client Application]
+        PythonCode[Python Functions]
+    end
+
+    subgraph "NAQ Service Layer"
+        ServiceManager[Service Manager]
+        ConnectionService[Connection Service]
+        JobService[Job Service]
+        StreamService[Stream Service]
+        KVService[KV Store Service]
+        EventService[Event Service]
     end
 
     subgraph "NAQ Processes"
-        Worker[Worker]
-        Scheduler[Scheduler]
+        Worker[Worker Process]
+        Scheduler[Scheduler Process]
     end
 
     subgraph "NATS Server (JetStream)"
         QueueStream[Queue Stream]
         ResultStore[Result KV Store]
         ScheduledJobs[Scheduled Jobs KV]
+        EventStream[Event Stream]
     end
 
-    Client -- "1. Enqueue Job" --> QueueStream
-    Scheduler -- "7. Check for Due Jobs" --> ScheduledJobs
-    ScheduledJobs -- "Job is Due" --> Scheduler
-    Scheduler -- "8. Enqueue Due Job" --> QueueStream
-    Worker -- "3. Fetch Job" --> QueueStream
+    subgraph "Configuration"
+        YAMLConfig[YAML Config]
+        EnvVars[Environment Variables]
+        TypedConfig[Typed Configuration]
+    end
+
+    %% Configuration Flow
+    YAMLConfig --> TypedConfig
+    EnvVars --> TypedConfig
+    TypedConfig --> ServiceManager
+
+    %% Service Layer Flow
+    ServiceManager --> ConnectionService
+    ServiceManager --> JobService
+    ServiceManager --> StreamService
+    ServiceManager --> KVService
+    ServiceManager --> EventService
+
+    %% Client Flow
+    Client -- "1. Enqueue Job" --> JobService
+    JobService --> StreamService
+    StreamService --> QueueStream
+
+    %% Worker Flow
+    Worker --> JobService
+    JobService -- "3. Fetch Job" --> StreamService
+    StreamService --> QueueStream
     Worker -- "4. Execute Function" --> PythonCode
     PythonCode -- "5. Return Result" --> Worker
-    Worker -- "6. Store Result" --> ResultStore
+    Worker --> JobService
+    JobService --> KVService
+    KVService -- "6. Store Result" --> ResultStore
+
+    %% Scheduler Flow
+    Scheduler --> JobService
+    JobService -- "7. Check Due Jobs" --> KVService
+    KVService --> ScheduledJobs
+    Scheduler -- "8. Enqueue Due Job" --> JobService
+
+    %% Event Flow
+    Worker -.-> EventService
+    Scheduler -.-> EventService
+    EventService -.-> EventStream
+
+    %% Service to NATS Connection
+    ConnectionService --> QueueStream
+    ConnectionService --> ResultStore
+    ConnectionService --> ScheduledJobs
+    ConnectionService --> EventStream
 ```
 
 1.  **Enqueueing**: The client calls an `enqueue` function (e.g., `enqueue_sync`). The function, its arguments, and other metadata are serialized into a job payload. This payload is then published as a message to a NATS subject that corresponds to the target queue.
@@ -66,6 +118,241 @@ Using NATS and JetStream as the foundation provides several key advantages:
 -   **Scalability**: You can add more workers at any time to increase your processing capacity. NATS handles the load balancing of jobs to available workers automatically.
 -   **Resilience**: If a worker crashes, JetStream ensures that the job it was processing will be re-delivered to another worker after a timeout. If the entire `naq` system goes down, the jobs are safe in the NATS stream, ready to be processed when the system comes back online.
 -   **Simplicity**: By offloading the complexities of persistence, delivery guarantees, and storage to NATS, the `naq` codebase can remain focused on the core logic of job execution and scheduling.
+
+## Utility Patterns and Common Code
+
+NAQ implements a comprehensive set of utility patterns to reduce code duplication and improve maintainability across the codebase. These utilities provide standardized approaches to common operations.
+
+### Core Utility Modules
+
+**Error Handling (`utils.error_handling`)**
+- Centralized error handling with configurable strategies
+- Exception wrapping and context management
+- Error metrics collection and reporting
+- Automatic error classification and routing
+
+**Retry Patterns (`utils.decorators`)**
+- Configurable retry decorators with exponential backoff
+- Support for different backoff strategies (linear, exponential, jitter)
+- Automatic retry on specific exception types
+- Performance timing integration
+
+**Structured Logging (`utils.logging`)**
+- Context-aware structured logging
+- Operation timing and performance tracking
+- JSON formatting for log aggregation
+- Thread-local context management
+
+**Async Utilities (`utils.async_helpers`)**
+- Concurrency control with semaphores
+- Async/sync function conversion utilities
+- Rate limiting and throttling
+- Background task management
+
+**Serialization (`utils.serialization`)**
+- Safe serialization with fallback mechanisms
+- Metadata-aware serialization
+- Compression support
+- Type validation on deserialization
+
+**Context Managers (`utils.context_managers`)**
+- Resource lifecycle management
+- Timeout handling
+- Circuit breaker patterns
+- Operation error contexts
+
+### Usage Example
+
+```python
+from naq.utils import (
+    retry, timing, log_errors,
+    async_error_handler_context,
+    StructuredLogger,
+    performance_context
+)
+
+class JobProcessor:
+    def __init__(self):
+        self.logger = StructuredLogger("job_processor")
+        self.error_handler = get_global_error_handler()
+    
+    @retry(max_attempts=3, backoff="exponential")
+    @timing(threshold_ms=1000)
+    @log_errors(reraise=True)
+    async def process_job(self, job_id: str):
+        """Process job with retry, timing, and error logging."""
+        async with async_error_handler_context(
+            self.error_handler, f"process_job_{job_id}"
+        ):
+            async with performance_context("job_processing", self.logger):
+                # Job processing logic here
+                result = await self._execute_job_logic(job_id)
+                return result
+```
+
+## Service Layer Architecture
+
+NAQ's service layer provides a comprehensive foundation for building reliable, scalable job processing applications. The service architecture follows dependency injection patterns and provides centralized resource management.
+
+### Service Layer Benefits
+
+**Centralized Connection Management**
+- Single point of NATS connection management with connection pooling
+- Automatic failover to backup servers
+- Resource cleanup and lifecycle management
+- Connection state monitoring and health checks
+
+**Configuration Integration**
+- Direct integration with YAML configuration system
+- Type-safe configuration access throughout the application
+- Environment-specific configuration overrides
+- Real-time configuration validation
+
+**Dependency Injection**
+- Services automatically resolve their dependencies
+- Lifecycle management with proper initialization and cleanup ordering
+- Easy testing with service mocking capabilities
+- Consistent resource management patterns
+
+**Type Safety and IDE Support**
+- Full type annotations with dataclass-based configuration
+- IDE autocompletion for configuration properties
+- Compile-time validation of configuration access patterns
+- Structured error handling with detailed validation messages
+
+### Service Architecture Diagram
+
+```{mermaid}
+graph TD
+    subgraph "Configuration Layer"
+        YAMLFiles[YAML Configuration Files]
+        EnvVars[Environment Variables]
+        ConfigLoader[Configuration Loader]
+        TypedConfig[Typed Configuration Objects]
+    end
+
+    subgraph "Service Layer"
+        ServiceManager[Service Manager<br/>Dependency Injection]
+        BaseService[Base Service<br/>Lifecycle Management]
+    end
+
+    subgraph "Core Services"
+        ConnectionService[Connection Service<br/>NATS Management]
+        StreamService[Stream Service<br/>JetStream Operations]
+        KVService[KV Store Service<br/>KeyValue Operations]
+        JobService[Job Service<br/>Job Orchestration]
+        EventService[Event Service<br/>Event Logging]
+        SchedulerService[Scheduler Service<br/>Time-based Jobs]
+    end
+
+    subgraph "Application Layer"
+        Workers[Worker Processes]
+        Clients[Client Applications]
+        Scheduler[Scheduler Process]
+        CustomServices[Custom Services]
+    end
+
+    %% Configuration flow
+    YAMLFiles --> ConfigLoader
+    EnvVars --> ConfigLoader
+    ConfigLoader --> TypedConfig
+    
+    %% Service management
+    TypedConfig --> ServiceManager
+    ServiceManager --> BaseService
+    BaseService --> ConnectionService
+    BaseService --> StreamService
+    BaseService --> KVService
+    BaseService --> JobService
+    BaseService --> EventService
+    BaseService --> SchedulerService
+
+    %% Application usage
+    ServiceManager --> Workers
+    ServiceManager --> Clients
+    ServiceManager --> Scheduler
+    ServiceManager --> CustomServices
+
+    %% Service dependencies
+    StreamService -.-> ConnectionService
+    KVService -.-> ConnectionService
+    JobService -.-> StreamService
+    JobService -.-> KVService
+    EventService -.-> StreamService
+    SchedulerService -.-> KVService
+
+    classDef configLayer fill:#e3f2fd
+    classDef serviceLayer fill:#f3e5f5
+    classDef coreServices fill:#e8f5e8
+    classDef appLayer fill:#fff3e0
+
+    class YAMLFiles,EnvVars,ConfigLoader,TypedConfig configLayer
+    class ServiceManager,BaseService serviceLayer
+    class ConnectionService,StreamService,KVService,JobService,EventService,SchedulerService coreServices
+    class Workers,Clients,Scheduler,CustomServices appLayer
+```
+
+### Service Lifecycle Management
+
+Each service follows a consistent lifecycle pattern:
+
+1. **Initialization**: Services are created with typed configuration
+2. **Dependency Resolution**: ServiceManager resolves service dependencies
+3. **Resource Acquisition**: Services acquire NATS connections, streams, etc.
+4. **Active Operation**: Services handle job processing, scheduling, events
+5. **Cleanup**: Resources are properly cleaned up when services shut down
+
+```python
+# Service lifecycle example
+async with create_service_manager_from_config("./config.yaml") as services:
+    # Services are automatically initialized with dependencies
+    job_service = await services.get_service(JobService)
+    
+    # Use services with managed resources
+    result = await job_service.execute_job(my_job)
+    
+    # Cleanup is automatic when exiting context
+```
+
+### Configuration-Driven Service Creation
+
+Services are created and configured based on your YAML configuration:
+
+```yaml
+# config.yaml
+nats:
+  servers: ["nats://primary:4222", "nats://backup:4222"]
+  max_reconnect_attempts: 5
+
+workers:
+  concurrency: 20
+  pools:
+    high_priority:
+      concurrency: 10
+      queues: ["urgent"]
+
+events:
+  enabled: true
+  batch_size: 200
+```
+
+```python
+# Services automatically use configuration
+from naq.services import create_service_manager_from_config
+
+service_manager = create_service_manager_from_config("./config.yaml")
+
+async with service_manager as services:
+    # ConnectionService uses nats.servers configuration
+    conn_service = await services.get_service(ConnectionService)
+    
+    # EventService uses events.enabled and events.batch_size
+    event_service = await services.get_service(EventService)
+    
+    # All services have type-safe access to their configuration
+    nats_servers = event_service.nats_config.servers
+    batch_size = event_service.events_config.batch_size
+```
 
 ## Event-Driven State Management Architecture
 

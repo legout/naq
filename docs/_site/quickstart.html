@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.32">
+<meta name="generator" content="quarto-1.7.33">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -71,14 +71,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-2fef5ea3f8957b3e4ecc936fc74692ca.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-bc185b5c5bdbcb35c2eb49d8a876ef70.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="site_libs/bootstrap/bootstrap-dark-08799928d293638fe9563d5c5a2794e5.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-ccd81253fefb92e9cd3f9eb5b5d87b54.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -302,6 +302,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span class="menu-text">Quickstart</span></a>
   </li>  
   <li class="nav-item">
+    <a class="nav-link" href="./configuration.html"> 
+<span class="menu-text">Configuration</span></a>
+  </li>  
+  <li class="nav-item">
     <a class="nav-link" href="./architecture.html"> 
 <span class="menu-text">Architecture</span></a>
   </li>  
@@ -312,6 +316,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li class="nav-item">
     <a class="nav-link" href="./advanced.html"> 
 <span class="menu-text">Advanced</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./event-logging.html"> 
+<span class="menu-text">Event-Driven State Management</span></a>
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="./api/index.html"> 
@@ -338,9 +346,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#define-a-task" id="toc-define-a-task" class="nav-link active" data-scroll-target="#define-a-task">1. Define a Task</a></li>
-  <li><a href="#enqueue-the-job" id="toc-enqueue-the-job" class="nav-link" data-scroll-target="#enqueue-the-job">2. Enqueue the Job</a></li>
-  <li><a href="#run-the-worker" id="toc-run-the-worker" class="nav-link" data-scroll-target="#run-the-worker">3. Run the Worker</a></li>
+  <li><a href="#set-up-configuration-optional" id="toc-set-up-configuration-optional" class="nav-link active" data-scroll-target="#set-up-configuration-optional">1. Set Up Configuration (Optional)</a></li>
+  <li><a href="#define-a-task" id="toc-define-a-task" class="nav-link" data-scroll-target="#define-a-task">2. Define a Task</a></li>
+  <li><a href="#enqueue-the-job" id="toc-enqueue-the-job" class="nav-link" data-scroll-target="#enqueue-the-job">3. Enqueue the Job</a></li>
+  <li><a href="#run-the-worker" id="toc-run-the-worker" class="nav-link" data-scroll-target="#run-the-worker">4. Run the Worker</a></li>
+  <li><a href="#monitor-your-jobs" id="toc-monitor-your-jobs" class="nav-link" data-scroll-target="#monitor-your-jobs">5. Monitor Your Jobs</a>
+  <ul class="collapse">
+  <li><a href="#real-time-job-monitoring" id="toc-real-time-job-monitoring" class="nav-link" data-scroll-target="#real-time-job-monitoring">Real-time Job Monitoring</a></li>
+  <li><a href="#monitor-specific-jobs" id="toc-monitor-specific-jobs" class="nav-link" data-scroll-target="#monitor-specific-jobs">Monitor Specific Jobs</a></li>
+  <li><a href="#job-event-history" id="toc-job-event-history" class="nav-link" data-scroll-target="#job-event-history">Job Event History</a></li>
+  <li><a href="#worker-status-monitoring" id="toc-worker-status-monitoring" class="nav-link" data-scroll-target="#worker-status-monitoring">Worker Status Monitoring</a></li>
+  <li><a href="#system-health" id="toc-system-health" class="nav-link" data-scroll-target="#system-health">System Health</a></li>
+  <li><a href="#why-this-matters" id="toc-why-this-matters" class="nav-link" data-scroll-target="#why-this-matters">Why This Matters</a></li>
+  </ul></li>
   <li><a href="#whats-next" id="toc-whats-next" class="nav-link" data-scroll-target="#whats-next">What’s Next?</a></li>
   </ul>
 </nav>
@@ -369,53 +387,60 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <p>This guide will walk you through the basics of setting up a task, enqueuing it, and running a worker to process it.</p>
+<section id="set-up-configuration-optional" class="level2">
+<h2 class="anchored" data-anchor-id="set-up-configuration-optional">1. Set Up Configuration (Optional)</h2>
+<p>While not required for this quickstart, NAQ supports comprehensive YAML-based configuration that’s useful for production deployments. For now, we’ll use the defaults, but you can create a configuration file:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Create a development configuration file (optional)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> system config-init <span class="at">--environment</span> development</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>This creates a <code>naq.yaml</code> file with sensible defaults. For this quickstart, the built-in defaults will work fine.</p>
+</section>
 <section id="define-a-task" class="level2">
-<h2 class="anchored" data-anchor-id="define-a-task">1. Define a Task</h2>
+<h2 class="anchored" data-anchor-id="define-a-task">2. Define a Task</h2>
 <p>First, create a Python file to define the function you want to run in the background. Let’s call this file <code>tasks.py</code>.</p>
 <p>This function can be any regular Python function. For this example, we’ll create a simple function that simulates some work and counts the words in a given text.</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># tasks.py</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> time</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> random</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> count_words(text):</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co">    A simple function that counts the words in a string.</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Processing text: '</span><span class="sc">{</span>text[:<span class="dv">30</span>]<span class="sc">}</span><span class="ss">...'"</span>)</span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Simulate some I/O or CPU-bound work</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    time.sleep(random.randint(<span class="dv">1</span>, <span class="dv">3</span>))</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    word_count <span class="op">=</span> <span class="bu">len</span>(text.split())</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Found </span><span class="sc">{</span>word_count<span class="sc">}</span><span class="ss"> words."</span>)</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> word_count</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># tasks.py</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> time</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> random</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> count_words(text):</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="co">    A simple function that counts the words in a string.</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Processing text: '</span><span class="sc">{</span>text[:<span class="dv">30</span>]<span class="sc">}</span><span class="ss">...'"</span>)</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Simulate some I/O or CPU-bound work</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    time.sleep(random.randint(<span class="dv">1</span>, <span class="dv">3</span>))</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    word_count <span class="op">=</span> <span class="bu">len</span>(text.split())</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Found </span><span class="sc">{</span>word_count<span class="sc">}</span><span class="ss"> words."</span>)</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> word_count</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </section>
 <section id="enqueue-the-job" class="level2">
-<h2 class="anchored" data-anchor-id="enqueue-the-job">2. Enqueue the Job</h2>
+<h2 class="anchored" data-anchor-id="enqueue-the-job">3. Enqueue the Job</h2>
 <p>Now, let’s enqueue the <code>count_words</code> function to be executed by a worker. Create another file, <code>main.py</code>, to send the job to the queue.</p>
 <p>We’ll use the <code>enqueue_sync</code> function, which is a simple, blocking way to add a job to the queue.</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># main.py</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq <span class="im">import</span> enqueue_sync</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> tasks <span class="im">import</span> count_words</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="co"># The text we want to process</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>long_text <span class="op">=</span> (</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"A journey of a thousand miles begins with a single step. "</span></span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">"The best time to plant a tree was 20 years ago. "</span></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="st">"The second best time is now."</span></span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>)</span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Enqueuing job to count words..."</span>)</span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Enqueue the function `count_words` with `long_text` as its argument</span></span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>job <span class="op">=</span> enqueue_sync(count_words, long_text)</span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Successfully enqueued job </span><span class="sc">{</span>job<span class="sc">.</span>job_id<span class="sc">}</span><span class="ss">."</span>)</span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"To process the job, run a worker with: naq worker default"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># main.py</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq <span class="im">import</span> enqueue_sync</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> tasks <span class="im">import</span> count_words</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co"># The text we want to process</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>long_text <span class="op">=</span> (</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"A journey of a thousand miles begins with a single step. "</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">"The best time to plant a tree was 20 years ago. "</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="st">"The second best time is now."</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Enqueuing job to count words..."</span>)</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Enqueue the function `count_words` with `long_text` as its argument</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>job <span class="op">=</span> enqueue_sync(count_words, long_text)</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"Successfully enqueued job </span><span class="sc">{</span>job<span class="sc">.</span>job_id<span class="sc">}</span><span class="ss">."</span>)</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"To process the job, run a worker with: naq worker default"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </section>
 <section id="run-the-worker" class="level2">
-<h2 class="anchored" data-anchor-id="run-the-worker">3. Run the Worker</h2>
+<h2 class="anchored" data-anchor-id="run-the-worker">4. Run the Worker</h2>
 <p>With the job enqueued, the final step is to start a worker process. The worker will connect to NATS, fetch the job from the queue, and execute the <code>count_words</code> function.</p>
 <p>Open your terminal and run the following command:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> worker default</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> worker default</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <p>The <code>default</code> argument tells the worker to listen to the default queue, which is where <code>enqueue_sync</code> sends jobs.</p>
 <p>You should see output similar to this in your worker’s terminal:</p>
 <pre><code>14:30:15.123 INFO     Worker listening on queue: naq_default_queue
@@ -424,9 +449,71 @@ Found 25 words.
 14:30:18.245 INFO     Job 1a2b3c4d completed. Result: 25</code></pre>
 <p>Congratulations! You’ve successfully enqueued and processed your first background job with <code>naq</code>.</p>
 </section>
+<section id="monitor-your-jobs" class="level2">
+<h2 class="anchored" data-anchor-id="monitor-your-jobs">5. Monitor Your Jobs</h2>
+<p>One of NAQ’s most powerful features is its comprehensive event-driven monitoring system. Every job operation is logged as structured events that you can monitor in real-time.</p>
+<section id="real-time-job-monitoring" class="level3">
+<h3 class="anchored" data-anchor-id="real-time-job-monitoring">Real-time Job Monitoring</h3>
+<p>Open a new terminal and run the events monitor to see your jobs in action:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Watch all job events in real-time</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>This will show a live stream of all job lifecycle events as they happen. Now go back to your <code>main.py</code> and run it again to see the events flowing:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> main.py</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>You should see events like:</p>
+<pre><code>12:34:56.789  job-abc123   enqueued      default  -        Job enqueued to default
+12:34:56.823  job-abc123   started       default  worker-1 Job started by worker-1  
+12:34:59.156  job-abc123   completed     default  worker-1 Job completed in 2333ms</code></pre>
+</section>
+<section id="monitor-specific-jobs" class="level3">
+<h3 class="anchored" data-anchor-id="monitor-specific-jobs">Monitor Specific Jobs</h3>
+<p>You can also monitor events for a specific job:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Monitor events for a specific job ID</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events <span class="at">--job-id</span> job-abc123</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Monitor only failed jobs</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events <span class="at">--event-type</span> failed</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Monitor events for a specific queue</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events <span class="at">--queue</span> my-queue</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="job-event-history" class="level3">
+<h3 class="anchored" data-anchor-id="job-event-history">Job Event History</h3>
+<p>Get the complete event history for any job:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Get event history for a specific job</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> event-history job-abc123</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>This shows the complete lifecycle of a job with timestamps, durations, and detailed information.</p>
+</section>
+<section id="worker-status-monitoring" class="level3">
+<h3 class="anchored" data-anchor-id="worker-status-monitoring">Worker Status Monitoring</h3>
+<p>Monitor your workers’ health and activity:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Watch worker lifecycle events</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> worker-events</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Check worker status</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> list-workers</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="system-health" class="level3">
+<h3 class="anchored" data-anchor-id="system-health">System Health</h3>
+<p>Get overall system statistics:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Show system event statistics</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> event-stats</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="why-this-matters" class="level3">
+<h3 class="anchored" data-anchor-id="why-this-matters">Why This Matters</h3>
+<p>This comprehensive monitoring gives you:</p>
+<ul>
+<li><strong>Instant Visibility</strong>: See exactly what’s happening with your jobs</li>
+<li><strong>Easy Debugging</strong>: Trace job failures with complete event history<br>
+</li>
+<li><strong>Performance Insights</strong>: Monitor job durations and worker utilization</li>
+<li><strong>Production Readiness</strong>: Built-in observability for production deployments</li>
+</ul>
+</section>
+</section>
 <section id="whats-next" class="level2">
 <h2 class="anchored" data-anchor-id="whats-next">What’s Next?</h2>
 <ul>
+<li>Learn about <a href="./event-logging.html">Event-Driven State Management</a> for advanced monitoring.</li>
 <li>Explore how to <a href="./examples.html">schedule jobs</a> to run in the future.</li>
 <li>Learn about the <a href="./architecture.html">architecture</a> of <code>naq</code>.</li>
 <li>Check out more complex <a href="./examples.html">examples</a>.</li>

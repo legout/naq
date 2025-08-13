@@ -2,7 +2,7 @@
 import asyncio
 import time
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 import msgspec
 from loguru import logger
@@ -10,7 +10,9 @@ from nats import NATS
 from nats.js import JetStreamContext
 from nats.js.api import ConsumerConfig, DeliverPolicy, StreamConfig, StorageType
 
-from ..connection import get_jetstream_context, get_nats_connection
+from ..services import ServiceManager
+from ..services.connection import ConnectionService
+from ..services.streams import StreamService
 from ..models import JobEvent, JobEventType
 from ..settings import DEFAULT_NATS_URL
 
@@ -86,7 +88,8 @@ class NATSJobEventStorage(BaseEventStorage):
 
     def __init__(
         self,
-        nats_url: str = DEFAULT_NATS_URL,
+        config: Optional[Dict] = None,
+        nats_url: str = DEFAULT_NATS_URL,  # Legacy parameter
         stream_name: str = "NAQ_JOB_EVENTS",
         subject_prefix: str = "naq.jobs.events"
     ):
@@ -94,17 +97,25 @@ class NATSJobEventStorage(BaseEventStorage):
         Initialize the NATS event storage.
         
         Args:
-            nats_url: NATS server URL.
+            config: Configuration dictionary, preferred over legacy parameters
+            nats_url: NATS server URL (legacy parameter).
             stream_name: JetStream stream name for events.
             subject_prefix: Base subject prefix for event routing.
         """
-        self.nats_url = nats_url
+        # Handle configuration - prefer passed config over legacy parameters
+        if config is not None:
+            self._config = config
+            self.nats_url = config.get('nats_url', nats_url)
+        else:
+            # Fallback to legacy parameters for backward compatibility
+            self._config = {'nats_url': nats_url}
+            self.nats_url = nats_url
+            
         self.stream_name = stream_name
         self.subject_prefix = subject_prefix
         
-        # Connection management
-        self._nc: Optional[NATS] = None
-        self._js: Optional[JetStreamContext] = None
+        # Service management
+        self._service_manager: Optional[ServiceManager] = None
         self._connected = False
 
     async def _connect(self) -> None:
@@ -113,11 +124,21 @@ class NATSJobEventStorage(BaseEventStorage):
             return
 
         try:
-            self._nc = await get_nats_connection(self.nats_url)
-            self._js = await get_jetstream_context(self.nats_url)
+            # Initialize service manager
+            self._service_manager = ServiceManager(self._config)
+            await self._service_manager.initialize_all()
             
-            # Setup the stream
-            await self._setup_stream()
+            # Setup the stream using StreamService
+            stream_service = await self._service_manager.get_service(StreamService)
+            await stream_service.ensure_stream(
+                name=self.stream_name,
+                subjects=[f"{self.subject_prefix}.>"],
+                storage_type="FILE",
+                max_age=7 * 24 * 60 * 60,  # 7 days retention
+                max_msgs=1_000_000,  # Max 1M messages
+                max_bytes=1024 * 1024 * 1024,  # 1GB max size
+                duplicate_window=60,  # 1 minute dedup window
+            )
             
             self._connected = True
             logger.debug(f"Connected to NATS event storage: {self.nats_url}")
@@ -126,32 +147,6 @@ class NATSJobEventStorage(BaseEventStorage):
             logger.error(f"Failed to connect to NATS event storage: {e}")
             raise
 
-    async def _setup_stream(self) -> None:
-        """Create the JetStream stream if it doesn't exist."""
-        if not self._js:
-            raise RuntimeError("JetStream context not initialized")
-
-        try:
-            # Try to get existing stream info
-            await self._js.stream_info(self.stream_name)
-            logger.debug(f"Stream {self.stream_name} already exists")
-            
-        except Exception:
-            # Stream doesn't exist, create it
-            logger.info(f"Creating JetStream stream: {self.stream_name}")
-            
-            stream_config = StreamConfig(
-                name=self.stream_name,
-                subjects=[f"{self.subject_prefix}.>"],
-                storage=StorageType.FILE,
-                max_age=7 * 24 * 60 * 60,  # 7 days retention
-                max_msgs=1_000_000,  # Max 1M messages
-                max_bytes=1024 * 1024 * 1024,  # 1GB max size
-                duplicate_window=60,  # 1 minute dedup window
-            )
-            
-            await self._js.add_stream(stream_config)
-            logger.info(f"Created JetStream stream: {self.stream_name}")
 
     def _generate_subject(self, event: JobEvent) -> str:
         """
@@ -192,24 +187,23 @@ class NATSJobEventStorage(BaseEventStorage):
         """
         await self._connect()
         
-        if not self._js:
-            raise RuntimeError("JetStream context not available")
-
         # Generate subject and serialize event
         subject = self._generate_subject(event)
         event_data = msgspec.msgpack.encode(event)
         
         try:
-            # Update event with NATS metadata
-            event.nats_subject = subject
-            
-            # Publish to JetStream
-            ack = await self._js.publish(subject, event_data)
-            
-            # Update event with sequence number
-            event.nats_sequence = ack.seq
-            
-            logger.debug(f"Stored event {event.event_type} for job {event.job_id} (seq: {ack.seq})")
+            connection_service = await self._service_manager.get_service(ConnectionService)
+            async with connection_service.jetstream_scope() as js:
+                # Update event with NATS metadata
+                event.nats_subject = subject
+                
+                # Publish to JetStream
+                ack = await js.publish(subject, event_data)
+                
+                # Update event with sequence number
+                event.nats_sequence = ack.seq
+                
+                logger.debug(f"Stored event {event.event_type} for job {event.job_id} (seq: {ack.seq})")
             
         except Exception as e:
             logger.error(f"Failed to store event: {e}")
@@ -227,48 +221,47 @@ class NATSJobEventStorage(BaseEventStorage):
         """
         await self._connect()
         
-        if not self._js:
-            raise RuntimeError("JetStream context not available")
-
         events = []
         subject_filter = f"{self.subject_prefix}.{job_id}.>"
         
         try:
-            # Create an ephemeral pull consumer
-            consumer_config = ConsumerConfig(
-                deliver_policy=DeliverPolicy.ALL,
-                filter_subject=subject_filter,
-            )
-            
-            consumer = await self._js.create_consumer(
-                self.stream_name,
-                config=consumer_config
-            )
-            
-            # Fetch all available messages
-            batch_size = 100
-            while True:
-                msgs = await consumer.fetch(batch_size, timeout=1.0)
-                if not msgs:
-                    break
-                    
-                for msg in msgs:
-                    try:
-                        event = msgspec.msgpack.decode(msg.data, type=JobEvent)
-                        events.append(event)
-                        await msg.ack()
-                        
-                    except Exception as e:
-                        logger.error(f"Failed to decode event message: {e}")
-                        await msg.ack()  # Ack to avoid redelivery
-                        continue
+            connection_service = await self._service_manager.get_service(ConnectionService)
+            async with connection_service.jetstream_scope() as js:
+                # Create an ephemeral pull consumer
+                consumer_config = ConsumerConfig(
+                    deliver_policy=DeliverPolicy.ALL,
+                    filter_subject=subject_filter,
+                )
                 
-                if len(msgs) < batch_size:
-                    break
+                consumer = await js.create_consumer(
+                    self.stream_name,
+                    config=consumer_config
+                )
+                
+                # Fetch all available messages
+                batch_size = 100
+                while True:
+                    msgs = await consumer.fetch(batch_size, timeout=1.0)
+                    if not msgs:
+                        break
+                        
+                    for msg in msgs:
+                        try:
+                            event = msgspec.msgpack.decode(msg.data, type=JobEvent)
+                            events.append(event)
+                            await msg.ack()
+                            
+                        except Exception as e:
+                            logger.error(f"Failed to decode event message: {e}")
+                            await msg.ack()  # Ack to avoid redelivery
+                            continue
                     
-            # Clean up the ephemeral consumer
-            await consumer.delete()
-            
+                    if len(msgs) < batch_size:
+                        break
+                        
+                # Clean up the ephemeral consumer
+                await consumer.delete()
+                
             # Sort events by timestamp
             events.sort(key=lambda e: e.timestamp)
             
@@ -300,9 +293,6 @@ class NATSJobEventStorage(BaseEventStorage):
         """
         await self._connect()
         
-        if not self._js:
-            raise RuntimeError("JetStream context not available")
-
         # Build subject filter
         subject_parts = [self.subject_prefix]
         
@@ -326,42 +316,44 @@ class NATSJobEventStorage(BaseEventStorage):
         subject_filter = ".".join(subject_parts)
         
         try:
-            # Create a push consumer for real-time streaming
-            consumer_config = ConsumerConfig(
-                deliver_policy=DeliverPolicy.NEW,
-                filter_subject=subject_filter,
-            )
-            
-            consumer = await self._js.create_consumer(
-                self.stream_name,
-                config=consumer_config
-            )
-            
-            logger.debug(f"Streaming events with filter: {subject_filter}")
-            
-            async for msg in consumer.messages():
-                try:
-                    event = msgspec.msgpack.decode(msg.data, type=JobEvent)
-                    
-                    # Additional filtering if needed
-                    if event_type and event.event_type != event_type:
+            connection_service = await self._service_manager.get_service(ConnectionService)
+            async with connection_service.jetstream_scope() as js:
+                # Create a push consumer for real-time streaming
+                consumer_config = ConsumerConfig(
+                    deliver_policy=DeliverPolicy.NEW,
+                    filter_subject=subject_filter,
+                )
+                
+                consumer = await js.create_consumer(
+                    self.stream_name,
+                    config=consumer_config
+                )
+                
+                logger.debug(f"Streaming events with filter: {subject_filter}")
+                
+                async for msg in consumer.messages():
+                    try:
+                        event = msgspec.msgpack.decode(msg.data, type=JobEvent)
+                        
+                        # Additional filtering if needed
+                        if event_type and event.event_type != event_type:
+                            await msg.ack()
+                            continue
+                        if queue_name and event.queue_name != queue_name:
+                            await msg.ack()
+                            continue
+                        if worker_id and event.worker_id != worker_id:
+                            await msg.ack()
+                            continue
+                        
+                        await msg.ack()
+                        yield event
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to decode streamed event: {e}")
                         await msg.ack()
                         continue
-                    if queue_name and event.queue_name != queue_name:
-                        await msg.ack()
-                        continue
-                    if worker_id and event.worker_id != worker_id:
-                        await msg.ack()
-                        continue
-                    
-                    await msg.ack()
-                    yield event
-                    
-                except Exception as e:
-                    logger.error(f"Failed to decode streamed event: {e}")
-                    await msg.ack()
-                    continue
-                    
+                        
         except Exception as e:
             logger.error(f"Failed to stream events: {e}")
             raise
@@ -371,5 +363,6 @@ class NATSJobEventStorage(BaseEventStorage):
         if self._connected:
             logger.debug("Closing NATS event storage connection")
             self._connected = False
-            self._nc = None
-            self._js = None
+            if self._service_manager:
+                await self._service_manager.cleanup_all()
+                self._service_manager = None

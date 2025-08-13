@@ -12,10 +12,7 @@ import pytest
 import pytest_asyncio
 from naq.events import AsyncJobEventLogger, JobEvent, JobEventType, WorkerEvent, WorkerEventType
 from naq.events.storage import NATSJobEventStorage
-from naq.models import Job
-from naq.queue import Queue
-from naq.settings import DEFAULT_NATS_URL
-from naq.worker import Worker
+from naq import Job, Queue, Worker, DEFAULT_NATS_URL
 
 
 @pytest.fixture

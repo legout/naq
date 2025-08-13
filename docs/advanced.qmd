@@ -4,6 +4,150 @@ title: "Advanced Usage"
 
 This section covers advanced features and configuration options for optimizing `naq` in production environments.
 
+## Utility Patterns for Robust Applications
+
+NAQ provides a comprehensive set of utility patterns that help you build robust, maintainable applications. These utilities handle common patterns like error handling, retries, logging, and performance monitoring.
+
+### Error Handling and Retry Patterns
+
+Use NAQ's retry decorators and error handling utilities to make your job functions more resilient:
+
+```python
+from naq.utils import retry, log_errors, async_error_handler_context
+from naq.utils.error_handling import get_global_error_handler
+from naq import enqueue_async
+
+# Configure global error handler
+error_handler = get_global_error_handler()
+error_handler.register_handler(
+    ConnectionError,
+    lambda err, ctx, extra: print(f"Connection failed in {ctx}: {err}")
+)
+
+@retry(max_attempts=3, delay=2.0, backoff="exponential")
+@log_errors(reraise=True)
+async def unreliable_api_call(user_id: int):
+    """Job function with automatic retry and error logging."""
+    async with async_error_handler_context(
+        error_handler, f"api_call_user_{user_id}"
+    ):
+        # Simulate unreliable API call
+        if random.random() < 0.3:  # 30% failure rate
+            raise ConnectionError("API temporarily unavailable")
+        return f"Data for user {user_id}"
+
+# Enqueue the job - retries happen automatically
+await enqueue_async(unreliable_api_call, 123)
+```
+
+### Performance Monitoring and Structured Logging
+
+Track performance and use structured logging for better observability:
+
+```python
+from naq.utils import timing, StructuredLogger, performance_context
+from naq import enqueue_async
+
+# Create structured logger with context
+logger = StructuredLogger("data_processor", {
+    "service": "background_jobs",
+    "version": "1.0.0"
+})
+
+@timing(threshold_ms=5000)  # Log if takes more than 5 seconds
+async def process_large_dataset(dataset_id: str, batch_size: int = 1000):
+    """Process large dataset with performance monitoring."""
+    
+    async with performance_context("dataset_processing", logger) as perf:
+        # Add custom metrics to performance context
+        perf['dataset_id'] = dataset_id
+        perf['batch_size'] = batch_size
+        
+        with logger.operation_context("load_dataset", dataset_id=dataset_id):
+            dataset = await load_dataset(dataset_id)
+            logger.info(f"Loaded dataset with {len(dataset)} records")
+        
+        with logger.operation_context("process_batches", batch_count=len(dataset) // batch_size):
+            results = []
+            for i in range(0, len(dataset), batch_size):
+                batch = dataset[i:i + batch_size]
+                result = await process_batch(batch)
+                results.extend(result)
+                
+                # Log progress
+                logger.info(
+                    f"Processed batch {i // batch_size + 1}",
+                    batch_index=i // batch_size + 1,
+                    records_processed=len(results)
+                )
+        
+        return results
+
+# Enqueue with structured context
+logger.info("Enqueueing dataset processing job", dataset_id="dataset_123")
+await enqueue_async(process_large_dataset, "dataset_123", batch_size=500)
+```
+
+### Async Utilities and Concurrency Control
+
+Control concurrency and manage async operations efficiently:
+
+```python
+from naq.utils.async_helpers import gather_with_concurrency, async_map
+from naq import enqueue_async
+
+async def fetch_user_data(user_id: int):
+    """Fetch data for a single user."""
+    # Simulate API call
+    await asyncio.sleep(0.1)
+    return f"Data for user {user_id}"
+
+async def bulk_user_processing(user_ids: list[int]):
+    """Process multiple users with controlled concurrency."""
+    
+    # Process users with max 10 concurrent operations
+    tasks = [fetch_user_data(uid) for uid in user_ids]
+    results = await gather_with_concurrency(tasks, concurrency=10)
+    
+    # Alternative: use async_map for the same result
+    # results = await async_map(fetch_user_data, user_ids, concurrency=10)
+    
+    return results
+
+# Enqueue bulk processing job
+user_ids = list(range(1, 101))  # 100 users
+await enqueue_async(bulk_user_processing, user_ids)
+```
+
+### Context Managers for Resource Management
+
+Use context managers for safe resource handling:
+
+```python
+from naq.utils.context_managers import timeout_context, managed_resource
+from naq import enqueue_async
+
+async def acquire_database():
+    """Acquire database connection."""
+    return await database.connect()
+
+async def release_database(conn):
+    """Release database connection."""
+    await conn.close()
+
+async def database_heavy_job(query: str):
+    """Job that requires database access with timeout."""
+    
+    async with timeout_context(30.0, "Database operation timeout"):
+        async with managed_resource(acquire_database, release_database) as db:
+            # Database operations are automatically timed out and cleaned up
+            result = await db.execute(query)
+            return result.fetchall()
+
+# Enqueue database job with automatic resource management
+await enqueue_async(database_heavy_job, "SELECT * FROM large_table")
+```
+
 ## Efficient Connection Handling & Batching
 
 When enqueuing many jobs in a tight loop, creating a new NATS connection for each job is inefficient. `naq` provides several ways to manage connections for high-throughput scenarios.
@@ -68,20 +212,173 @@ if __name__ == "__main__":
     main()
 ```
 
-## Configuration via Environment Variables
+## Service Layer Architecture
 
-Many of `naq`'s settings can be configured using environment variables, which is ideal for production and containerized deployments.
+NAQ features a comprehensive service layer that provides centralized connection management, dependency injection, and resource lifecycle management. This architecture improves performance, reliability, and maintainability.
 
-| Variable                      | Default                        | Description                                                                                             |
-| ----------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| `NAQ_NATS_URL`                | `nats://localhost:4222`        | The URL of the NATS server.                                                                             |
-| `NAQ_DEFAULT_QUEUE`           | `naq_default_queue`            | The default queue name used when none is specified.                                                     |
-| `NAQ_JOB_SERIALIZER`          | `pickle`                       | The serializer for jobs. Can be `pickle` or `json`. **See security note below.**                        |
-| `NAQ_DEFAULT_RESULT_TTL`      | `604800` (7 days)              | Default time-to-live (in seconds) for job results stored in NATS.                                       |
-| `NAQ_SCHEDULER_LOCK_TTL`      | `30`                           | TTL (in seconds) for the scheduler's high-availability leader lock.                                       |
-| `NAQ_WORKER_TTL`              | `60`                           | TTL (in seconds) for a worker's heartbeat. If a worker is silent for this long, it's considered dead.    |
-| `NAQ_WORKER_HEARTBEAT_INTERVAL` | `15`                           | How often (in seconds) a worker sends a heartbeat to NATS.                                              |
-| `NAQ_LOG_LEVEL`               | `CRITICAL`                     | The logging level for `naq` components. Can be `DEBUG`, `INFO`, `WARNING`, `ERROR`.                       |
+### Core Service Components
+
+The service layer consists of several key components:
+
+- **ServiceManager**: Central coordinator for all services with dependency injection
+- **ConnectionService**: Manages NATS connections with pooling and failover
+- **StreamService**: Handles JetStream operations for job queues
+- **KVStoreService**: Manages KeyValue store operations for results and metadata
+- **JobService**: Orchestrates job execution and result handling
+- **EventService**: Manages comprehensive event logging and processing
+
+### Using the Service Layer
+
+```python
+from naq.services import create_service_manager_from_config, BaseService
+from naq.config import load_config
+
+# Create service manager with typed configuration
+service_manager = create_service_manager_from_config("./config.yaml")
+
+# Use services in your application
+async def process_jobs():
+    async with service_manager as services:
+        # Get job service (automatically gets other dependencies)
+        job_service = await services.get_service(JobService)
+        
+        # Process jobs with managed connections and resources
+        result = await job_service.execute_job(my_job)
+        return result
+
+# Run with proper resource management
+await process_jobs()
+```
+
+### Connection Management Benefits
+
+The centralized connection management provides several advantages:
+
+- **Connection Pooling**: Efficient reuse of NATS connections across services
+- **Automatic Failover**: Transparent failover to backup NATS servers
+- **Resource Cleanup**: Automatic cleanup of connections and streams
+- **Configuration Integration**: Direct integration with YAML configuration system
+- **Type Safety**: Full type safety with IDE support
+
+### Custom Services
+
+You can create custom services that integrate with the NAQ service layer:
+
+```python
+from naq.services import BaseService
+from naq.config.types import NAQConfig
+
+class CustomAnalyticsService(BaseService):
+    """Custom service for analytics processing."""
+    
+    def __init__(self, config: NAQConfig):
+        super().__init__(config)
+        self.analytics_enabled = config.get_nested("custom.analytics.enabled", True)
+        
+    async def _do_initialize(self):
+        """Initialize analytics connections."""
+        # Access NATS config with type safety
+        nats_servers = self.nats_config.servers
+        self.connection = await self._create_analytics_connection(nats_servers)
+        
+    async def _do_cleanup(self):
+        """Clean up analytics resources."""
+        if hasattr(self, 'connection'):
+            await self.connection.close()
+    
+    async def track_job_metrics(self, job_id: str, metrics: dict):
+        """Track job performance metrics."""
+        if not self.analytics_enabled:
+            return
+            
+        await self.connection.publish(
+            f"analytics.job.{job_id}",
+            json.dumps(metrics).encode()
+        )
+
+# Register and use custom service
+service_manager.register_service(CustomAnalyticsService)
+analytics = await service_manager.get_service(CustomAnalyticsService)
+await analytics.track_job_metrics("job-123", {"duration_ms": 1500})
+```
+
+## Configuration via YAML and Environment Variables
+
+NAQ supports comprehensive configuration through YAML files with full backward compatibility for environment variables. The new configuration system provides better structure, validation, and type safety while maintaining all existing functionality.
+
+### YAML Configuration (Recommended)
+
+For new projects, use YAML configuration files for better structure and maintainability:
+
+```yaml
+# naq.yaml
+nats:
+  servers: ["nats://localhost:4222"]
+  client_name: "my-app"
+  max_reconnect_attempts: 5
+  
+workers:
+  concurrency: 10
+  heartbeat_interval: 15
+  pools:
+    high_priority:
+      concurrency: 20
+      queues: ["urgent", "critical"]
+      
+events:
+  enabled: true
+  batch_size: 100
+  
+logging:
+  level: "INFO"
+  format: "json"
+```
+
+**See the complete [Configuration Guide](configuration.qmd) for detailed YAML configuration options.**
+
+### Environment Variables (Legacy Support)
+
+All existing environment variables continue to work and will override YAML settings:
+
+| Variable                      | YAML Path | Default                        | Description                                                                                             |
+| ----------------------------- | --------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `NAQ_NATS_URL`                | `nats.servers[0]` | `nats://localhost:4222`        | The URL of the NATS server.                                                                             |
+| `NAQ_DEFAULT_QUEUE`           | `queues.default` | `naq_default_queue`            | The default queue name used when none is specified.                                                     |
+| `NAQ_JOB_SERIALIZER`          | `serialization.job_serializer` | `pickle`                       | The serializer for jobs. Can be `pickle` or `json`. **See security note below.**                        |
+| `NAQ_DEFAULT_RESULT_TTL`      | `results.ttl` | `604800` (7 days)              | Default time-to-live (in seconds) for job results stored in NATS.                                       |
+| `NAQ_SCHEDULER_LOCK_TTL`      | `scheduler.lock_ttl` | `30`                           | TTL (in seconds) for the scheduler's high-availability leader lock.                                       |
+| `NAQ_WORKER_TTL`              | `workers.ttl` | `60`                           | TTL (in seconds) for a worker's heartbeat. If a worker is silent for this long, it's considered dead.    |
+| `NAQ_WORKER_HEARTBEAT_INTERVAL` | `workers.heartbeat_interval` | `15`                           | How often (in seconds) a worker sends a heartbeat to NATS.                                              |
+| `NAQ_LOG_LEVEL`               | `logging.level` | `CRITICAL`                     | The logging level for `naq` components. Can be `DEBUG`, `INFO`, `WARNING`, `ERROR`.                       |
+| `NAQ_EVENTS_ENABLED`          | `events.enabled` | `true`                        | Enable/disable event logging system globally |
+| `NAQ_EVENT_LOGGER_BATCH_SIZE` | `events.batch_size` | `100`                         | Number of events to batch before flushing |
+| `NAQ_CONCURRENCY`             | `workers.concurrency` | `10`                          | Default worker concurrency level |
+
+### Configuration Priority
+
+Configuration values are loaded with the following priority (highest to lowest):
+
+1. **Command-line config file** (`--config ./my-config.yaml`)
+2. **Local config file** (`./naq.yaml` or `./naq.yml`)
+3. **User config file** (`~/.naq/config.yaml`)
+4. **System config file** (`/etc/naq/config.yaml`)
+5. **Environment variables** (`NAQ_*` variables)
+6. **Built-in defaults**
+
+### Environment Variable Interpolation
+
+YAML configuration supports environment variable interpolation:
+
+```yaml
+nats:
+  servers: ["${NAQ_NATS_URL:nats://localhost:4222}"]
+  auth:
+    username: "${NATS_USER}"
+    password: "${NATS_PASS}"
+    
+workers:
+  concurrency: "${NAQ_CONCURRENCY:10}"
+```
 
 ## Job Serialization (`pickle` vs. `json`)
 

@@ -19,12 +19,12 @@ from .main import console
 from ..settings import (
     DEFAULT_NATS_URL,
     DEFAULT_QUEUE_NAME,
+    DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
     DEFAULT_WORKER_TTL_SECONDS,
     WORKER_STATUS,
 )
 from ..utils import setup_logging
 from ..worker import Worker
-from ..connection import close_nats_connection
 
 
 # Create worker command group
@@ -86,10 +86,17 @@ def start(
     logger.info(f"NATS URL: {nats_url}")
     logger.info(f"Concurrency: {concurrency}")
 
+    # Create configuration
+    config = {
+        'nats_url': nats_url,
+        'concurrency': concurrency,
+        'heartbeat_interval': DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
+        'worker_ttl': DEFAULT_WORKER_TTL_SECONDS,
+    }
+
     w = Worker(
         queues=queues,
-        nats_url=nats_url,
-        concurrency=concurrency,
+        config=config,
         worker_name=name,
         module_paths=module_paths,
     )
@@ -131,9 +138,13 @@ def list_workers(
     setup_logging(log_level if log_level else None)
     logger.info(f"Listing active workers from NATS at {nats_url}")
 
+    async def _list_workers_async():
+        from ..worker.status import WorkerStatusManager
+        return await WorkerStatusManager.list_workers(nats_url=nats_url)
+    
     try:
-        # Use synchronous interface to list workers
-        workers = Worker.list_workers_sync(nats_url=nats_url)
+        # Use async interface to list workers
+        workers = asyncio.run(_list_workers_async())
         if not workers:
             console.print("[yellow]No active workers found.[/yellow]")
             return
@@ -198,12 +209,7 @@ def list_workers(
     except Exception as e:
         logger.exception(f"Error listing workers: {e}")
         console.print(f"[red]Error listing workers: {str(e)}[/red]")
-    finally:
-        # Close any NATS connection if opened by the sync wrapper
-        try:
-            asyncio.run(close_nats_connection())
-        except Exception:
-            pass
+    # No cleanup needed for service-based approach
 
 
 @worker_app.command("events") 

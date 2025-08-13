@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.32">
+<meta name="generator" content="quarto-1.7.33">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -71,14 +71,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-2fef5ea3f8957b3e4ecc936fc74692ca.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-bc185b5c5bdbcb35c2eb49d8a876ef70.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="site_libs/bootstrap/bootstrap-dark-08799928d293638fe9563d5c5a2794e5.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-ccd81253fefb92e9cd3f9eb5b5d87b54.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -302,6 +302,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span class="menu-text">Quickstart</span></a>
   </li>  
   <li class="nav-item">
+    <a class="nav-link" href="./configuration.html"> 
+<span class="menu-text">Configuration</span></a>
+  </li>  
+  <li class="nav-item">
     <a class="nav-link" href="./architecture.html"> 
 <span class="menu-text">Architecture</span></a>
   </li>  
@@ -312,6 +316,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li class="nav-item">
     <a class="nav-link active" href="./advanced.html" aria-current="page"> 
 <span class="menu-text">Advanced</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./event-logging.html"> 
+<span class="menu-text">Event-Driven State Management</span></a>
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="./api/index.html"> 
@@ -338,16 +346,57 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#efficient-connection-handling-batching" id="toc-efficient-connection-handling-batching" class="nav-link active" data-scroll-target="#efficient-connection-handling-batching">Efficient Connection Handling &amp; Batching</a>
+  <li><a href="#utility-patterns-for-robust-applications" id="toc-utility-patterns-for-robust-applications" class="nav-link active" data-scroll-target="#utility-patterns-for-robust-applications">Utility Patterns for Robust Applications</a>
+  <ul class="collapse">
+  <li><a href="#error-handling-and-retry-patterns" id="toc-error-handling-and-retry-patterns" class="nav-link" data-scroll-target="#error-handling-and-retry-patterns">Error Handling and Retry Patterns</a></li>
+  <li><a href="#performance-monitoring-and-structured-logging" id="toc-performance-monitoring-and-structured-logging" class="nav-link" data-scroll-target="#performance-monitoring-and-structured-logging">Performance Monitoring and Structured Logging</a></li>
+  <li><a href="#async-utilities-and-concurrency-control" id="toc-async-utilities-and-concurrency-control" class="nav-link" data-scroll-target="#async-utilities-and-concurrency-control">Async Utilities and Concurrency Control</a></li>
+  <li><a href="#context-managers-for-resource-management" id="toc-context-managers-for-resource-management" class="nav-link" data-scroll-target="#context-managers-for-resource-management">Context Managers for Resource Management</a></li>
+  </ul></li>
+  <li><a href="#efficient-connection-handling-batching" id="toc-efficient-connection-handling-batching" class="nav-link" data-scroll-target="#efficient-connection-handling-batching">Efficient Connection Handling &amp; Batching</a>
   <ul class="collapse">
   <li><a href="#using-a-queue-instance-async" id="toc-using-a-queue-instance-async" class="nav-link" data-scroll-target="#using-a-queue-instance-async">Using a <code>Queue</code> Instance (Async)</a></li>
   <li><a href="#thread-local-connections-sync" id="toc-thread-local-connections-sync" class="nav-link" data-scroll-target="#thread-local-connections-sync">Thread-Local Connections (Sync)</a></li>
   </ul></li>
-  <li><a href="#configuration-via-environment-variables" id="toc-configuration-via-environment-variables" class="nav-link" data-scroll-target="#configuration-via-environment-variables">Configuration via Environment Variables</a></li>
+  <li><a href="#service-layer-architecture" id="toc-service-layer-architecture" class="nav-link" data-scroll-target="#service-layer-architecture">Service Layer Architecture</a>
+  <ul class="collapse">
+  <li><a href="#core-service-components" id="toc-core-service-components" class="nav-link" data-scroll-target="#core-service-components">Core Service Components</a></li>
+  <li><a href="#using-the-service-layer" id="toc-using-the-service-layer" class="nav-link" data-scroll-target="#using-the-service-layer">Using the Service Layer</a></li>
+  <li><a href="#connection-management-benefits" id="toc-connection-management-benefits" class="nav-link" data-scroll-target="#connection-management-benefits">Connection Management Benefits</a></li>
+  <li><a href="#custom-services" id="toc-custom-services" class="nav-link" data-scroll-target="#custom-services">Custom Services</a></li>
+  </ul></li>
+  <li><a href="#configuration-via-yaml-and-environment-variables" id="toc-configuration-via-yaml-and-environment-variables" class="nav-link" data-scroll-target="#configuration-via-yaml-and-environment-variables">Configuration via YAML and Environment Variables</a>
+  <ul class="collapse">
+  <li><a href="#yaml-configuration-recommended" id="toc-yaml-configuration-recommended" class="nav-link" data-scroll-target="#yaml-configuration-recommended">YAML Configuration (Recommended)</a></li>
+  <li><a href="#environment-variables-legacy-support" id="toc-environment-variables-legacy-support" class="nav-link" data-scroll-target="#environment-variables-legacy-support">Environment Variables (Legacy Support)</a></li>
+  <li><a href="#configuration-priority" id="toc-configuration-priority" class="nav-link" data-scroll-target="#configuration-priority">Configuration Priority</a></li>
+  <li><a href="#environment-variable-interpolation" id="toc-environment-variable-interpolation" class="nav-link" data-scroll-target="#environment-variable-interpolation">Environment Variable Interpolation</a></li>
+  </ul></li>
   <li><a href="#job-serialization-pickle-vs.-json" id="toc-job-serialization-pickle-vs.-json" class="nav-link" data-scroll-target="#job-serialization-pickle-vs.-json">Job Serialization (<code>pickle</code> vs.&nbsp;<code>json</code>)</a>
   <ul class="collapse">
   <li><a href="#pickle-default" id="toc-pickle-default" class="nav-link" data-scroll-target="#pickle-default"><code>pickle</code> (Default)</a></li>
   <li><a href="#json-recommended-for-production" id="toc-json-recommended-for-production" class="nav-link" data-scroll-target="#json-recommended-for-production"><code>json</code> (Recommended for Production)</a></li>
+  </ul></li>
+  <li><a href="#event-system-configuration" id="toc-event-system-configuration" class="nav-link" data-scroll-target="#event-system-configuration">Event System Configuration</a>
+  <ul class="collapse">
+  <li><a href="#core-event-logging-settings" id="toc-core-event-logging-settings" class="nav-link" data-scroll-target="#core-event-logging-settings">Core Event Logging Settings</a></li>
+  <li><a href="#event-logger-performance" id="toc-event-logger-performance" class="nav-link" data-scroll-target="#event-logger-performance">Event Logger Performance</a></li>
+  <li><a href="#example-production-configuration" id="toc-example-production-configuration" class="nav-link" data-scroll-target="#example-production-configuration">Example Production Configuration</a></li>
+  </ul></li>
+  <li><a href="#custom-event-processing" id="toc-custom-event-processing" class="nav-link" data-scroll-target="#custom-event-processing">Custom Event Processing</a>
+  <ul class="collapse">
+  <li><a href="#building-custom-event-processors" id="toc-building-custom-event-processors" class="nav-link" data-scroll-target="#building-custom-event-processors">Building Custom Event Processors</a></li>
+  <li><a href="#integration-with-monitoring-systems" id="toc-integration-with-monitoring-systems" class="nav-link" data-scroll-target="#integration-with-monitoring-systems">Integration with Monitoring Systems</a></li>
+  </ul></li>
+  <li><a href="#performance-optimization" id="toc-performance-optimization" class="nav-link" data-scroll-target="#performance-optimization">Performance Optimization</a>
+  <ul class="collapse">
+  <li><a href="#high-volume-event-logging" id="toc-high-volume-event-logging" class="nav-link" data-scroll-target="#high-volume-event-logging">High-Volume Event Logging</a></li>
+  <li><a href="#memory-management" id="toc-memory-management" class="nav-link" data-scroll-target="#memory-management">Memory Management</a></li>
+  </ul></li>
+  <li><a href="#troubleshooting" id="toc-troubleshooting" class="nav-link" data-scroll-target="#troubleshooting">Troubleshooting</a>
+  <ul class="collapse">
+  <li><a href="#common-event-system-issues" id="toc-common-event-system-issues" class="nav-link" data-scroll-target="#common-event-system-issues">Common Event System Issues</a></li>
+  <li><a href="#debug-commands" id="toc-debug-commands" class="nav-link" data-scroll-target="#debug-commands">Debug Commands</a></li>
   </ul></li>
   </ul>
 </nav>
@@ -376,76 +425,326 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <p>This section covers advanced features and configuration options for optimizing <code>naq</code> in production environments.</p>
+<section id="utility-patterns-for-robust-applications" class="level2">
+<h2 class="anchored" data-anchor-id="utility-patterns-for-robust-applications">Utility Patterns for Robust Applications</h2>
+<p>NAQ provides a comprehensive set of utility patterns that help you build robust, maintainable applications. These utilities handle common patterns like error handling, retries, logging, and performance monitoring.</p>
+<section id="error-handling-and-retry-patterns" class="level3">
+<h3 class="anchored" data-anchor-id="error-handling-and-retry-patterns">Error Handling and Retry Patterns</h3>
+<p>Use NAQ’s retry decorators and error handling utilities to make your job functions more resilient:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils <span class="im">import</span> retry, log_errors, async_error_handler_context</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.error_handling <span class="im">import</span> get_global_error_handler</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq <span class="im">import</span> enqueue_async</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Configure global error handler</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>error_handler <span class="op">=</span> get_global_error_handler()</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>error_handler.register_handler(</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="pp">ConnectionError</span>,</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">lambda</span> err, ctx, extra: <span class="bu">print</span>(<span class="ss">f"Connection failed in </span><span class="sc">{</span>ctx<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span>err<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="at">@retry</span>(max_attempts<span class="op">=</span><span class="dv">3</span>, delay<span class="op">=</span><span class="fl">2.0</span>, backoff<span class="op">=</span><span class="st">"exponential"</span>)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="at">@log_errors</span>(reraise<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> unreliable_api_call(user_id: <span class="bu">int</span>):</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Job function with automatic retry and error logging."""</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> async_error_handler_context(</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>        error_handler, <span class="ss">f"api_call_user_</span><span class="sc">{</span>user_id<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    ):</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Simulate unreliable API call</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> random.random() <span class="op">&lt;</span> <span class="fl">0.3</span>:  <span class="co"># 30% failure rate</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>            <span class="cf">raise</span> <span class="pp">ConnectionError</span>(<span class="st">"API temporarily unavailable"</span>)</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ss">f"Data for user </span><span class="sc">{</span>user_id<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="co"># Enqueue the job - retries happen automatically</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="cf">await</span> enqueue_async(unreliable_api_call, <span class="dv">123</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="performance-monitoring-and-structured-logging" class="level3">
+<h3 class="anchored" data-anchor-id="performance-monitoring-and-structured-logging">Performance Monitoring and Structured Logging</h3>
+<p>Track performance and use structured logging for better observability:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils <span class="im">import</span> timing, StructuredLogger, performance_context</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq <span class="im">import</span> enqueue_async</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Create structured logger with context</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>logger <span class="op">=</span> StructuredLogger(<span class="st">"data_processor"</span>, {</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">"service"</span>: <span class="st">"background_jobs"</span>,</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"version"</span>: <span class="st">"1.0.0"</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="at">@timing</span>(threshold_ms<span class="op">=</span><span class="dv">5000</span>)  <span class="co"># Log if takes more than 5 seconds</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> process_large_dataset(dataset_id: <span class="bu">str</span>, batch_size: <span class="bu">int</span> <span class="op">=</span> <span class="dv">1000</span>):</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Process large dataset with performance monitoring."""</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> performance_context(<span class="st">"dataset_processing"</span>, logger) <span class="im">as</span> perf:</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Add custom metrics to performance context</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>        perf[<span class="st">'dataset_id'</span>] <span class="op">=</span> dataset_id</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>        perf[<span class="st">'batch_size'</span>] <span class="op">=</span> batch_size</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> logger.operation_context(<span class="st">"load_dataset"</span>, dataset_id<span class="op">=</span>dataset_id):</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>            dataset <span class="op">=</span> <span class="cf">await</span> load_dataset(dataset_id)</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>            logger.info(<span class="ss">f"Loaded dataset with </span><span class="sc">{</span><span class="bu">len</span>(dataset)<span class="sc">}</span><span class="ss"> records"</span>)</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> logger.operation_context(<span class="st">"process_batches"</span>, batch_count<span class="op">=</span><span class="bu">len</span>(dataset) <span class="op">//</span> batch_size):</span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>            results <span class="op">=</span> []</span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>            <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">0</span>, <span class="bu">len</span>(dataset), batch_size):</span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>                batch <span class="op">=</span> dataset[i:i <span class="op">+</span> batch_size]</span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>                result <span class="op">=</span> <span class="cf">await</span> process_batch(batch)</span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>                results.extend(result)</span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>                </span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a>                <span class="co"># Log progress</span></span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>                logger.info(</span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>                    <span class="ss">f"Processed batch </span><span class="sc">{</span>i <span class="op">//</span> batch_size <span class="op">+</span> <span class="dv">1</span><span class="sc">}</span><span class="ss">"</span>,</span>
+<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>                    batch_index<span class="op">=</span>i <span class="op">//</span> batch_size <span class="op">+</span> <span class="dv">1</span>,</span>
+<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>                    records_processed<span class="op">=</span><span class="bu">len</span>(results)</span>
+<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a>                )</span>
+<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> results</span>
+<span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-39"><a href="#cb2-39" aria-hidden="true" tabindex="-1"></a><span class="co"># Enqueue with structured context</span></span>
+<span id="cb2-40"><a href="#cb2-40" aria-hidden="true" tabindex="-1"></a>logger.info(<span class="st">"Enqueueing dataset processing job"</span>, dataset_id<span class="op">=</span><span class="st">"dataset_123"</span>)</span>
+<span id="cb2-41"><a href="#cb2-41" aria-hidden="true" tabindex="-1"></a><span class="cf">await</span> enqueue_async(process_large_dataset, <span class="st">"dataset_123"</span>, batch_size<span class="op">=</span><span class="dv">500</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="async-utilities-and-concurrency-control" class="level3">
+<h3 class="anchored" data-anchor-id="async-utilities-and-concurrency-control">Async Utilities and Concurrency Control</h3>
+<p>Control concurrency and manage async operations efficiently:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.async_helpers <span class="im">import</span> gather_with_concurrency, async_map</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq <span class="im">import</span> enqueue_async</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> fetch_user_data(user_id: <span class="bu">int</span>):</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Fetch data for a single user."""</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Simulate API call</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> asyncio.sleep(<span class="fl">0.1</span>)</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ss">f"Data for user </span><span class="sc">{</span>user_id<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> bulk_user_processing(user_ids: <span class="bu">list</span>[<span class="bu">int</span>]):</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Process multiple users with controlled concurrency."""</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Process users with max 10 concurrent operations</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    tasks <span class="op">=</span> [fetch_user_data(uid) <span class="cf">for</span> uid <span class="kw">in</span> user_ids]</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    results <span class="op">=</span> <span class="cf">await</span> gather_with_concurrency(tasks, concurrency<span class="op">=</span><span class="dv">10</span>)</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Alternative: use async_map for the same result</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>    <span class="co"># results = await async_map(fetch_user_data, user_ids, concurrency=10)</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> results</span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Enqueue bulk processing job</span></span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>user_ids <span class="op">=</span> <span class="bu">list</span>(<span class="bu">range</span>(<span class="dv">1</span>, <span class="dv">101</span>))  <span class="co"># 100 users</span></span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a><span class="cf">await</span> enqueue_async(bulk_user_processing, user_ids)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="context-managers-for-resource-management" class="level3">
+<h3 class="anchored" data-anchor-id="context-managers-for-resource-management">Context Managers for Resource Management</h3>
+<p>Use context managers for safe resource handling:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.context_managers <span class="im">import</span> timeout_context, managed_resource</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq <span class="im">import</span> enqueue_async</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> acquire_database():</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Acquire database connection."""</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="cf">await</span> database.<span class="ex">connect</span>()</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> release_database(conn):</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Release database connection."""</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> conn.close()</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> database_heavy_job(query: <span class="bu">str</span>):</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Job that requires database access with timeout."""</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> timeout_context(<span class="fl">30.0</span>, <span class="st">"Database operation timeout"</span>):</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">async</span> <span class="cf">with</span> managed_resource(acquire_database, release_database) <span class="im">as</span> db:</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Database operations are automatically timed out and cleaned up</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>            result <span class="op">=</span> <span class="cf">await</span> db.execute(query)</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> result.fetchall()</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a><span class="co"># Enqueue database job with automatic resource management</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a><span class="cf">await</span> enqueue_async(database_heavy_job, <span class="st">"SELECT * FROM large_table"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
 <section id="efficient-connection-handling-batching" class="level2">
 <h2 class="anchored" data-anchor-id="efficient-connection-handling-batching">Efficient Connection Handling &amp; Batching</h2>
 <p>When enqueuing many jobs in a tight loop, creating a new NATS connection for each job is inefficient. <code>naq</code> provides several ways to manage connections for high-throughput scenarios.</p>
 <section id="using-a-queue-instance-async" class="level3">
 <h3 class="anchored" data-anchor-id="using-a-queue-instance-async">Using a <code>Queue</code> Instance (Async)</h3>
 <p>For asynchronous applications, the most efficient way to enqueue jobs is to instantiate a <code>Queue</code> object and reuse it. The <code>Queue</code> instance manages a persistent connection to NATS.</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># async_batch_enqueue.py</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> asyncio</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.queue <span class="im">import</span> Queue</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> my_task(i):</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ss">f"Processed item </span><span class="sc">{</span>i<span class="sc">}</span><span class="ss">"</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> main():</span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create a single Queue instance for the 'high_volume' queue</span></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    queue <span class="op">=</span> Queue(name<span class="op">=</span><span class="st">"high_volume"</span>)</span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Enqueuing 1,000 jobs using a single connection..."</span>)</span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    tasks <span class="op">=</span> []</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">1000</span>):</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>        task <span class="op">=</span> queue.enqueue(my_task, i)</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>        tasks.append(task)</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> asyncio.gather(<span class="op">*</span>tasks)</span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"All jobs enqueued."</span>)</span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    <span class="co"># The connection remains open until the Queue object is no longer in use</span></span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    <span class="co"># or explicitly closed.</span></span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> queue.close()</span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">__name__</span> <span class="op">==</span> <span class="st">"__main__"</span>:</span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>    asyncio.run(main())</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># async_batch_enqueue.py</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> asyncio</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.queue <span class="im">import</span> Queue</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> my_task(i):</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ss">f"Processed item </span><span class="sc">{</span>i<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> main():</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create a single Queue instance for the 'high_volume' queue</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    queue <span class="op">=</span> Queue(name<span class="op">=</span><span class="st">"high_volume"</span>)</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Enqueuing 1,000 jobs using a single connection..."</span>)</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>    tasks <span class="op">=</span> []</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">1000</span>):</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>        task <span class="op">=</span> queue.enqueue(my_task, i)</span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>        tasks.append(task)</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> asyncio.gather(<span class="op">*</span>tasks)</span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"All jobs enqueued."</span>)</span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>    <span class="co"># The connection remains open until the Queue object is no longer in use</span></span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>    <span class="co"># or explicitly closed.</span></span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> queue.close()</span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">__name__</span> <span class="op">==</span> <span class="st">"__main__"</span>:</span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a>    asyncio.run(main())</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </section>
 <section id="thread-local-connections-sync" class="level3">
 <h3 class="anchored" data-anchor-id="thread-local-connections-sync">Thread-Local Connections (Sync)</h3>
 <p>The synchronous helper functions (<code>enqueue_sync</code>, <code>enqueue_at_sync</code>, etc.) are optimized for batching out of the box. They automatically use a <strong>thread-local NATS connection</strong>. This means that all calls to these functions from the same thread will reuse the same connection, avoiding the overhead of reconnecting each time.</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># sync_batch_enqueue.py</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq <span class="im">import</span> enqueue_sync, close_sync_connections</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> my_task(i):</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ss">f"Processed item </span><span class="sc">{</span>i<span class="sc">}</span><span class="ss">"</span></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> main():</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Enqueuing 1,000 jobs using a thread-local connection..."</span>)</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">1000</span>):</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>        enqueue_sync(my_task, i)</span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"All jobs enqueued."</span>)</span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Optionally, you can explicitly close the thread-local connection</span></span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="co"># when you are done with a batch. This is not required, as connections</span></span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># are also closed on process exit.</span></span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    close_sync_connections()</span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Thread-local connection closed."</span>)</span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">__name__</span> <span class="op">==</span> <span class="st">"__main__"</span>:</span>
-<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>    main()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># sync_batch_enqueue.py</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq <span class="im">import</span> enqueue_sync, close_sync_connections</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> my_task(i):</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ss">f"Processed item </span><span class="sc">{</span>i<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> main():</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Enqueuing 1,000 jobs using a thread-local connection..."</span>)</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">1000</span>):</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>        enqueue_sync(my_task, i)</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"All jobs enqueued."</span>)</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Optionally, you can explicitly close the thread-local connection</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    <span class="co"># when you are done with a batch. This is not required, as connections</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># are also closed on process exit.</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>    close_sync_connections()</span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Thread-local connection closed."</span>)</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">__name__</span> <span class="op">==</span> <span class="st">"__main__"</span>:</span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>    main()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </section>
 </section>
-<section id="configuration-via-environment-variables" class="level2">
-<h2 class="anchored" data-anchor-id="configuration-via-environment-variables">Configuration via Environment Variables</h2>
-<p>Many of <code>naq</code>’s settings can be configured using environment variables, which is ideal for production and containerized deployments.</p>
+<section id="service-layer-architecture" class="level2">
+<h2 class="anchored" data-anchor-id="service-layer-architecture">Service Layer Architecture</h2>
+<p>NAQ features a comprehensive service layer that provides centralized connection management, dependency injection, and resource lifecycle management. This architecture improves performance, reliability, and maintainability.</p>
+<section id="core-service-components" class="level3">
+<h3 class="anchored" data-anchor-id="core-service-components">Core Service Components</h3>
+<p>The service layer consists of several key components:</p>
+<ul>
+<li><strong>ServiceManager</strong>: Central coordinator for all services with dependency injection</li>
+<li><strong>ConnectionService</strong>: Manages NATS connections with pooling and failover</li>
+<li><strong>StreamService</strong>: Handles JetStream operations for job queues</li>
+<li><strong>KVStoreService</strong>: Manages KeyValue store operations for results and metadata</li>
+<li><strong>JobService</strong>: Orchestrates job execution and result handling</li>
+<li><strong>EventService</strong>: Manages comprehensive event logging and processing</li>
+</ul>
+</section>
+<section id="using-the-service-layer" class="level3">
+<h3 class="anchored" data-anchor-id="using-the-service-layer">Using the Service Layer</h3>
+<div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services <span class="im">import</span> create_service_manager_from_config, BaseService</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.config <span class="im">import</span> load_config</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Create service manager with typed configuration</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>service_manager <span class="op">=</span> create_service_manager_from_config(<span class="st">"./config.yaml"</span>)</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Use services in your application</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> process_jobs():</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> service_manager <span class="im">as</span> services:</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Get job service (automatically gets other dependencies)</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>        job_service <span class="op">=</span> <span class="cf">await</span> services.get_service(JobService)</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Process jobs with managed connections and resources</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>        result <span class="op">=</span> <span class="cf">await</span> job_service.execute_job(my_job)</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> result</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a><span class="co"># Run with proper resource management</span></span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a><span class="cf">await</span> process_jobs()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="connection-management-benefits" class="level3">
+<h3 class="anchored" data-anchor-id="connection-management-benefits">Connection Management Benefits</h3>
+<p>The centralized connection management provides several advantages:</p>
+<ul>
+<li><strong>Connection Pooling</strong>: Efficient reuse of NATS connections across services</li>
+<li><strong>Automatic Failover</strong>: Transparent failover to backup NATS servers</li>
+<li><strong>Resource Cleanup</strong>: Automatic cleanup of connections and streams</li>
+<li><strong>Configuration Integration</strong>: Direct integration with YAML configuration system</li>
+<li><strong>Type Safety</strong>: Full type safety with IDE support</li>
+</ul>
+</section>
+<section id="custom-services" class="level3">
+<h3 class="anchored" data-anchor-id="custom-services">Custom Services</h3>
+<p>You can create custom services that integrate with the NAQ service layer:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services <span class="im">import</span> BaseService</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.config.types <span class="im">import</span> NAQConfig</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> CustomAnalyticsService(BaseService):</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Custom service for analytics processing."""</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, config: NAQConfig):</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>        <span class="bu">super</span>().<span class="fu">__init__</span>(config)</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.analytics_enabled <span class="op">=</span> config.get_nested(<span class="st">"custom.analytics.enabled"</span>, <span class="va">True</span>)</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _do_initialize(<span class="va">self</span>):</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Initialize analytics connections."""</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Access NATS config with type safety</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>        nats_servers <span class="op">=</span> <span class="va">self</span>.nats_config.servers</span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.connection <span class="op">=</span> <span class="cf">await</span> <span class="va">self</span>._create_analytics_connection(nats_servers)</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _do_cleanup(<span class="va">self</span>):</span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Clean up analytics resources."""</span></span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="bu">hasattr</span>(<span class="va">self</span>, <span class="st">'connection'</span>):</span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> <span class="va">self</span>.connection.close()</span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> track_job_metrics(<span class="va">self</span>, job_id: <span class="bu">str</span>, metrics: <span class="bu">dict</span>):</span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Track job performance metrics."""</span></span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> <span class="va">self</span>.analytics_enabled:</span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span></span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>            </span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> <span class="va">self</span>.connection.publish(</span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"analytics.job.</span><span class="sc">{</span>job_id<span class="sc">}</span><span class="ss">"</span>,</span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>            json.dumps(metrics).encode()</span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a><span class="co"># Register and use custom service</span></span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a>service_manager.register_service(CustomAnalyticsService)</span>
+<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a>analytics <span class="op">=</span> <span class="cf">await</span> service_manager.get_service(CustomAnalyticsService)</span>
+<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a><span class="cf">await</span> analytics.track_job_metrics(<span class="st">"job-123"</span>, {<span class="st">"duration_ms"</span>: <span class="dv">1500</span>})</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="configuration-via-yaml-and-environment-variables" class="level2">
+<h2 class="anchored" data-anchor-id="configuration-via-yaml-and-environment-variables">Configuration via YAML and Environment Variables</h2>
+<p>NAQ supports comprehensive configuration through YAML files with full backward compatibility for environment variables. The new configuration system provides better structure, validation, and type safety while maintaining all existing functionality.</p>
+<section id="yaml-configuration-recommended" class="level3">
+<h3 class="anchored" data-anchor-id="yaml-configuration-recommended">YAML Configuration (Recommended)</h3>
+<p>For new projects, use YAML configuration files for better structure and maintainability:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode yaml code-with-copy"><code class="sourceCode yaml"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># naq.yaml</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">nats</span><span class="kw">:</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">servers</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="st">"nats://localhost:4222"</span><span class="kw">]</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">client_name</span><span class="kw">:</span><span class="at"> </span><span class="st">"my-app"</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">max_reconnect_attempts</span><span class="kw">:</span><span class="at"> </span><span class="dv">5</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="at">  </span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="fu">workers</span><span class="kw">:</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">concurrency</span><span class="kw">:</span><span class="at"> </span><span class="dv">10</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">heartbeat_interval</span><span class="kw">:</span><span class="at"> </span><span class="dv">15</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">pools</span><span class="kw">:</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">high_priority</span><span class="kw">:</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">concurrency</span><span class="kw">:</span><span class="at"> </span><span class="dv">20</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">queues</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="st">"urgent"</span><span class="kw">,</span><span class="at"> </span><span class="st">"critical"</span><span class="kw">]</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a><span class="at">      </span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a><span class="fu">events</span><span class="kw">:</span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">enabled</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">batch_size</span><span class="kw">:</span><span class="at"> </span><span class="dv">100</span></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a><span class="at">  </span></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a><span class="fu">logging</span><span class="kw">:</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">level</span><span class="kw">:</span><span class="at"> </span><span class="st">"INFO"</span></span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">format</span><span class="kw">:</span><span class="at"> </span><span class="st">"json"</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><strong>See the complete <a href="./configuration.html">Configuration Guide</a> for detailed YAML configuration options.</strong></p>
+</section>
+<section id="environment-variables-legacy-support" class="level3">
+<h3 class="anchored" data-anchor-id="environment-variables-legacy-support">Environment Variables (Legacy Support)</h3>
+<p>All existing environment variables continue to work and will override YAML settings:</p>
 <table class="caption-top table">
 <colgroup>
+<col style="width: 16%">
+<col style="width: 5%">
 <col style="width: 17%">
-<col style="width: 18%">
-<col style="width: 63%">
+<col style="width: 60%">
 </colgroup>
 <thead>
 <tr class="header">
 <th>Variable</th>
+<th>YAML Path</th>
 <th>Default</th>
 <th>Description</th>
 </tr>
@@ -453,46 +752,97 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tbody>
 <tr class="odd">
 <td><code>NAQ_NATS_URL</code></td>
+<td><code>nats.servers[0]</code></td>
 <td><code>nats://localhost:4222</code></td>
 <td>The URL of the NATS server.</td>
 </tr>
 <tr class="even">
 <td><code>NAQ_DEFAULT_QUEUE</code></td>
+<td><code>queues.default</code></td>
 <td><code>naq_default_queue</code></td>
 <td>The default queue name used when none is specified.</td>
 </tr>
 <tr class="odd">
 <td><code>NAQ_JOB_SERIALIZER</code></td>
+<td><code>serialization.job_serializer</code></td>
 <td><code>pickle</code></td>
 <td>The serializer for jobs. Can be <code>pickle</code> or <code>json</code>. <strong>See security note below.</strong></td>
 </tr>
 <tr class="even">
 <td><code>NAQ_DEFAULT_RESULT_TTL</code></td>
+<td><code>results.ttl</code></td>
 <td><code>604800</code> (7 days)</td>
 <td>Default time-to-live (in seconds) for job results stored in NATS.</td>
 </tr>
 <tr class="odd">
 <td><code>NAQ_SCHEDULER_LOCK_TTL</code></td>
+<td><code>scheduler.lock_ttl</code></td>
 <td><code>30</code></td>
 <td>TTL (in seconds) for the scheduler’s high-availability leader lock.</td>
 </tr>
 <tr class="even">
 <td><code>NAQ_WORKER_TTL</code></td>
+<td><code>workers.ttl</code></td>
 <td><code>60</code></td>
 <td>TTL (in seconds) for a worker’s heartbeat. If a worker is silent for this long, it’s considered dead.</td>
 </tr>
 <tr class="odd">
 <td><code>NAQ_WORKER_HEARTBEAT_INTERVAL</code></td>
+<td><code>workers.heartbeat_interval</code></td>
 <td><code>15</code></td>
 <td>How often (in seconds) a worker sends a heartbeat to NATS.</td>
 </tr>
 <tr class="even">
 <td><code>NAQ_LOG_LEVEL</code></td>
+<td><code>logging.level</code></td>
 <td><code>CRITICAL</code></td>
 <td>The logging level for <code>naq</code> components. Can be <code>DEBUG</code>, <code>INFO</code>, <code>WARNING</code>, <code>ERROR</code>.</td>
 </tr>
+<tr class="odd">
+<td><code>NAQ_EVENTS_ENABLED</code></td>
+<td><code>events.enabled</code></td>
+<td><code>true</code></td>
+<td>Enable/disable event logging system globally</td>
+</tr>
+<tr class="even">
+<td><code>NAQ_EVENT_LOGGER_BATCH_SIZE</code></td>
+<td><code>events.batch_size</code></td>
+<td><code>100</code></td>
+<td>Number of events to batch before flushing</td>
+</tr>
+<tr class="odd">
+<td><code>NAQ_CONCURRENCY</code></td>
+<td><code>workers.concurrency</code></td>
+<td><code>10</code></td>
+<td>Default worker concurrency level</td>
+</tr>
 </tbody>
 </table>
+</section>
+<section id="configuration-priority" class="level3">
+<h3 class="anchored" data-anchor-id="configuration-priority">Configuration Priority</h3>
+<p>Configuration values are loaded with the following priority (highest to lowest):</p>
+<ol type="1">
+<li><strong>Command-line config file</strong> (<code>--config ./my-config.yaml</code>)</li>
+<li><strong>Local config file</strong> (<code>./naq.yaml</code> or <code>./naq.yml</code>)</li>
+<li><strong>User config file</strong> (<code>~/.naq/config.yaml</code>)</li>
+<li><strong>System config file</strong> (<code>/etc/naq/config.yaml</code>)</li>
+<li><strong>Environment variables</strong> (<code>NAQ_*</code> variables)</li>
+<li><strong>Built-in defaults</strong></li>
+</ol>
+</section>
+<section id="environment-variable-interpolation" class="level3">
+<h3 class="anchored" data-anchor-id="environment-variable-interpolation">Environment Variable Interpolation</h3>
+<p>YAML configuration supports environment variable interpolation:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode yaml code-with-copy"><code class="sourceCode yaml"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu">nats</span><span class="kw">:</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">servers</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="st">"${NAQ_NATS_URL:nats://localhost:4222}"</span><span class="kw">]</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">auth</span><span class="kw">:</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">username</span><span class="kw">:</span><span class="at"> </span><span class="st">"${NATS_USER}"</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">password</span><span class="kw">:</span><span class="at"> </span><span class="st">"${NATS_PASS}"</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="at">    </span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="fu">workers</span><span class="kw">:</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">concurrency</span><span class="kw">:</span><span class="at"> </span><span class="st">"${NAQ_CONCURRENCY:10}"</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
 </section>
 <section id="job-serialization-pickle-vs.-json" class="level2">
 <h2 class="anchored" data-anchor-id="job-serialization-pickle-vs.-json">Job Serialization (<code>pickle</code> vs.&nbsp;<code>json</code>)</h2>
@@ -511,7 +861,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong>Cons</strong>: Less flexible. Cannot serialize complex Python objects that don’t have a natural JSON representation.</li>
 </ul>
 <p>To use the <code>json</code> serializer, set the following environment variable:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_JOB_SERIALIZER</span><span class="op">=</span>json</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb11"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_JOB_SERIALIZER</span><span class="op">=</span>json</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="callout callout-style-default callout-warning callout-titled">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -526,6 +876,403 @@ Warning
 <p>It is <strong>strongly recommended</strong> to use the <code>json</code> serializer in any environment where the job producer is not fully trusted.</p>
 </div>
 </div>
+</section>
+</section>
+<section id="event-system-configuration" class="level2">
+<h2 class="anchored" data-anchor-id="event-system-configuration">Event System Configuration</h2>
+<p>NAQ’s event-driven state management system is highly configurable for different deployment scenarios and performance requirements.</p>
+<section id="core-event-logging-settings" class="level3">
+<h3 class="anchored" data-anchor-id="core-event-logging-settings">Core Event Logging Settings</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 42%">
+<col style="width: 30%">
+<col style="width: 26%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Environment Variable</th>
+<th>Default Value</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>NAQ_EVENT_LOGGING_ENABLED</code></td>
+<td><code>true</code></td>
+<td>Enable/disable event logging system globally</td>
+</tr>
+<tr class="even">
+<td><code>NAQ_EVENT_STREAM_NAME</code></td>
+<td><code>NAQ_JOB_EVENTS</code></td>
+<td>Name of the NATS JetStream stream for events</td>
+</tr>
+<tr class="odd">
+<td><code>NAQ_EVENT_SUBJECT_PREFIX</code></td>
+<td><code>naq.jobs.events</code></td>
+<td>Subject prefix for event messages</td>
+</tr>
+<tr class="even">
+<td><code>NAQ_EVENT_STREAM_MAX_AGE</code></td>
+<td><code>168h</code></td>
+<td>Maximum age for events (7 days)</td>
+</tr>
+<tr class="odd">
+<td><code>NAQ_EVENT_STREAM_MAX_BYTES</code></td>
+<td><code>1GB</code></td>
+<td>Maximum storage for event stream</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="event-logger-performance" class="level3">
+<h3 class="anchored" data-anchor-id="event-logger-performance">Event Logger Performance</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 42%">
+<col style="width: 30%">
+<col style="width: 26%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Environment Variable</th>
+<th>Default Value</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>NAQ_EVENT_LOGGER_BATCH_SIZE</code></td>
+<td><code>100</code></td>
+<td>Number of events to batch before flushing</td>
+</tr>
+<tr class="even">
+<td><code>NAQ_EVENT_LOGGER_FLUSH_INTERVAL</code></td>
+<td><code>5.0</code></td>
+<td>Maximum seconds between flushes</td>
+</tr>
+<tr class="odd">
+<td><code>NAQ_EVENT_LOGGER_MAX_PENDING</code></td>
+<td><code>1000</code></td>
+<td>Maximum pending events in memory</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="example-production-configuration" class="level3">
+<h3 class="anchored" data-anchor-id="example-production-configuration">Example Production Configuration</h3>
+<div class="sourceCode" id="cb12"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Enable event logging with optimized settings</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_EVENT_LOGGING_ENABLED</span><span class="op">=</span>true</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_EVENT_STREAM_MAX_AGE</span><span class="op">=</span>720h    <span class="co"># 30 days retention</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_EVENT_STREAM_MAX_BYTES</span><span class="op">=</span>5GB   <span class="co"># Larger storage limit</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Performance tuning for high-throughput scenarios</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_EVENT_LOGGER_BATCH_SIZE</span><span class="op">=</span>250  <span class="co"># Larger batches</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_EVENT_LOGGER_FLUSH_INTERVAL</span><span class="op">=</span>2.0  <span class="co"># More frequent flushes</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_EVENT_LOGGER_MAX_PENDING</span><span class="op">=</span>2000    <span class="co"># Higher memory buffer</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Reduce worker heartbeat noise</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_WORKER_HEARTBEAT_INTERVAL</span><span class="op">=</span>30  <span class="co"># Less frequent heartbeats</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="custom-event-processing" class="level2">
+<h2 class="anchored" data-anchor-id="custom-event-processing">Custom Event Processing</h2>
+<section id="building-custom-event-processors" class="level3">
+<h3 class="anchored" data-anchor-id="building-custom-event-processors">Building Custom Event Processors</h3>
+<p>Create specialized event processors for your specific needs:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># custom_processor.py</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> asyncio</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.events <span class="im">import</span> AsyncJobEventProcessor, JobEventType</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> datetime <span class="im">import</span> datetime, timedelta</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> PerformanceAnalyzer:</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Custom processor for performance analysis."""</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, alert_threshold_ms<span class="op">=</span><span class="dv">10000</span>):</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.alert_threshold <span class="op">=</span> alert_threshold_ms</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.slow_jobs <span class="op">=</span> []</span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.queue_stats <span class="op">=</span> {}</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> start_monitoring(<span class="va">self</span>):</span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Start the performance monitoring system."""</span></span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>        processor <span class="op">=</span> AsyncJobEventProcessor()</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Register handlers</span></span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>        processor.add_handler(JobEventType.COMPLETED, <span class="va">self</span>._analyze_completion)</span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>        processor.add_handler(JobEventType.FAILED, <span class="va">self</span>._analyze_failure)</span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> processor.start()</span>
+<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a>        <span class="cf">try</span>:</span>
+<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Process events continuously</span></span>
+<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a>            <span class="cf">async</span> <span class="cf">for</span> event <span class="kw">in</span> processor.stream_job_events():</span>
+<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a>                <span class="cf">pass</span></span>
+<span id="cb13-28"><a href="#cb13-28" aria-hidden="true" tabindex="-1"></a>        <span class="cf">finally</span>:</span>
+<span id="cb13-29"><a href="#cb13-29" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> processor.stop()</span>
+<span id="cb13-30"><a href="#cb13-30" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb13-31"><a href="#cb13-31" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _analyze_completion(<span class="va">self</span>, event):</span>
+<span id="cb13-32"><a href="#cb13-32" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Analyze completed job performance."""</span></span>
+<span id="cb13-33"><a href="#cb13-33" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> event.duration_ms <span class="kw">and</span> event.duration_ms <span class="op">&gt;</span> <span class="va">self</span>.alert_threshold:</span>
+<span id="cb13-34"><a href="#cb13-34" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>.slow_jobs.append({</span>
+<span id="cb13-35"><a href="#cb13-35" aria-hidden="true" tabindex="-1"></a>                <span class="st">'job_id'</span>: event.job_id,</span>
+<span id="cb13-36"><a href="#cb13-36" aria-hidden="true" tabindex="-1"></a>                <span class="st">'duration'</span>: event.duration_ms,</span>
+<span id="cb13-37"><a href="#cb13-37" aria-hidden="true" tabindex="-1"></a>                <span class="st">'queue'</span>: event.queue_name,</span>
+<span id="cb13-38"><a href="#cb13-38" aria-hidden="true" tabindex="-1"></a>                <span class="st">'worker'</span>: event.worker_id,</span>
+<span id="cb13-39"><a href="#cb13-39" aria-hidden="true" tabindex="-1"></a>                <span class="st">'timestamp'</span>: event.timestamp</span>
+<span id="cb13-40"><a href="#cb13-40" aria-hidden="true" tabindex="-1"></a>            })</span>
+<span id="cb13-41"><a href="#cb13-41" aria-hidden="true" tabindex="-1"></a>            </span>
+<span id="cb13-42"><a href="#cb13-42" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Send alert</span></span>
+<span id="cb13-43"><a href="#cb13-43" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> <span class="va">self</span>._send_performance_alert(event)</span>
+<span id="cb13-44"><a href="#cb13-44" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb13-45"><a href="#cb13-45" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Update queue statistics</span></span>
+<span id="cb13-46"><a href="#cb13-46" aria-hidden="true" tabindex="-1"></a>        queue <span class="op">=</span> event.queue_name <span class="kw">or</span> <span class="st">'default'</span></span>
+<span id="cb13-47"><a href="#cb13-47" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> queue <span class="kw">not</span> <span class="kw">in</span> <span class="va">self</span>.queue_stats:</span>
+<span id="cb13-48"><a href="#cb13-48" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>.queue_stats[queue] <span class="op">=</span> {</span>
+<span id="cb13-49"><a href="#cb13-49" aria-hidden="true" tabindex="-1"></a>                <span class="st">'completed'</span>: <span class="dv">0</span>,</span>
+<span id="cb13-50"><a href="#cb13-50" aria-hidden="true" tabindex="-1"></a>                <span class="st">'total_duration'</span>: <span class="dv">0</span>,</span>
+<span id="cb13-51"><a href="#cb13-51" aria-hidden="true" tabindex="-1"></a>                <span class="st">'avg_duration'</span>: <span class="dv">0</span></span>
+<span id="cb13-52"><a href="#cb13-52" aria-hidden="true" tabindex="-1"></a>            }</span>
+<span id="cb13-53"><a href="#cb13-53" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb13-54"><a href="#cb13-54" aria-hidden="true" tabindex="-1"></a>        stats <span class="op">=</span> <span class="va">self</span>.queue_stats[queue]</span>
+<span id="cb13-55"><a href="#cb13-55" aria-hidden="true" tabindex="-1"></a>        stats[<span class="st">'completed'</span>] <span class="op">+=</span> <span class="dv">1</span></span>
+<span id="cb13-56"><a href="#cb13-56" aria-hidden="true" tabindex="-1"></a>        stats[<span class="st">'total_duration'</span>] <span class="op">+=</span> (event.duration_ms <span class="kw">or</span> <span class="dv">0</span>)</span>
+<span id="cb13-57"><a href="#cb13-57" aria-hidden="true" tabindex="-1"></a>        stats[<span class="st">'avg_duration'</span>] <span class="op">=</span> stats[<span class="st">'total_duration'</span>] <span class="op">/</span> stats[<span class="st">'completed'</span>]</span>
+<span id="cb13-58"><a href="#cb13-58" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb13-59"><a href="#cb13-59" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _analyze_failure(<span class="va">self</span>, event):</span>
+<span id="cb13-60"><a href="#cb13-60" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Analyze job failures."""</span></span>
+<span id="cb13-61"><a href="#cb13-61" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"🚨 Job failure analysis: </span><span class="sc">{</span>event<span class="sc">.</span>job_id<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb13-62"><a href="#cb13-62" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"   Error: </span><span class="sc">{</span>event<span class="sc">.</span>error_message<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb13-63"><a href="#cb13-63" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"   Queue: </span><span class="sc">{</span>event<span class="sc">.</span>queue_name<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb13-64"><a href="#cb13-64" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"   Worker: </span><span class="sc">{</span>event<span class="sc">.</span>worker_id<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb13-65"><a href="#cb13-65" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb13-66"><a href="#cb13-66" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _send_performance_alert(<span class="va">self</span>, event):</span>
+<span id="cb13-67"><a href="#cb13-67" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Send performance alert."""</span></span>
+<span id="cb13-68"><a href="#cb13-68" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"⚠️  SLOW JOB ALERT: </span><span class="sc">{</span>event<span class="sc">.</span>job_id<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb13-69"><a href="#cb13-69" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"   Duration: </span><span class="sc">{</span>event<span class="sc">.</span>duration_ms<span class="sc">}</span><span class="ss">ms (threshold: </span><span class="sc">{</span><span class="va">self</span><span class="sc">.</span>alert_threshold<span class="sc">}</span><span class="ss">ms)"</span>)</span>
+<span id="cb13-70"><a href="#cb13-70" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"   Queue: </span><span class="sc">{</span>event<span class="sc">.</span>queue_name<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb13-71"><a href="#cb13-71" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb13-72"><a href="#cb13-72" aria-hidden="true" tabindex="-1"></a>        <span class="co"># In production: send to Slack, PagerDuty, etc.</span></span>
+<span id="cb13-73"><a href="#cb13-73" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb13-74"><a href="#cb13-74" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> get_performance_report(<span class="va">self</span>):</span>
+<span id="cb13-75"><a href="#cb13-75" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Generate performance report."""</span></span>
+<span id="cb13-76"><a href="#cb13-76" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> {</span>
+<span id="cb13-77"><a href="#cb13-77" aria-hidden="true" tabindex="-1"></a>            <span class="st">'slow_jobs_count'</span>: <span class="bu">len</span>(<span class="va">self</span>.slow_jobs),</span>
+<span id="cb13-78"><a href="#cb13-78" aria-hidden="true" tabindex="-1"></a>            <span class="st">'queue_performance'</span>: <span class="va">self</span>.queue_stats,</span>
+<span id="cb13-79"><a href="#cb13-79" aria-hidden="true" tabindex="-1"></a>            <span class="st">'recent_slow_jobs'</span>: <span class="va">self</span>.slow_jobs[<span class="op">-</span><span class="dv">10</span>:]</span>
+<span id="cb13-80"><a href="#cb13-80" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb13-81"><a href="#cb13-81" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-82"><a href="#cb13-82" aria-hidden="true" tabindex="-1"></a><span class="co"># Usage</span></span>
+<span id="cb13-83"><a href="#cb13-83" aria-hidden="true" tabindex="-1"></a>analyzer <span class="op">=</span> PerformanceAnalyzer(alert_threshold_ms<span class="op">=</span><span class="dv">5000</span>)</span>
+<span id="cb13-84"><a href="#cb13-84" aria-hidden="true" tabindex="-1"></a>asyncio.run(analyzer.start_monitoring())</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="integration-with-monitoring-systems" class="level3">
+<h3 class="anchored" data-anchor-id="integration-with-monitoring-systems">Integration with Monitoring Systems</h3>
+<section id="prometheus-metrics" class="level4">
+<h4 class="anchored" data-anchor-id="prometheus-metrics">Prometheus Metrics</h4>
+<div class="sourceCode" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># prometheus_integration.py</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> time</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> prometheus_client <span class="im">import</span> Counter, Histogram, Gauge, start_http_server</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.events <span class="im">import</span> AsyncJobEventProcessor, JobEventType</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Define metrics</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>job_total <span class="op">=</span> Counter(<span class="st">'naq_jobs_total'</span>, <span class="st">'Total jobs processed'</span>, [<span class="st">'queue'</span>, <span class="st">'status'</span>])</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>job_duration <span class="op">=</span> Histogram(<span class="st">'naq_job_duration_seconds'</span>, <span class="st">'Job duration'</span>, [<span class="st">'queue'</span>])</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>active_workers <span class="op">=</span> Gauge(<span class="st">'naq_active_workers'</span>, <span class="st">'Number of active workers'</span>)</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> PrometheusExporter:</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Export NAQ metrics to Prometheus."""</span></span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, port<span class="op">=</span><span class="dv">8000</span>):</span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.port <span class="op">=</span> port</span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.active_worker_count <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> start_exporter(<span class="va">self</span>):</span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Start the Prometheus metrics exporter."""</span></span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Start HTTP server for metrics</span></span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>        start_http_server(<span class="va">self</span>.port)</span>
+<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"📊 Prometheus metrics available at http://localhost:</span><span class="sc">{</span><span class="va">self</span><span class="sc">.</span>port<span class="sc">}</span><span class="ss">/metrics"</span>)</span>
+<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Start event processing</span></span>
+<span id="cb14-25"><a href="#cb14-25" aria-hidden="true" tabindex="-1"></a>        processor <span class="op">=</span> AsyncJobEventProcessor()</span>
+<span id="cb14-26"><a href="#cb14-26" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a>        processor.add_handler(JobEventType.COMPLETED, <span class="va">self</span>._handle_completed)</span>
+<span id="cb14-28"><a href="#cb14-28" aria-hidden="true" tabindex="-1"></a>        processor.add_handler(JobEventType.FAILED, <span class="va">self</span>._handle_failed)</span>
+<span id="cb14-29"><a href="#cb14-29" aria-hidden="true" tabindex="-1"></a>        processor.add_handler(JobEventType.ENQUEUED, <span class="va">self</span>._handle_enqueued)</span>
+<span id="cb14-30"><a href="#cb14-30" aria-hidden="true" tabindex="-1"></a>        processor.add_global_handler(<span class="va">self</span>._handle_worker_events)</span>
+<span id="cb14-31"><a href="#cb14-31" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb14-32"><a href="#cb14-32" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> processor.start()</span>
+<span id="cb14-33"><a href="#cb14-33" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb14-34"><a href="#cb14-34" aria-hidden="true" tabindex="-1"></a>        <span class="cf">try</span>:</span>
+<span id="cb14-35"><a href="#cb14-35" aria-hidden="true" tabindex="-1"></a>            <span class="cf">async</span> <span class="cf">for</span> event <span class="kw">in</span> processor.stream_job_events():</span>
+<span id="cb14-36"><a href="#cb14-36" aria-hidden="true" tabindex="-1"></a>                <span class="cf">pass</span></span>
+<span id="cb14-37"><a href="#cb14-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">finally</span>:</span>
+<span id="cb14-38"><a href="#cb14-38" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> processor.stop()</span>
+<span id="cb14-39"><a href="#cb14-39" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb14-40"><a href="#cb14-40" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _handle_completed(<span class="va">self</span>, event):</span>
+<span id="cb14-41"><a href="#cb14-41" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Handle completed job metrics."""</span></span>
+<span id="cb14-42"><a href="#cb14-42" aria-hidden="true" tabindex="-1"></a>        queue <span class="op">=</span> event.queue_name <span class="kw">or</span> <span class="st">'default'</span></span>
+<span id="cb14-43"><a href="#cb14-43" aria-hidden="true" tabindex="-1"></a>        job_total.labels(queue<span class="op">=</span>queue, status<span class="op">=</span><span class="st">'completed'</span>).inc()</span>
+<span id="cb14-44"><a href="#cb14-44" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb14-45"><a href="#cb14-45" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> event.duration_ms:</span>
+<span id="cb14-46"><a href="#cb14-46" aria-hidden="true" tabindex="-1"></a>            duration_seconds <span class="op">=</span> event.duration_ms <span class="op">/</span> <span class="fl">1000.0</span></span>
+<span id="cb14-47"><a href="#cb14-47" aria-hidden="true" tabindex="-1"></a>            job_duration.labels(queue<span class="op">=</span>queue).observe(duration_seconds)</span>
+<span id="cb14-48"><a href="#cb14-48" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb14-49"><a href="#cb14-49" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _handle_failed(<span class="va">self</span>, event):</span>
+<span id="cb14-50"><a href="#cb14-50" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Handle failed job metrics."""</span></span>
+<span id="cb14-51"><a href="#cb14-51" aria-hidden="true" tabindex="-1"></a>        queue <span class="op">=</span> event.queue_name <span class="kw">or</span> <span class="st">'default'</span></span>
+<span id="cb14-52"><a href="#cb14-52" aria-hidden="true" tabindex="-1"></a>        job_total.labels(queue<span class="op">=</span>queue, status<span class="op">=</span><span class="st">'failed'</span>).inc()</span>
+<span id="cb14-53"><a href="#cb14-53" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb14-54"><a href="#cb14-54" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _handle_enqueued(<span class="va">self</span>, event):</span>
+<span id="cb14-55"><a href="#cb14-55" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Handle enqueued job metrics."""</span></span>
+<span id="cb14-56"><a href="#cb14-56" aria-hidden="true" tabindex="-1"></a>        queue <span class="op">=</span> event.queue_name <span class="kw">or</span> <span class="st">'default'</span></span>
+<span id="cb14-57"><a href="#cb14-57" aria-hidden="true" tabindex="-1"></a>        job_total.labels(queue<span class="op">=</span>queue, status<span class="op">=</span><span class="st">'enqueued'</span>).inc()</span>
+<span id="cb14-58"><a href="#cb14-58" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb14-59"><a href="#cb14-59" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _handle_worker_events(<span class="va">self</span>, event):</span>
+<span id="cb14-60"><a href="#cb14-60" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Handle worker events for active count."""</span></span>
+<span id="cb14-61"><a href="#cb14-61" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="bu">hasattr</span>(event, <span class="st">'details'</span>) <span class="kw">and</span> event.details:</span>
+<span id="cb14-62"><a href="#cb14-62" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> event.details.get(<span class="st">'event_category'</span>) <span class="op">==</span> <span class="st">'worker'</span>:</span>
+<span id="cb14-63"><a href="#cb14-63" aria-hidden="true" tabindex="-1"></a>                <span class="cf">if</span> <span class="st">'worker_started'</span> <span class="kw">in</span> event.event_type.value:</span>
+<span id="cb14-64"><a href="#cb14-64" aria-hidden="true" tabindex="-1"></a>                    <span class="va">self</span>.active_worker_count <span class="op">+=</span> <span class="dv">1</span></span>
+<span id="cb14-65"><a href="#cb14-65" aria-hidden="true" tabindex="-1"></a>                <span class="cf">elif</span> <span class="st">'worker_stopped'</span> <span class="kw">in</span> event.event_type.value:</span>
+<span id="cb14-66"><a href="#cb14-66" aria-hidden="true" tabindex="-1"></a>                    <span class="va">self</span>.active_worker_count <span class="op">-=</span> <span class="dv">1</span></span>
+<span id="cb14-67"><a href="#cb14-67" aria-hidden="true" tabindex="-1"></a>                </span>
+<span id="cb14-68"><a href="#cb14-68" aria-hidden="true" tabindex="-1"></a>                active_workers.<span class="bu">set</span>(<span class="va">self</span>.active_worker_count)</span>
+<span id="cb14-69"><a href="#cb14-69" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-70"><a href="#cb14-70" aria-hidden="true" tabindex="-1"></a><span class="co"># Usage</span></span>
+<span id="cb14-71"><a href="#cb14-71" aria-hidden="true" tabindex="-1"></a>exporter <span class="op">=</span> PrometheusExporter(port<span class="op">=</span><span class="dv">8000</span>)</span>
+<span id="cb14-72"><a href="#cb14-72" aria-hidden="true" tabindex="-1"></a>asyncio.run(exporter.start_exporter())</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+</section>
+<section id="performance-optimization" class="level2">
+<h2 class="anchored" data-anchor-id="performance-optimization">Performance Optimization</h2>
+<section id="high-volume-event-logging" class="level3">
+<h3 class="anchored" data-anchor-id="high-volume-event-logging">High-Volume Event Logging</h3>
+<p>For high-throughput systems, optimize event logging performance:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># high_performance_config.py</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> os</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Optimize for high volume</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>os.environ.update({</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">'NAQ_EVENT_LOGGER_BATCH_SIZE'</span>: <span class="st">'500'</span>,        <span class="co"># Larger batches</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">'NAQ_EVENT_LOGGER_FLUSH_INTERVAL'</span>: <span class="st">'1.0'</span>,    <span class="co"># Faster flushes</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">'NAQ_EVENT_LOGGER_MAX_PENDING'</span>: <span class="st">'5000'</span>,      <span class="co"># Higher memory buffer</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Reduce event noise</span></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">'NAQ_WORKER_HEARTBEAT_INTERVAL'</span>: <span class="st">'60'</span>,       <span class="co"># Less frequent heartbeats</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Optimize NATS JetStream</span></span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>    <span class="st">'NAQ_EVENT_STREAM_MAX_BYTES'</span>: <span class="st">'10GB'</span>,        <span class="co"># Larger stream</span></span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>    <span class="st">'NAQ_EVENT_STREAM_MAX_AGE'</span>: <span class="st">'48h'</span>,           <span class="co"># Shorter retention</span></span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>})</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="memory-management" class="level3">
+<h3 class="anchored" data-anchor-id="memory-management">Memory Management</h3>
+<p>Monitor and control memory usage:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># memory_monitoring.py</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> asyncio</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> psutil</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.events <span class="im">import</span> AsyncJobEventLogger</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> MemoryAwareLogger:</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Event logger with memory monitoring."""</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, memory_threshold_mb<span class="op">=</span><span class="dv">1000</span>):</span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.threshold <span class="op">=</span> memory_threshold_mb</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.logger <span class="op">=</span> AsyncJobEventLogger()</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>._monitoring <span class="op">=</span> <span class="va">True</span></span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> start_with_monitoring(<span class="va">self</span>):</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Start logger with memory monitoring."""</span></span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> <span class="va">self</span>.logger.start()</span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Start memory monitoring task</span></span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>        monitor_task <span class="op">=</span> asyncio.create_task(<span class="va">self</span>._monitor_memory())</span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a>        <span class="cf">try</span>:</span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a>            <span class="co"># Your application logic here</span></span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>            <span class="cf">pass</span></span>
+<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>        <span class="cf">finally</span>:</span>
+<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>._monitoring <span class="op">=</span> <span class="va">False</span></span>
+<span id="cb16-26"><a href="#cb16-26" aria-hidden="true" tabindex="-1"></a>            monitor_task.cancel()</span>
+<span id="cb16-27"><a href="#cb16-27" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> <span class="va">self</span>.logger.stop()</span>
+<span id="cb16-28"><a href="#cb16-28" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb16-29"><a href="#cb16-29" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> _monitor_memory(<span class="va">self</span>):</span>
+<span id="cb16-30"><a href="#cb16-30" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Monitor memory usage and adjust batch size."""</span></span>
+<span id="cb16-31"><a href="#cb16-31" aria-hidden="true" tabindex="-1"></a>        <span class="cf">while</span> <span class="va">self</span>._monitoring:</span>
+<span id="cb16-32"><a href="#cb16-32" aria-hidden="true" tabindex="-1"></a>            process <span class="op">=</span> psutil.Process()</span>
+<span id="cb16-33"><a href="#cb16-33" aria-hidden="true" tabindex="-1"></a>            memory_mb <span class="op">=</span> process.memory_info().rss <span class="op">/</span> <span class="dv">1024</span> <span class="op">/</span> <span class="dv">1024</span></span>
+<span id="cb16-34"><a href="#cb16-34" aria-hidden="true" tabindex="-1"></a>            </span>
+<span id="cb16-35"><a href="#cb16-35" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> memory_mb <span class="op">&gt;</span> <span class="va">self</span>.threshold:</span>
+<span id="cb16-36"><a href="#cb16-36" aria-hidden="true" tabindex="-1"></a>                <span class="bu">print</span>(<span class="ss">f"⚠️  High memory usage: </span><span class="sc">{</span>memory_mb<span class="sc">:.1f}</span><span class="ss">MB"</span>)</span>
+<span id="cb16-37"><a href="#cb16-37" aria-hidden="true" tabindex="-1"></a>                <span class="co"># Force flush to reduce memory</span></span>
+<span id="cb16-38"><a href="#cb16-38" aria-hidden="true" tabindex="-1"></a>                <span class="cf">await</span> <span class="va">self</span>.logger.flush()</span>
+<span id="cb16-39"><a href="#cb16-39" aria-hidden="true" tabindex="-1"></a>            </span>
+<span id="cb16-40"><a href="#cb16-40" aria-hidden="true" tabindex="-1"></a>            <span class="cf">await</span> asyncio.sleep(<span class="dv">30</span>)  <span class="co"># Check every 30 seconds</span></span>
+<span id="cb16-41"><a href="#cb16-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-42"><a href="#cb16-42" aria-hidden="true" tabindex="-1"></a><span class="co"># Usage</span></span>
+<span id="cb16-43"><a href="#cb16-43" aria-hidden="true" tabindex="-1"></a>memory_logger <span class="op">=</span> MemoryAwareLogger(memory_threshold_mb<span class="op">=</span><span class="dv">800</span>)</span>
+<span id="cb16-44"><a href="#cb16-44" aria-hidden="true" tabindex="-1"></a>asyncio.run(memory_logger.start_with_monitoring())</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="troubleshooting" class="level2">
+<h2 class="anchored" data-anchor-id="troubleshooting">Troubleshooting</h2>
+<section id="common-event-system-issues" class="level3">
+<h3 class="anchored" data-anchor-id="common-event-system-issues">Common Event System Issues</h3>
+<p><strong>Events not appearing in stream:</strong></p>
+<ol type="1">
+<li><p>Check if event logging is enabled:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="bu">echo</span> <span class="va">$NAQ_EVENT_LOGGING_ENABLED</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div></li>
+<li><p>Verify NATS connectivity:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="ex">nats</span> stream info NAQ_JOB_EVENTS</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div></li>
+<li><p>Check event logger lifecycle:</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>logger <span class="op">=</span> AsyncJobEventLogger()</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="cf">await</span> logger.start()  <span class="co"># Must call start()</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="co"># ... log events</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="cf">await</span> logger.stop()   <span class="co"># Must call stop()</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div></li>
+</ol>
+<p><strong>High memory usage:</strong></p>
+<ol type="1">
+<li><p>Reduce batch size:</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_EVENT_LOGGER_BATCH_SIZE</span><span class="op">=</span>50</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div></li>
+<li><p>Increase flush frequency:</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_EVENT_LOGGER_FLUSH_INTERVAL</span><span class="op">=</span>2.0</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div></li>
+<li><p>Monitor pending events:</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># In your application</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> logger._pending_events_count <span class="op">&gt;</span> <span class="dv">500</span>:</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> logger.flush()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div></li>
+</ol>
+<p><strong>Slow event processing:</strong></p>
+<ol type="1">
+<li><p>Increase batch size for better throughput:</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_EVENT_LOGGER_BATCH_SIZE</span><span class="op">=</span>300</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div></li>
+<li><p>Use dedicated NATS cluster for events</p></li>
+<li><p>Consider event sampling for very high-volume scenarios</p></li>
+</ol>
+</section>
+<section id="debug-commands" class="level3">
+<h3 class="anchored" data-anchor-id="debug-commands">Debug Commands</h3>
+<div class="sourceCode" id="cb24"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Check event stream status</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="ex">nats</span> stream info NAQ_JOB_EVENTS</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Monitor event rate</span></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events <span class="at">--format</span> raw <span class="kw">|</span> <span class="ex">pv</span> <span class="at">-l</span></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Test event logging</span></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> <span class="at">-c</span> <span class="st">"</span></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a><span class="st">import asyncio</span></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a><span class="st">from naq.events import AsyncJobEventLogger</span></span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a><span class="st">async def test():</span></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a><span class="st">    logger = AsyncJobEventLogger()</span></span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a><span class="st">    await logger.start()</span></span>
+<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a><span class="st">    await logger.log_job_enqueued('test-job', 'test-queue')</span></span>
+<span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a><span class="st">    await logger.flush()</span></span>
+<span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a><span class="st">    await logger.stop()</span></span>
+<span id="cb24-18"><a href="#cb24-18" aria-hidden="true" tabindex="-1"></a><span class="st">    print('Event logged successfully')</span></span>
+<span id="cb24-19"><a href="#cb24-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-20"><a href="#cb24-20" aria-hidden="true" tabindex="-1"></a><span class="st">asyncio.run(test())</span></span>
+<span id="cb24-21"><a href="#cb24-21" aria-hidden="true" tabindex="-1"></a><span class="st">"</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 
 
 </section>

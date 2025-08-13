@@ -4,6 +4,11 @@ from unittest.mock import AsyncMock, MagicMock
 from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
 import nats
+import tempfile
+import shutil
+from pathlib import Path
+from typing import Dict, Any
+import yaml
 
 import socket
 
@@ -15,6 +20,175 @@ from naq.settings import (
 )
 
 from naq.worker import Worker
+
+# NEW: Service layer imports for ServiceManager testing
+from naq.services import ServiceManager
+from naq.services.connection import ConnectionService
+from naq.services.jobs import JobService
+from naq.services.events import EventService
+from naq.services.streams import StreamService
+from naq.services.kv_stores import KVStoreService
+from naq.services.scheduler import SchedulerService
+from naq.config import load_config
+from naq.models.jobs import Job
+from naq.models.enums import JOB_STATUS
+
+
+# ============================================================================
+# CONSOLIDATED FIXTURES FOR UNIFIED TESTING
+# ============================================================================
+
+@pytest.fixture
+def base_test_config():
+    """Base test configuration that works with all test patterns."""
+    return {
+        'nats': {
+            'url': 'nats://localhost:4222',
+            'client_name': 'naq-test-unified'
+        },
+        'workers': {
+            'concurrency': 2,
+            'heartbeat_interval': 5,
+            'max_jobs': 100
+        },
+        'events': {
+            'enabled': True,
+            'batch_size': 10
+        },
+        'streams': {
+            'ensure_streams': True
+        },
+        'logging': {
+            'level': 'INFO'
+        }
+    }
+
+
+@pytest.fixture
+def unified_mock_nats():
+    """Unified NATS mock that works for both legacy and service layer tests."""
+    mock_nc = AsyncMock(name="mock_nats_connection")
+    mock_nc.is_connected = True
+    mock_nc.connected_url = "nats://localhost:4222"
+    mock_nc.client_id = 12345
+    
+    mock_js = AsyncMock(name="mock_jetstream")
+    mock_nc.jetstream.return_value = mock_js
+    
+    # Mock JetStream operations
+    mock_js.publish.return_value = AsyncMock(seq=1)
+    mock_js.purge_stream.return_value = AsyncMock(purged=5)
+    
+    # Mock KV operations
+    mock_kv = AsyncMock(name="mock_kv_store")
+    mock_kv.put.return_value = AsyncMock(seq=1)
+    mock_kv.get.return_value = AsyncMock(value=b"test_value")
+    mock_kv.delete.return_value = True
+    mock_kv.update.return_value = AsyncMock(seq=2)
+    mock_js.key_value.return_value = mock_kv
+    
+    # Mock stream operations
+    mock_js.add_stream.return_value = AsyncMock()
+    mock_js.stream_info.return_value = {
+        'config': {'name': 'test-stream'},
+        'state': {'messages': 0, 'bytes': 0}
+    }
+    
+    return mock_nc, mock_js
+
+
+@pytest.fixture
+async def unified_service_manager(base_test_config, unified_mock_nats):
+    """Unified ServiceManager for testing both legacy and new patterns."""
+    mock_nc, mock_js = unified_mock_nats
+    
+    with patch('naq.services.connection.get_nats_connection', return_value=mock_nc):
+        manager = ServiceManager(base_test_config)
+        await manager.initialize_all()
+        yield manager
+        await manager.cleanup_all()
+
+
+@pytest.fixture
+def mock_service_dependencies():
+    """Mock all service dependencies for isolated testing."""
+    mocks = {
+        'connection_service': AsyncMock(spec=ConnectionService),
+        'job_service': AsyncMock(spec=JobService),
+        'event_service': AsyncMock(spec=EventService),
+        'stream_service': AsyncMock(spec=StreamService),
+        'kv_store_service': AsyncMock(spec=KVStoreService),
+        'scheduler_service': AsyncMock(spec=SchedulerService)
+    }
+    
+    # Setup common return values
+    mocks['job_service'].enqueue_job.return_value = "test-job-id"
+    mocks['stream_service'].purge_stream.return_value = 5
+    mocks['kv_store_service'].get.return_value = {"status": "completed"}
+    
+    return mocks
+
+
+@pytest.fixture
+async def test_job_factory():
+    """Factory for creating test jobs with various configurations."""
+    def create_job(
+        function=None,
+        args=(),
+        kwargs=None,
+        job_id=None,
+        queue_name="test-queue",
+        **job_options
+    ):
+        if function is None:
+            def default_function(*args, **kwargs):
+                return f"result for {args} {kwargs}"
+            function = default_function
+        
+        if kwargs is None:
+            kwargs = {}
+        
+        return Job(
+            function=function,
+            args=args,
+            kwargs=kwargs,
+            job_id=job_id,
+            queue_name=queue_name,
+            **job_options
+        )
+    
+    return create_job
+
+
+@pytest.fixture
+def temp_config_file_factory():
+    """Factory for creating temporary configuration files."""
+    created_files = []
+    
+    def create_config_file(config_data, file_format='yaml'):
+        if file_format == 'yaml':
+            suffix = '.yaml'
+            content = yaml.dump(config_data)
+        else:
+            raise ValueError(f"Unsupported format: {file_format}")
+        
+        with tempfile.NamedTemporaryFile(
+            mode='w',
+            suffix=suffix,
+            delete=False
+        ) as f:
+            f.write(content)
+            created_files.append(f.name)
+            return f.name
+    
+    yield create_config_file
+    
+    # Cleanup
+    for file_path in created_files:
+        try:
+            Path(file_path).unlink()
+        except FileNotFoundError:
+            pass
 
 
 @pytest.fixture
@@ -55,6 +229,35 @@ def worker_dict():
         "concurrency": 2,
         "worker_name": "test-worker",
         # Add other params if needed by tests
+    }
+
+
+@pytest.fixture
+def service_test_config() -> Dict[str, Any]:
+    """ServiceManager-compatible test configuration."""
+    return {
+        'nats': {
+            'url': 'nats://localhost:4222',
+            'client_name': 'naq-test',
+            'max_reconnect_attempts': 3
+        },
+        'workers': {
+            'concurrency': 2,
+            'heartbeat_interval': 5,
+            'ttl': 30,
+            'default_queue': 'test_queue'
+        },
+        'events': {
+            'enabled': True,
+            'batch_size': 10,
+            'flush_interval': 0.1
+        },
+        'results': {
+            'ttl': 300
+        },
+        'scheduled_jobs': {
+            'kv_name': 'NAQ_SCHEDULED_JOBS'
+        }
     }
 
 
@@ -152,6 +355,91 @@ async def mock_nats(mocker):
     )
 
     return mock_nc, mock_js
+
+
+@pytest.fixture
+async def service_manager(service_test_config):
+    """Real ServiceManager for integration tests."""
+    manager = ServiceManager(service_test_config)
+    await manager.initialize_all()
+    yield manager
+    await manager.cleanup_all()
+
+
+@pytest.fixture
+def mock_service_manager():
+    """Mock ServiceManager for unit tests."""
+    mock_manager = AsyncMock(spec=ServiceManager)
+    
+    # Create mock services with proper specs
+    mock_connection_service = AsyncMock(spec=ConnectionService)
+    mock_job_service = AsyncMock(spec=JobService)
+    mock_event_service = AsyncMock(spec=EventService)
+    mock_stream_service = AsyncMock(spec=StreamService)
+    mock_kv_service = AsyncMock(spec=KVStoreService)
+    mock_scheduler_service = AsyncMock(spec=SchedulerService)
+    
+    # Configure jetstream_scope context manager for ConnectionService
+    async def mock_jetstream_scope():
+        mock_js = AsyncMock()
+        mock_js.publish = AsyncMock(return_value=MagicMock(stream="test", seq=1))
+        mock_js.key_value = AsyncMock()
+        mock_js.stream = AsyncMock()
+        mock_js.consumer = AsyncMock()
+        return mock_js
+    
+    mock_connection_service.jetstream_scope = mock_jetstream_scope
+    
+    # Configure get_service to return appropriate mocks
+    service_map = {
+        ConnectionService: mock_connection_service,
+        JobService: mock_job_service,
+        EventService: mock_event_service,
+        StreamService: mock_stream_service,
+        KVStoreService: mock_kv_service,
+        SchedulerService: mock_scheduler_service,
+    }
+    
+    mock_manager.get_service.side_effect = lambda service_type: service_map[service_type]
+    mock_manager.initialize_all = AsyncMock()
+    mock_manager.cleanup_all = AsyncMock()
+    
+    return mock_manager, service_map
+
+
+@pytest.fixture
+async def service_aware_nats_mock(mock_service_manager):
+    """NATS mock that integrates with ServiceManager architecture."""
+    mock_manager, service_map = mock_service_manager
+    
+    # Return connection service with jetstream_scope already configured
+    return service_map[ConnectionService], mock_manager
+
+
+@pytest.fixture
+def temp_config_file(service_test_config):
+    """Create temporary YAML config file for testing."""
+    temp_dir = tempfile.mkdtemp()
+    config_path = Path(temp_dir) / "test_config.yaml"
+    
+    with open(config_path, 'w') as f:
+        yaml.dump(service_test_config, f)
+    
+    yield str(config_path)
+    shutil.rmtree(temp_dir)
+
+
+@pytest.fixture
+def service_test_job():
+    """Create test job compatible with service layer."""
+    def dummy_task(x: int) -> int:
+        return x * 2
+    
+    return Job(
+        function=dummy_task,
+        args=(5,),
+        queue_name="test_queue"
+    )
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -285,3 +573,63 @@ def mock_failed_job_handler():
     mock.initialize = AsyncMock(name="initialize")
     mock.handle_failed_job = AsyncMock(name="handle_failed_job")
     return mock
+
+
+# Legacy compatibility fixtures - maintain existing test functionality
+@pytest_asyncio.fixture
+async def service_compatible_queue(service_aware_nats_mock, service_test_config):
+    """Setup a test queue with ServiceManager architecture."""
+    from naq.queue.core import Queue
+    connection_service, mock_manager = service_aware_nats_mock
+    
+    # Queue now takes config parameter and uses ServiceManager internally
+    q = Queue(name="test", config=service_test_config)
+    return q
+
+
+@pytest_asyncio.fixture
+async def service_compatible_worker(service_aware_nats_mock, service_test_config):
+    """Setup a test worker with ServiceManager architecture."""
+    from naq.worker.core import Worker
+    connection_service, mock_manager = service_aware_nats_mock
+    
+    # Worker now takes config parameter and uses ServiceManager internally
+    worker = Worker(
+        queues=["test_queue"],
+        config=service_test_config,
+        worker_name="test-worker"
+    )
+    return worker
+
+
+# Add configuration validation fixture
+@pytest.fixture
+def invalid_config():
+    """Configuration with validation errors for testing."""
+    return {
+        'nats': {
+            'url': '',  # Empty URL should be invalid
+            'max_reconnect_attempts': -1  # Negative value should be invalid
+        },
+        'workers': {
+            'concurrency': 0  # Zero concurrency should be invalid
+        }
+    }
+
+
+# Environment variable override fixture
+@pytest.fixture
+def env_override_config(monkeypatch):
+    """Setup environment variables for configuration override testing."""
+    overrides = {
+        'NAQ_WORKERS_CONCURRENCY': '20',
+        'NAQ_NATS_URL': 'nats://override:4222',
+        'NAQ_EVENTS_ENABLED': 'false'
+    }
+    
+    for key, value in overrides.items():
+        monkeypatch.setenv(key, value)
+    
+    yield overrides
+    
+    # Cleanup handled by monkeypatch automatically

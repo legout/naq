@@ -22,12 +22,25 @@ uv pip install naq
 pixi add naq
 ```
 
-### Optional Dashboard
+### Optional Dependencies
 
-`naq` comes with an optional web-based dashboard for real-time monitoring. To install the necessary dependencies (including Sanic and Datastar), use the `dashboard` extra:
+`naq` includes several optional feature sets that you can install as needed:
 
+**Dashboard** - Web-based monitoring dashboard:
 ```bash
 pip install naq[dashboard]
+```
+
+**YAML Configuration** - Enhanced configuration support (recommended):
+```bash
+pip install naq[yaml]
+# or install specific dependencies:
+pip install pyyaml jsonschema
+```
+
+**Complete Installation** - All optional features:
+```bash
+pip install naq[dashboard,yaml]
 ```
 
 ## Setting Up NATS
@@ -60,6 +73,62 @@ nats-server -js
 
 Refer to the [official NATS documentation](https://docs.nats.io/running-a-nats-service/introduction/installation) for detailed installation instructions for your operating system.
 
+## Initial Configuration Setup
+
+### Quick Start Configuration
+
+After installation, set up your initial configuration using the CLI:
+
+```bash
+# Create a development configuration
+naq system config-init --environment development
+
+# Or create a production configuration
+naq system config-init --environment production
+```
+
+This creates a `naq.yaml` file in your current directory with appropriate defaults for your environment.
+
+### Verify Configuration
+
+```bash
+# Check that your configuration is valid
+naq system config --validate
+
+# View your current configuration
+naq system config --show
+
+# See which configuration files are being used
+naq system config --sources
+```
+
+### Environment Variables (Alternative)
+
+If you prefer environment variables over YAML configuration:
+
+```bash
+# Basic NATS connection
+export NAQ_NATS_URL=nats://localhost:4222
+
+# Worker settings
+export NAQ_WORKER_CONCURRENCY=10
+export NAQ_LOG_LEVEL=INFO
+
+# Enable comprehensive event logging
+export NAQ_EVENTS_ENABLED=true
+```
+
+### Configuration File Locations
+
+NAQ searches for configuration files in the following order:
+
+1. **Current directory**: `./naq.yaml` or `./naq.yml`
+2. **User config**: `~/.naq/config.yaml`
+3. **System config**: `/etc/naq/config.yaml`
+4. **Environment variables**: `NAQ_*` variables
+
+For detailed configuration options, see the [Configuration Guide](configuration.qmd).
+
 ## Troubleshooting
 
 ::: {.callout-note}
@@ -67,5 +136,22 @@ Refer to the [official NATS documentation](https://docs.nats.io/running-a-nats-s
 
 -   Ensure your NATS server is running and accessible from where you are running your application and workers.
 -   Verify that JetStream is enabled. You can check the server logs for a line confirming "JetStream is enabled."
--   By default, `naq` attempts to connect to `nats://localhost:4222`. If your server is elsewhere, set the `NATS_URL` environment variable.
+-   By default, `naq` attempts to connect to `nats://localhost:4222`. If your server is elsewhere, set the `NAQ_NATS_URL` environment variable or update your YAML configuration.
+:::
+
+::: {.callout-note}
+**Configuration Issues?**
+
+-   Use `naq system config --validate` to check for configuration errors
+-   Check configuration file locations with `naq system config --sources`
+-   Verify YAML syntax: `python -c "import yaml; yaml.safe_load(open('naq.yaml'))"`
+-   Environment variables take precedence over YAML configuration files
+:::
+
+::: {.callout-note}
+**Missing Dependencies?**
+
+-   For YAML configuration: `pip install pyyaml jsonschema`
+-   For validation features: `pip install jsonschema`
+-   For dashboard: `pip install naq[dashboard]`
 :::

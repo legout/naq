@@ -84,17 +84,182 @@ def config(
         "--validate",
         help="Validate configuration settings.",
     ),
+    config_path: Optional[str] = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to configuration file.",
+    ),
+    format_output: str = typer.Option(
+        "yaml",
+        "--format",
+        "-f",
+        help="Output format for configuration display (yaml, json).",
+    ),
+    sources: bool = typer.Option(
+        False,
+        "--sources",
+        help="Show configuration source information.",
+    ),
 ):
     """
-    Show or validate NAQ configuration settings.
+    Show, validate, and manage NAQ configuration settings.
     """
-    console.print("[yellow]Note:[/yellow] Configuration management commands will be implemented")
-    console.print("after the YAML configuration system is added in a future task.")
-    
-    if show:
-        console.print("\n[bold]Current Configuration:[/bold]")
-        console.print("This would show current settings from environment variables and config files.")
-    
-    if validate:
-        console.print("\n[bold]Configuration Validation:[/bold]")
-        console.print("This would validate all configuration settings and report any issues.")
+    try:
+        from ..config import (
+            load_config, 
+            get_config, 
+            get_config_source_info, 
+            get_effective_config_dict,
+            validate_config_file
+        )
+        from ..exceptions import ConfigurationError
+        import yaml
+        import json
+        from rich.syntax import Syntax
+        from rich.table import Table
+        
+        # Handle validation mode
+        if validate:
+            console.print("[bold]Validating Configuration...[/bold]")
+            try:
+                if config_path:
+                    validate_config_file(config_path)
+                    console.print(f"[green]✓[/green] Configuration file '{config_path}' is valid")
+                else:
+                    config = load_config(validate=True)
+                    console.print("[green]✓[/green] Current configuration is valid")
+            except ConfigurationError as e:
+                console.print(f"[red]✗[/red] Configuration validation failed:")
+                console.print(str(e))
+                raise typer.Exit(code=1)
+            except Exception as e:
+                console.print(f"[red]✗[/red] Error validating configuration: {e}")
+                raise typer.Exit(code=1)
+            return
+        
+        # Handle sources mode
+        if sources:
+            console.print("[bold]Configuration Sources:[/bold]")
+            source_info = get_config_source_info()
+            
+            table = Table(title="Configuration Source Information")
+            table.add_column("Property", style="cyan")
+            table.add_column("Value", style="green")
+            
+            table.add_row("Loaded", str(source_info.get("loaded", False)))
+            if source_info.get("config_path"):
+                table.add_row("Config File", source_info["config_path"])
+            
+            table.add_row("Search Paths", "\n".join(source_info.get("search_paths", [])))
+            table.add_row("Found Files", "\n".join(source_info.get("found_files", [])))
+            
+            console.print(table)
+            return
+        
+        # Handle show mode (default)
+        if show or not (validate or sources):
+            console.print("[bold]Current Configuration:[/bold]")
+            
+            try:
+                # Load configuration
+                if config_path:
+                    config = load_config(config_path)
+                else:
+                    config = get_config()
+                
+                # Get configuration as dictionary
+                config_dict = get_effective_config_dict()
+                
+                # Format output
+                if format_output.lower() == "json":
+                    formatted = json.dumps(config_dict, indent=2)
+                    syntax = Syntax(formatted, "json", theme="monokai", line_numbers=True)
+                    console.print(syntax)
+                else:  # yaml (default)
+                    formatted = yaml.dump(config_dict, default_flow_style=False, sort_keys=True)
+                    syntax = Syntax(formatted, "yaml", theme="monokai", line_numbers=True)
+                    console.print(syntax)
+                
+            except ConfigurationError as e:
+                console.print(f"[red]Error:[/red] {e}")
+                raise typer.Exit(code=1)
+            except Exception as e:
+                console.print(f"[red]Error loading configuration:[/red] {e}")
+                raise typer.Exit(code=1)
+                
+    except ImportError:
+        console.print("[red]Error:[/red] Configuration system not available.")
+        console.print("The YAML configuration system may not be fully installed.")
+        raise typer.Exit(code=1)
+
+
+@system_app.command("config-init")
+def config_init(
+    environment: str = typer.Option(
+        "development",
+        "--environment",
+        "-e",
+        help="Environment to create config for (development, production, testing, minimal).",
+    ),
+    output_path: Optional[str] = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output path for configuration file (default: ./naq.yaml).",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Overwrite existing configuration file.",
+    ),
+):
+    """
+    Initialize a new NAQ configuration file.
+    """
+    try:
+        from ..config.defaults import get_config_template
+        import yaml
+        from pathlib import Path
+        
+        # Determine output path
+        if output_path is None:
+            output_path = "./naq.yaml"
+        
+        output_file = Path(output_path)
+        
+        # Check if file exists and force flag
+        if output_file.exists() and not force:
+            console.print(f"[red]Error:[/red] Configuration file '{output_path}' already exists.")
+            console.print("Use --force to overwrite, or specify a different output path.")
+            raise typer.Exit(code=1)
+        
+        # Get template configuration
+        try:
+            config_template = get_config_template(environment)
+        except Exception:
+            console.print(f"[red]Error:[/red] Unknown environment '{environment}'.")
+            console.print("Available environments: development, production, testing, minimal")
+            raise typer.Exit(code=1)
+        
+        # Write configuration file
+        try:
+            with open(output_file, 'w') as f:
+                f.write(f"# NAQ Configuration - {environment.title()} Environment\n")
+                f.write(f"# Generated by NAQ CLI\n\n")
+                yaml.dump(config_template, f, default_flow_style=False, sort_keys=True)
+            
+            console.print(f"[green]✓[/green] Configuration file created: '{output_path}'")
+            console.print(f"Environment: {environment}")
+            console.print("\nTo use this configuration:")
+            console.print("1. Edit the file to match your requirements")
+            console.print("2. Set NAQ_ENVIRONMENT environment variable if using environment overrides")
+            console.print("3. Run 'naq system config --validate' to check your configuration")
+            
+        except Exception as e:
+            console.print(f"[red]Error:[/red] Failed to write configuration file: {e}")
+            raise typer.Exit(code=1)
+            
+    except ImportError:
+        console.print("[red]Error:[/red] Configuration system not available.")
+        raise typer.Exit(code=1)

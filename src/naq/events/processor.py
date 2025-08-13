@@ -1,6 +1,6 @@
 # src/naq/events/processor.py
 import asyncio
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from loguru import logger
 
@@ -21,16 +21,22 @@ class AsyncJobEventProcessor:
     def __init__(
         self,
         storage: Optional[BaseEventStorage] = None,
-        nats_url: str = DEFAULT_NATS_URL
+        config: Optional[Any] = None,
+        nats_url: str = DEFAULT_NATS_URL,  # Legacy parameter
+        max_concurrent_handlers: int = 10,
+        event_buffer_size: int = 1000
     ):
         """
         Initialize the event processor.
         
         Args:
             storage: Storage backend instance. If None, creates NATSJobEventStorage.
-            nats_url: NATS URL for default storage backend.
+            config: Configuration dictionary, preferred over legacy parameters
+            nats_url: NATS URL for default storage backend (legacy parameter).
+            max_concurrent_handlers: Maximum number of concurrent event handlers
+            event_buffer_size: Size of the event buffer for batching
         """
-        self.storage = storage or NATSJobEventStorage(nats_url=nats_url)
+        self.storage = storage or NATSJobEventStorage(config=config, nats_url=nats_url)
         
         # Event handlers mapping: event_type -> list of handlers
         self._event_handlers: Dict[JobEventType, List[Callable]] = {}
@@ -38,9 +44,20 @@ class AsyncJobEventProcessor:
         # Global handlers that receive all events
         self._global_handlers: List[Callable] = []
         
+        # Performance configuration
+        self._max_concurrent_handlers = max_concurrent_handlers
+        self._event_buffer_size = event_buffer_size
+        self._handler_semaphore = asyncio.Semaphore(max_concurrent_handlers)
+        
         # Internal state
         self._processing_task: Optional[asyncio.Task] = None
         self._running = False
+        self._event_stats = {
+            'events_processed': 0,
+            'handlers_executed': 0,
+            'handler_errors': 0,
+            'last_event_time': None
+        }
 
     def add_handler(self, event_type: JobEventType, handler: Callable) -> None:
         """
@@ -190,22 +207,26 @@ class AsyncJobEventProcessor:
 
     async def _execute_handler(self, handler: Callable, event: JobEvent) -> None:
         """
-        Execute a single handler for an event.
+        Execute a single handler for an event with performance controls.
         
         Args:
             handler: The handler function to execute.
             event: The JobEvent to pass to the handler.
         """
-        try:
-            # Support both sync and async handlers
-            if asyncio.iscoroutinefunction(handler):
-                await handler(event)
-            else:
-                # Run sync handler in thread pool to avoid blocking
-                await asyncio.to_thread(handler, event)
+        async with self._handler_semaphore:
+            try:
+                # Support both sync and async handlers
+                if asyncio.iscoroutinefunction(handler):
+                    await handler(event)
+                else:
+                    # Run sync handler in thread pool to avoid blocking
+                    await asyncio.to_thread(handler, event)
                 
-        except Exception as e:
-            logger.error(f"Error executing event handler: {e}")
+                self._event_stats['handlers_executed'] += 1
+                    
+            except Exception as e:
+                logger.error(f"Error executing event handler: {e}")
+                self._event_stats['handler_errors'] += 1
 
     def get_handler_count(self, event_type: Optional[JobEventType] = None) -> int:
         """
@@ -299,3 +320,40 @@ class AsyncJobEventProcessor:
             worker_id=worker_id
         ):
             yield event
+
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Get event processing statistics.
+        
+        Returns:
+            Dictionary with processing statistics
+        """
+        return {
+            'events_processed': self._event_stats['events_processed'],
+            'handlers_executed': self._event_stats['handlers_executed'],
+            'handler_errors': self._event_stats['handler_errors'],
+            'last_event_time': self._event_stats['last_event_time'],
+            'handler_count': self.get_handler_count(),
+            'max_concurrent_handlers': self._max_concurrent_handlers,
+            'current_concurrent_handlers': self._max_concurrent_handlers - self._handler_semaphore._value,
+            'is_running': self._running
+        }
+
+    async def configure_performance(
+        self, 
+        max_concurrent_handlers: Optional[int] = None,
+        event_buffer_size: Optional[int] = None
+    ) -> None:
+        """
+        Update performance configuration.
+        
+        Args:
+            max_concurrent_handlers: New maximum concurrent handlers
+            event_buffer_size: New event buffer size
+        """
+        if max_concurrent_handlers is not None:
+            self._max_concurrent_handlers = max_concurrent_handlers
+            self._handler_semaphore = asyncio.Semaphore(max_concurrent_handlers)
+            
+        if event_buffer_size is not None:
+            self._event_buffer_size = event_buffer_size

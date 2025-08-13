@@ -1,0 +1,689 @@
+---
+title: "Configuration"
+---
+
+NAQ provides a comprehensive YAML-based configuration system that supports hierarchical configuration loading, validation, and environment-specific overrides while maintaining full backward compatibility with environment variables.
+
+## Quick Start
+
+### Creating Your First Configuration
+
+Use the CLI to generate a configuration file for your environment:
+
+```bash
+# Create development configuration
+naq system config-init --environment development
+
+# Create production configuration  
+naq system config-init --environment production --output ./prod-config.yaml
+```
+
+This creates a `naq.yaml` file in your current directory with sensible defaults for your chosen environment.
+
+### Basic Configuration Example
+
+```yaml
+# naq.yaml
+nats:
+  servers: ["nats://localhost:4222"]
+  client_name: my-app
+  
+workers:
+  concurrency: 10
+  heartbeat_interval: 15
+  
+events:
+  enabled: true
+  batch_size: 100
+  
+logging:
+  level: INFO
+  format: text
+```
+
+## Configuration Discovery
+
+NAQ loads configuration from multiple sources with the following priority (highest to lowest):
+
+1. **Explicit config file** (via `--config` flag or `config_path` parameter)
+2. **Current directory**: `./naq.yaml` or `./naq.yml`
+3. **User config directory**: `~/.naq/config.yaml`
+4. **System config directory**: `/etc/naq/config.yaml`
+5. **Environment variables**: `NAQ_*` variables
+6. **Built-in defaults**
+
+### Configuration File Locations
+
+```bash
+# Check which configuration files are being used
+naq system config --sources
+
+# Validate current configuration
+naq system config --validate
+
+# View current effective configuration
+naq system config --show
+```
+
+## Configuration Structure
+
+### Complete Configuration Schema
+
+```yaml
+# Complete NAQ configuration with all available options
+nats:
+  servers:
+    - "nats://primary:4222"
+    - "nats://backup:4222"
+  client_name: "my-app"
+  max_reconnect_attempts: 5
+  reconnect_time_wait: 2.0
+  connection_timeout: 10.0
+  drain_timeout: 30.0
+  auth:
+    username: "${NATS_USER}"
+    password: "${NATS_PASS}"
+  tls:
+    enabled: false
+    cert_file: "/path/to/cert.pem"
+    key_file: "/path/to/key.pem"
+    ca_file: "/path/to/ca.pem"
+
+queues:
+  default: "main_queue"
+  prefix: "myapp"
+  configs:
+    urgent:
+      ack_wait: 30
+      max_deliver: 5
+    background:
+      ack_wait: 300
+      max_deliver: 3
+
+workers:
+  concurrency: 10
+  heartbeat_interval: 15
+  ttl: 60
+  max_job_duration: 3600
+  shutdown_timeout: 30
+  pools:
+    priority:
+      concurrency: 5
+      queues: ["urgent", "critical"]
+    background:
+      concurrency: 3
+      queues: ["background", "cleanup"]
+
+scheduler:
+  enabled: true
+  lock_ttl: 30
+  lock_renew_interval: 15
+  max_failures: 5
+  scan_interval: 1.0
+
+events:
+  enabled: true
+  batch_size: 100
+  flush_interval: 5.0
+  max_buffer_size: 10000
+  storage_url: "nats://events:4222"
+  subject_prefix: "myapp.jobs.events"
+  stream:
+    name: "MYAPP_JOB_EVENTS"
+    max_age: "7d"
+    max_bytes: "1GB"
+    replicas: 1
+  filters:
+    exclude_heartbeats: true
+    min_job_duration: 100
+
+results:
+  ttl: 604800  # 7 days
+  cleanup_interval: 3600
+  kv_bucket: "myapp_results"
+
+serialization:
+  job_serializer: "pickle"
+  compression: false
+  json:
+    encoder: "json.JSONEncoder"
+    decoder: "json.JSONDecoder"
+
+logging:
+  level: "INFO"
+  format: "json"
+  file: "/var/log/naq/naq.log"
+  max_size: "100MB"
+  backup_count: 5
+  to_file_enabled: true
+```
+
+### Environment Variable Interpolation
+
+Configuration files support environment variable interpolation using `${VARIABLE:default}` syntax:
+
+```yaml
+nats:
+  servers: 
+    - "${NAQ_NATS_URL:nats://localhost:4222}"
+    - "${NATS_BACKUP_URL}"  # Required, no default
+  auth:
+    username: "${NATS_USER}"
+    password: "${NATS_PASS}"
+
+workers:
+  concurrency: "${NAQ_CONCURRENCY:10}"
+  
+logging:
+  level: "${LOG_LEVEL:INFO}"
+```
+
+## Environment-Specific Configuration
+
+Define environment-specific overrides within your configuration file:
+
+```yaml
+# Base configuration
+nats:
+  servers: ["nats://localhost:4222"]
+workers:
+  concurrency: 10
+logging:
+  level: "INFO"
+
+# Environment overrides
+environments:
+  development:
+    name: development
+    overrides:
+      logging.level: "DEBUG"
+      workers.concurrency: 2
+      events.batch_size: 10
+      
+  production:
+    name: production
+    overrides:
+      logging.level: "INFO"
+      logging.format: "json"
+      workers.concurrency: 50
+      events.batch_size: 500
+      
+  testing:
+    name: testing
+    overrides:
+      logging.level: "WARNING"
+      events.enabled: false
+      scheduler.enabled: false
+```
+
+### Using Environment Overrides
+
+Set the `NAQ_ENVIRONMENT` variable to apply specific overrides:
+
+```bash
+# Apply development overrides
+export NAQ_ENVIRONMENT=development
+naq worker start
+
+# Apply production overrides  
+export NAQ_ENVIRONMENT=production
+naq worker start
+```
+
+## Configuration Templates
+
+### Development Environment
+
+```yaml
+# development.yaml - optimized for local development
+nats:
+  servers: ["nats://localhost:4222"]
+  client_name: "dev-client"
+
+workers:
+  concurrency: 2  # Low concurrency for debugging
+  heartbeat_interval: 15
+
+events:
+  enabled: true
+  batch_size: 10  # Small batches for quick feedback
+  flush_interval: 2.0
+  filters:
+    exclude_heartbeats: false  # Include all events for debugging
+
+logging:
+  level: "DEBUG"
+  format: "text"  # Human-readable logs
+  file: null  # Log to stdout
+
+scheduler:
+  enabled: true
+  scan_interval: 1.0  # Fast scanning for development
+```
+
+### Production Environment
+
+```yaml
+# production.yaml - optimized for performance and reliability
+nats:
+  servers:
+    - "nats://nats-1:4222" 
+    - "nats://nats-2:4222"
+    - "nats://nats-3:4222"
+  client_name: "prod-client"
+  max_reconnect_attempts: 10
+  auth:
+    username: "${NATS_USER}"
+    password: "${NATS_PASS}"
+
+workers:
+  concurrency: 50
+  heartbeat_interval: 30
+  max_job_duration: 7200
+
+events:
+  enabled: true
+  batch_size: 500  # Large batches for efficiency
+  flush_interval: 1.0
+  max_buffer_size: 50000
+  stream:
+    name: "PROD_JOB_EVENTS"
+    max_age: "30d"
+    max_bytes: "10GB"
+    replicas: 3
+
+logging:
+  level: "INFO"
+  format: "json"  # Structured logs for monitoring
+  file: "/var/log/naq/naq.log"
+  to_file_enabled: true
+
+scheduler:
+  enabled: true
+  lock_ttl: 60
+  scan_interval: 5.0
+```
+
+### Testing Environment
+
+```yaml
+# testing.yaml - minimal configuration for tests
+nats:
+  servers: ["nats://localhost:4222"]
+
+workers:
+  concurrency: 1  # Single worker for predictable tests
+  heartbeat_interval: 5
+
+scheduler:
+  enabled: false  # Disable for most tests
+
+events:
+  enabled: false  # Reduce noise in test logs
+
+logging:
+  level: "WARNING"
+  format: "text"
+
+results:
+  ttl: 60  # Short TTL for test cleanup
+```
+
+## CLI Configuration Management
+
+### Configuration Commands
+
+```bash
+# Show current configuration
+naq system config --show
+
+# Show configuration in JSON format
+naq system config --show --format json
+
+# Show configuration sources
+naq system config --sources
+
+# Validate configuration
+naq system config --validate
+
+# Validate specific file
+naq system config --validate --config ./my-config.yaml
+
+# Create new configuration
+naq system config-init --environment production
+
+# Create configuration with custom output path
+naq system config-init --environment development --output ./dev-config.yaml
+
+# Overwrite existing configuration
+naq system config-init --force
+```
+
+### Integration with Workers and Services
+
+```bash
+# Start worker with specific configuration
+naq worker start --config ./production.yaml
+
+# Start scheduler with configuration
+naq scheduler start --config ./production.yaml
+
+# Use configuration in application
+python -c "
+from naq.config import load_config
+config = load_config('./my-config.yaml')
+print(f'NATS servers: {config.nats.servers}')
+"
+```
+
+## Configuration Validation
+
+NAQ provides comprehensive configuration validation using JSON Schema and custom business rules.
+
+### Schema Validation
+
+All configuration is automatically validated against a comprehensive JSON schema that checks:
+
+- **Data types**: Ensures values are the correct type (string, number, boolean)
+- **Value ranges**: Validates numeric ranges and string patterns
+- **Required fields**: Ensures essential configuration is present
+- **Format validation**: Validates URLs, file paths, and other formatted strings
+
+### Business Rules Validation
+
+Additional validation includes:
+
+- **NATS server URL format** validation
+- **File existence** checks for TLS certificates
+- **Logical consistency** (e.g., lock renewal interval < lock TTL)
+- **Resource limits** (reasonable concurrency values, timeout relationships)
+
+### Validation Examples
+
+```bash
+# Validate current configuration
+naq system config --validate
+
+# Example validation output for invalid config
+Configuration validation failed:
+- NATS servers list cannot be empty
+- Worker concurrency must be at least 1
+- Events flush interval must be at least 0.1 seconds
+- NATS TLS cert file not found: /missing/cert.pem
+```
+
+## Type-Safe Configuration Access
+
+When using NAQ in Python applications, you get full type safety and IDE support:
+
+```python
+from naq.config import load_config
+
+# Load and validate configuration
+config = load_config("./my-config.yaml")
+
+# Type-safe access with IDE autocompletion
+nats_url = config.nats.servers[0]  # str
+worker_count = config.workers.concurrency  # int
+events_enabled = config.events.enabled  # bool
+
+# Nested access using dot notation
+primary_server = config.get_nested("nats.servers[0]")
+batch_size = config.get_nested("events.batch_size", default=100)
+
+# Configuration serialization
+config_dict = config.to_dict()
+```
+
+## Service Layer Integration
+
+The configuration system integrates seamlessly with NAQ's service layer:
+
+```python
+from naq.services import create_service_manager_from_config
+
+# Create service manager with typed configuration
+service_manager = create_service_manager_from_config("./config.yaml")
+
+# Services automatically receive typed configuration
+async with service_manager as services:
+    # All services have access to type-safe configuration
+    connection_service = await services.get_service(ConnectionService)
+    # Connection service uses config.nats for NATS settings
+```
+
+## Backward Compatibility
+
+The new YAML configuration system is fully backward compatible with environment variables. All existing `NAQ_*` environment variables continue to work and will override corresponding YAML values.
+
+### Environment Variable Reference
+
+| Environment Variable | YAML Path | Description |
+|---------------------|-----------|-------------|
+| `NAQ_NATS_URL` | `nats.servers[0]` | Primary NATS server URL |
+| `NAQ_DEFAULT_QUEUE` | `queues.default` | Default queue name |
+| `NAQ_WORKER_CONCURRENCY` | `workers.concurrency` | Worker concurrency level |
+| `NAQ_LOG_LEVEL` | `logging.level` | Logging level |
+| `NAQ_EVENTS_ENABLED` | `events.enabled` | Enable/disable event logging |
+| `NAQ_SCHEDULER_ENABLED` | `scheduler.enabled` | Enable/disable scheduler |
+
+[View complete mapping table →](advanced.qmd#environment-variables)
+
+### Migration from Environment Variables
+
+1. **Generate current configuration**:
+   ```bash
+   # This includes current environment variable values
+   naq system config-init --environment development
+   ```
+
+2. **Move environment-specific values**:
+   ```yaml
+   # Replace hardcoded values with environment interpolation
+   nats:
+     servers: ["${NAQ_NATS_URL:nats://localhost:4222}"]
+   ```
+
+3. **Gradually migrate**:
+   - Start with YAML file containing environment interpolation
+   - Gradually move values from environment to YAML
+   - Use environment overrides for deployment differences
+
+## Docker and Container Deployments
+
+### Container-Optimized Configuration
+
+```yaml
+# docker-config.yaml - optimized for containers
+nats:
+  servers: ["${NATS_URL:nats://nats:4222}"]
+  client_name: "${NAQ_CLIENT_NAME:naq-worker}"
+  auth:
+    username: "${NATS_USER}"
+    password: "${NATS_PASS}"
+
+workers:
+  concurrency: "${NAQ_CONCURRENCY:10}"
+  
+logging:
+  level: "${NAQ_LOG_LEVEL:INFO}"
+  format: "json"  # Structured logs for container log aggregation
+  file: null      # Always log to stdout in containers
+
+events:
+  enabled: "${NAQ_EVENTS_ENABLED:true}"
+  storage_url: "${NAQ_EVENT_STORAGE_URL}"
+```
+
+### Docker Usage
+
+```dockerfile
+# Dockerfile
+FROM python:3.12
+COPY docker-config.yaml /app/naq.yaml
+ENV NAQ_ENVIRONMENT=production
+CMD ["naq", "worker", "start"]
+```
+
+```bash
+# Docker run with configuration
+docker run -v ./config.yaml:/app/naq.yaml \
+  -e NAQ_ENVIRONMENT=production \
+  -e NATS_URL=nats://nats-server:4222 \
+  my-naq-app
+```
+
+## Advanced Configuration Patterns
+
+### Dynamic Configuration Updates
+
+```python
+from naq.config import reload_config, get_config
+
+# Current configuration
+config = get_config()
+print(f"Current concurrency: {config.workers.concurrency}")
+
+# Reload configuration (picks up file changes)
+config = reload_config()
+print(f"New concurrency: {config.workers.concurrency}")
+```
+
+### Configuration Monitoring
+
+```python
+import asyncio
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+from naq.config import reload_config
+
+class ConfigReloadHandler(FileSystemEventHandler):
+    def on_modified(self, event):
+        if event.src_path.endswith('naq.yaml'):
+            print("Configuration file changed, reloading...")
+            try:
+                reload_config()
+                print("Configuration reloaded successfully")
+            except Exception as e:
+                print(f"Failed to reload configuration: {e}")
+
+# Monitor configuration file for changes
+observer = Observer()
+observer.schedule(ConfigReloadHandler(), path=".", recursive=False)
+observer.start()
+```
+
+### Configuration Templating
+
+For complex deployments, you can use templating tools with NAQ configuration:
+
+```yaml
+# config-template.yaml (using Jinja2)
+nats:
+  servers:
+    {% for server in nats_servers %}
+    - "{{ server }}"
+    {% endfor %}
+  
+workers:
+  concurrency: {{ worker_concurrency | default(10) }}
+  
+{% if environment == 'production' %}
+logging:
+  level: "INFO"
+  format: "json"
+{% else %}
+logging:
+  level: "DEBUG"
+  format: "text"
+{% endif %}
+```
+
+## Troubleshooting
+
+### Common Configuration Issues
+
+**Configuration not found:**
+```bash
+# Check search paths
+naq system config --sources
+
+# Verify file exists
+ls -la naq.yaml ~/.naq/config.yaml /etc/naq/config.yaml
+```
+
+**Environment variables not working:**
+```bash
+# Check current environment
+env | grep NAQ_
+
+# Test specific variable
+export NAQ_LOG_LEVEL=DEBUG
+naq system config --show | grep level
+```
+
+**Validation errors:**
+```bash
+# Get detailed validation errors
+naq system config --validate
+
+# Check specific configuration file
+naq system config --validate --config ./my-config.yaml
+```
+
+**YAML syntax errors:**
+```bash
+# Use YAML validator
+python -c "
+import yaml
+with open('naq.yaml') as f:
+    try:
+        yaml.safe_load(f)
+        print('YAML syntax is valid')
+    except yaml.YAMLError as e:
+        print(f'YAML syntax error: {e}')
+"
+```
+
+### Debug Mode
+
+Enable debug logging to see configuration loading:
+
+```bash
+export NAQ_LOG_LEVEL=DEBUG
+naq system config --show
+```
+
+This will show detailed information about:
+- Configuration file discovery
+- Environment variable processing  
+- Value merging and overrides
+- Validation results
+
+## Best Practices
+
+### Development
+- Use `development` environment with debug logging
+- Keep configuration files in version control
+- Use environment variable interpolation for secrets
+- Validate configuration in CI/CD pipelines
+
+### Production
+- Use `production` environment with structured logging
+- Store sensitive values in environment variables or secret management
+- Monitor configuration changes
+- Use separate configurations for different deployment stages
+- Enable comprehensive event logging for observability
+
+### Security
+- Never commit secrets to configuration files
+- Use environment variable interpolation for sensitive values
+- Validate configuration on startup
+- Restrict file permissions on configuration files
+- Use TLS for NATS connections in production
+
+### Performance
+- Use larger batch sizes and longer intervals for high-throughput scenarios
+- Configure appropriate worker concurrency based on workload
+- Tune event logging parameters for your monitoring needs
+- Use connection pooling through the service layer

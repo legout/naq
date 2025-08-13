@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.32">
+<meta name="generator" content="quarto-1.7.33">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -20,6 +20,41 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
 </style>
 
 
@@ -36,14 +71,14 @@ ul.task-list li input[type="checkbox"] {
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-2fef5ea3f8957b3e4ecc936fc74692ca.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-bc185b5c5bdbcb35c2eb49d8a876ef70.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="site_libs/bootstrap/bootstrap-dark-08799928d293638fe9563d5c5a2794e5.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-ccd81253fefb92e9cd3f9eb5b5d87b54.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -271,6 +306,10 @@ ul.task-list li input[type="checkbox"] {
 <span class="menu-text">Quickstart</span></a>
   </li>  
   <li class="nav-item">
+    <a class="nav-link" href="./configuration.html"> 
+<span class="menu-text">Configuration</span></a>
+  </li>  
+  <li class="nav-item">
     <a class="nav-link active" href="./architecture.html" aria-current="page"> 
 <span class="menu-text">Architecture</span></a>
   </li>  
@@ -281,6 +320,10 @@ ul.task-list li input[type="checkbox"] {
   <li class="nav-item">
     <a class="nav-link" href="./advanced.html"> 
 <span class="menu-text">Advanced</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./event-logging.html"> 
+<span class="menu-text">Event-Driven State Management</span></a>
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="./api/index.html"> 
@@ -310,6 +353,25 @@ ul.task-list li input[type="checkbox"] {
   <li><a href="#core-components" id="toc-core-components" class="nav-link active" data-scroll-target="#core-components">Core Components</a></li>
   <li><a href="#how-it-works-the-job-lifecycle" id="toc-how-it-works-the-job-lifecycle" class="nav-link" data-scroll-target="#how-it-works-the-job-lifecycle">How It Works: The Job Lifecycle</a></li>
   <li><a href="#why-nats" id="toc-why-nats" class="nav-link" data-scroll-target="#why-nats">Why NATS?</a></li>
+  <li><a href="#utility-patterns-and-common-code" id="toc-utility-patterns-and-common-code" class="nav-link" data-scroll-target="#utility-patterns-and-common-code">Utility Patterns and Common Code</a>
+  <ul class="collapse">
+  <li><a href="#core-utility-modules" id="toc-core-utility-modules" class="nav-link" data-scroll-target="#core-utility-modules">Core Utility Modules</a></li>
+  <li><a href="#usage-example" id="toc-usage-example" class="nav-link" data-scroll-target="#usage-example">Usage Example</a></li>
+  </ul></li>
+  <li><a href="#service-layer-architecture" id="toc-service-layer-architecture" class="nav-link" data-scroll-target="#service-layer-architecture">Service Layer Architecture</a>
+  <ul class="collapse">
+  <li><a href="#service-layer-benefits" id="toc-service-layer-benefits" class="nav-link" data-scroll-target="#service-layer-benefits">Service Layer Benefits</a></li>
+  <li><a href="#service-architecture-diagram" id="toc-service-architecture-diagram" class="nav-link" data-scroll-target="#service-architecture-diagram">Service Architecture Diagram</a></li>
+  <li><a href="#service-lifecycle-management" id="toc-service-lifecycle-management" class="nav-link" data-scroll-target="#service-lifecycle-management">Service Lifecycle Management</a></li>
+  <li><a href="#configuration-driven-service-creation" id="toc-configuration-driven-service-creation" class="nav-link" data-scroll-target="#configuration-driven-service-creation">Configuration-Driven Service Creation</a></li>
+  </ul></li>
+  <li><a href="#event-driven-state-management-architecture" id="toc-event-driven-state-management-architecture" class="nav-link" data-scroll-target="#event-driven-state-management-architecture">Event-Driven State Management Architecture</a>
+  <ul class="collapse">
+  <li><a href="#event-flow-architecture" id="toc-event-flow-architecture" class="nav-link" data-scroll-target="#event-flow-architecture">Event Flow Architecture</a></li>
+  <li><a href="#state-management-layers" id="toc-state-management-layers" class="nav-link" data-scroll-target="#state-management-layers">State Management Layers</a></li>
+  <li><a href="#event-types-and-sources" id="toc-event-types-and-sources" class="nav-link" data-scroll-target="#event-types-and-sources">Event Types and Sources</a></li>
+  <li><a href="#benefits-of-event-driven-architecture" id="toc-benefits-of-event-driven-architecture" class="nav-link" data-scroll-target="#benefits-of-event-driven-architecture">Benefits of Event-Driven Architecture</a></li>
+  </ul></li>
   </ul>
 </nav>
     </div>
@@ -339,12 +401,13 @@ ul.task-list li input[type="checkbox"] {
 <p><code>naq</code> is designed to be a simple yet powerful distributed task queue. Its architecture is fundamentally built around <a href="https://nats.io">NATS</a> and its persistence layer, <a href="https://docs.nats.io/jetstream/jetstream">JetStream</a>, which serve as the central nervous system for communication between clients, workers, and the scheduler.</p>
 <section id="core-components" class="level2">
 <h2 class="anchored" data-anchor-id="core-components">Core Components</h2>
-<p>The <code>naq</code> ecosystem consists of four main components:</p>
+<p>The <code>naq</code> ecosystem consists of five main components:</p>
 <ol type="1">
 <li><strong>The Client (Producer)</strong>: Any application that enqueues jobs. This could be a web server, a script, or any other part of your system that needs to offload work.</li>
 <li><strong>NATS Server (with JetStream)</strong>: The message broker that provides persistence, message delivery, and storage for job results and worker metadata.</li>
 <li><strong>The Worker(s)</strong>: The processes that subscribe to queues, execute jobs, and report back their results. You can run as many workers as you need, on as many machines as you want.</li>
 <li><strong>The Scheduler</strong>: A dedicated process that handles time-based events, such as scheduled jobs and recurring tasks.</li>
+<li><strong>The Service Layer</strong>: A centralized service architecture that provides connection management, configuration integration, and resource lifecycle management across all NAQ components.</li>
 </ol>
 </section>
 <section id="how-it-works-the-job-lifecycle" class="level2">
@@ -357,29 +420,80 @@ ul.task-list li input[type="checkbox"] {
 <div>
 <pre class="mermaid mermaid-js">graph TD
     subgraph "Your Application"
-        Client[Client]
-        PythonCode[Python Code]
+        Client[Client Application]
+        PythonCode[Python Functions]
+    end
+
+    subgraph "NAQ Service Layer"
+        ServiceManager[Service Manager]
+        ConnectionService[Connection Service]
+        JobService[Job Service]
+        StreamService[Stream Service]
+        KVService[KV Store Service]
+        EventService[Event Service]
     end
 
     subgraph "NAQ Processes"
-        Worker[Worker]
-        Scheduler[Scheduler]
+        Worker[Worker Process]
+        Scheduler[Scheduler Process]
     end
 
     subgraph "NATS Server (JetStream)"
         QueueStream[Queue Stream]
         ResultStore[Result KV Store]
         ScheduledJobs[Scheduled Jobs KV]
+        EventStream[Event Stream]
     end
 
-    Client -- "1. Enqueue Job" --&gt; QueueStream
-    Scheduler -- "7. Check for Due Jobs" --&gt; ScheduledJobs
-    ScheduledJobs -- "Job is Due" --&gt; Scheduler
-    Scheduler -- "8. Enqueue Due Job" --&gt; QueueStream
-    Worker -- "3. Fetch Job" --&gt; QueueStream
+    subgraph "Configuration"
+        YAMLConfig[YAML Config]
+        EnvVars[Environment Variables]
+        TypedConfig[Typed Configuration]
+    end
+
+    %% Configuration Flow
+    YAMLConfig --&gt; TypedConfig
+    EnvVars --&gt; TypedConfig
+    TypedConfig --&gt; ServiceManager
+
+    %% Service Layer Flow
+    ServiceManager --&gt; ConnectionService
+    ServiceManager --&gt; JobService
+    ServiceManager --&gt; StreamService
+    ServiceManager --&gt; KVService
+    ServiceManager --&gt; EventService
+
+    %% Client Flow
+    Client -- "1. Enqueue Job" --&gt; JobService
+    JobService --&gt; StreamService
+    StreamService --&gt; QueueStream
+
+    %% Worker Flow
+    Worker --&gt; JobService
+    JobService -- "3. Fetch Job" --&gt; StreamService
+    StreamService --&gt; QueueStream
     Worker -- "4. Execute Function" --&gt; PythonCode
     PythonCode -- "5. Return Result" --&gt; Worker
-    Worker -- "6. Store Result" --&gt; ResultStore
+    Worker --&gt; JobService
+    JobService --&gt; KVService
+    KVService -- "6. Store Result" --&gt; ResultStore
+
+    %% Scheduler Flow
+    Scheduler --&gt; JobService
+    JobService -- "7. Check Due Jobs" --&gt; KVService
+    KVService --&gt; ScheduledJobs
+    Scheduler -- "8. Enqueue Due Job" --&gt; JobService
+
+    %% Event Flow
+    Worker -.-&gt; EventService
+    Scheduler -.-&gt; EventService
+    EventService -.-&gt; EventStream
+
+    %% Service to NATS Connection
+    ConnectionService --&gt; QueueStream
+    ConnectionService --&gt; ResultStore
+    ConnectionService --&gt; ScheduledJobs
+    ConnectionService --&gt; EventStream
 </pre>
 </div>
 <p></p></figure><p></p>
@@ -404,8 +518,328 @@ ul.task-list li input[type="checkbox"] {
 <li><strong>Resilience</strong>: If a worker crashes, JetStream ensures that the job it was processing will be re-delivered to another worker after a timeout. If the entire <code>naq</code> system goes down, the jobs are safe in the NATS stream, ready to be processed when the system comes back online.</li>
 <li><strong>Simplicity</strong>: By offloading the complexities of persistence, delivery guarantees, and storage to NATS, the <code>naq</code> codebase can remain focused on the core logic of job execution and scheduling.</li>
 </ul>
+</section>
+<section id="utility-patterns-and-common-code" class="level2">
+<h2 class="anchored" data-anchor-id="utility-patterns-and-common-code">Utility Patterns and Common Code</h2>
+<p>NAQ implements a comprehensive set of utility patterns to reduce code duplication and improve maintainability across the codebase. These utilities provide standardized approaches to common operations.</p>
+<section id="core-utility-modules" class="level3">
+<h3 class="anchored" data-anchor-id="core-utility-modules">Core Utility Modules</h3>
+<p><strong>Error Handling (<code>utils.error_handling</code>)</strong> - Centralized error handling with configurable strategies - Exception wrapping and context management - Error metrics collection and reporting - Automatic error classification and routing</p>
+<p><strong>Retry Patterns (<code>utils.decorators</code>)</strong> - Configurable retry decorators with exponential backoff - Support for different backoff strategies (linear, exponential, jitter) - Automatic retry on specific exception types - Performance timing integration</p>
+<p><strong>Structured Logging (<code>utils.logging</code>)</strong> - Context-aware structured logging - Operation timing and performance tracking - JSON formatting for log aggregation - Thread-local context management</p>
+<p><strong>Async Utilities (<code>utils.async_helpers</code>)</strong> - Concurrency control with semaphores - Async/sync function conversion utilities - Rate limiting and throttling - Background task management</p>
+<p><strong>Serialization (<code>utils.serialization</code>)</strong> - Safe serialization with fallback mechanisms - Metadata-aware serialization - Compression support - Type validation on deserialization</p>
+<p><strong>Context Managers (<code>utils.context_managers</code>)</strong> - Resource lifecycle management - Timeout handling - Circuit breaker patterns - Operation error contexts</p>
+</section>
+<section id="usage-example" class="level3">
+<h3 class="anchored" data-anchor-id="usage-example">Usage Example</h3>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils <span class="im">import</span> (</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    retry, timing, log_errors,</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    async_error_handler_context,</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    StructuredLogger,</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    performance_context</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> JobProcessor:</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>):</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.logger <span class="op">=</span> StructuredLogger(<span class="st">"job_processor"</span>)</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.error_handler <span class="op">=</span> get_global_error_handler()</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">@retry</span>(max_attempts<span class="op">=</span><span class="dv">3</span>, backoff<span class="op">=</span><span class="st">"exponential"</span>)</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">@timing</span>(threshold_ms<span class="op">=</span><span class="dv">1000</span>)</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">@log_errors</span>(reraise<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> process_job(<span class="va">self</span>, job_id: <span class="bu">str</span>):</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>        <span class="co">"""Process job with retry, timing, and error logging."""</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">async</span> <span class="cf">with</span> async_error_handler_context(</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>            <span class="va">self</span>.error_handler, <span class="ss">f"process_job_</span><span class="sc">{</span>job_id<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>        ):</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>            <span class="cf">async</span> <span class="cf">with</span> performance_context(<span class="st">"job_processing"</span>, <span class="va">self</span>.logger):</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>                <span class="co"># Job processing logic here</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>                result <span class="op">=</span> <span class="cf">await</span> <span class="va">self</span>._execute_job_logic(job_id)</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>                <span class="cf">return</span> result</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="service-layer-architecture" class="level2">
+<h2 class="anchored" data-anchor-id="service-layer-architecture">Service Layer Architecture</h2>
+<p>NAQ’s service layer provides a comprehensive foundation for building reliable, scalable job processing applications. The service architecture follows dependency injection patterns and provides centralized resource management.</p>
+<section id="service-layer-benefits" class="level3">
+<h3 class="anchored" data-anchor-id="service-layer-benefits">Service Layer Benefits</h3>
+<p><strong>Centralized Connection Management</strong> - Single point of NATS connection management with connection pooling - Automatic failover to backup servers - Resource cleanup and lifecycle management - Connection state monitoring and health checks</p>
+<p><strong>Configuration Integration</strong> - Direct integration with YAML configuration system - Type-safe configuration access throughout the application - Environment-specific configuration overrides - Real-time configuration validation</p>
+<p><strong>Dependency Injection</strong> - Services automatically resolve their dependencies - Lifecycle management with proper initialization and cleanup ordering - Easy testing with service mocking capabilities - Consistent resource management patterns</p>
+<p><strong>Type Safety and IDE Support</strong> - Full type annotations with dataclass-based configuration - IDE autocompletion for configuration properties - Compile-time validation of configuration access patterns - Structured error handling with detailed validation messages</p>
+</section>
+<section id="service-architecture-diagram" class="level3">
+<h3 class="anchored" data-anchor-id="service-architecture-diagram">Service Architecture Diagram</h3>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">graph TD
+    subgraph "Configuration Layer"
+        YAMLFiles[YAML Configuration Files]
+        EnvVars[Environment Variables]
+        ConfigLoader[Configuration Loader]
+        TypedConfig[Typed Configuration Objects]
+    end
+
+    subgraph "Service Layer"
+        ServiceManager[Service Manager&lt;br/&gt;Dependency Injection]
+        BaseService[Base Service&lt;br/&gt;Lifecycle Management]
+    end
+
+    subgraph "Core Services"
+        ConnectionService[Connection Service&lt;br/&gt;NATS Management]
+        StreamService[Stream Service&lt;br/&gt;JetStream Operations]
+        KVService[KV Store Service&lt;br/&gt;KeyValue Operations]
+        JobService[Job Service&lt;br/&gt;Job Orchestration]
+        EventService[Event Service&lt;br/&gt;Event Logging]
+        SchedulerService[Scheduler Service&lt;br/&gt;Time-based Jobs]
+    end
+
+    subgraph "Application Layer"
+        Workers[Worker Processes]
+        Clients[Client Applications]
+        Scheduler[Scheduler Process]
+        CustomServices[Custom Services]
+    end
+
+    %% Configuration flow
+    YAMLFiles --&gt; ConfigLoader
+    EnvVars --&gt; ConfigLoader
+    ConfigLoader --&gt; TypedConfig
+    
+    %% Service management
+    TypedConfig --&gt; ServiceManager
+    ServiceManager --&gt; BaseService
+    BaseService --&gt; ConnectionService
+    BaseService --&gt; StreamService
+    BaseService --&gt; KVService
+    BaseService --&gt; JobService
+    BaseService --&gt; EventService
+    BaseService --&gt; SchedulerService
+
+    %% Application usage
+    ServiceManager --&gt; Workers
+    ServiceManager --&gt; Clients
+    ServiceManager --&gt; Scheduler
+    ServiceManager --&gt; CustomServices
+
+    %% Service dependencies
+    StreamService -.-&gt; ConnectionService
+    KVService -.-&gt; ConnectionService
+    JobService -.-&gt; StreamService
+    JobService -.-&gt; KVService
+    EventService -.-&gt; StreamService
+    SchedulerService -.-&gt; KVService
+
+    classDef configLayer fill:#e3f2fd
+    classDef serviceLayer fill:#f3e5f5
+    classDef coreServices fill:#e8f5e8
+    classDef appLayer fill:#fff3e0
+
+    class YAMLFiles,EnvVars,ConfigLoader,TypedConfig configLayer
+    class ServiceManager,BaseService serviceLayer
+    class ConnectionService,StreamService,KVService,JobService,EventService,SchedulerService coreServices
+    class Workers,Clients,Scheduler,CustomServices appLayer
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+</section>
+<section id="service-lifecycle-management" class="level3">
+<h3 class="anchored" data-anchor-id="service-lifecycle-management">Service Lifecycle Management</h3>
+<p>Each service follows a consistent lifecycle pattern:</p>
+<ol type="1">
+<li><strong>Initialization</strong>: Services are created with typed configuration</li>
+<li><strong>Dependency Resolution</strong>: ServiceManager resolves service dependencies</li>
+<li><strong>Resource Acquisition</strong>: Services acquire NATS connections, streams, etc.</li>
+<li><strong>Active Operation</strong>: Services handle job processing, scheduling, events</li>
+<li><strong>Cleanup</strong>: Resources are properly cleaned up when services shut down</li>
+</ol>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Service lifecycle example</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="cf">with</span> create_service_manager_from_config(<span class="st">"./config.yaml"</span>) <span class="im">as</span> services:</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Services are automatically initialized with dependencies</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    job_service <span class="op">=</span> <span class="cf">await</span> services.get_service(JobService)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Use services with managed resources</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> <span class="cf">await</span> job_service.execute_job(my_job)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Cleanup is automatic when exiting context</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="configuration-driven-service-creation" class="level3">
+<h3 class="anchored" data-anchor-id="configuration-driven-service-creation">Configuration-Driven Service Creation</h3>
+<p>Services are created and configured based on your YAML configuration:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode yaml code-with-copy"><code class="sourceCode yaml"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># config.yaml</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">nats</span><span class="kw">:</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">servers</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="st">"nats://primary:4222"</span><span class="kw">,</span><span class="at"> </span><span class="st">"nats://backup:4222"</span><span class="kw">]</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">max_reconnect_attempts</span><span class="kw">:</span><span class="at"> </span><span class="dv">5</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="fu">workers</span><span class="kw">:</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">concurrency</span><span class="kw">:</span><span class="at"> </span><span class="dv">20</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">pools</span><span class="kw">:</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">high_priority</span><span class="kw">:</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">concurrency</span><span class="kw">:</span><span class="at"> </span><span class="dv">10</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="fu">queues</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="st">"urgent"</span><span class="kw">]</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="fu">events</span><span class="kw">:</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">enabled</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">batch_size</span><span class="kw">:</span><span class="at"> </span><span class="dv">200</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Services automatically use configuration</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services <span class="im">import</span> create_service_manager_from_config</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>service_manager <span class="op">=</span> create_service_manager_from_config(<span class="st">"./config.yaml"</span>)</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="cf">with</span> service_manager <span class="im">as</span> services:</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="co"># ConnectionService uses nats.servers configuration</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    conn_service <span class="op">=</span> <span class="cf">await</span> services.get_service(ConnectionService)</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    <span class="co"># EventService uses events.enabled and events.batch_size</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    event_service <span class="op">=</span> <span class="cf">await</span> services.get_service(EventService)</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="co"># All services have type-safe access to their configuration</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    nats_servers <span class="op">=</span> event_service.nats_config.servers</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    batch_size <span class="op">=</span> event_service.events_config.batch_size</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="event-driven-state-management-architecture" class="level2">
+<h2 class="anchored" data-anchor-id="event-driven-state-management-architecture">Event-Driven State Management Architecture</h2>
+<p>NAQ implements comprehensive event-driven state management where every state transition is captured as a structured event and stored in NATS JetStream streams. This provides complete observability and enables powerful monitoring, debugging, and analytics capabilities.</p>
+<section id="event-flow-architecture" class="level3">
+<h3 class="anchored" data-anchor-id="event-flow-architecture">Event Flow Architecture</h3>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">graph TD
+    subgraph "NAQ Components"
+        Worker[Worker Process]
+        Queue[Queue Client]
+        Scheduler[Scheduler Process]
+    end
+
+    subgraph "NATS JetStream - Job Processing"
+        JobStream[Job Queue Stream&lt;br/&gt;naq_jobs]
+        ResultKV[Results KV Store&lt;br/&gt;naq_results]
+        ScheduleKV[Scheduled Jobs KV&lt;br/&gt;naq_scheduled_jobs]
+        WorkerKV[Worker Status KV&lt;br/&gt;naq_workers]
+    end
+
+    subgraph "NATS JetStream - Event Logging"
+        EventStream[Event Stream&lt;br/&gt;NAQ_JOB_EVENTS]
+        EventStorage[(Durable Event Storage)]
+    end
+
+    subgraph "Event Consumers"
+        Monitor[Real-time Monitor&lt;br/&gt;naq events]
+        Analytics[Analytics Engine&lt;br/&gt;naq event-stats]
+        History[Historical Queries&lt;br/&gt;naq event-history]
+        Custom[Custom Event Handlers]
+    end
+
+    %% Job Processing Flow
+    Queue --&gt; JobStream
+    JobStream --&gt; Worker
+    Worker --&gt; ResultKV
+    Queue --&gt; ScheduleKV
+    Scheduler --&gt; ScheduleKV
+    Scheduler --&gt; JobStream
+    Worker --&gt; WorkerKV
+
+    %% Event Logging Flow
+    Worker -.-&gt;|Job Events| EventStream
+    Queue -.-&gt;|Enqueue Events| EventStream
+    Scheduler -.-&gt;|Schedule Events| EventStream
+    Worker -.-&gt;|Worker Events| EventStream
+
+    %% Event Storage &amp; Consumption
+    EventStream --&gt; EventStorage
+    EventStorage --&gt; Monitor
+    EventStorage --&gt; Analytics  
+    EventStorage --&gt; History
+    EventStorage --&gt; Custom
+
+    %% Styling
+    classDef naqComponent fill:#e1f5fe
+    classDef natsStorage fill:#f3e5f5
+    classDef eventSystem fill:#e8f5e8
+    classDef consumers fill:#fff3e0
+
+    class Worker,Queue,Scheduler naqComponent
+    class JobStream,ResultKV,ScheduleKV,WorkerKV natsStorage
+    class EventStream,EventStorage eventSystem
+    class Monitor,Analytics,History,Custom consumers
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+</section>
+<section id="state-management-layers" class="level3">
+<h3 class="anchored" data-anchor-id="state-management-layers">State Management Layers</h3>
+<p>NAQ’s state management operates on multiple layers:</p>
+<p><strong>1. Operational State (KV Stores)</strong> - <strong>Current state</strong> of jobs, workers, and schedules - <strong>Fast lookups</strong> for status queries - <strong>Optimized for real-time operations</strong></p>
+<p><strong>2. Event Stream (Audit Trail)</strong> - <strong>Complete history</strong> of all state transitions - <strong>Immutable event log</strong> for debugging and compliance - <strong>Time-ordered</strong> event sequence for analysis</p>
+<p><strong>3. Derived State (Analytics)</strong> - <strong>Aggregated metrics</strong> computed from event streams - <strong>System health indicators</strong> and performance stats - <strong>Trend analysis</strong> and capacity planning data</p>
+</section>
+<section id="event-types-and-sources" class="level3">
+<h3 class="anchored" data-anchor-id="event-types-and-sources">Event Types and Sources</h3>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">graph LR
+    subgraph "Event Sources"
+        W[Worker]
+        Q[Queue] 
+        S[Scheduler]
+    end
+
+    subgraph "Event Categories"
+        JE[Job Lifecycle Events]
+        WE[Worker Status Events]
+        SE[Schedule Management Events]
+    end
+
+    subgraph "Event Stream"
+        ES[NAQ_JOB_EVENTS&lt;br/&gt;JetStream]
+    end
+
+    W --&gt; JE
+    W --&gt; WE
+    Q --&gt; JE
+    Q --&gt; SE
+    S --&gt; JE
+    S --&gt; SE
+
+    JE --&gt; ES
+    WE --&gt; ES
+    SE --&gt; ES
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+<p><strong>Job Lifecycle Events:</strong> - ENQUEUED, STARTED, COMPLETED, FAILED, RETRY_SCHEDULED - SCHEDULED, SCHEDULE_TRIGGERED, CANCELLED</p>
+<p><strong>Worker Status Events:</strong> - WORKER_STARTED, WORKER_STOPPED, WORKER_IDLE, WORKER_BUSY - WORKER_HEARTBEAT, WORKER_ERROR</p>
+<p><strong>Schedule Management Events:</strong> - SCHEDULE_PAUSED, SCHEDULE_RESUMED, SCHEDULE_CANCELLED - SCHEDULE_MODIFIED</p>
+</section>
+<section id="benefits-of-event-driven-architecture" class="level3">
+<h3 class="anchored" data-anchor-id="benefits-of-event-driven-architecture">Benefits of Event-Driven Architecture</h3>
+<p><strong>Complete Observability</strong> - Every system operation is logged and queryable - Real-time monitoring of all components - Historical analysis for debugging and optimization</p>
+<p><strong>Reactive Capabilities</strong> - Build applications that respond to job lifecycle events - Implement custom business logic triggered by state changes - Create monitoring and alerting systems</p>
+<p><strong>Debugging &amp; Analytics</strong> - Trace job execution across the entire system - Analyze performance patterns and bottlenecks - Monitor worker health and capacity utilization</p>
+<p><strong>Compliance &amp; Auditing</strong> - Immutable audit trail of all operations - Meet compliance requirements for job processing - Track system usage and resource consumption</p>
 
 
+</section>
 </section>
 
 </main> <!-- /main -->

@@ -49,7 +49,14 @@ To get your development environment set up, follow these steps:
 
     ```bash
     pytest
+    
+    # Or run specific test categories
+    pytest tests/test_services/    # Service layer tests
+    pytest tests/test_config/      # Configuration tests
+    pytest tests/test_compatibility/  # Backward compatibility tests
     ```
+
+    See the [Testing Guide](testing.qmd) for comprehensive testing documentation and patterns.
 
 ## Making Changes
 

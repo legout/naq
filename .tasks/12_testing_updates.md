@@ -1,142 +1,247 @@
 # Task 12: Testing Updates and Validation
 
 ## Overview
-Update the entire test suite to work with the refactored codebase structure, add comprehensive tests for new components, and ensure all functionality works correctly after the major refactoring.
+**COMPLEXITY: HIGH** - Update the entire test suite to work with the service layer integration, migrate existing tests to new architecture, add comprehensive service layer testing, and ensure all functionality works correctly after the major service integration.
 
-## Current State
-After completing Tasks 01-11:
-- Large files split into focused modules
-- Service layer implemented
-- YAML configuration system available
-- Common patterns extracted
-- Event system fully integrated
-- Imports updated with backward compatibility
+## Current State (UPDATED ASSESSMENT)
+After completing Tasks 01-09 and comprehensive service layer integration:
+- ✅ **Service layer fully integrated** across all components (Queue, Worker, Scheduler, CLI, Events)
+- ✅ **Configuration system** supports both YAML and legacy parameters with backward compatibility  
+- ✅ **Backward compatibility maintained** for all user-facing APIs and import patterns
+- ✅ **Event system integrated** with service layer architecture
+- ❌ **Test infrastructure needs major overhaul** - current tests use old connection patterns
+- ❌ **No service layer tests exist** - critical gap in testing coverage
+- ❌ **Configuration testing completely missing** - YAML config → ServiceManager pipeline untested
+- ❌ **Existing tests need migration** to ServiceManager architecture
 
-## Testing Challenges
-- Test imports need updating to use new module structure
-- Service layer needs comprehensive testing
-- Configuration system needs validation
-- Event system needs integration testing
-- Performance regression testing required
-- Backward compatibility must be validated
+## Testing Challenges (UPDATED)
 
-## Testing Strategy
+### **Critical Issues Discovered in Current Test Infrastructure:**
 
-### 1. Test Categories
+1. **Test Architecture Mismatch:**
+   - Current tests still use old `nats_jetstream()` connection patterns 
+   - ServiceManager architecture not tested at all
+   - Mock fixtures in `conftest.py` need complete overhaul for service layer
 
-#### Unit Tests
-- **Model Tests**: Test individual model classes and methods
-- **Service Tests**: Test each service in isolation with mocks
-- **Utility Tests**: Test common patterns and helper functions
-- **Configuration Tests**: Test configuration loading and validation
+2. **Missing Service Layer Testing:**
+   - No `test_*service*.py` files exist
+   - Service dependency injection not tested
+   - Service lifecycle management not validated
+   - Cross-service communication not tested
 
-#### Integration Tests  
-- **Component Integration**: Test interaction between major components
-- **Service Integration**: Test services working together
-- **End-to-End**: Test complete workflows (enqueue → process → complete)
-- **Event Flow**: Test event logging throughout system
+3. **Configuration Testing Gap:**
+   - YAML configuration loading completely untested
+   - Environment variable overrides not validated
+   - Configuration → ServiceManager → Components pipeline not tested
+   - Configuration validation logic not covered
 
-#### Compatibility Tests
-- **Import Compatibility**: Test all legacy import patterns work
-- **API Compatibility**: Test existing user code continues to work
-- **Configuration Compatibility**: Test env vars still work
+4. **Test Organization Conflicts:**
+   ```
+   CURRENT STRUCTURE:           NEEDS TO BECOME:
+   tests/unit/test_unit_*.py    tests/unit/ + tests/test_services/
+   tests/integration/           tests/integration/ (updated for services)
+   (no config tests)            tests/test_config/ (new)
+   (no service tests)           tests/test_services/ (new)
+   ```
 
-#### Performance Tests
-- **Regression Tests**: Ensure no performance degradation  
-- **Service Overhead**: Measure service layer impact
-- **Event Logging**: Test event system performance impact
-- **Connection Efficiency**: Test NATS connection improvements
+5. **Mock Infrastructure Outdated:**
+   - Current mocks target individual NATS connections
+   - Need ServiceManager mocking patterns
+   - Service dependency mocking required
+   - Configuration-driven mock setup needed
 
-## Detailed Implementation Plan
+## Updated Testing Strategy
 
-### 1. Update Test Infrastructure
+### **Phase-Based Implementation Approach**
 
-**Test Configuration and Setup:**
+#### **Phase 1: Test Infrastructure Overhaul (Priority: CRITICAL)**
+1. **Update `conftest.py` for ServiceManager architecture:**
+   - Add ServiceManager fixtures
+   - Create service-layer mock patterns  
+   - Update existing NATS mocks to work with services
+   - Add configuration fixture support
+
+2. **Create service layer test foundation:**
+   - Establish service testing patterns
+   - Create mock service dependencies
+   - Set up service lifecycle testing utilities
+
+#### **Phase 2: Service Layer Testing (Priority: HIGH)**
+1. **Individual Service Unit Tests:**
+   - `tests/test_services/test_connection_service.py` - Connection pooling, failover
+   - `tests/test_services/test_job_service.py` - Job execution orchestration  
+   - `tests/test_services/test_event_service.py` - Event logging
+   - `tests/test_services/test_stream_service.py` - JetStream operations
+   - `tests/test_services/test_kv_service.py` - KeyValue operations
+   - `tests/test_services/test_scheduler_service.py` - Scheduling operations
+
+2. **Service Integration Testing:**
+   - Cross-service communication validation
+   - Dependency injection testing
+   - Service lifecycle management testing
+
+#### **Phase 3: Configuration Testing (Priority: HIGH)**
+1. **YAML Configuration Pipeline:**
+   ```
+   YAML File → ConfigLoader → TypedConfig → ServiceManager → Services
+   ```
+2. **Configuration validation testing**
+3. **Environment variable override testing**
+4. **Configuration error handling testing**
+
+#### **Phase 4: Existing Test Migration (Priority: MEDIUM)**
+1. **Migrate current tests to ServiceManager:**
+   - Update `test_unit_queue.py` to use services
+   - Update `test_unit_worker.py` to use services
+   - Update `test_integration_*.py` files
+   - Maintain backward compatibility in test coverage
+
+#### **Phase 5: Compatibility & Performance (Priority: MEDIUM)**
+1. **Backward Compatibility Tests:**
+   - API compatibility validation
+   - Import compatibility testing  
+   - Legacy parameter support testing
+
+2. **Performance Regression Testing:**
+   - Service layer overhead measurement
+   - Event logging performance impact
+   - Memory usage analysis
+
+## Detailed Implementation Plan (UPDATED)
+
+### **Phase 1: Test Infrastructure Overhaul**
+
+#### **Critical Update: `conftest.py` ServiceManager Integration**
+Current `conftest.py` has sophisticated NATS mocking but no ServiceManager support. Analysis shows we need complete rewrite:
+
+**CURRENT STATE ANALYSIS:**
+- Line 97-154: Existing `mock_nats` fixture uses direct `nats_jetstream()` patterns
+- Line 130-138: KV store mocking targets individual buckets, not service layer
+- Line 21-46: Mock fixtures use old component patterns
+- Missing: ServiceManager fixtures, configuration loading, service dependency mocking
+
+**REQUIRED UPDATES:**
+
 ```python
-# tests/conftest.py - Updated test configuration
+# tests/conftest.py - COMPLETE REWRITE REQUIRED
 import pytest
 import asyncio
 import tempfile
-import shutil
+import shutil  
 from pathlib import Path
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock, AsyncMock, MagicMock
+from typing import Dict, Any
 
-from naq.config import load_config, temp_config
+# NEW: Service layer imports (currently missing)
 from naq.services import ServiceManager
+from naq.services.connection import ConnectionService
+from naq.services.jobs import JobService
+from naq.services.events import EventService
+from naq.services.streams import StreamService
+from naq.services.kv_stores import KVStoreService
+from naq.config import load_config
 from naq.models.jobs import Job
 from naq.models.enums import JOB_STATUS
 
+# REPLACE: Current worker_dict fixture (line 50-58) with service-aware config
 @pytest.fixture
-def test_config():
-    """Test configuration with safe defaults."""
+def service_test_config() -> Dict[str, Any]:
+    """ServiceManager-compatible test configuration."""
     return {
         'nats': {
-            'servers': ['nats://localhost:4222'],
+            'url': 'nats://localhost:4222',
             'client_name': 'naq-test',
             'max_reconnect_attempts': 3
         },
         'workers': {
             'concurrency': 2,
             'heartbeat_interval': 5,
-            'ttl': 30
+            'ttl': 30,
+            'default_queue': 'test_queue'
         },
         'events': {
             'enabled': True,
             'batch_size': 10,
-            'flush_interval': 0.1,
-            'max_buffer_size': 100
-        },
-        'queues': {
-            'default': 'test_queue'
+            'flush_interval': 0.1
         },
         'results': {
             'ttl': 300
         }
     }
 
+# NEW: ServiceManager fixtures for different test scenarios
 @pytest.fixture
-async def service_manager(test_config):
-    """Service manager fixture for integration tests."""
-    async with ServiceManager(test_config) as services:
-        yield services
+async def service_manager(service_test_config):
+    """Real ServiceManager for integration tests."""
+    manager = ServiceManager(service_test_config)
+    await manager.initialize_all()
+    yield manager
+    await manager.cleanup_all()
 
 @pytest.fixture
-def mock_services():
-    """Mock services for unit testing."""
-    services = {}
-    
-    # Mock each service type
-    from naq.services.jobs import JobService
-    from naq.services.events import EventService
-    from naq.services.connection import ConnectionService
-    
-    services[JobService] = AsyncMock(spec=JobService)
-    services[EventService] = AsyncMock(spec=EventService)
-    services[ConnectionService] = AsyncMock(spec=ConnectionService)
-    
+def mock_service_manager():
+    """Mock ServiceManager for unit tests."""
     mock_manager = AsyncMock(spec=ServiceManager)
-    mock_manager.get_service.side_effect = lambda t: services[t]
     
-    return mock_manager
+    # Create mock services with proper specs
+    mock_connection_service = AsyncMock(spec=ConnectionService)
+    mock_job_service = AsyncMock(spec=JobService)
+    mock_event_service = AsyncMock(spec=EventService)
+    mock_stream_service = AsyncMock(spec=StreamService)
+    mock_kv_service = AsyncMock(spec=KVStoreService)
+    
+    # Configure jetstream_scope context manager for ConnectionService
+    @asyncio.contextmanager
+    async def mock_jetstream_scope():
+        mock_js = AsyncMock()
+        mock_js.publish = AsyncMock(return_value=MagicMock(stream="test", seq=1))
+        yield mock_js
+    
+    mock_connection_service.jetstream_scope = mock_jetstream_scope
+    
+    # Configure get_service to return appropriate mocks
+    service_map = {
+        ConnectionService: mock_connection_service,
+        JobService: mock_job_service,
+        EventService: mock_event_service,
+        StreamService: mock_stream_service,
+        KVStoreService: mock_kv_service,
+    }
+    
+    mock_manager.get_service.side_effect = lambda service_type: service_map[service_type]
+    mock_manager.initialize_all = AsyncMock()
+    mock_manager.cleanup_all = AsyncMock()
+    
+    return mock_manager, service_map
 
+# REPLACE: Current mock_nats fixture (line 97-154) with service-aware version
 @pytest.fixture
-def temp_config_file(test_config):
-    """Create temporary YAML config file."""
+async def service_aware_nats_mock(mock_service_manager):
+    """NATS mock that integrates with ServiceManager architecture."""
+    mock_manager, service_map = mock_service_manager
+    
+    # Return connection service with jetstream_scope already configured
+    return service_map[ConnectionService], mock_manager
+
+# NEW: Configuration testing fixtures
+@pytest.fixture
+def temp_config_file(service_test_config):
+    """Create temporary YAML config file for testing."""
     import yaml
     
     temp_dir = tempfile.mkdtemp()
     config_path = Path(temp_dir) / "test_config.yaml"
     
     with open(config_path, 'w') as f:
-        yaml.dump(test_config, f)
+        yaml.dump(service_test_config, f)
     
     yield str(config_path)
-    
     shutil.rmtree(temp_dir)
 
+# UPDATE: Existing test_job fixture to work with new Job model structure
 @pytest.fixture
-async def test_job():
-    """Create test job for testing."""
+def service_test_job():
+    """Create test job compatible with service layer."""
     def dummy_task(x: int) -> int:
         return x * 2
     
@@ -146,6 +251,11 @@ async def test_job():
         queue_name="test_queue"
     )
 ```
+
+**MIGRATION IMPACT:**
+- Current tests using `mock_nats` (test_unit_queue.py:18-25) need to use `service_aware_nats_mock`
+- Worker tests using `worker_dict` need to use `service_test_config`
+- All component creation needs to pass `config` parameter instead of individual parameters
 
 ### 2. Model Tests
 
@@ -237,124 +347,242 @@ class TestWorkerEvent:
         assert event.concurrency_limit == 10
 ```
 
-### 3. Service Layer Tests
+### **Phase 2: Service Layer Testing** 
 
-**Test Services in Isolation:**
+#### **Individual Service Unit Tests** 
+**Critical Gap:** No service tests exist. Need to create from scratch.
+
+**NEW FILES REQUIRED:**
+
+#### **tests/test_services/test_connection_service.py** - Missing entirely
 ```python
-# tests/test_services/test_job_service.py
 import pytest
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, MagicMock
+from naq.services.connection import ConnectionService
+
+class TestConnectionService:
+    async def test_jetstream_scope_context_manager(self, service_test_config):
+        """Test jetstream_scope provides proper context management."""
+        service = ConnectionService(service_test_config)
+        
+        async with service.jetstream_scope() as js:
+            assert js is not None
+            # Test that js has expected methods
+            assert hasattr(js, 'publish')
+            assert hasattr(js, 'key_value')
+    
+    async def test_connection_pooling(self, service_test_config):
+        """Test connection reuse and pooling."""
+        service = ConnectionService(service_test_config)
+        
+        # Multiple jetstream_scope calls should reuse connection
+        async with service.jetstream_scope() as js1:
+            async with service.jetstream_scope() as js2:
+                # Both should work (specific assertions depend on implementation)
+                assert js1 is not None
+                assert js2 is not None
+```
+
+#### **tests/test_services/test_job_service.py** - Missing entirely  
+```python
+import pytest
+from unittest.mock import AsyncMock
 from naq.services.jobs import JobService
-from naq.services.events import EventService
 from naq.models.jobs import Job
 
 class TestJobService:
-    async def test_enqueue_job(self, test_config):
+    async def test_enqueue_job_with_service_dependencies(self, mock_service_manager):
         """Test job enqueuing through service layer."""
-        # Mock dependencies
-        mock_event_service = AsyncMock(spec=EventService)
-        mock_connection_service = AsyncMock()
+        mock_manager, service_map = mock_service_manager
         
-        service = JobService(
-            test_config,
-            event_service=mock_event_service,
-            connection_service=mock_connection_service
-        )
+        job_service = service_map[JobService] 
+        connection_service = service_map[ConnectionService]
+        event_service = service_map[EventService]
         
         def test_func():
             return "test"
         
         job = Job(function=test_func)
         
+        # Configure mock to simulate enqueue_job method
+        job_service.enqueue_job.return_value = "job-123"
+        
         # Test enqueuing
-        job_id = await service.enqueue_job(job, "test-queue")
+        job_id = await job_service.enqueue_job(job, "test-queue")
         
-        assert job_id is not None
-        # Verify event was logged
-        mock_event_service.log_job_enqueued.assert_called_once()
-    
-    async def test_execute_job_success(self, test_config):
-        """Test successful job execution."""
-        mock_event_service = AsyncMock(spec=EventService)
-        
-        service = JobService(
-            test_config,
-            event_service=mock_event_service
-        )
-        
-        def test_func(x):
-            return x * 2
-        
-        job = Job(function=test_func, args=(5,))
-        
-        # Test execution
-        result = await service.execute_job(job, "worker-1")
-        
-        assert result.status == "completed"
-        assert result.result == 10
-        
-        # Verify events were logged
-        mock_event_service.log_job_started.assert_called_once()
-        mock_event_service.log_job_completed.assert_called_once()
-    
-    async def test_execute_job_failure(self, test_config):
-        """Test job execution failure handling."""
-        mock_event_service = AsyncMock(spec=EventService)
-        
-        service = JobService(
-            test_config,
-            event_service=mock_event_service
-        )
-        
-        def failing_func():
-            raise ValueError("Test error")
-        
-        job = Job(function=failing_func, max_retries=0)
-        
-        # Test execution
-        result = await service.execute_job(job, "worker-1")
-        
-        assert result.status == "failed"
-        assert "Test error" in result.error
-        
-        # Verify failure event was logged
-        mock_event_service.log_job_failed.assert_called_once()
-
-# tests/test_services/test_event_service.py
-from naq.services.events import EventService
-from naq.events.logger import AsyncJobEventLogger
-
-class TestEventService:
-    async def test_event_logging(self, test_config):
-        """Test event logging through service."""
-        mock_logger = AsyncMock(spec=AsyncJobEventLogger)
-        
-        service = EventService(test_config)
-        service._logger = mock_logger
-        
-        # Test event logging
-        await service.log_job_started("job-123", "worker-1", "test-queue")
-        
-        # Verify logger was called
-        mock_logger.log_job_started.assert_called_once_with(
-            job_id="job-123",
-            worker_id="worker-1",
-            queue_name="test-queue"
-        )
-    
-    async def test_event_disabled(self, test_config):
-        """Test event logging when disabled."""
-        test_config['events']['enabled'] = False
-        
-        service = EventService(test_config)
-        
-        # Should not create logger when disabled
-        await service.log_job_started("job-123", "worker-1", "test-queue")
-        
-        assert service._logger is None
+        assert job_id == "job-123"
+        job_service.enqueue_job.assert_called_once()
 ```
 
-### 4. Integration Tests
+#### **tests/test_services/test_event_service.py** - Missing entirely
+```python  
+import pytest
+from unittest.mock import AsyncMock
+from naq.services.events import EventService
+
+class TestEventService:
+    async def test_log_job_events(self, service_test_config):
+        """Test event logging through service."""
+        service = EventService(service_test_config)
+        
+        # Test event logging methods exist and can be called
+        await service.log_job_started("job-123", "worker-1", "test-queue")
+        await service.log_job_completed("job-123", "worker-1", duration_ms=1000)
+        
+        # Verify service handles events (specific assertions depend on implementation)
+        assert True  # Placeholder - actual tests depend on EventService implementation
+```
+
+#### **tests/test_services/test_service_manager.py** - Missing entirely
+```python
+import pytest  
+from naq.services import ServiceManager
+from naq.services.connection import ConnectionService
+from naq.services.jobs import JobService
+
+class TestServiceManager:
+    async def test_service_initialization(self, service_test_config):
+        """Test ServiceManager initializes all services."""
+        manager = ServiceManager(service_test_config)
+        await manager.initialize_all()
+        
+        # Test service retrieval
+        conn_service = await manager.get_service(ConnectionService)
+        job_service = await manager.get_service(JobService)
+        
+        assert conn_service is not None
+        assert job_service is not None
+        
+        await manager.cleanup_all()
+    
+    async def test_dependency_injection(self, service_test_config):
+        """Test services are properly injected with dependencies."""
+        manager = ServiceManager(service_test_config)
+        await manager.initialize_all()
+        
+        job_service = await manager.get_service(JobService)
+        
+        # Verify job_service has injected dependencies
+        # (specific assertions depend on JobService implementation)
+        assert hasattr(job_service, '_connection_service') or hasattr(job_service, 'connection_service')
+        
+        await manager.cleanup_all()
+```
+
+### **Phase 3: Configuration Testing**
+
+#### **YAML Configuration Pipeline Testing** - Missing entirely
+**Critical Gap:** No configuration tests exist. YAML → ServiceManager pipeline completely untested.
+
+```python
+# tests/test_config/test_yaml_loading.py - NEW FILE REQUIRED
+import pytest
+import tempfile
+from pathlib import Path
+import yaml
+from naq.config import load_config
+from naq.services import ServiceManager
+
+class TestConfigurationLoading:
+    def test_yaml_config_loading(self, temp_config_file):
+        """Test loading configuration from YAML file."""
+        config = load_config(temp_config_file)
+        
+        # Test config structure matches expected format
+        assert 'nats' in config
+        assert 'workers' in config
+        assert 'events' in config
+        assert config['nats']['url'] == 'nats://localhost:4222'
+    
+    def test_environment_variable_overrides(self, temp_config_file):
+        """Test environment variables override YAML config."""
+        import os
+        
+        # Set environment variable
+        original_value = os.environ.get('NAQ_WORKERS_CONCURRENCY')
+        os.environ['NAQ_WORKERS_CONCURRENCY'] = '20'
+        
+        try:
+            config = load_config(temp_config_file)
+            assert config['workers']['concurrency'] == 20  # From env var
+        finally:
+            if original_value is not None:
+                os.environ['NAQ_WORKERS_CONCURRENCY'] = original_value
+            else:
+                del os.environ['NAQ_WORKERS_CONCURRENCY']
+    
+    async def test_config_to_service_manager_pipeline(self, temp_config_file):
+        """Test complete YAML → ServiceManager pipeline."""
+        config = load_config(temp_config_file)
+        
+        # Test ServiceManager can be created from loaded config
+        manager = ServiceManager(config)
+        await manager.initialize_all()
+        
+        # Verify services are created correctly
+        from naq.services.connection import ConnectionService
+        conn_service = await manager.get_service(ConnectionService)
+        assert conn_service is not None
+        
+        await manager.cleanup_all()
+
+# tests/test_config/test_validation.py - NEW FILE REQUIRED  
+class TestConfigurationValidation:
+    def test_invalid_config_raises_error(self):
+        """Test configuration validation catches errors."""
+        invalid_config = {
+            'nats': {
+                'url': '',  # Empty URL should be invalid
+                'max_reconnect_attempts': -1  # Negative value should be invalid
+            }
+        }
+        
+        # Test validation logic (depends on implementation)
+        with pytest.raises(ValueError):
+            ServiceManager(invalid_config)
+```
+
+### **Phase 4: Existing Test Migration**
+
+#### **Current Test Migration Requirements**
+**CRITICAL ISSUE:** All existing tests use old connection patterns and need migration.
+
+**tests/unit/test_unit_queue.py Migration:**
+- **Line 18-25**: Uses `mock_nats` fixture → needs `service_aware_nats_mock`
+- **Line 24**: `Queue(name="test")` → needs `Queue(name="test", config=service_test_config)`
+- **Line 21-22**: Uses direct `get_nats_connection`, `get_jetstream_context` patching → needs ServiceManager mocking
+
+**Current Pattern (test_unit_queue.py:18-25):**
+```python
+@pytest_asyncio.fixture
+async def queue(self, mock_nats, mocker):
+    """Setup a test queue with mocked NATS."""
+    mock_nc, mock_js = mock_nats
+    mocker.patch('naq.queue.get_nats_connection', return_value=mock_nc)
+    mocker.patch('naq.queue.get_jetstream_context', return_value=mock_js)
+    mocker.patch('naq.queue.ensure_stream')
+    q = Queue(name="test")
+    return q
+```
+
+**Required New Pattern:**
+```python
+@pytest_asyncio.fixture
+async def queue(self, service_aware_nats_mock, service_test_config):
+    """Setup a test queue with ServiceManager architecture."""
+    connection_service, mock_manager = service_aware_nats_mock
+    
+    # Queue now takes config parameter and uses ServiceManager internally
+    q = Queue(name="test", config=service_test_config)
+    return q
+```
+
+**tests/integration/test_integration_events.py Migration:**
+- **Line 30-33**: Direct `AsyncJobEventLogger(nats_url=nats_url)` → needs ServiceManager configuration
+- **Line 38-40**: Direct `NATSJobEventStorage(nats_url=nats_url)` → needs service integration
+- **Line 214**: `Queue(name="test-event-queue", nats_url=nats_url)` → needs config parameter
+
+### **Phase 5: Integration Tests Updates**
 
 **Test Component Integration:**
 ```python
@@ -778,12 +1006,22 @@ jobs:
 - **Depends on**: All previous tasks (01-11) - need completed refactored codebase
 - **Blocks**: None - this completes and validates the refactoring
 
-## Estimated Time
-- **Test Infrastructure Update**: 6-8 hours
-- **Unit Test Creation/Updates**: 15-20 hours
-- **Integration Tests**: 12-15 hours  
-- **Compatibility Tests**: 8-10 hours
-- **Performance Tests**: 6-8 hours
-- **CLI Tests**: 4-6 hours
-- **Test Organization and CI**: 4-6 hours
-- **Total**: 55-73 hours
+## Estimated Time (UPDATED)
+- **Test Infrastructure Overhaul**: 15-20 hours (was 6-8 hours) - Major `conftest.py` rewrite, ServiceManager fixtures
+- **Service Layer Testing**: 20-25 hours (new) - Individual service tests, service integration tests
+- **Configuration Testing**: 8-12 hours (new) - YAML pipeline testing, validation, environment overrides
+- **Existing Test Migration**: 15-20 hours (was included in Unit Tests) - Migrate all current tests to ServiceManager
+- **Unit Test Updates**: 8-12 hours (reduced from 15-20) - Update remaining unit tests
+- **Integration Tests**: 12-15 hours (unchanged) - Update existing integration tests
+- **Compatibility Tests**: 8-10 hours (unchanged) - Ensure backward compatibility
+- **Performance Tests**: 6-8 hours (unchanged) - Service layer overhead testing
+- **CLI Tests**: 4-6 hours (unchanged) - Update CLI command tests
+- **Test Organization and CI**: 6-8 hours (increased) - More complex organization needed
+- **Total**: 85-108 hours (was 55-73 hours)
+
+**COMPLEXITY INCREASE RATIONALE:**
+- Existing test infrastructure needs complete overhaul, not just additions
+- Service layer testing is entirely missing and needs to be built from scratch
+- Configuration testing pipeline doesn't exist
+- Current tests use deprecated patterns and need migration
+- Mock infrastructure needs redesign for ServiceManager architecture

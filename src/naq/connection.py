@@ -9,7 +9,13 @@ from nats.js import JetStreamContext
 
 from .exceptions import NaqConnectionError
 from .settings import DEFAULT_NATS_URL
-from .utils import setup_logging
+# Import setup_logging directly to avoid circular import
+try:
+    from .utils.logging import setup_structured_logging as setup_logging
+except ImportError:
+    # Fallback to legacy utils if new structure not available
+    def setup_logging(*args, **kwargs):
+        pass
 
 
 class ConnectionManager:

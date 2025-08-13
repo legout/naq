@@ -4,7 +4,18 @@ title: "Quickstart Guide"
 
 This guide will walk you through the basics of setting up a task, enqueuing it, and running a worker to process it.
 
-## 1. Define a Task
+## 1. Set Up Configuration (Optional)
+
+While not required for this quickstart, NAQ supports comprehensive YAML-based configuration that's useful for production deployments. For now, we'll use the defaults, but you can create a configuration file:
+
+```bash
+# Create a development configuration file (optional)
+naq system config-init --environment development
+```
+
+This creates a `naq.yaml` file with sensible defaults. For this quickstart, the built-in defaults will work fine.
+
+## 2. Define a Task
 
 First, create a Python file to define the function you want to run in the background. Let's call this file `tasks.py`.
 
@@ -27,7 +38,7 @@ def count_words(text):
     return word_count
 ```
 
-## 2. Enqueue the Job
+## 3. Enqueue the Job
 
 Now, let's enqueue the `count_words` function to be executed by a worker. Create another file, `main.py`, to send the job to the queue.
 
@@ -35,8 +46,11 @@ We'll use the `enqueue_sync` function, which is a simple, blocking way to add a 
 
 ```python
 # main.py
-from naq import enqueue_sync
+from naq import enqueue_sync  # Main API (backward compatible)
 from tasks import count_words
+
+# Alternative: Use new modular imports (optional)
+# from naq.queue.sync_api import enqueue_sync
 
 # The text we want to process
 long_text = (
@@ -54,7 +68,7 @@ print(f"Successfully enqueued job {job.job_id}.")
 print("To process the job, run a worker with: naq worker default")
 ```
 
-## 3. Run the Worker
+## 4. Run the Worker
 
 With the job enqueued, the final step is to start a worker process. The worker will connect to NATS, fetch the job from the queue, and execute the `count_words` function.
 
@@ -77,7 +91,7 @@ Found 25 words.
 
 Congratulations! You've successfully enqueued and processed your first background job with `naq`.
 
-## 4. Monitor Your Jobs
+## 5. Monitor Your Jobs
 
 One of NAQ's most powerful features is its comprehensive event-driven monitoring system. Every job operation is logged as structured events that you can monitor in real-time.
 

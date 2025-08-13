@@ -1,0 +1,364 @@
+---
+title: "Testing Guide"
+---
+
+## Overview
+
+NAQ uses a comprehensive testing strategy that validates both the new service layer architecture and maintains backward compatibility. This guide covers testing patterns, best practices, and how to work with the enhanced test infrastructure.
+
+## Test Structure
+
+### Test Organization
+
+```
+tests/
+├── conftest.py                    # Test configuration and fixtures
+├── test_models/                   # Model unit tests (planned)
+├── test_services/                 # Service layer tests (new)
+│   ├── test_service_manager.py    # ServiceManager lifecycle
+│   ├── test_connection_service.py # Connection management
+│   └── test_job_service.py        # Job execution service
+├── test_config/                   # Configuration tests (new)
+│   ├── test_yaml_loading.py       # YAML config loading
+│   └── test_validation.py         # Config validation
+├── test_compatibility/            # Backward compatibility (new)
+│   ├── test_imports.py            # Import compatibility
+│   └── test_user_workflows.py     # User workflow compatibility
+├── test_performance/              # Performance tests (new)
+│   └── test_service_overhead.py   # Service layer overhead
+├── unit/                          # Legacy unit tests (updated)
+├── integration/                   # Integration tests
+└── scenario/                      # Scenario tests
+```
+
+## Testing Patterns
+
+### Service Layer Testing
+
+#### ServiceManager Testing
+
+```python
+@pytest.mark.asyncio
+async def test_service_initialization(service_test_config):
+    """Test ServiceManager initializes all services correctly."""
+    manager = ServiceManager(service_test_config)
+    await manager.initialize_all()
+    
+    try:
+        # Test service retrieval
+        conn_service = await manager.get_service(ConnectionService)
+        job_service = await manager.get_service(JobService)
+        
+        assert conn_service is not None
+        assert job_service is not None
+    finally:
+        await manager.cleanup_all()
+```
+
+#### Service Mocking
+
+```python
+async def test_with_mock_services(mock_service_manager):
+    """Test using mock service manager."""
+    mock_manager, service_map = mock_service_manager
+    
+    job_service = service_map[JobService]
+    job_service.enqueue_job.return_value = "job-123"
+    
+    result = await job_service.enqueue_job(job, "test-queue")
+    assert result == "job-123"
+```
+
+### Configuration Testing
+
+#### YAML Configuration
+
+```python
+def test_yaml_config_loading(temp_config_file):
+    """Test loading configuration from YAML file."""
+    config = load_config(temp_config_file)
+    
+    assert 'nats' in config.to_dict()
+    assert config.to_dict()['nats']['url'] == 'nats://localhost:4222'
+```
+
+#### Environment Variable Overrides
+
+```python
+def test_environment_overrides(temp_config_file, env_override_config):
+    """Test environment variables override YAML config."""
+    config = load_config(temp_config_file)
+    config_dict = config.to_dict()
+    
+    # Values should be overridden by environment variables
+    assert config_dict['workers']['concurrency'] == 20  # From NAQ_WORKERS_CONCURRENCY
+```
+
+### Compatibility Testing
+
+#### Import Compatibility
+
+```python
+def test_main_imports():
+    """Test main package imports still work."""
+    from naq import Queue, Worker, Job, enqueue, enqueue_sync
+    
+    assert Queue is not None
+    assert callable(enqueue)
+```
+
+#### Workflow Compatibility
+
+```python
+def test_basic_sync_workflow():
+    """Test basic synchronous workflow still works."""
+    from naq import enqueue_sync, JOB_STATUS
+    
+    def simple_task(x):
+        return x + 1
+    
+    # Should work exactly as before refactoring
+    job = enqueue_sync(simple_task, 5)
+    assert job.job_id is not None
+```
+
+## Test Fixtures
+
+### Core Fixtures
+
+#### `service_test_config`
+
+Provides a complete test configuration for ServiceManager:
+
+```python
+{
+    'nats': {
+        'url': 'nats://localhost:4222',
+        'client_name': 'naq-test'
+    },
+    'workers': {
+        'concurrency': 2,
+        'heartbeat_interval': 5
+    },
+    'events': {
+        'enabled': True,
+        'batch_size': 10
+    }
+}
+```
+
+#### `service_manager`
+
+Real ServiceManager instance for integration tests:
+
+```python
+async def test_with_real_services(service_manager):
+    conn_service = await service_manager.get_service(ConnectionService)
+    # Use real service for integration testing
+```
+
+#### `mock_service_manager`
+
+Mock ServiceManager for unit tests:
+
+```python
+def test_with_mock_services(mock_service_manager):
+    mock_manager, service_map = mock_service_manager
+    job_service = service_map[JobService]
+    # Configure and use mocked services
+```
+
+### Configuration Fixtures
+
+#### `temp_config_file`
+
+Creates temporary YAML configuration file:
+
+```python
+def test_config_loading(temp_config_file):
+    config = load_config(temp_config_file)
+    # Test with real config file
+```
+
+#### `env_override_config`
+
+Sets up environment variable overrides:
+
+```python
+def test_env_overrides(temp_config_file, env_override_config):
+    # Environment variables are automatically set
+    config = load_config(temp_config_file)
+    # Test environment variable behavior
+```
+
+### Compatibility Fixtures
+
+#### `service_compatible_queue`
+
+Queue instance using ServiceManager architecture:
+
+```python
+async def test_new_queue_pattern(service_compatible_queue):
+    queue = service_compatible_queue
+    # Test with service-aware queue
+```
+
+## Best Practices
+
+### Test Isolation
+
+1. **Use proper fixtures** to ensure test isolation
+2. **Mock external dependencies** like NATS connections
+3. **Clean up resources** after tests complete
+
+### Service Testing
+
+1. **Test service interfaces** not implementation details
+2. **Use dependency injection** for testing
+3. **Verify service lifecycle** (initialize/cleanup)
+
+### Configuration Testing
+
+1. **Test all configuration sources** (YAML, env vars, defaults)
+2. **Validate configuration errors** are handled properly
+3. **Test configuration-driven behavior**
+
+### Performance Testing
+
+1. **Measure service overhead** to prevent regressions
+2. **Test concurrent access** patterns
+3. **Monitor memory usage** for leaks
+
+## Running Tests
+
+### Basic Test Execution
+
+```bash
+# Run all tests
+pytest
+
+# Run specific test categories
+pytest tests/test_services/
+pytest tests/test_config/
+pytest tests/test_compatibility/
+
+# Run with coverage
+pytest --cov=naq tests/
+```
+
+### Performance Tests
+
+```bash
+# Run performance tests
+pytest tests/test_performance/ -v
+
+# Run with timing information
+pytest tests/test_performance/ --durations=10
+```
+
+### Integration Tests
+
+```bash
+# Start NATS server first
+docker compose up -d nats
+
+# Run integration tests
+pytest tests/integration/ -v
+```
+
+## Test Development Guidelines
+
+### Writing Service Tests
+
+1. **Test public interfaces** of services
+2. **Mock dependencies** appropriately
+3. **Test error conditions** and edge cases
+4. **Verify service interactions**
+
+### Writing Configuration Tests
+
+1. **Test configuration loading** from all sources
+2. **Validate error handling** for invalid configs
+3. **Test environment variable overrides**
+4. **Verify service integration** with config
+
+### Writing Compatibility Tests
+
+1. **Test all public APIs** continue to work
+2. **Verify import patterns** are maintained
+3. **Test typical user workflows**
+4. **Check error behavior** compatibility
+
+## Migration from Legacy Tests
+
+### Updating Existing Tests
+
+When updating legacy tests to work with the service layer:
+
+1. **Add service fixtures** alongside existing ones
+2. **Create service-compatible versions** of test cases
+3. **Maintain backward compatibility** during transition
+4. **Document migration patterns** for future reference
+
+### Example Migration
+
+```python
+# Legacy pattern
+@pytest_asyncio.fixture
+async def queue(mock_nats, mocker):
+    mock_nc, mock_js = mock_nats
+    mocker.patch('naq.queue.get_nats_connection', return_value=mock_nc)
+    q = Queue(name="test")
+    return q
+
+# Service-compatible pattern
+@pytest_asyncio.fixture
+async def service_queue(service_compatible_queue):
+    return service_compatible_queue
+
+# Test using both patterns
+async def test_queue_functionality(queue):
+    # Legacy test pattern
+    pass
+
+async def test_service_queue_functionality(service_queue):
+    # New service pattern
+    pass
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Service initialization errors**
+   - Check configuration validity
+   - Verify mock setup for dependencies
+   - Ensure proper cleanup in tests
+
+2. **Import errors in tests**
+   - Verify service layer imports are available
+   - Check circular import issues
+   - Update fixture dependencies
+
+3. **Performance test failures**
+   - Check mock configuration
+   - Verify reasonable timeouts
+   - Consider test environment factors
+
+### Debug Strategies
+
+1. **Use verbose pytest output** (`-v` flag)
+2. **Add debug logging** to tests
+3. **Check fixture setup** and teardown
+4. **Verify mock configurations** are correct
+
+## Future Considerations
+
+As the service layer evolves, consider:
+
+1. **Adding more service-specific tests**
+2. **Expanding performance test coverage**
+3. **Creating integration test scenarios**
+4. **Developing testing utilities** for common patterns
+
+The testing infrastructure is designed to be extensible and maintainable as NAQ continues to grow and evolve.

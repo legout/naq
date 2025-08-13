@@ -273,6 +273,27 @@ class JobEvent(msgspec.Struct):
             **kwargs
         )
 
+    @classmethod
+    def scheduler_error(
+        cls,
+        error_type: str,
+        error_message: str,
+        schedule_id: Optional[str] = None,
+        queue_name: Optional[str] = None,
+        message: Optional[str] = None,
+        **kwargs
+    ) -> "JobEvent":
+        """Create a SCHEDULER_ERROR event."""
+        return cls(
+            job_id=schedule_id or "unknown",
+            event_type=JobEventType.SCHEDULER_ERROR,
+            queue_name=queue_name,
+            error_type=error_type,
+            error_message=error_message,
+            message=message or f"Scheduler error: {error_type}",
+            **kwargs
+        )
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert the event to a dictionary representation."""
         return {

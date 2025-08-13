@@ -533,6 +533,26 @@ class AsyncJobEventLogger:
         )
         await self.log_event(event)
 
+    async def log_scheduler_error(
+        self,
+        error_type: str,
+        error_message: str,
+        schedule_id: Optional[str] = None,
+        queue_name: Optional[str] = None,
+        message: Optional[str] = None,
+        **kwargs
+    ) -> None:
+        """Log a scheduler error event."""
+        event = JobEvent.scheduler_error(
+            error_type=error_type,
+            error_message=error_message,
+            schedule_id=schedule_id,
+            queue_name=queue_name,
+            message=message,
+            **kwargs
+        )
+        await self.log_event(event)
+
 
 class JobEventLogger:
     """

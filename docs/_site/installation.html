@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.32">
+<meta name="generator" content="quarto-1.7.33">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -71,14 +71,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-2fef5ea3f8957b3e4ecc936fc74692ca.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-bc185b5c5bdbcb35c2eb49d8a876ef70.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="site_libs/bootstrap/bootstrap-dark-08799928d293638fe9563d5c5a2794e5.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-ccd81253fefb92e9cd3f9eb5b5d87b54.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -302,6 +302,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span class="menu-text">Quickstart</span></a>
   </li>  
   <li class="nav-item">
+    <a class="nav-link" href="./configuration.html"> 
+<span class="menu-text">Configuration</span></a>
+  </li>  
+  <li class="nav-item">
     <a class="nav-link" href="./architecture.html"> 
 <span class="menu-text">Architecture</span></a>
   </li>  
@@ -312,6 +316,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li class="nav-item">
     <a class="nav-link" href="./advanced.html"> 
 <span class="menu-text">Advanced</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="./event-logging.html"> 
+<span class="menu-text">Event-Driven State Management</span></a>
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="./api/index.html"> 
@@ -341,12 +349,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#installing-naq" id="toc-installing-naq" class="nav-link active" data-scroll-target="#installing-naq">Installing NAQ</a>
   <ul class="collapse">
   <li><a href="#using-uv-or-pixi" id="toc-using-uv-or-pixi" class="nav-link" data-scroll-target="#using-uv-or-pixi">Using <code>uv</code> or <code>pixi</code></a></li>
-  <li><a href="#optional-dashboard" id="toc-optional-dashboard" class="nav-link" data-scroll-target="#optional-dashboard">Optional Dashboard</a></li>
+  <li><a href="#optional-dependencies" id="toc-optional-dependencies" class="nav-link" data-scroll-target="#optional-dependencies">Optional Dependencies</a></li>
   </ul></li>
   <li><a href="#setting-up-nats" id="toc-setting-up-nats" class="nav-link" data-scroll-target="#setting-up-nats">Setting Up NATS</a>
   <ul class="collapse">
   <li><a href="#using-docker-recommended" id="toc-using-docker-recommended" class="nav-link" data-scroll-target="#using-docker-recommended">Using Docker (Recommended)</a></li>
   <li><a href="#manual-setup" id="toc-manual-setup" class="nav-link" data-scroll-target="#manual-setup">Manual Setup</a></li>
+  </ul></li>
+  <li><a href="#initial-configuration-setup" id="toc-initial-configuration-setup" class="nav-link" data-scroll-target="#initial-configuration-setup">Initial Configuration Setup</a>
+  <ul class="collapse">
+  <li><a href="#quick-start-configuration" id="toc-quick-start-configuration" class="nav-link" data-scroll-target="#quick-start-configuration">Quick Start Configuration</a></li>
+  <li><a href="#verify-configuration" id="toc-verify-configuration" class="nav-link" data-scroll-target="#verify-configuration">Verify Configuration</a></li>
+  <li><a href="#environment-variables-alternative" id="toc-environment-variables-alternative" class="nav-link" data-scroll-target="#environment-variables-alternative">Environment Variables (Alternative)</a></li>
+  <li><a href="#configuration-file-locations" id="toc-configuration-file-locations" class="nav-link" data-scroll-target="#configuration-file-locations">Configuration File Locations</a></li>
   </ul></li>
   <li><a href="#troubleshooting" id="toc-troubleshooting" class="nav-link" data-scroll-target="#troubleshooting">Troubleshooting</a></li>
   </ul>
@@ -388,10 +403,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Using pixi</span></span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="ex">pixi</span> add naq</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </section>
-<section id="optional-dashboard" class="level3">
-<h3 class="anchored" data-anchor-id="optional-dashboard">Optional Dashboard</h3>
-<p><code>naq</code> comes with an optional web-based dashboard for real-time monitoring. To install the necessary dependencies (including Sanic and Datastar), use the <code>dashboard</code> extra:</p>
+<section id="optional-dependencies" class="level3">
+<h3 class="anchored" data-anchor-id="optional-dependencies">Optional Dependencies</h3>
+<p><code>naq</code> includes several optional feature sets that you can install as needed:</p>
+<p><strong>Dashboard</strong> - Web-based monitoring dashboard:</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install naq<span class="pp">[</span><span class="ss">dashboard</span><span class="pp">]</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><strong>YAML Configuration</strong> - Enhanced configuration support (recommended):</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install naq<span class="pp">[</span><span class="ss">yaml</span><span class="pp">]</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co"># or install specific dependencies:</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install pyyaml jsonschema</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><strong>Complete Installation</strong> - All optional features:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install naq<span class="pp">[</span><span class="ss">dashboard,yaml</span><span class="pp">]</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </section>
 </section>
 <section id="setting-up-nats" class="level2">
@@ -409,8 +431,56 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="manual-setup" class="level3">
 <h3 class="anchored" data-anchor-id="manual-setup">Manual Setup</h3>
 <p>If you prefer to run a NATS server manually, ensure that you start it with the <code>-js</code> flag to enable JetStream:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">nats-server</span> <span class="at">-js</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">nats-server</span> <span class="at">-js</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <p>Refer to the <a href="https://docs.nats.io/running-a-nats-service/introduction/installation">official NATS documentation</a> for detailed installation instructions for your operating system.</p>
+</section>
+</section>
+<section id="initial-configuration-setup" class="level2">
+<h2 class="anchored" data-anchor-id="initial-configuration-setup">Initial Configuration Setup</h2>
+<section id="quick-start-configuration" class="level3">
+<h3 class="anchored" data-anchor-id="quick-start-configuration">Quick Start Configuration</h3>
+<p>After installation, set up your initial configuration using the CLI:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Create a development configuration</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> system config-init <span class="at">--environment</span> development</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Or create a production configuration</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> system config-init <span class="at">--environment</span> production</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>This creates a <code>naq.yaml</code> file in your current directory with appropriate defaults for your environment.</p>
+</section>
+<section id="verify-configuration" class="level3">
+<h3 class="anchored" data-anchor-id="verify-configuration">Verify Configuration</h3>
+<div class="sourceCode" id="cb8"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Check that your configuration is valid</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> system config <span class="at">--validate</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co"># View your current configuration</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> system config <span class="at">--show</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="co"># See which configuration files are being used</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> system config <span class="at">--sources</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="environment-variables-alternative" class="level3">
+<h3 class="anchored" data-anchor-id="environment-variables-alternative">Environment Variables (Alternative)</h3>
+<p>If you prefer environment variables over YAML configuration:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Basic NATS connection</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_NATS_URL</span><span class="op">=</span>nats://localhost:4222</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Worker settings</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_WORKER_CONCURRENCY</span><span class="op">=</span>10</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_LOG_LEVEL</span><span class="op">=</span>INFO</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Enable comprehensive event logging</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">NAQ_EVENTS_ENABLED</span><span class="op">=</span>true</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="configuration-file-locations" class="level3">
+<h3 class="anchored" data-anchor-id="configuration-file-locations">Configuration File Locations</h3>
+<p>NAQ searches for configuration files in the following order:</p>
+<ol type="1">
+<li><strong>Current directory</strong>: <code>./naq.yaml</code> or <code>./naq.yml</code></li>
+<li><strong>User config</strong>: <code>~/.naq/config.yaml</code></li>
+<li><strong>System config</strong>: <code>/etc/naq/config.yaml</code></li>
+<li><strong>Environment variables</strong>: <code>NAQ_*</code> variables</li>
+</ol>
+<p>For detailed configuration options, see the <a href="./configuration.html">Configuration Guide</a>.</p>
 </section>
 </section>
 <section id="troubleshooting" class="level2">
@@ -429,7 +499,44 @@ Note
 <ul>
 <li>Ensure your NATS server is running and accessible from where you are running your application and workers.</li>
 <li>Verify that JetStream is enabled. You can check the server logs for a line confirming “JetStream is enabled.”</li>
-<li>By default, <code>naq</code> attempts to connect to <code>nats://localhost:4222</code>. If your server is elsewhere, set the <code>NATS_URL</code> environment variable.</li>
+<li>By default, <code>naq</code> attempts to connect to <code>nats://localhost:4222</code>. If your server is elsewhere, set the <code>NAQ_NATS_URL</code> environment variable or update your YAML configuration.</li>
+</ul>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>Configuration Issues?</strong></p>
+<ul>
+<li>Use <code>naq system config --validate</code> to check for configuration errors</li>
+<li>Check configuration file locations with <code>naq system config --sources</code></li>
+<li>Verify YAML syntax: <code>python -c "import yaml; yaml.safe_load(open('naq.yaml'))"</code></li>
+<li>Environment variables take precedence over YAML configuration files</li>
+</ul>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><strong>Missing Dependencies?</strong></p>
+<ul>
+<li>For YAML configuration: <code>pip install pyyaml jsonschema</code></li>
+<li>For validation features: <code>pip install jsonschema</code></li>
+<li>For dashboard: <code>pip install naq[dashboard]</code></li>
 </ul>
 </div>
 </div>
