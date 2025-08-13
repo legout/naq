@@ -1,0 +1,1 @@
+"""Event monitoring CLI commands for naq."""

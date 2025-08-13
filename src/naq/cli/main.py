@@ -1,0 +1,1 @@
+"""Main CLI application for naq."""
