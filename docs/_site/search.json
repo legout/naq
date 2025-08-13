@@ -25,7 +25,7 @@
     "href": "quickstart.html#enqueue-the-job",
     "title": "Quickstart Guide",
     "section": "3. Enqueue the Job",
-    "text": "3. Enqueue the Job\nNow, let’s enqueue the count_words function to be executed by a worker. Create another file, main.py, to send the job to the queue.\nWe’ll use the enqueue_sync function, which is a simple, blocking way to add a job to the queue.\n# main.py\nfrom naq import enqueue_sync\nfrom tasks import count_words\n\n# The text we want to process\nlong_text = (\n    \"A journey of a thousand miles begins with a single step. \"\n    \"The best time to plant a tree was 20 years ago. \"\n    \"The second best time is now.\"\n)\n\nprint(\"Enqueuing job to count words...\")\n\n# Enqueue the function `count_words` with `long_text` as its argument\njob = enqueue_sync(count_words, long_text)\n\nprint(f\"Successfully enqueued job {job.job_id}.\")\nprint(\"To process the job, run a worker with: naq worker default\")"
+    "text": "3. Enqueue the Job\nNow, let’s enqueue the count_words function to be executed by a worker. Create another file, main.py, to send the job to the queue.\nWe’ll use the enqueue_sync function, which is a simple, blocking way to add a job to the queue.\n# main.py\nfrom naq import enqueue_sync  # Main API (backward compatible)\nfrom tasks import count_words\n\n# Alternative: Use new modular imports (optional)\n# from naq.queue.sync_api import enqueue_sync\n\n# The text we want to process\nlong_text = (\n    \"A journey of a thousand miles begins with a single step. \"\n    \"The best time to plant a tree was 20 years ago. \"\n    \"The second best time is now.\"\n)\n\nprint(\"Enqueuing job to count words...\")\n\n# Enqueue the function `count_words` with `long_text` as its argument\njob = enqueue_sync(count_words, long_text)\n\nprint(f\"Successfully enqueued job {job.job_id}.\")\nprint(\"To process the job, run a worker with: naq worker default\")"
   },
   {
     "objectID": "quickstart.html#run-the-worker",
@@ -182,32 +182,109 @@
     "text": "Troubleshooting\n\nCommon Event System Issues\nEvents not appearing in stream:\n\nCheck if event logging is enabled:\necho $NAQ_EVENT_LOGGING_ENABLED\nVerify NATS connectivity:\nnats stream info NAQ_JOB_EVENTS\nCheck event logger lifecycle:\nlogger = AsyncJobEventLogger()\nawait logger.start()  # Must call start()\n# ... log events\nawait logger.stop()   # Must call stop()\n\nHigh memory usage:\n\nReduce batch size:\nexport NAQ_EVENT_LOGGER_BATCH_SIZE=50\nIncrease flush frequency:\nexport NAQ_EVENT_LOGGER_FLUSH_INTERVAL=2.0\nMonitor pending events:\n# In your application\nif logger._pending_events_count &gt; 500:\n    await logger.flush()\n\nSlow event processing:\n\nIncrease batch size for better throughput:\nexport NAQ_EVENT_LOGGER_BATCH_SIZE=300\nUse dedicated NATS cluster for events\nConsider event sampling for very high-volume scenarios\n\n\n\nDebug Commands\n# Check event stream status\nnats stream info NAQ_JOB_EVENTS\n\n# Monitor event rate\nnaq events --format raw | pv -l\n\n# Test event logging\npython -c \"\nimport asyncio\nfrom naq.events import AsyncJobEventLogger\n\nasync def test():\n    logger = AsyncJobEventLogger()\n    await logger.start()\n    await logger.log_job_enqueued('test-job', 'test-queue')\n    await logger.flush()\n    await logger.stop()\n    print('Event logged successfully')\n\nasyncio.run(test())\n\""
   },
   {
-    "objectID": "contributing.html",
-    "href": "contributing.html",
-    "title": "Contributing",
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "NAQ - NATS Asynchronous Queue",
     "section": "",
-    "text": "We welcome contributions to naq! Whether you’re fixing a bug, adding a new feature, or improving the documentation, your help is appreciated."
+    "text": "NAQ is a simple, asynchronous job queueing library for Python, inspired by RQ (Redis Queue), but built entirely on top of NATS and its JetStream persistence layer.\nIt allows you to easily enqueue Python functions to be executed asynchronously by worker processes, leveraging the power and resilience of NATS JetStream for message persistence and delivery."
   },
   {
-    "objectID": "contributing.html#getting-started",
-    "href": "contributing.html#getting-started",
-    "title": "Contributing",
-    "section": "Getting Started",
-    "text": "Getting Started\nIf you’re new to the project, a good place to start is by looking at the open issues on GitHub.\n\nDevelopment Setup\nTo get your development environment set up, follow these steps:\n\nFork and Clone the Repository\nStart by forking the main repository on GitHub, and then clone your fork locally:\ngit clone https://github.com/YOUR_USERNAME/naq.git\ncd naq\nInstall Dependencies\nWe recommend using a virtual environment. naq uses uv for dependency management.\n# Create a virtual environment\npython -m venv .venv\nsource .venv/bin/activate\n\n# Install dependencies, including development tools\nuv pip install -e \".[dev]\"\nRun the NATS Server\nThe test suite and examples require a running NATS server. You can use the provided Docker Compose file:\ncd docker\ndocker-compose up -d\nRun the Tests\nTo make sure everything is set up correctly, run the test suite:\npytest"
+    "objectID": "index.html#get-started",
+    "href": "index.html#get-started",
+    "title": "NAQ - NATS Asynchronous Queue",
+    "section": "Get Started",
+    "text": "Get Started\nReady to dive in? Check out the Quickstart Guide to get your first worker up and running in minutes.\n\nNew in Version 0.2.0\nNAQ 0.2.0 introduces a new modular structure with complete backward compatibility: - All existing imports continue to work unchanged - New modular imports available for better organization - Enhanced service layer for advanced use cases - See the Import Migration Guide for details"
   },
   {
-    "objectID": "contributing.html#making-changes",
-    "href": "contributing.html#making-changes",
-    "title": "Contributing",
-    "section": "Making Changes",
-    "text": "Making Changes\n\nCreate a New Branch\nCreate a new branch for your changes:\ngit checkout -b feature/my-new-feature\nWrite Your Code\nMake your changes to the codebase. If you’re adding a new feature, please include tests.\nFormat Your Code\nBefore committing, make sure your code is formatted correctly:\nruff format .\nruff check --fix .\nCommit and Push\nCommit your changes with a clear and descriptive message, and push them to your fork:\ngit commit -m \"feat: Add my new feature\"\ngit push origin feature/my-new-feature\nCreate a Pull Request\nOpen a pull request from your fork to the main branch of the naq repository. Provide a clear description of your changes and reference any related issues."
+    "objectID": "index.html#what-makes-naq-different",
+    "href": "index.html#what-makes-naq-different",
+    "title": "NAQ - NATS Asynchronous Queue",
+    "section": "What Makes NAQ Different",
+    "text": "What Makes NAQ Different\nNAQ isn’t just another task queue - it’s a complete event-driven job processing platform built on NATS. Every state change, from job enqueue to worker heartbeats, is captured as a structured event and stored in durable streams.\nSee your jobs in action:\n# Watch jobs being processed in real-time  \nnaq events\n\n# Monitor worker status and health\nnaq worker-events\n\n# Analyze job performance and history\nnaq event-history job-abc-123\nThis event-driven approach gives you unprecedented visibility into your job processing pipeline, making debugging, monitoring, and scaling dramatically easier."
   },
   {
-    "objectID": "contributing.html#code-of-conduct",
-    "href": "contributing.html#code-of-conduct",
-    "title": "Contributing",
-    "section": "Code of Conduct",
-    "text": "Code of Conduct\nPlease note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by its terms.\nThank you for contributing to naq!"
+    "objectID": "index.html#key-features",
+    "href": "index.html#key-features",
+    "title": "NAQ - NATS Asynchronous Queue",
+    "section": "Key Features",
+    "text": "Key Features\n\nSimple API: Familiar and easy-to-use API, similar to RQ.\nAsynchronous Core: Built with asyncio and nats-py for high performance.\nPersistent & Reliable: Uses NATS JetStream for robust job persistence and guaranteed delivery.\nEvent-Driven State Management: Complete observability with real-time job, worker, and schedule event streaming.\nComprehensive Monitoring: Live monitoring of job lifecycle, worker status, and system health with rich CLI tools.\nScheduled & Recurring Jobs: Supports cron-style, interval-based, and one-time scheduled tasks with full event tracking.\nJob Dependencies: Create complex workflows by defining dependencies between jobs.\nAutomatic Retries: Configurable retry mechanism with exponential backoff for failed jobs.\nWorker Status Tracking: Real-time worker heartbeats, status changes, and performance monitoring.\nSchedule Management: Full lifecycle management of scheduled jobs with pause, resume, modify, and cancel operations.\nHistorical Analysis: Query job event history for debugging, analytics, and compliance.\nProduction-Ready Monitoring: Built-in alerting, metrics collection, and integration with monitoring systems.\nPowerful CLI: Comprehensive command-line interface with real-time monitoring, event history, and system analytics."
+  },
+  {
+    "objectID": "testing.html",
+    "href": "testing.html",
+    "title": "Testing Guide",
+    "section": "",
+    "text": "NAQ uses a comprehensive testing strategy that validates both the new service layer architecture and maintains backward compatibility. This guide covers testing patterns, best practices, and how to work with the enhanced test infrastructure."
+  },
+  {
+    "objectID": "testing.html#overview",
+    "href": "testing.html#overview",
+    "title": "Testing Guide",
+    "section": "",
+    "text": "NAQ uses a comprehensive testing strategy that validates both the new service layer architecture and maintains backward compatibility. This guide covers testing patterns, best practices, and how to work with the enhanced test infrastructure."
+  },
+  {
+    "objectID": "testing.html#test-structure",
+    "href": "testing.html#test-structure",
+    "title": "Testing Guide",
+    "section": "Test Structure",
+    "text": "Test Structure\n\nTest Organization\ntests/\n├── conftest.py                    # Test configuration and fixtures\n├── test_models/                   # Model unit tests (planned)\n├── test_services/                 # Service layer tests (new)\n│   ├── test_service_manager.py    # ServiceManager lifecycle\n│   ├── test_connection_service.py # Connection management\n│   └── test_job_service.py        # Job execution service\n├── test_config/                   # Configuration tests (new)\n│   ├── test_yaml_loading.py       # YAML config loading\n│   └── test_validation.py         # Config validation\n├── test_compatibility/            # Backward compatibility (new)\n│   ├── test_imports.py            # Import compatibility\n│   └── test_user_workflows.py     # User workflow compatibility\n├── test_performance/              # Performance tests (new)\n│   └── test_service_overhead.py   # Service layer overhead\n├── unit/                          # Legacy unit tests (updated)\n├── integration/                   # Integration tests\n└── scenario/                      # Scenario tests"
+  },
+  {
+    "objectID": "testing.html#testing-patterns",
+    "href": "testing.html#testing-patterns",
+    "title": "Testing Guide",
+    "section": "Testing Patterns",
+    "text": "Testing Patterns\n\nService Layer Testing\n\nServiceManager Testing\n@pytest.mark.asyncio\nasync def test_service_initialization(service_test_config):\n    \"\"\"Test ServiceManager initializes all services correctly.\"\"\"\n    manager = ServiceManager(service_test_config)\n    await manager.initialize_all()\n    \n    try:\n        # Test service retrieval\n        conn_service = await manager.get_service(ConnectionService)\n        job_service = await manager.get_service(JobService)\n        \n        assert conn_service is not None\n        assert job_service is not None\n    finally:\n        await manager.cleanup_all()\n\n\nService Mocking\nasync def test_with_mock_services(mock_service_manager):\n    \"\"\"Test using mock service manager.\"\"\"\n    mock_manager, service_map = mock_service_manager\n    \n    job_service = service_map[JobService]\n    job_service.enqueue_job.return_value = \"job-123\"\n    \n    result = await job_service.enqueue_job(job, \"test-queue\")\n    assert result == \"job-123\"\n\n\n\nConfiguration Testing\n\nYAML Configuration\ndef test_yaml_config_loading(temp_config_file):\n    \"\"\"Test loading configuration from YAML file.\"\"\"\n    config = load_config(temp_config_file)\n    \n    assert 'nats' in config.to_dict()\n    assert config.to_dict()['nats']['url'] == 'nats://localhost:4222'\n\n\nEnvironment Variable Overrides\ndef test_environment_overrides(temp_config_file, env_override_config):\n    \"\"\"Test environment variables override YAML config.\"\"\"\n    config = load_config(temp_config_file)\n    config_dict = config.to_dict()\n    \n    # Values should be overridden by environment variables\n    assert config_dict['workers']['concurrency'] == 20  # From NAQ_WORKERS_CONCURRENCY\n\n\n\nCompatibility Testing\n\nImport Compatibility\ndef test_main_imports():\n    \"\"\"Test main package imports still work.\"\"\"\n    from naq import Queue, Worker, Job, enqueue, enqueue_sync\n    \n    assert Queue is not None\n    assert callable(enqueue)\n\n\nWorkflow Compatibility\ndef test_basic_sync_workflow():\n    \"\"\"Test basic synchronous workflow still works.\"\"\"\n    from naq import enqueue_sync, JOB_STATUS\n    \n    def simple_task(x):\n        return x + 1\n    \n    # Should work exactly as before refactoring\n    job = enqueue_sync(simple_task, 5)\n    assert job.job_id is not None"
+  },
+  {
+    "objectID": "testing.html#test-fixtures",
+    "href": "testing.html#test-fixtures",
+    "title": "Testing Guide",
+    "section": "Test Fixtures",
+    "text": "Test Fixtures\n\nCore Fixtures\n\nservice_test_config\nProvides a complete test configuration for ServiceManager:\n{\n    'nats': {\n        'url': 'nats://localhost:4222',\n        'client_name': 'naq-test'\n    },\n    'workers': {\n        'concurrency': 2,\n        'heartbeat_interval': 5\n    },\n    'events': {\n        'enabled': True,\n        'batch_size': 10\n    }\n}\n\n\nservice_manager\nReal ServiceManager instance for integration tests:\nasync def test_with_real_services(service_manager):\n    conn_service = await service_manager.get_service(ConnectionService)\n    # Use real service for integration testing\n\n\nmock_service_manager\nMock ServiceManager for unit tests:\ndef test_with_mock_services(mock_service_manager):\n    mock_manager, service_map = mock_service_manager\n    job_service = service_map[JobService]\n    # Configure and use mocked services\n\n\n\nConfiguration Fixtures\n\ntemp_config_file\nCreates temporary YAML configuration file:\ndef test_config_loading(temp_config_file):\n    config = load_config(temp_config_file)\n    # Test with real config file\n\n\nenv_override_config\nSets up environment variable overrides:\ndef test_env_overrides(temp_config_file, env_override_config):\n    # Environment variables are automatically set\n    config = load_config(temp_config_file)\n    # Test environment variable behavior\n\n\n\nCompatibility Fixtures\n\nservice_compatible_queue\nQueue instance using ServiceManager architecture:\nasync def test_new_queue_pattern(service_compatible_queue):\n    queue = service_compatible_queue\n    # Test with service-aware queue"
+  },
+  {
+    "objectID": "testing.html#best-practices",
+    "href": "testing.html#best-practices",
+    "title": "Testing Guide",
+    "section": "Best Practices",
+    "text": "Best Practices\n\nTest Isolation\n\nUse proper fixtures to ensure test isolation\nMock external dependencies like NATS connections\nClean up resources after tests complete\n\n\n\nService Testing\n\nTest service interfaces not implementation details\nUse dependency injection for testing\nVerify service lifecycle (initialize/cleanup)\n\n\n\nConfiguration Testing\n\nTest all configuration sources (YAML, env vars, defaults)\nValidate configuration errors are handled properly\nTest configuration-driven behavior\n\n\n\nPerformance Testing\n\nMeasure service overhead to prevent regressions\nTest concurrent access patterns\nMonitor memory usage for leaks"
+  },
+  {
+    "objectID": "testing.html#running-tests",
+    "href": "testing.html#running-tests",
+    "title": "Testing Guide",
+    "section": "Running Tests",
+    "text": "Running Tests\n\nBasic Test Execution\n# Run all tests\npytest\n\n# Run specific test categories\npytest tests/test_services/\npytest tests/test_config/\npytest tests/test_compatibility/\n\n# Run with coverage\npytest --cov=naq tests/\n\n\nPerformance Tests\n# Run performance tests\npytest tests/test_performance/ -v\n\n# Run with timing information\npytest tests/test_performance/ --durations=10\n\n\nIntegration Tests\n# Start NATS server first\ndocker compose up -d nats\n\n# Run integration tests\npytest tests/integration/ -v"
+  },
+  {
+    "objectID": "testing.html#test-development-guidelines",
+    "href": "testing.html#test-development-guidelines",
+    "title": "Testing Guide",
+    "section": "Test Development Guidelines",
+    "text": "Test Development Guidelines\n\nWriting Service Tests\n\nTest public interfaces of services\nMock dependencies appropriately\nTest error conditions and edge cases\nVerify service interactions\n\n\n\nWriting Configuration Tests\n\nTest configuration loading from all sources\nValidate error handling for invalid configs\nTest environment variable overrides\nVerify service integration with config\n\n\n\nWriting Compatibility Tests\n\nTest all public APIs continue to work\nVerify import patterns are maintained\nTest typical user workflows\nCheck error behavior compatibility"
+  },
+  {
+    "objectID": "testing.html#migration-from-legacy-tests",
+    "href": "testing.html#migration-from-legacy-tests",
+    "title": "Testing Guide",
+    "section": "Migration from Legacy Tests",
+    "text": "Migration from Legacy Tests\n\nUpdating Existing Tests\nWhen updating legacy tests to work with the service layer:\n\nAdd service fixtures alongside existing ones\nCreate service-compatible versions of test cases\nMaintain backward compatibility during transition\nDocument migration patterns for future reference\n\n\n\nExample Migration\n# Legacy pattern\n@pytest_asyncio.fixture\nasync def queue(mock_nats, mocker):\n    mock_nc, mock_js = mock_nats\n    mocker.patch('naq.queue.get_nats_connection', return_value=mock_nc)\n    q = Queue(name=\"test\")\n    return q\n\n# Service-compatible pattern\n@pytest_asyncio.fixture\nasync def service_queue(service_compatible_queue):\n    return service_compatible_queue\n\n# Test using both patterns\nasync def test_queue_functionality(queue):\n    # Legacy test pattern\n    pass\n\nasync def test_service_queue_functionality(service_queue):\n    # New service pattern\n    pass"
+  },
+  {
+    "objectID": "testing.html#troubleshooting",
+    "href": "testing.html#troubleshooting",
+    "title": "Testing Guide",
+    "section": "Troubleshooting",
+    "text": "Troubleshooting\n\nCommon Issues\n\nService initialization errors\n\nCheck configuration validity\nVerify mock setup for dependencies\nEnsure proper cleanup in tests\n\nImport errors in tests\n\nVerify service layer imports are available\nCheck circular import issues\nUpdate fixture dependencies\n\nPerformance test failures\n\nCheck mock configuration\nVerify reasonable timeouts\nConsider test environment factors\n\n\n\n\nDebug Strategies\n\nUse verbose pytest output (-v flag)\nAdd debug logging to tests\nCheck fixture setup and teardown\nVerify mock configurations are correct"
+  },
+  {
+    "objectID": "testing.html#future-considerations",
+    "href": "testing.html#future-considerations",
+    "title": "Testing Guide",
+    "section": "Future Considerations",
+    "text": "Future Considerations\nAs the service layer evolves, consider:\n\nAdding more service-specific tests\nExpanding performance test coverage\nCreating integration test scenarios\nDeveloping testing utilities for common patterns\n\nThe testing infrastructure is designed to be extensible and maintainable as NAQ continues to grow and evolve."
   },
   {
     "objectID": "examples.html",
@@ -441,32 +518,95 @@
     "text": "Best Practices\n\nDevelopment\n\nUse development environment with debug logging\nKeep configuration files in version control\nUse environment variable interpolation for secrets\nValidate configuration in CI/CD pipelines\n\n\n\nProduction\n\nUse production environment with structured logging\nStore sensitive values in environment variables or secret management\nMonitor configuration changes\nUse separate configurations for different deployment stages\nEnable comprehensive event logging for observability\n\n\n\nSecurity\n\nNever commit secrets to configuration files\nUse environment variable interpolation for sensitive values\nValidate configuration on startup\nRestrict file permissions on configuration files\nUse TLS for NATS connections in production\n\n\n\nPerformance\n\nUse larger batch sizes and longer intervals for high-throughput scenarios\nConfigure appropriate worker concurrency based on workload\nTune event logging parameters for your monitoring needs\nUse connection pooling through the service layer"
   },
   {
-    "objectID": "index.html",
-    "href": "index.html",
-    "title": "NAQ - NATS Asynchronous Queue",
+    "objectID": "contributing.html",
+    "href": "contributing.html",
+    "title": "Contributing",
     "section": "",
-    "text": "NAQ is a simple, asynchronous job queueing library for Python, inspired by RQ (Redis Queue), but built entirely on top of NATS and its JetStream persistence layer.\nIt allows you to easily enqueue Python functions to be executed asynchronously by worker processes, leveraging the power and resilience of NATS JetStream for message persistence and delivery."
+    "text": "We welcome contributions to naq! Whether you’re fixing a bug, adding a new feature, or improving the documentation, your help is appreciated."
   },
   {
-    "objectID": "index.html#get-started",
-    "href": "index.html#get-started",
-    "title": "NAQ - NATS Asynchronous Queue",
-    "section": "Get Started",
-    "text": "Get Started\nReady to dive in? Check out the Quickstart Guide to get your first worker up and running in minutes."
+    "objectID": "contributing.html#getting-started",
+    "href": "contributing.html#getting-started",
+    "title": "Contributing",
+    "section": "Getting Started",
+    "text": "Getting Started\nIf you’re new to the project, a good place to start is by looking at the open issues on GitHub.\n\nDevelopment Setup\nTo get your development environment set up, follow these steps:\n\nFork and Clone the Repository\nStart by forking the main repository on GitHub, and then clone your fork locally:\ngit clone https://github.com/YOUR_USERNAME/naq.git\ncd naq\nInstall Dependencies\nWe recommend using a virtual environment. naq uses uv for dependency management.\n# Create a virtual environment\npython -m venv .venv\nsource .venv/bin/activate\n\n# Install dependencies, including development tools\nuv pip install -e \".[dev]\"\nRun the NATS Server\nThe test suite and examples require a running NATS server. You can use the provided Docker Compose file:\ncd docker\ndocker-compose up -d\nRun the Tests\nTo make sure everything is set up correctly, run the test suite:\npytest\n\n# Or run specific test categories\npytest tests/test_services/    # Service layer tests\npytest tests/test_config/      # Configuration tests\npytest tests/test_compatibility/  # Backward compatibility tests\nSee the Testing Guide for comprehensive testing documentation and patterns."
   },
   {
-    "objectID": "index.html#what-makes-naq-different",
-    "href": "index.html#what-makes-naq-different",
-    "title": "NAQ - NATS Asynchronous Queue",
-    "section": "What Makes NAQ Different",
-    "text": "What Makes NAQ Different\nNAQ isn’t just another task queue - it’s a complete event-driven job processing platform built on NATS. Every state change, from job enqueue to worker heartbeats, is captured as a structured event and stored in durable streams.\nSee your jobs in action:\n# Watch jobs being processed in real-time  \nnaq events\n\n# Monitor worker status and health\nnaq worker-events\n\n# Analyze job performance and history\nnaq event-history job-abc-123\nThis event-driven approach gives you unprecedented visibility into your job processing pipeline, making debugging, monitoring, and scaling dramatically easier."
+    "objectID": "contributing.html#making-changes",
+    "href": "contributing.html#making-changes",
+    "title": "Contributing",
+    "section": "Making Changes",
+    "text": "Making Changes\n\nCreate a New Branch\nCreate a new branch for your changes:\ngit checkout -b feature/my-new-feature\nWrite Your Code\nMake your changes to the codebase. If you’re adding a new feature, please include tests.\nFormat Your Code\nBefore committing, make sure your code is formatted correctly:\nruff format .\nruff check --fix .\nCommit and Push\nCommit your changes with a clear and descriptive message, and push them to your fork:\ngit commit -m \"feat: Add my new feature\"\ngit push origin feature/my-new-feature\nCreate a Pull Request\nOpen a pull request from your fork to the main branch of the naq repository. Provide a clear description of your changes and reference any related issues."
   },
   {
-    "objectID": "index.html#key-features",
-    "href": "index.html#key-features",
-    "title": "NAQ - NATS Asynchronous Queue",
-    "section": "Key Features",
-    "text": "Key Features\n\nSimple API: Familiar and easy-to-use API, similar to RQ.\nAsynchronous Core: Built with asyncio and nats-py for high performance.\nPersistent & Reliable: Uses NATS JetStream for robust job persistence and guaranteed delivery.\nEvent-Driven State Management: Complete observability with real-time job, worker, and schedule event streaming.\nComprehensive Monitoring: Live monitoring of job lifecycle, worker status, and system health with rich CLI tools.\nScheduled & Recurring Jobs: Supports cron-style, interval-based, and one-time scheduled tasks with full event tracking.\nJob Dependencies: Create complex workflows by defining dependencies between jobs.\nAutomatic Retries: Configurable retry mechanism with exponential backoff for failed jobs.\nWorker Status Tracking: Real-time worker heartbeats, status changes, and performance monitoring.\nSchedule Management: Full lifecycle management of scheduled jobs with pause, resume, modify, and cancel operations.\nHistorical Analysis: Query job event history for debugging, analytics, and compliance.\nProduction-Ready Monitoring: Built-in alerting, metrics collection, and integration with monitoring systems.\nPowerful CLI: Comprehensive command-line interface with real-time monitoring, event history, and system analytics."
+    "objectID": "contributing.html#code-of-conduct",
+    "href": "contributing.html#code-of-conduct",
+    "title": "Contributing",
+    "section": "Code of Conduct",
+    "text": "Code of Conduct\nPlease note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by its terms.\nThank you for contributing to naq!"
+  },
+  {
+    "objectID": "import-migration.html",
+    "href": "import-migration.html",
+    "title": "Import Migration Guide",
+    "section": "",
+    "text": "NAQ 0.2.0 introduces a new modular structure while maintaining full backward compatibility. All existing imports continue to work without modification, and new modular imports are available for improved organization."
+  },
+  {
+    "objectID": "import-migration.html#overview",
+    "href": "import-migration.html#overview",
+    "title": "Import Migration Guide",
+    "section": "",
+    "text": "NAQ 0.2.0 introduces a new modular structure while maintaining full backward compatibility. All existing imports continue to work without modification, and new modular imports are available for improved organization."
+  },
+  {
+    "objectID": "import-migration.html#backward-compatibility",
+    "href": "import-migration.html#backward-compatibility",
+    "title": "Import Migration Guide",
+    "section": "Backward Compatibility",
+    "text": "Backward Compatibility\nAll existing imports continue to work unchanged:\n# Main functionality - STILL WORKS\nfrom naq import Queue, Worker, Job, enqueue, enqueue_sync\n\n# Models and types - STILL WORKS  \nfrom naq.models import JOB_STATUS, JobEvent, JobResult\n\n# Event logging - STILL WORKS\nfrom naq.events import AsyncJobEventLogger\n\n# Configuration - STILL WORKS\nfrom naq import get_config, DEFAULT_NATS_URL"
+  },
+  {
+    "objectID": "import-migration.html#new-modular-structure-optional",
+    "href": "import-migration.html#new-modular-structure-optional",
+    "title": "Import Migration Guide",
+    "section": "New Modular Structure (Optional)",
+    "text": "New Modular Structure (Optional)\nFor new code, you can use the new modular structure for better organization:\n\nModels by Category\n# Job models\nfrom naq.models.jobs import Job, JobResult\n\n# Status and event enums\nfrom naq.models.enums import JOB_STATUS, JobEventType, WorkerEventType\n\n# Event models\nfrom naq.models.events import JobEvent, WorkerEvent\n\n# Schedule models\nfrom naq.models.schedules import Schedule\n\n\nServices (New)\n# Service layer for advanced usage\nfrom naq.services import JobService, EventService, ServiceManager\n\n# Create service manager\nfrom naq.services import create_service_manager_from_config\n\n\nUtilities (New)\n# Decorators\nfrom naq.utils.decorators import retry, timing, log_errors\n\n# Context managers\nfrom naq.utils.context_managers import managed_resource, timeout_context\n\n# Async helpers\nfrom naq.utils.async_helpers import gather_with_concurrency, retry_async\n\n# Error handling\nfrom naq.utils.error_handling import ErrorHandler, wrap_naq_exception\n\n# Structured logging\nfrom naq.utils.logging import StructuredLogger, setup_structured_logging\n\n\nConfiguration (Enhanced)\n# Enhanced configuration system\nfrom naq.config import load_config, get_config, reload_config\n\n# Configuration validation\nfrom naq.config import validate_config_file\n\n# Configuration types\nfrom naq.config.types import NAQConfig"
+  },
+  {
+    "objectID": "import-migration.html#import-equivalence",
+    "href": "import-migration.html#import-equivalence",
+    "title": "Import Migration Guide",
+    "section": "Import Equivalence",
+    "text": "Import Equivalence\nOld and new imports refer to the same objects:\n# These are identical\nfrom naq import Job as LegacyJob\nfrom naq.models.jobs import Job as NewJob\nassert LegacyJob is NewJob  # True\n\n# These are identical\nfrom naq.models import JOB_STATUS as LegacyStatus\nfrom naq.models.enums import JOB_STATUS as NewStatus\nassert LegacyStatus is NewStatus  # True"
+  },
+  {
+    "objectID": "import-migration.html#migration-recommendations",
+    "href": "import-migration.html#migration-recommendations",
+    "title": "Import Migration Guide",
+    "section": "Migration Recommendations",
+    "text": "Migration Recommendations\n\nFor Existing Projects\n\nNo changes needed - all existing code continues to work\nConsider migrating imports gradually over time\nUse new modular imports for new features\n\n\n\nFor New Projects\n\nUse new modular imports for better organization\nTake advantage of new service layer for complex applications\nUse enhanced configuration system\n\n\n\nFor Large Codebases\n\nMigrate imports gradually, module by module\nUse both old and new imports during transition\nTest thoroughly after each migration step"
+  },
+  {
+    "objectID": "import-migration.html#quick-reference",
+    "href": "import-migration.html#quick-reference",
+    "title": "Import Migration Guide",
+    "section": "Quick Reference",
+    "text": "Quick Reference\n\n\n\n\n\n\n\n\nComponent\nLegacy Import\nNew Import\n\n\n\n\nJob\nfrom naq import Job\nfrom naq.models.jobs import Job\n\n\nJOB_STATUS\nfrom naq.models import JOB_STATUS\nfrom naq.models.enums import JOB_STATUS\n\n\nQueue\nfrom naq import Queue\nfrom naq.queue.core import Queue\n\n\nWorker\nfrom naq import Worker\nfrom naq.worker.core import Worker\n\n\nenqueue\nfrom naq import enqueue\nfrom naq.queue.async_api import enqueue\n\n\nJobEvent\nfrom naq.models import JobEvent\nfrom naq.models.events import JobEvent\n\n\nAsyncJobEventLogger\nfrom naq.events import AsyncJobEventLogger\nfrom naq.events.logger import AsyncJobEventLogger"
+  },
+  {
+    "objectID": "import-migration.html#benefits-of-new-structure",
+    "href": "import-migration.html#benefits-of-new-structure",
+    "title": "Import Migration Guide",
+    "section": "Benefits of New Structure",
+    "text": "Benefits of New Structure\n\nBetter Organization\n\nRelated functionality grouped into focused modules\nClear separation between models, services, and utilities\nEasier to understand and maintain\n\n\n\nEnhanced Functionality\n\nService layer for dependency injection and centralized operations\nComprehensive utility functions with clear categorization\nEnhanced configuration system with validation\n\n\n\nFuture-Proof\n\nModular structure supports future extensions\nClear API boundaries for plugin development\nBetter type hints and IDE support"
+  },
+  {
+    "objectID": "import-migration.html#migration-examples",
+    "href": "import-migration.html#migration-examples",
+    "title": "Import Migration Guide",
+    "section": "Migration Examples",
+    "text": "Migration Examples\n\nBefore (Legacy)\nfrom naq import enqueue_sync, Worker, JOB_STATUS\nfrom naq.models import Job, JobEvent\nfrom naq.events import AsyncJobEventLogger\n\ndef process_job():\n    job = enqueue_sync(my_task, arg1, arg2)\n    worker = Worker(['default'])\n    logger = AsyncJobEventLogger()\n    return job\n\n\nAfter (New Modular - Optional)\nfrom naq.queue.sync_api import enqueue_sync\nfrom naq.worker.core import Worker\nfrom naq.models.enums import JOB_STATUS\nfrom naq.models.jobs import Job\nfrom naq.models.events import JobEvent\nfrom naq.events.logger import AsyncJobEventLogger\n\ndef process_job():\n    job = enqueue_sync(my_task, arg1, arg2)\n    worker = Worker(['default'])\n    logger = AsyncJobEventLogger()\n    return job\nBoth approaches work identically - choose based on your preferences and project needs."
   },
   {
     "objectID": "architecture.html",
