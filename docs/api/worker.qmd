@@ -8,25 +8,29 @@ The `worker` module contains the `Worker` class, which is responsible for fetchi
 
 You can start a worker from the command line using `naq worker`, but you can also create and run a `Worker` instance programmatically.
 
-### `naq.worker.Worker(queues, nats_url, concurrency, worker_name, services, ...)`
+### `naq.worker.Worker(queues, config=None, services=None, ...)`
+
+The `Worker` class constructor now prioritizes the `config` and `services` parameters for centralized configuration and dependency injection. Parameters like `nats_url`, `heartbeat_interval`, `worker_ttl`, `ack_wait`, and `module_paths` are now typically managed via the `config` object or internally by the service layer.
 
 | Parameter            | Type                               | Description                                                                                             |
 | -------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `queues`             | `list[str]` &#124; `str`            | A list of queue names to listen to. Defaults to the single `naq_default_queue`.                         |
-| `nats_url`           | `str`                              | The URL of the NATS server.                                                                             |
+| `config`             | `NAQConfig` &#124; `dict` &#124; `None` | Optional NAQConfig object or dictionary for worker and service configuration.                           |
+| `services`           | `ServiceManager` &#124; `None`     | Optional ServiceManager instance for dependency injection.                                               |
 | `concurrency`        | `int`                              | The maximum number of jobs to process concurrently. Defaults to `10`.                                     |
 | `worker_name`        | `str` &#124; `None`                 | A name for the worker, used for creating durable consumer names. A unique ID is generated if not provided. |
-| `services`           | `ServiceManager` &#124; `None`     | Optional ServiceManager instance for dependency injection.                                               |
-| `heartbeat_interval` | `int`                              | The interval (in seconds) at which the worker sends a heartbeat. Defaults to `15`.                      |
-| `worker_ttl`         | `int`                              | The time-to-live (in seconds) for the worker's heartbeat. Defaults to `60`.                             |
-| `ack_wait`           | `int` &#124; `dict` &#124; `None`   | The time (in seconds) the worker has to acknowledge a job before it's re-delivered. Can be a global value or a per-queue dictionary. |
-| `module_paths`       | `list[str]` &#124; `str` &#124; `None` | A list of paths to add to `sys.path` to help the worker find your task modules.                       |
+| `nats_url`           | `str`                              | *Deprecated.* The URL of the NATS server. Use `config` instead.                                         |
+| `heartbeat_interval` | `int`                              | *Deprecated.* The interval (in seconds) at which the worker sends a heartbeat. Use `config` instead.    |
+| `worker_ttl`         | `int`                              | *Deprecated.* The time-to-live (in seconds) for the worker's heartbeat. Use `config` instead.           |
+| `ack_wait`           | `int` &#124; `dict` &#124; `None`   | *Deprecated.* The time (in seconds) the worker has to acknowledge a job. Use `config` instead.          |
+| `module_paths`       | `list[str]` &#124; `str` &#124; `None` | *Deprecated.* Paths to add to `sys.path`. Use `config` instead.                                         |
+
 
 ### Methods
 
 #### `run()`
 
-Starts the worker's main processing loop. This is an `async` method.
+Starts the worker's main processing loop. This method internally uses `JobService` for job execution and `EventService` for logging job events.
 
 ```python
 async def run(self) -> None
@@ -63,9 +67,71 @@ A synchronous version of `list_workers()`.
 
 The `Worker` class integrates with the service layer architecture to provide efficient resource management and connection pooling. When using the service layer, the worker automatically leverages centralized services for NATS connections, job execution, and event logging.
 
-### Using Worker with ServiceManager
+### Worker Class Definition and Service Layer Integration
 
-The recommended way to use the `Worker` class with the service layer is to provide a `ServiceManager` instance:
+The `Worker` class is designed to seamlessly integrate with NAQ's service layer, allowing it to leverage shared resources and centralized configuration.
+
+```python
+from naq.config import NAQConfig
+from naq.services import ServiceManager, JobService, EventService, ConnectionService
+from naq.worker.core import Worker as CoreWorker
+from typing import List, Optional, Union, Dict, Any
+import asyncio
+
+class Worker(CoreWorker):
+    def __init__(
+        self,
+        queues: Union[str, List[str]],
+        config: Optional[Union[NAQConfig, dict]] = None,
+        services: Optional[ServiceManager] = None,
+        concurrency: int = 10,
+        worker_name: Optional[str] = None,
+        # Deprecated parameters (managed by config or services)
+        nats_url: Optional[str] = None,
+        heartbeat_interval: Optional[int] = None,
+        worker_ttl: Optional[int] = None,
+        ack_wait: Optional[Union[int, Dict[str, int]]] = None,
+        module_paths: Optional[Union[str, List[str]]] = None,
+    ):
+        super().__init__(
+            queues=queues,
+            config=config,
+            services=services,
+            concurrency=concurrency,
+            worker_name=worker_name,
+            nats_url=nats_url, # Passed for backward compatibility within core
+            heartbeat_interval=heartbeat_interval,
+            worker_ttl=worker_ttl,
+            ack_wait=ack_wait,
+            module_paths=module_paths,
+        )
+        self._job_service: Optional[JobService] = None
+        self._event_service: Optional[EventService] = None
+        self._connection_service: Optional[ConnectionService] = None
+
+    async def _setup_services(self):
+        """Internal method to get service instances from ServiceManager."""
+        if self._services:
+            self._job_service = await self._services.get_service(JobService)
+            self._event_service = await self._services.get_service(EventService)
+            self._connection_service = await self._services.get_service(ConnectionService)
+
+    async def run(self) -> None:
+        """
+        Starts the worker's main processing loop.
+        This method now leverages JobService for job execution and EventService for event logging.
+        """
+        await self._setup_services() # Ensure services are available
+        # The core run logic will then use self._job_service and self._event_service
+        # for processing jobs and logging events.
+        await super().run() # Call the original run method from CoreWorker
+
+```
+
+#### Usage Pattern with `ServiceManager`
+
+The recommended way to instantiate and run a `Worker` is by providing a `ServiceManager` instance. This allows the `Worker` to share and leverage the common services managed by the `ServiceManager`.
+
 
 ```python
 import asyncio

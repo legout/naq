@@ -1,0 +1,1337 @@
+---
+title: "Utils Package API Reference"
+---
+
+# Utils Package API Reference
+
+The `naq.utils` package provides a comprehensive collection of utilities extracted from various modules throughout the codebase. It eliminates code duplication and provides consistent, well-tested functionality across all components of `naq`.
+
+## Package Overview
+
+```python
+from naq.utils import (
+    # Async helpers
+    run_async, run_sync, async_to_sync, sync_to_async,
+
+    # Error handling
+    ErrorContext, ErrorCategory, ErrorHandler,
+
+    # Logging
+    get_structured_logger, add_contextual_fields,
+
+    # NATS helpers
+    nats_connection_context, nats_jetstream_context,
+
+    # Timing
+    Timer, AsyncTimer, Benchmark,
+
+    # Types
+    Result, JobID, WorkerID, QueueName,
+
+    # Validation
+    validate_type, validate_range, validate_choice
+)
+```
+
+## Async Helpers
+
+Utilities for bridging synchronous and asynchronous code.
+
+### Functions
+
+#### `run_async(func, *args, **kwargs)`
+
+Execute an async function from synchronous code.
+
+```python
+from naq.utils import run_async
+
+async def async_function(x, y):
+    return x + y
+
+# Call from sync code
+result = run_async(async_function, 1, 2)
+print(result)  # 3
+```
+
+**Parameters:**
+- `func`: The async function to execute
+- `*args`: Positional arguments to pass to the function
+- `**kwargs`: Keyword arguments to pass to the function
+
+**Returns:**
+The result of the async function
+
+#### `run_sync(func, *args, **kwargs)`
+
+Execute a synchronous function from async code.
+
+```python
+from naq.utils import run_sync
+
+def sync_function(x, y):
+    return x * y
+
+# Call from async code
+async def main():
+    result = await run_sync(sync_function, 3, 4)
+    print(result)  # 12
+```
+
+**Parameters:**
+- `func`: The sync function to execute
+- `*args`: Positional arguments to pass to the function
+- `**kwargs`: Keyword arguments to pass to the function
+
+**Returns:**
+The result of the sync function
+
+#### `async_to_sync(func)`
+
+Decorator to convert an async function to a sync function.
+
+```python
+from naq.utils import async_to_sync
+
+@async_to_sync
+async def async_operation(x):
+    await asyncio.sleep(0.1)
+    return x * 2
+
+# Now can be called synchronously
+result = async_operation(5)
+print(result)  # 10
+```
+
+#### `sync_to_async(func)`
+
+Decorator to convert a sync function to an async function.
+
+```python
+from naq.utils import sync_to_async
+
+@sync_to_async
+def sync_operation(x):
+    time.sleep(0.1)  # Blocking operation
+    return x + 10
+
+# Now can be called asynchronously
+async def main():
+    result = await sync_operation(5)
+    print(result)  # 15
+```
+
+## Context Managers
+
+Common context managers for resource management.
+
+### Functions
+
+#### `managed_resource(resource_factory, cleanup_func)`
+
+Generic resource management with cleanup.
+
+```python
+from naq.utils.context_managers import managed_resource
+
+def create_connection():
+    return create_database_connection()
+
+def cleanup_connection(conn):
+    conn.close()
+
+with managed_resource(create_connection, cleanup_connection) as conn:
+    result = conn.execute("SELECT * FROM table")
+```
+
+#### `timeout_context(timeout_seconds)`
+
+Timeout management for operations.
+
+```python
+from naq.utils.context_managers import timeout_context
+
+with timeout_context(5.0) as timeout:
+    try:
+        result = long_running_operation()
+    except TimeoutError:
+        print("Operation timed out")
+```
+
+#### `retry_context(retry_config)`
+
+Retry logic with context management.
+
+```python
+from naq.utils.context_managers import retry_context
+from naq.utils.types import RetryConfig
+
+retry_config = RetryConfig(max_attempts=3, base_delay=1.0)
+
+with retry_context(retry_config) as retry:
+    try:
+        result = unreliable_operation()
+    except Exception as e:
+        if retry.should_retry(e):
+            retry.wait()
+            continue
+        raise
+```
+
+#### `benchmark_context()`
+
+Performance benchmarking.
+
+```python
+from naq.utils.context_managers import benchmark_context
+
+with benchmark_context() as benchmark:
+    result = operation_to_measure()
+
+print(f"Operation took {benchmark.duration:.4f} seconds")
+```
+
+## Decorators
+
+Reusable decorators for common patterns.
+
+### Functions
+
+#### `@retry`
+
+Automatic retry logic with configurable strategies.
+
+```python
+from naq.utils.decorators import retry
+
+@retry(max_attempts=3, base_delay=1.0, max_delay=10.0, retryable_exceptions=(ConnectionError, TimeoutError))
+def unreliable_operation():
+    # May fail with connection or timeout errors
+    pass
+```
+
+#### `timeout_decorator(timeout_seconds)`
+
+Timeout enforcement for functions.
+
+```python
+from naq.utils.decorators import timeout_decorator
+
+@timeout_decorator(5.0)
+def slow_operation():
+    # Will raise TimeoutError if takes longer than 5 seconds
+    time.sleep(10)
+```
+
+#### `benchmark_decorator()`
+
+Performance measurement.
+
+```python
+from naq.utils.decorators import benchmark_decorator
+
+@benchmark_decorator()
+def operation_to_measure():
+    # Performance will be measured and logged
+    return complex_calculation()
+```
+
+#### `log_errors(logger=None)`
+
+Automatic error logging.
+
+```python
+from naq.utils.decorators import log_errors
+import logging
+
+logger = logging.getLogger(__name__)
+
+@log_errors(logger)
+def operation_that_might_fail():
+    # Errors will be automatically logged
+    raise ValueError("Something went wrong")
+```
+
+#### `validate_args(**validators)`
+
+Argument validation.
+
+```python
+from naq.utils.decorators import validate_args
+from naq.utils.validation import validate_type, validate_range
+
+@validate_args(
+    x=validate_type(int),
+    y=validate_range(0, 100)
+)
+def process_data(x, y):
+    # x must be int, y must be between 0 and 100
+    pass
+```
+
+## Error Handling
+
+Centralized error handling and reporting.
+
+### Classes
+
+#### `ErrorContext`
+
+Rich error context with metadata.
+
+```python
+from naq.utils.error_handling import ErrorContext, ErrorCategory
+
+try:
+    result = risky_operation()
+except Exception as e:
+    error_context = ErrorContext(
+        operation="risky_operation",
+        exception=e,
+        component="MyComponent"
+    )
+    error_context.category = ErrorCategory.EXECUTION
+    error_context.add_metadata({"input_data": data})
+
+    # Report or log the error
+    await error_reporter.report_error(error_context)
+    raise
+```
+
+**Methods:**
+- `add_metadata(key, value)`: Add metadata to the error context
+- `to_dict()`: Convert error context to dictionary
+- `to_json()`: Convert error context to JSON string
+
+#### `ErrorCategory`
+
+Categorization of errors.
+
+```python
+from naq.utils.error_handling import ErrorCategory
+
+# Available categories
+ErrorCategory.CONNECTION      # Connection-related errors
+ErrorCategory.EXECUTION      # Job execution errors
+ErrorCategory.VALIDATION     # Input validation errors
+ErrorCategory.CONFIGURATION  # Configuration errors
+ErrorCategory.TIMEOUT        # Timeout errors
+ErrorCategory.UNKNOWN        # Uncategorized errors
+```
+
+#### `ErrorHandler`
+
+Centralized error handling strategies.
+
+```python
+from naq.utils.error_handling import ErrorHandler, ErrorContext
+
+class MyErrorHandler(ErrorHandler):
+    async def handle_error(self, error_context: ErrorContext) -> None:
+        if error_context.category == ErrorCategory.CONNECTION:
+            # Handle connection errors
+            await self._handle_connection_error(error_context)
+        else:
+            # Handle other errors
+            await self._handle_generic_error(error_context)
+```
+
+#### `ErrorReporter`
+
+Structured error reporting.
+
+```python
+from naq.utils.error_handling import ErrorReporter
+
+reporter = ErrorReporter()
+await reporter.report_error(error_context)
+```
+
+### Recovery Strategies
+
+Configurable recovery mechanisms.
+
+```python
+from naq.utils.error_handling import RecoveryStrategy, RetryRecoveryStrategy
+
+# Retry recovery
+retry_strategy = RetryRecoveryStrategy(max_attempts=3, delay=1.0)
+
+# Custom recovery strategy
+class CustomRecoveryStrategy(RecoveryStrategy):
+    async def recover(self, error_context: ErrorContext) -> bool:
+        # Custom recovery logic
+        return True
+```
+
+## Logging
+
+Comprehensive logging utilities.
+
+### Functions
+
+#### `get_structured_logger(name, **kwargs)`
+
+Get a structured logger with contextual fields.
+
+```python
+from naq.utils.logging import get_structured_logger
+
+logger = get_structured_logger("my_component", component="my_component")
+
+# Log with structured data
+logger.info("Operation completed",
+           operation_id="123",
+           duration=1.5,
+           status="success")
+```
+
+#### `add_contextual_fields(logger, **fields)`
+
+Add contextual fields to a logger.
+
+```python
+from naq.utils.logging import add_contextual_fields
+
+logger = logging.getLogger("my_component")
+logger = add_contextual_fields(logger, component="my_component", version="1.0")
+
+# All log messages will include the contextual fields
+logger.info("Starting up")
+# Output: {"component": "my_component", "version": "1.0", "message": "Starting up"}
+```
+
+#### `setup_performance_logging(logger_name, enabled=True)`
+
+Setup performance logging for operations.
+
+```python
+from naq.utils.logging import setup_performance_logging
+
+perf_logger = setup_performance_logging("performance")
+
+# Log performance metrics
+perf_logger.info("Operation timing",
+                 operation="data_processing",
+                 duration=1.234,
+                 memory_mb=45.6)
+```
+
+### Classes
+
+#### `LogHandlerManager`
+
+Centralized log handler configuration.
+
+```python
+from naq.utils.logging import LogHandlerManager
+
+manager = LogHandlerManager()
+
+# Add handlers
+manager.add_file_handler("app.log", level="INFO")
+manager.add_stream_handler(level="DEBUG")
+
+# Apply to all loggers
+manager.apply_to_all_loggers()
+```
+
+## NATS Helpers
+
+NATS-specific utilities extracted from connection modules.
+
+### Context Managers
+
+#### `nats_connection_context(servers=None, **kwargs)`
+
+Context manager for NATS connections.
+
+```python
+from naq.utils.nats_helpers import nats_connection_context
+
+async with nats_connection_context(servers=["nats://localhost:4222"]) as conn:
+    await conn.publish("subject", b"message")
+```
+
+#### `nats_jetstream_context(servers=None, **kwargs)`
+
+Context manager for NATS JetStream.
+
+```python
+from naq.utils.nats_helpers import nats_jetstream_context
+
+async with nats_jetstream_context() as (conn, js):
+    await js.add_stream(name="mystream", subjects=["mystream.*"])
+    await js.publish("mystream.test", b"test message")
+```
+
+#### `nats_kv_store_context(bucket_name, **kwargs)`
+
+Context manager for NATS KV store.
+
+```python
+from naq.utils.nats_helpers import nats_kv_store_context
+
+async with nats_kv_store_context("mybucket") as kv:
+    await kv.put("key", "value")
+    value = await kv.get("key")
+```
+
+### Connection Utilities
+
+#### `test_nats_connection(nats_url, timeout=5.0)`
+
+Test NATS connection health.
+
+```python
+from naq.utils.nats_helpers import test_nats_connection
+
+is_healthy = await test_nats_connection("nats://localhost:4222")
+if is_healthy:
+    print("NATS connection is healthy")
+```
+
+#### `wait_for_nats_connection(nats_url, timeout=30, check_interval=1.0)`
+
+Wait for NATS connection to be available.
+
+```python
+from naq.utils.nats_helpers import wait_for_nats_connection
+
+is_available = await wait_for_nats_connection("nats://localhost:4222", timeout=60)
+if is_available:
+    print("NATS connection is now available")
+```
+
+### Stream Utilities
+
+#### `create_stream_with_retry(js, stream_config, retry_config=None)`
+
+Create a JetStream stream with retry logic.
+
+```python
+from naq.utils.nats_helpers import create_stream_with_retry, StreamConfigHelper
+
+async with nats_jetstream_context() as (conn, js):
+    config = StreamConfigHelper(
+        name="MY_STREAM",
+        subjects=["my.subject.*"]
+    )
+    stream_info = await create_stream_with_retry(js, config)
+```
+
+#### `ensure_stream_exists(js, stream_name, subjects=None, **kwargs)`
+
+Ensure a stream exists, creating it if necessary.
+
+```python
+from naq.utils.nats_helpers import ensure_stream_exists
+
+async with nats_jetstream_context() as (conn, js):
+    stream_info = await ensure_stream_exists(
+        js,
+        "MY_STREAM",
+        subjects=["my.subject.*"],
+        max_age=3600
+    )
+```
+
+### KV Store Utilities
+
+#### `kv_get_with_retry(js, key, config)`
+
+Get a value from NATS KeyValue store with retry logic.
+
+```python
+from naq.utils.nats_helpers import kv_get_with_retry, KVOperationConfig
+
+async with nats_jetstream_context() as (conn, js):
+    config = KVOperationConfig(bucket_name="MY_BUCKET")
+    value = await kv_get_with_retry(js, "my_key", config)
+```
+
+#### `kv_put_with_retry(js, key, value, config)`
+
+Put a value into NATS KeyValue store with retry logic.
+
+```python
+from naq.utils.nats_helpers import kv_put_with_retry
+
+async with nats_jetstream_context() as (conn, js):
+    await kv_put_with_retry(js, "my_key", b"my_value", "MY_BUCKET")
+```
+
+### Subject Utilities
+
+#### `build_subject(prefix, domain, entity_type, entity_id, action=None, version=None)`
+
+Build a NATS subject string from components.
+
+```python
+from naq.utils.nats_helpers import build_subject
+
+subject = build_subject(
+    prefix="naq",
+    domain="jobs",
+    entity_type="job",
+    entity_id="123",
+    action="enqueued"
+)
+# Returns: "naq.jobs.job.123.enqueued"
+```
+
+#### `parse_subject(subject)`
+
+Parse a NATS subject string into components.
+
+```python
+from naq.utils.nats_helpers import parse_subject
+
+parts = parse_subject("naq.jobs.job.123.enqueued")
+print(parts.domain)      # "jobs"
+print(parts.entity_id)   # "123"
+print(parts.action)      # "enqueued"
+```
+
+### Message Handling
+
+#### `publish_message_with_retry(conn, subject, data, headers=None, retry_config=None)`
+
+Publish a message to NATS with retry logic.
+
+```python
+from naq.utils.nats_helpers import publish_message_with_retry
+
+async with nats_connection_context() as conn:
+    await publish_message_with_retry(
+        conn,
+        "my.subject",
+        b"message data",
+        headers={"message-type": "update"}
+    )
+```
+
+#### `request_with_retry(conn, subject, data, timeout=5.0, retry_config=None)`
+
+Make a NATS request with retry logic.
+
+```python
+from naq.utils.nats_helpers import request_with_retry
+
+async with nats_connection_context() as conn:
+    response = await request_with_retry(
+        conn,
+        "my.service",
+        b"request data",
+        timeout=10.0
+    )
+```
+
+### Connection Monitoring
+
+#### `get_connection_metrics()`
+
+Get current connection metrics.
+
+```python
+from naq.utils.nats_helpers import get_connection_metrics
+
+metrics = get_connection_metrics()
+print(f"Total connections: {metrics.total_connections}")
+print(f"Active connections: {metrics.active_connections}")
+print(f"Failed connections: {metrics.failed_connections}")
+```
+
+## Serialization
+
+Serialization utilities for jobs and results.
+
+### Classes
+
+#### `JobSerializer`
+
+Job serialization with multiple formats.
+
+```python
+from naq.utils.serialization import JobSerializer
+
+serializer = JobSerializer()
+
+# Serialize a job
+job_data = serializer.serialize(job)
+
+# Deserialize a job
+restored_job = serializer.deserialize(job_data)
+```
+
+#### `ResultSerializer`
+
+Result serialization with TTL support.
+
+```python
+from naq.utils.serialization import ResultSerializer
+
+serializer = ResultSerializer()
+
+# Serialize a result
+result_data = serializer.serialize(result)
+
+# Deserialize a result
+restored_result = serializer.deserialize(result_data)
+```
+
+#### `SecureSerializer`
+
+Security-focused serialization.
+
+```python
+from naq.utils.serialization import SecureSerializer
+
+serializer = SecureSerializer(secret_key="my_secret")
+
+# Serialize with encryption
+encrypted_data = serializer.serialize(sensitive_data)
+
+# Deserialize with decryption
+decrypted_data = serializer.deserialize(encrypted_data)
+```
+
+### Protocol
+
+#### `SerializerProtocol`
+
+Extensible serialization interface.
+
+```python
+from naq.utils.serialization import SerializerProtocol
+
+class CustomSerializer(SerializerProtocol):
+    def serialize(self, obj) -> bytes:
+        # Custom serialization logic
+        pass
+
+    def deserialize(self, data: bytes):
+        # Custom deserialization logic
+        pass
+```
+
+## Timing and Benchmarking
+
+Performance measurement and timing utilities.
+
+### Classes
+
+#### `Timer`
+
+High-resolution timing for operations.
+
+```python
+from naq.utils.timing import Timer
+
+with Timer() as timer:
+    result = operation_to_measure()
+
+print(f"Operation took {timer.duration:.4f} seconds")
+print(f"Operation took {timer.duration_ms:.2f} milliseconds")
+```
+
+#### `AsyncTimer`
+
+Async-compatible timing.
+
+```python
+from naq.utils.timing import AsyncTimer
+
+async with AsyncTimer() as timer:
+    result = await async_operation_to_measure()
+
+print(f"Async operation took {timer.duration:.4f} seconds")
+```
+
+#### `Benchmark`
+
+Comprehensive benchmarking tools.
+
+```python
+from naq.utils.timing import Benchmark
+
+benchmark = Benchmark()
+
+async with benchmark:
+    for i in range(1000):
+        await operation_to_measure()
+
+print(f"Processed 1000 operations in {benchmark.total_time:.2f}s")
+print(f"Average time: {benchmark.average_time:.4f}s")
+print(f"Min time: {benchmark.min_time:.4f}s")
+print(f"Max time: {benchmark.max_time:.4f}s")
+```
+
+#### `Scheduler`
+
+Time-based scheduling utilities.
+
+```python
+from naq.utils.timing import Scheduler
+
+scheduler = Scheduler()
+
+# Schedule a function to run after a delay
+scheduler.schedule_later(5.0, my_function, arg1, arg2)
+
+# Schedule a function to run at a specific time
+scheduler.schedule_at(datetime(2023, 12, 25, 10, 0), my_function)
+
+# Run the scheduler
+await scheduler.run()
+```
+
+## Type Definitions
+
+Comprehensive type definitions for the entire system.
+
+### Basic Type Aliases
+
+```python
+from naq.utils.types import (
+    JobID, WorkerID, QueueName, Subject, StreamName, BucketName,
+    Seconds, Milliseconds, Timestamp, Duration,
+    JSONValue, JSONObject, JSONArray, JSONType,
+    SyncFunction, AsyncFunction, JobFunction
+)
+
+# Usage examples
+job_id: JobID = "job-123"
+worker_id: WorkerID = "worker-456"
+queue_name: QueueName = "default_queue"
+duration: Duration = 5.0
+config: JSONObject = {"key": "value"}
+```
+
+### Protocol Definitions
+
+#### `Serializable`
+
+Protocol for objects that can be serialized to bytes.
+
+```python
+from naq.utils.types import Serializable
+
+class MyJob(Serializable):
+    def serialize(self) -> bytes:
+        return json.dumps(self.data).encode()
+
+    @classmethod
+    def deserialize(cls, data: bytes) -> 'MyJob':
+        return cls(json.loads(data.decode()))
+```
+
+#### `Configurable`
+
+Protocol for objects that can be configured.
+
+```python
+from naq.utils.types import Configurable
+
+class ConfigurableWorker(Configurable):
+    def update_config(self, config: Dict[str, Any]) -> None:
+        self.config.update(config)
+
+    def validate_config(self) -> List[str]:
+        errors = []
+        if 'max_concurrent' not in self.config:
+            errors.append("max_concurrent is required")
+        return errors
+```
+
+#### `Executable`
+
+Protocol for executable objects.
+
+```python
+from naq.utils.types import Executable
+
+class MyTask(Executable):
+    def execute(self, *args, **kwargs) -> Any:
+        return f"Task executed with {args}, {kwargs}"
+
+    async def execute_async(self, *args, **kwargs) -> Any:
+        await asyncio.sleep(0.1)
+        return f"Async task executed with {args}, {kwargs}"
+```
+
+### Generic Types
+
+#### `Result`
+
+Generic result type that can contain either a success value or an error.
+
+```python
+from naq.utils.types import Result
+
+def divide(a: float, b: float) -> Result[float, ValueError]:
+    if b == 0:
+        return Result.error(ValueError("Cannot divide by zero"))
+    return Result.ok(a / b)
+
+result = divide(10, 2)
+if result.is_ok():
+    print(f"Result: {result.value}")
+else:
+    print(f"Error: {result.error}")
+```
+
+#### `PaginatedResult`
+
+Generic paginated result type.
+
+```python
+from naq.utils.types import PaginatedResult
+
+def get_users(page: int, page_size: int) -> PaginatedResult[User]:
+    users = db.query(User).offset(page * page_size).limit(page_size).all()
+    total = db.query(User).count()
+    return PaginatedResult(
+        items=users,
+        page=page,
+        page_size=page_size,
+        total=total
+    )
+```
+
+#### `BatchResult`
+
+Generic batch operation result type.
+
+```python
+from naq.utils.types import BatchResult, BatchError
+
+def process_batch(items: List[Item]) -> BatchResult[ProcessedItem]:
+    successful = []
+    failed = []
+
+    for item in items:
+        try:
+            processed = process_item(item)
+            successful.append(processed)
+        except Exception as e:
+            failed.append(BatchError(item=item, error=e))
+
+    return BatchResult(successful=successful, failed=failed)
+```
+
+### Model Types
+
+#### `JobDependency`
+
+Represents a job dependency relationship.
+
+```python
+from naq.utils.types import JobDependency
+
+dependency = JobDependency(
+    job_id="job-123",
+    dependency_type="completion",
+    condition={"success": True}
+)
+```
+
+#### `JobMetrics`
+
+Metrics for job execution and performance.
+
+```python
+from naq.utils.types import JobMetrics
+
+metrics = JobMetrics(
+    execution_time=1.5,
+    wait_time=0.5,
+    memory_usage_mb=10.2,
+    cpu_usage_percent=5.0
+)
+```
+
+#### `WorkerMetrics`
+
+Metrics for worker performance and health.
+
+```python
+from naq.utils.types import WorkerMetrics
+
+metrics = WorkerMetrics(
+    jobs_processed=100,
+    jobs_failed=2,
+    avg_job_duration=1.2,
+    memory_usage_mb=50.5
+)
+```
+
+### Configuration Types
+
+#### `RetryConfig`
+
+Configuration for retry behavior.
+
+```python
+from naq.utils.types import RetryConfig
+
+retry_config = RetryConfig(
+    max_retries=3,
+    delay=1.0,
+    strategy="exponential",
+    retry_on=(ValueError, KeyError)
+)
+```
+
+#### `TimeoutConfig`
+
+Configuration for timeout behavior.
+
+```python
+from naq.utils.types import TimeoutConfig
+
+timeout_config = TimeoutConfig(
+    duration=30.0,
+    strategy="raise_exception"
+)
+```
+
+#### `ThrottleConfig`
+
+Configuration for throttling behavior.
+
+```python
+from naq.utils.types import ThrottleConfig
+
+throttle_config = ThrottleConfig(
+    max_requests=100,
+    time_window=60.0,
+    burst_capacity=10
+)
+```
+
+### Event Types
+
+#### `EventFilter`
+
+Filter for events based on various criteria.
+
+```python
+from naq.utils.types import EventFilter
+
+filter = EventFilter(
+    event_types=[JobEventType.COMPLETED, JobEventType.FAILED],
+    start_time=time.time() - 3600,  # Last hour
+    queue_names=["high_priority"]
+)
+```
+
+#### `EventSubscription`
+
+Subscription for events with filtering and callback.
+
+```python
+from naq.utils.types import EventSubscription
+
+def handle_event(event: JobEvent) -> None:
+    print(f"Job {event.job_id} completed in {event.duration_ms}ms")
+
+subscription = EventSubscription(
+    callback=handle_event,
+    filter=EventFilter(event_types=[JobEventType.COMPLETED])
+)
+```
+
+### Utility Types
+
+#### `TimeWindow`
+
+Represents a time window with start and end times.
+
+```python
+from naq.utils.types import TimeWindow
+
+window = TimeWindow(
+    start_time=time.time() - 3600,  # 1 hour ago
+    end_time=time.time()  # now
+)
+
+if window.contains(timestamp):
+    print("Timestamp is within the window")
+```
+
+#### `ResourceUsage`
+
+Resource usage information.
+
+```python
+from naq.utils.types import ResourceUsage
+
+usage = ResourceUsage(
+    cpu_percent=25.5,
+    memory_mb=1024.0,
+    disk_mb=2048.0,
+    network_bytes_in=1024,
+    network_bytes_out=2048
+)
+```
+
+## Validation
+
+Comprehensive validation utilities.
+
+### Functions
+
+#### `validate_type(value, expected_type, field_name="value")`
+
+Validate that a value matches the expected type.
+
+```python
+from naq.utils.validation import validate_type
+
+validate_type(42, int, "age")  # OK
+validate_type("42", int, "age")  # Raises TypeValidationError
+```
+
+#### `validate_optional_type(value, expected_type, field_name="value")`
+
+Validate that a value is either None or matches the expected type.
+
+```python
+from naq.utils.validation import validate_optional_type
+
+validate_optional_type(None, int, "age")  # OK
+validate_optional_type(42, int, "age")  # OK
+validate_optional_type("42", int, "age")  # Raises TypeValidationError
+```
+
+#### `validate_range(value, min_val, max_val, field_name="value")`
+
+Validate that a numeric value is within a specified range.
+
+```python
+from naq.utils.validation import validate_range
+
+validate_range(25, 0, 100, "age")  # OK
+validate_range(-5, 0, 100, "age")  # Raises ValidationError
+validate_range(150, 0, 100, "age")  # Raises ValidationError
+```
+
+#### `validate_choice(value, choices, field_name="value")`
+
+Validate that a value is one of the allowed choices.
+
+```python
+from naq.utils.validation import validate_choice
+
+validate_choice("active", ["active", "inactive"], "status")  # OK
+validate_choice("pending", ["active", "inactive"], "status")  # Raises ValidationError
+```
+
+#### `validate_string(value, min_length=None, max_length=None, pattern=None, field_name="value")`
+
+Validate string properties.
+
+```python
+from naq.utils.validation import validate_string
+
+validate_string("hello", min_length=1, max_length=10)  # OK
+validate_string("", min_length=1)  # Raises ValidationError
+validate_string("a" * 100, max_length=10)  # Raises ValidationError
+validate_string("user123", pattern=r"^[a-z]+\d+$")  # OK
+```
+
+#### `validate_url(value, field_name="value")`
+
+Validate URL format.
+
+```python
+from naq.utils.validation import validate_url
+
+validate_url("https://example.com")  # OK
+validate_url("not-a-url")  # Raises ValidationError
+```
+
+#### `validate_email(value, field_name="value")`
+
+Validate email format.
+
+```python
+from naq.utils.validation import validate_email
+
+validate_email("user@example.com")  # OK
+validate_email("invalid-email")  # Raises ValidationError
+```
+
+#### `validate_dict(dictionary, schema, dict_name="dictionary")`
+
+Validate a dictionary against a schema.
+
+```python
+from naq.utils.validation import validate_dict
+
+schema = {
+    "name": {"type": str, "required": True},
+    "age": {"type": int, "min": 0, "max": 150},
+    "email": {"type": str, "pattern": r"^[^@]+@[^@]+\.[^@]+$"}
+}
+
+data = {"name": "John", "age": 30, "email": "john@example.com"}
+validate_dict(data, schema)  # OK
+```
+
+### Classes
+
+#### `Validator`
+
+Configurable validator class.
+
+```python
+from naq.utils.validation import Validator
+
+validator = Validator()
+
+# Add validation rules
+validator.add_rule("name", validate_type(str))
+validator.add_rule("age", validate_range(0, 150))
+validator.add_rule("email", validate_email)
+
+# Validate data
+data = {"name": "John", "age": 30, "email": "john@example.com"}
+errors = validator.validate(data)
+if errors:
+    print("Validation errors:", errors)
+```
+
+#### `ValidationError`
+
+Exception raised when validation fails.
+
+```python
+from naq.utils.validation import ValidationError
+
+try:
+    validate_type("42", int, "age")
+except ValidationError as e:
+    print(f"Validation error: {e}")
+    print(f"Expected type: {e.expected_type}")
+    print(f"Actual value: {e.actual_value}")
+```
+
+### Dataclass Validation
+
+#### `validate_dataclass(obj)`
+
+Validate a dataclass instance.
+
+```python
+from naq.utils.validation import validate_dataclass
+from dataclasses import dataclass
+
+@dataclass
+class Person:
+    name: str
+    age: int
+
+    def __post_init__(self):
+        validate_dataclass(self)
+
+person = Person(name="John", age=30)
+# Validation happens automatically
+```
+
+## Integration Examples
+
+### Complete Example Using Multiple Utils
+
+```python
+import asyncio
+from naq.utils import (
+    # Async helpers
+    run_async,
+
+    # Error handling
+    ErrorContext, ErrorCategory,
+
+    # Logging
+    get_structured_logger,
+
+    # NATS helpers
+    nats_jetstream_context,
+
+    # Decorators
+    retry,
+
+    # Timing
+    Timer,
+
+    # Types
+    JobID, Result,
+
+    # Validation
+    validate_type, validate_range
+)
+
+# Setup logging
+logger = get_structured_logger("my_app")
+
+@retry(max_attempts=3, base_delay=1.0, retryable_exceptions=(ConnectionError, TimeoutError))
+async def process_job(job_id: JobID) -> Result[str, Exception]:
+    """Process a job with comprehensive error handling and logging."""
+
+    # Validate input
+    validate_type(job_id, str, "job_id")
+
+    with Timer() as timer:
+        logger.info("Starting job processing", job_id=job_id)
+
+        try:
+            async with nats_jetstream_context() as (conn, js):
+                # Process the job
+                result = await _process_job_impl(job_id, js)
+
+                logger.info(
+                    "Job completed successfully",
+                    job_id=job_id,
+                    duration=timer.duration
+                )
+
+                return Result.ok(result)
+
+        except Exception as e:
+            error_context = ErrorContext(
+                operation="job_processing",
+                exception=e,
+                job_id=job_id,
+                duration=timer.duration
+            )
+            error_context.category = ErrorCategory.EXECUTION
+
+            logger.error("Job processing failed", error_context=error_context.to_dict())
+
+            return Result.error(e)
+
+async def _process_job_impl(job_id: JobID, js) -> str:
+    """Actual job implementation."""
+    # Simulate work
+    await asyncio.sleep(0.1)
+
+    # Store result
+    await js.key_value("results").put(job_id, f"Result for {job_id}")
+
+    return f"Processed {job_id}"
+
+# Usage
+async def main():
+    result = await process_job("job-123")
+
+    if result.is_ok():
+        print(f"Success: {result.value()}")
+    else:
+        print(f"Error: {result.error()}")
+
+if __name__ == "__main__":
+    run_async(main)
+```
+
+This comprehensive example demonstrates how to use multiple utilities from the `naq.utils` package together to create robust, well-logged, and properly handled operations.

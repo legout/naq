@@ -4,7 +4,7 @@ title: "Connection Management API"
 
 # Connection Management
 
-The `naq` library provides sophisticated NATS connection management with both traditional and context manager-based approaches.
+The `naq` library provides sophisticated NATS connection management through the `utils.nats_helpers` module, offering both traditional and context manager-based approaches.
 
 ## Overview
 
@@ -15,18 +15,20 @@ The connection management system has been refactored to provide:
 - **Decorators**: Function-based connection injection
 - **Backward Compatibility**: Existing code continues to work without changes
 
+> **Note**: The connection management utilities have been moved from `naq.connection` to `naq.utils.nats_helpers` as part of the utils package consolidation. The old imports continue to work for backward compatibility.
+
 ## Context Managers
 
-### `nats_connection(config=None)`
+### `nats_connection_context(servers=None, **kwargs)`
 
 Context manager for NATS connections with automatic resource management.
 
 ```python
 import asyncio
-from naq.connection import nats_connection
+from naq.utils.nats_helpers import nats_connection_context
 
 async def example():
-    async with nats_connection() as conn:
+    async with nats_connection_context() as conn:
         await conn.publish("subject", b"message")
 ```
 
@@ -42,8 +44,8 @@ Context manager for JetStream contexts.
 
 ```python
 async def example():
-    async with nats_connection() as conn:
-        async with jetstream_context(conn) as js:
+    async with nats_connection_context() as conn:
+        async with jetstream_context_from_connection(conn) as js:
             await js.add_stream(name="stream", subjects=["stream.*"])
 ```
 
@@ -53,36 +55,37 @@ async def example():
 **Returns:**
 - A JetStream context for working with streams and consumers.
 
-### `nats_jetstream(config=None)`
+### `nats_jetstream_context(servers=None, **kwargs)`
 
 Combined context manager for NATS connection and JetStream.
 
 ```python
 async def example():
-    async with nats_jetstream() as (conn, js):
+    async with nats_jetstream_context() as (conn, js):
         await js.add_stream(name="stream", subjects=["stream.*"])
 ```
 
 **Parameters:**
-- `config` (Optional[Config]): Configuration object for the connection. If not provided, uses default configuration.
+- `servers` (Optional[List[str]]): List of NATS server URLs. If not provided, uses default configuration.
+- `**kwargs`: Additional connection parameters.
 
 **Returns:**
 - A tuple of (NATSClient, JetStreamContext) for working with both connections and JetStream.
 
-### `nats_kv_store(bucket_name, config=None)`
+### `nats_kv_store_context(bucket_name, **kwargs)`
 
 Context manager for NATS KeyValue operations.
 
 ```python
 async def example():
-    async with nats_kv_store("my_bucket") as kv:
+    async with nats_kv_store_context("mybucket") as kv:
         await kv.put("key", "value")
         result = await kv.get("key")
 ```
 
 **Parameters:**
 - `bucket_name` (str): Name of the KeyValue bucket.
-- `config` (Optional[Config]): Configuration object for the connection. If not provided, uses default configuration.
+- `**kwargs`: Additional connection parameters.
 
 **Returns:**
 - A KeyValue context for working with NATS KeyValue store.
@@ -92,11 +95,12 @@ async def example():
 ### Connection Monitoring
 
 ```python
-from naq.connection import connection_monitor
+from naq.utils.nats_helpers import get_connection_metrics
 
 # Monitor connection usage
-print(f"Total connections: {connection_monitor.metrics.total_connections}")
-print(f"Active connections: {connection_monitor.metrics.active_connections}")
+metrics = get_connection_metrics()
+print(f"Total connections: {metrics.total_connections}")
+print(f"Active connections: {metrics.active_connections}")
 ```
 
 The `ConnectionMonitor` class provides metrics for tracking connection usage:
@@ -109,7 +113,7 @@ The `ConnectionMonitor` class provides metrics for tracking connection usage:
 ### Connection Testing
 
 ```python
-from naq.connection import test_nats_connection, wait_for_nats_connection
+from naq.utils.nats_helpers import test_nats_connection, wait_for_nats_connection
 
 # Test connection health
 is_healthy = await test_nats_connection()
@@ -129,7 +133,7 @@ await wait_for_nats_connection(timeout=30)
 Decorator to inject NATS connection into functions.
 
 ```python
-from naq.connection import with_nats_connection
+from naq.utils.decorators import with_nats_connection
 
 @with_nats_connection()
 async def publish_message(conn, subject: str, message: bytes):
@@ -143,7 +147,7 @@ The decorator automatically establishes a NATS connection and passes it as the f
 Decorator to inject JetStream context into functions.
 
 ```python
-from naq.connection import with_jetstream_context
+from naq.utils.decorators import with_jetstream_context
 
 @with_jetstream_context()
 async def create_stream(js, stream_name: str):
@@ -157,13 +161,14 @@ The decorator automatically establishes a NATS connection and JetStream context,
 Connection parameters are configured through the standard `naq` configuration system:
 
 ```python
-from naq.connection import Config, get_config
+from naq.config import ConnectionConfig, create_default_config_manager
 
 # Get default configuration
-config = get_config()
+config_manager = create_default_config_manager()
+config = config_manager.get_typed("connection", dict)
 
 # Create custom configuration
-custom_config = Config(
+custom_config = ConnectionConfig(
     servers=["nats://localhost:4222"],
     client_name="my-app",
     max_reconnect_attempts=10,
@@ -195,9 +200,9 @@ finally:
 ### New Pattern (After)
 
 ```python
-from naq.connection import nats_jetstream
+from naq.utils.nats_helpers import nats_jetstream_context
 
-async with nats_jetstream(config) as (conn, js):
+async with nats_jetstream_context() as (conn, js):
     await js.add_stream(config)
 ```
 
@@ -224,7 +229,7 @@ The connection management system provides comprehensive error handling:
 from naq.exceptions import NaqConnectionError
 
 try:
-    async with nats_connection() as conn:
+    async with nats_connection_context() as conn:
         await conn.publish("subject", b"message")
 except NaqConnectionError as e:
     print(f"Connection error: {e}")

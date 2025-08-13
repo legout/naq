@@ -31,10 +31,46 @@ def count_words(text):
 
 Now, let's enqueue the `count_words` function to be executed by a worker. Create another file, `main.py`, to send the job to the queue.
 
-We'll use the `enqueue_sync` function, which is a simple, blocking way to add a job to the queue.
+### Using Queue with ServiceManager (Recommended)
+
+The recommended approach is to use a `Queue` instance initialized with a `ServiceManager`. This provides efficient connection management and leverages the service layer internally.
 
 ```python
 # main.py
+from naq.queue import Queue
+from naq.services import ServiceManager
+from tasks import count_words
+
+# The text we want to process
+long_text = (
+    "A journey of a thousand miles begins with a single step. "
+    "The best time to plant a tree was 20 years ago. "
+    "The second best time is now."
+)
+
+print("Enqueuing job to count words...")
+
+# Create a Queue instance with ServiceManager
+async def enqueue_job():
+    async with ServiceManager() as services:
+        queue = Queue(name="default", services=services)
+        job = await queue.enqueue(count_words, long_text)
+        print(f"Successfully enqueued job {job.job_id}.")
+        return job
+
+# Run the async function
+import asyncio
+job = asyncio.run(enqueue_job())
+
+print("To process the job, run a worker with: naq worker default")
+```
+
+### Using enqueue_sync (Simplified)
+
+For simpler use cases, you can still use the `enqueue_sync` function. Note that it now internally leverages the service layer for connection management and job processing.
+
+```python
+# main_simple.py
 from naq import enqueue_sync
 from tasks import count_words
 
@@ -79,25 +115,48 @@ Congratulations! You've successfully enqueued and processed your first backgroun
 
 ## Connection Management
 
-### Using Context Managers (Recommended)
+### Service-Based Connection Management (Recommended)
 
-The recommended way to manage NATS connections in `naq` is through context managers. They provide automatic resource management and ensure proper cleanup.
+The recommended way to manage NATS connections in `naq` is through the `ServiceManager`. It provides centralized connection management, automatic resource pooling, and simplifies application-level connection handling.
 
 ```python
 import asyncio
-from naq.connection import nats_connection, nats_jetstream, nats_kv_store
+from naq.queue import Queue
+from naq.services import ServiceManager
 
-async def basic_example():
+async def service_manager_example():
+    # Create ServiceManager with configuration
+    async with ServiceManager() as services:
+        # Get a Queue instance that uses the service layer
+        queue = Queue(name="my_queue", services=services)
+        
+        # The Queue internally uses services for connection management
+        job = await queue.enqueue(my_task, arg1, arg2)
+        print(f"Job enqueued: {job.job_id}")
+        
+        # Services handle connection pooling, reuse, and cleanup automatically
+        # No manual connection management needed at the application level
+```
+
+### Using Context Managers (Lower-Level Usage)
+
+Direct usage of context managers is still available but is primarily intended for lower-level operations or service-internal use cases. These provide fine-grained control over NATS connections when needed.
+
+```python
+import asyncio
+from naq.utils.nats_helpers import nats_connection_context, nats_jetstream_context, nats_kv_store_context
+
+async def low_level_example():
     # Simple connection
-    async with nats_connection() as conn:
+    async with nats_connection_context() as conn:
         await conn.publish("hello", b"world")
     
     # With JetStream
-    async with nats_jetstream() as (conn, js):
+    async with nats_jetstream_context() as (conn, js):
         stream = await js.add_stream(name="mystream", subjects=["mystream.*"])
     
     # With KeyValue store
-    async with nats_kv_store("mybucket") as kv:
+    async with nats_kv_store_context("mybucket") as kv:
         await kv.put("key", "value")
 ```
 
@@ -106,7 +165,7 @@ async def basic_example():
 For functions that need NATS connections, you can use decorators to automatically inject connections:
 
 ```python
-from naq.connection import with_nats_connection, with_jetstream_context
+from naq.utils.decorators import with_nats_connection, with_jetstream_context
 
 @with_nats_connection()
 async def publish(conn, subject: str, data: bytes):
@@ -122,7 +181,7 @@ async def create_stream(js, name: str):
 In production environments, you can test and monitor your connections:
 
 ```python
-from naq.connection import test_nats_connection, wait_for_nats_connection, connection_monitor
+from naq.utils.nats_helpers import test_nats_connection, wait_for_nats_connection, get_connection_metrics
 
 # Test if connection is available
 is_healthy = await test_nats_connection()
@@ -131,7 +190,8 @@ is_healthy = await test_nats_connection()
 await wait_for_nats_connection(timeout=30)
 
 # Monitor connection usage
-print(f"Active connections: {connection_monitor.metrics.active_connections}")
+metrics = get_connection_metrics()
+print(f"Active connections: {metrics.active_connections}")
 ```
 
 ## What's Next?

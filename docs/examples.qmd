@@ -20,13 +20,14 @@ naq worker scheduled_queue
 
 ### One-Time Scheduled Job
 
-You can enqueue a job to run after a specific delay or at a precise time.
+You can enqueue a job to run after a specific delay or at a precise time. With the service layer, scheduling operations are performed through a Queue instance that uses a ServiceManager.
 
 ```python
 # schedule_task.py
 import asyncio
 from datetime import datetime, timedelta
-from naq import enqueue_at, enqueue_in
+from naq.queue import Queue
+from naq.services import ServiceManager
 
 async def send_reminder(user_id, message):
     print(f"Sending reminder to {user_id}: {message}")
@@ -34,26 +35,28 @@ async def send_reminder(user_id, message):
     return f"Reminder sent to {user_id}"
 
 async def main():
-    # Schedule a job to run in 5 minutes
-    run_in_5_min = await enqueue_in(
-        send_reminder,
-        delay=timedelta(minutes=5),
-        user_id="user123",
-        message="Your meeting starts in 5 minutes.",
-        queue_name="scheduled_queue"
-    )
-    print(f"Job {run_in_5_min.job_id} scheduled to run in 5 minutes.")
+    # Create a Queue instance with ServiceManager
+    async with ServiceManager() as services:
+        queue = Queue(name="scheduled_queue", services=services)
+        
+        # Schedule a job to run in 5 minutes
+        run_in_5_min = await queue.enqueue_in(
+            send_reminder,
+            delay=timedelta(minutes=5),
+            user_id="user123",
+            message="Your meeting starts in 5 minutes."
+        )
+        print(f"Job {run_in_5_min.job_id} scheduled to run in 5 minutes.")
 
-    # Schedule a job to run at a specific time (UTC)
-    run_at_time = datetime.utcnow() + timedelta(hours=1)
-    run_at = await enqueue_at(
-        send_reminder,
-        run_at=run_at_time,
-        user_id="user456",
-        message="Don't forget your 1-hour follow-up.",
-        queue_name="scheduled_queue"
-    )
-    print(f"Job {run_at.job_id} scheduled to run at {run_at_time.isoformat()}.")
+        # Schedule a job to run at a specific time (UTC)
+        run_at_time = datetime.utcnow() + timedelta(hours=1)
+        run_at = await queue.enqueue_at(
+            send_reminder,
+            run_at=run_at_time,
+            user_id="user456",
+            message="Don't forget your 1-hour follow-up."
+        )
+        print(f"Job {run_at.job_id} scheduled to run at {run_at_time.isoformat()}.")
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -61,12 +64,13 @@ if __name__ == "__main__":
 
 ### Recurring Job (Cron)
 
-For tasks that need to run on a regular schedule (e.g., nightly reports, weekly cleanups), you can use the `schedule` function with a cron string.
+For tasks that need to run on a regular schedule (e.g., nightly reports, weekly cleanups), you can use the `schedule` method with a cron string through a Queue instance that uses a ServiceManager.
 
 ```python
 # recurring_task.py
 import asyncio
-from naq import schedule
+from naq.queue import Queue
+from naq.services import ServiceManager
 
 async def generate_nightly_report():
     print("Generating the nightly sales report...")
@@ -75,14 +79,17 @@ async def generate_nightly_report():
     return "Report generated successfully."
 
 async def main():
-    # Schedule the report to run every day at 2:00 AM UTC
-    cron_schedule = await schedule(
-        generate_nightly_report,
-        cron="0 2 * * *",  # Standard cron format
-        schedule_id="nightly-sales-report",
-        queue_name="scheduled_queue"
-    )
-    print(f"Cron job '{cron_schedule.schedule_id}' is now active.")
+    # Create a Queue instance with ServiceManager
+    async with ServiceManager() as services:
+        queue = Queue(name="scheduled_queue", services=services)
+        
+        # Schedule the report to run every day at 2:00 AM UTC
+        cron_schedule = await queue.schedule(
+            generate_nightly_report,
+            cron="0 2 * * *",  # Standard cron format
+            schedule_id="nightly-sales-report"
+        )
+        print(f"Cron job '{cron_schedule.schedule_id}' is now active.")
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -240,7 +247,7 @@ if __name__ == "__main__":
 
 ## Example 5: Custom Event Handlers
 
-The event system allows you to build powerful, reactive workflows by responding to job lifecycle events. This example demonstrates how to create a custom event handler that performs an action when a job of a certain type fails.
+The event system allows you to build powerful, reactive workflows by responding to job lifecycle events. This example demonstrates how to create a custom event handler that performs an action when a job of a certain type fails, using the service layer for event management.
 
 To run this example, you will need:
 1. A NATS server running.
@@ -252,8 +259,9 @@ To run this example, you will need:
 # custom_event_handler.py
 import asyncio
 import os
-from naq import enqueue
-from naq.events import AsyncJobEventProcessor, NATSJobEventStorage, JobEventType, JobEvent
+from naq.queue import Queue
+from naq.services import ServiceManager
+from naq.events import AsyncJobEventProcessor, JobEventType, JobEvent
 
 # Ensure event logging is enabled for this example to work
 os.environ["NAQ_EVENTS_ENABLED"] = "true"
@@ -289,45 +297,53 @@ async def on_job_failure(event: JobEvent):
 
 async def main():
     # --- Setup ---
-    print("Setting up event processor and enqueuing jobs...")
+    print("Setting up service manager and event processor...")
 
-    # 1. Create the event storage and processor
-    storage = NATSJobEventStorage()
-    processor = AsyncJobEventProcessor(storage)
+    # Create ServiceManager
+    async with ServiceManager() as services:
+        # Get EventService from the service manager
+        event_service = await services.get_service(EventService)
+        
+        # Create event processor using the EventService
+        processor = AsyncJobEventProcessor(event_service.get_event_storage())
 
-    # 2. Register our custom handler for FAILED events
-    processor.add_handler(JobEventType.FAILED, on_job_failure)
-    
-    # 3. Start the processor in the background
-    # It will begin listening for events immediately.
-    processor_task = asyncio.create_task(processor.start())
+        # 2. Register our custom handler for FAILED events
+        processor.add_handler(JobEventType.FAILED, on_job_failure)
+        
+        # 3. Start the processor in the background
+        # It will begin listening for events immediately.
+        processor_task = asyncio.create_task(processor.start())
 
-    # Give the processor a moment to start up
-    await asyncio.sleep(2)
+        # Give the processor a moment to start up
+        await asyncio.sleep(2)
 
-    # --- Enqueue Jobs ---
-    print("\nEnqueuing a successful job and a job that will fail...")
-    # Enqueue a job that will succeed
-    await enqueue(flaky_task, "success-1", queue_name="example_queue")
-    
-    # Enqueue a job that is designed to fail
-    await enqueue(flaky_task, "fail-on-purpose", queue_name="example_queue")
+        # --- Enqueue Jobs ---
+        print("\nEnqueuing a successful job and a job that will fail...")
+        
+        # Create Queue instance to enqueue jobs
+        queue = Queue(name="example_queue", services=services)
+        
+        # Enqueue a job that will succeed
+        await queue.enqueue(flaky_task, "success-1")
+        
+        # Enqueue a job that is designed to fail
+        await queue.enqueue(flaky_task, "fail-on-purpose")
 
-    print("Jobs enqueued. Make sure a worker is running to process them.")
-    print("The custom handler will be called when the 'fail-on-purpose' job fails.")
+        print("Jobs enqueued. Make sure a worker is running to process them.")
+        print("The custom handler will be called when the 'fail-on-purpose' job fails.")
 
-    # --- Keep Running ---
-    try:
-        # Keep the script running to allow the processor to handle events
-        print("\nWaiting for events... Press Ctrl+C to exit.")
-        while True:
-            await asyncio.sleep(1)
-    except KeyboardInterrupt:
-        print("\nShutting down...")
-    finally:
-        # Ensure the processor is stopped cleanly
-        await processor.stop()
-        await processor_task # Wait for the processor task to finish
+        # --- Keep Running ---
+        try:
+            # Keep the script running to allow the processor to handle events
+            print("\nWaiting for events... Press Ctrl+C to exit.")
+            while True:
+                await asyncio.sleep(1)
+        except KeyboardInterrupt:
+            print("\nShutting down...")
+        finally:
+            # Ensure the processor is stopped cleanly
+            await processor.stop()
+            await processor_task # Wait for the processor task to finish
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -349,20 +365,69 @@ You will see the handler script enqueue two jobs. The worker will pick them up. 
 
 ## Example 6: Connection Management with Context Managers
 
-The new connection management system provides context managers for automatic resource management. These examples demonstrate how to use the different context managers available in `naq`.
+The connection management system provides context managers for automatic resource management. With the service layer integration, these context managers are primarily used internally by services like ConnectionService. The recommended approach is to use ServiceManager for connection management at the application level.
 
-### Basic Connection Management
+### Service-Based Connection Management (Recommended)
+
+The preferred way to manage connections is through ServiceManager, which handles connection pooling, reuse, and cleanup automatically.
+
+```python
+# service_connection_example.py
+import asyncio
+from naq.queue import Queue
+from naq.services import ServiceManager
+
+async def service_manager_example():
+    """Example of connection management through ServiceManager."""
+    
+    # Create ServiceManager with configuration
+    async with ServiceManager() as services:
+        # Get a Queue instance that uses the service layer
+        queue = Queue(name="example_queue", services=services)
+        
+        # The Queue internally uses services for connection management
+        # Connection pooling, reuse, and cleanup are handled automatically
+        job = await queue.enqueue(my_task, arg1, arg2)
+        print(f"Job enqueued: {job.job_id}")
+        
+        # No manual connection management needed at the application level
+        # Services handle everything internally
+
+async def multiple_queues_example():
+    """Example of managing multiple queues with shared connections."""
+    
+    async with ServiceManager() as services:
+        # Create multiple queues that share connection resources
+        high_priority = Queue(name="high_priority", services=services)
+        normal_priority = Queue(name="normal_priority", services=services)
+        background = Queue(name="background", services=services)
+        
+        # All queues share the same connection pool managed by ServiceManager
+        high_job = await high_priority.enqueue(critical_task, "urgent")
+        normal_job = await normal_priority.enqueue(regular_task, "data")
+        bg_job = await background.enqueue(low_priority_task, "cleanup")
+        
+        print(f"Jobs enqueued: {high_job.job_id}, {normal_job.job_id}, {bg_job.job_id}")
+
+if __name__ == "__main__":
+    asyncio.run(service_manager_example())
+    asyncio.run(multiple_queues_example())
+```
+
+### Context Managers (Lower-Level Usage)
+
+Direct usage of context managers is still available but is primarily intended for lower-level operations or service-internal use cases. These provide fine-grained control over NATS connections when needed.
 
 ```python
 # connection_example.py
 import asyncio
-from naq.connection import nats_connection, nats_jetstream, nats_kv_store
+from naq.utils.nats_helpers import nats_connection_context, nats_jetstream_context, nats_kv_store_context
 
 async def basic_connection_example():
     """Example of basic NATS connection management."""
     
     # Simple connection for publishing messages
-    async with nats_connection() as conn:
+    async with nats_connection_context() as conn:
         await conn.publish("hello.world", b"Hello from context manager!")
         print("Message published successfully")
     
@@ -372,7 +437,7 @@ async def jetstream_example():
     """Example of JetStream context management."""
     
     # Combined connection and JetStream context
-    async with nats_jetstream() as (conn, js):
+    async with nats_jetstream_context() as (conn, js):
         # Create a stream
         await js.add_stream(
             name="example_stream",
@@ -390,7 +455,7 @@ async def kv_store_example():
     """Example of KeyValue store management."""
     
     # KeyValue store context
-    async with nats_kv_store("example_bucket") as kv:
+    async with nats_kv_store_context("example_bucket") as kv:
         # Store a value
         await kv.put("user:123", '{"name": "Alice", "role": "admin"}')
         print("Value stored in KV bucket")
@@ -416,7 +481,7 @@ if __name__ == "__main__":
 ```python
 # decorator_example.py
 import asyncio
-from naq.connection import with_nats_connection, with_jetstream_context
+from naq.utils.decorators import with_nats_connection, with_jetstream_context
 
 @with_nats_connection()
 async def publish_message(conn, subject: str, message: str):
@@ -452,11 +517,11 @@ if __name__ == "__main__":
 ```python
 # monitoring_example.py
 import asyncio
-from naq.connection import (
+from naq.utils.nats_helpers import (
     test_nats_connection,
     wait_for_nats_connection,
-    connection_monitor,
-    nats_connection
+    get_connection_metrics,
+    nats_connection_context
 )
 
 async def monitoring_example():
@@ -471,12 +536,12 @@ async def monitoring_example():
     print(f"Connection ready: {is_ready}")
     
     # Use connection and monitor metrics
-    async with nats_connection() as conn:
+    async with nats_connection_context() as conn:
         # Do some work
         await conn.publish("monitoring.test", b"Test message")
         
         # Check connection metrics
-        metrics = connection_monitor.metrics
+        metrics = get_connection_metrics()
         print(f"Total connections: {metrics.total_connections}")
         print(f"Active connections: {metrics.active_connections}")
         print(f"Failed connections: {metrics.failed_connections}")
@@ -491,13 +556,14 @@ if __name__ == "__main__":
 ```python
 # custom_config_example.py
 import asyncio
-from naq.connection import Config, nats_connection, nats_jetstream
+from naq.config import ConnectionConfig
+from naq.utils.nats_helpers import nats_connection_context, nats_jetstream_context
 
 async def custom_config_example():
     """Example of using custom connection configuration."""
     
     # Create custom configuration
-    config = Config(
+    config = ConnectionConfig(
         servers=["nats://localhost:4222", "nats://localhost:4223"],
         client_name="my-custom-app",
         max_reconnect_attempts=10,
@@ -505,12 +571,12 @@ async def custom_config_example():
     )
     
     # Use custom configuration
-    async with nats_connection(config) as conn:
+    async with nats_connection_context(servers=config.servers, name=config.client_name) as conn:
         await conn.publish("config.test", b"Using custom config")
         print("Message published with custom configuration")
     
     # Use with JetStream
-    async with nats_jetstream(config) as (conn, js):
+    async with nats_jetstream_context(servers=config.servers, name=config.client_name) as (conn, js):
         await js.add_stream(
             name="config_stream",
             subjects=["config.*"]
@@ -531,10 +597,11 @@ from naq.connection import (
     get_nats_connection,
     get_jetstream_context,
     close_nats_connection,
-    
+)
+from naq.utils.nats_helpers import (
     # New context managers
-    nats_connection,
-    nats_jetstream
+    nats_connection_context,
+    nats_jetstream_context
 )
 
 async def legacy_pattern():
@@ -554,7 +621,7 @@ async def modern_pattern():
     """New way of managing connections."""
     print("=== Modern Pattern ===")
     
-    async with nats_jetstream() as (conn, js):
+    async with nats_jetstream_context() as (conn, js):
         await js.add_stream(name="modern_stream", subjects=["modern.*"])
         print("Stream created using modern pattern")
     
@@ -578,19 +645,19 @@ if __name__ == "__main__":
 ```python
 # production_example.py
 import asyncio
-from naq.connection import (
-    nats_connection,
-    nats_jetstream,
+from naq.utils.nats_helpers import (
+    nats_connection_context,
+    nats_jetstream_context,
     test_nats_connection,
     wait_for_nats_connection,
-    connection_monitor,
-    Config
+    get_connection_metrics
 )
+from naq.config import ConnectionConfig
 
 class ProductionService:
     """Example of production-ready connection management."""
     
-    def __init__(self, config: Config):
+    def __init__(self, config: ConnectionConfig):
         self.config = config
     
     async def ensure_connection(self):
@@ -608,7 +675,7 @@ class ProductionService:
         
         try:
             # Use JetStream with automatic connection management
-            async with nats_jetstream(self.config) as (conn, js):
+            async with nats_jetstream_context(servers=self.config.servers, name=self.config.client_name) as (conn, js):
                 # Create stream if it doesn't exist
                 try:
                     await js.add_stream(
@@ -625,7 +692,7 @@ class ProductionService:
                     print(f"Published: {data}")
                 
                 # Log connection metrics
-                metrics = connection_monitor.metrics
+                metrics = get_connection_metrics()
                 print(f"Connection metrics - Total: {metrics.total_connections}, "
                       f"Active: {metrics.active_connections}, "
                       f"Failed: {metrics.failed_connections}")
@@ -638,7 +705,7 @@ async def production_example():
     """Example of production-ready connection management."""
     
     # Production configuration
-    config = Config(
+    config = ConnectionConfig(
         servers=["nats://localhost:4222"],
         client_name="production-service",
         max_reconnect_attempts=10,

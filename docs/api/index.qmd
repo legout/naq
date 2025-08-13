@@ -80,141 +80,61 @@ For more detailed information about the service layer architecture and advanced 
 
 ## Utils Package
 
-The utils package provides a comprehensive collection of utilities extracted from various modules throughout the codebase. It offers common functionality used across all components of `naq`, eliminating code duplication and providing consistent tools for common operations.
+The `utils` package provides a comprehensive collection of utilities extracted from various modules throughout the codebase. It eliminates code duplication and provides consistent, well-tested functionality across all components of `naq`.
 
--   [**`utils` Package**](utils.qmd): Core utilities including async helpers, configuration management, error handling, logging, NATS helpers, retry mechanisms, serialization, timing, types, and validation.
+-   [**`utils` Package**](utils.qmd): Comprehensive utilities for common operations including async helpers, configuration management, error handling, logging, NATS helpers, retry mechanisms, serialization, timing, types, and validation.
 
-### Core Utils Modules
+### Core Utility Modules
 
--   **[`async_helpers`](utils.qmd#async-helpers)**: Utilities for bridging synchronous and asynchronous code, including `run_async()`, `run_sync()`, and conversion decorators.
+The utils package is organized into specialized modules, each focusing on a specific area of functionality:
 
--   **[`config`](utils.qmd#config)**: Configuration management system with multiple source support, including `ConfigManager`, environment variables, file-based config, and dataclass loading.
+-   **[`decorators`](utils.qmd#decorators)**: Reusable decorators for common patterns
+-   **[`context_managers`](utils.qmd#context-managers)**: Common context managers for resource management
+-   **[`async_helpers`](utils.qmd#async-helpers)**: Utilities for bridging synchronous and asynchronous code
+-   **[`error_handling`](utils.qmd#error-handling)**: Centralized error handling and reporting
+-   **[`logging`](utils.qmd#logging)**: Comprehensive logging utilities and formatters
+-   **[`serialization`](utils.qmd#serialization)**: Serialization utilities for jobs and results
+-   **[`validation`](utils.qmd#validation)**: Comprehensive validation utilities
+-   **[`timing`](utils.qmd#timing-and-benchmarking)**: Performance measurement and timing utilities
+-   **[`nats_helpers`](utils.qmd#nats-helpers)**: NATS-specific utilities
+-   **[`types`](utils.qmd#type-definitions)**: Comprehensive type definitions for the entire system
 
--   **[`context_managers`](utils.qmd#context-managers)**: Common context managers for resource management, including `managed_resource()`, `timeout_context()`, and `retry_context()`.
+### Integration with Core Components
 
--   **[`decorators`](utils.qmd#decorators)**: Reusable decorators for common patterns, including `retry_decorator()`, `timeout_decorator()`, `benchmark_decorator()`, and `log_errors()`.
+The utils package integrates seamlessly with all core components of `naq`, providing consistent functionality and eliminating code duplication:
 
--   **[`error_handling`](utils.qmd#error-handling)**: Centralized error handling and reporting, including `ErrorContext`, `ErrorCategory`, `ErrorHandler`, and recovery strategies.
-
--   **[`logging`](utils.qmd#logging)**: Comprehensive logging utilities, including structured logging, performance logging, log handler management, and log correlation.
-
--   **[`nats_helpers`](utils.qmd#nats-helpers)**: NATS-specific utilities extracted from connection modules, including connection management, stream operations, KV store operations, subject utilities, and message handling.
-
--   **[`retry`](utils.qmd#retry)**: Comprehensive retry system with `RetryConfig`, `retry_async()`, `retry()`, various retry strategies, and jitter support.
-
--   **[`serialization`](utils.qmd#serialization)**: Serialization utilities for jobs and results, including `JobSerializer`, `ResultSerializer`, `SecureSerializer`, and extensible serializer protocols.
-
--   **[`timing`](utils.qmd#timing)**: Performance measurement and timing utilities, including `Timer`, `AsyncTimer`, `Benchmark`, `Scheduler`, and performance tracking.
-
--   **[`types`](utils.qmd#types)**: Comprehensive type definitions for the entire system, including basic type aliases, protocol definitions, generic types, validation helpers, and model types.
-
--   **[`validation`](utils.qmd#validation)**: Comprehensive validation utilities, including type validation, range validation, choice validation, string validation, URL/email validation, dictionary validation, and dataclass validation.
-
-### Utils Usage Examples
-
-The utils package is designed to be used throughout all components of `naq`. Here are some common usage patterns:
-
-#### Configuration Management
 ```python
-from naq.utils.config import ConfigManager, EnvironmentConfigSource, load_naq_config
-
-# Load configuration with multiple sources
-config_manager = ConfigManager([
-    EnvironmentConfigSource(prefix="NAQ_"),
-    FileConfigSource("naq.yaml")
-])
-
-# Get typed configuration values
-max_retries = config_manager.get_typed("job.max_retries", int, 3)
-timeout = config_manager.get_required_typed("connection.timeout", float)
-
-# Load predefined configuration structures
-naq_config = load_naq_config(config_manager)
-```
-
-#### Error Handling
-```python
-from naq.utils import ErrorContext, ErrorCategory, ErrorReporter
-
-async def process_job(job):
-    try:
-        result = await job.execute()
-        return result
-    except Exception as e:
-        error_context = ErrorContext(
-            operation="job_execution",
-            exception=e,
-            job_id=job.id
-        )
-        error_context.category = ErrorCategory.EXECUTION
-        
-        reporter = ErrorReporter()
-        await reporter.report_error(error_context)
-        raise
-```
-
-#### NATS Operations
-```python
-from naq.utils.nats_helpers import nats_jetstream_context, create_stream_with_retry
-
-async def setup_stream():
-    async with nats_jetstream_context() as (conn, js):
-        stream_info = await create_stream_with_retry(
-            js,
-            StreamConfigHelper(
-                name="MY_STREAM",
-                subjects=["my.subject.*"]
-            )
-        )
-        return stream_info
-```
-
-#### Performance Monitoring
-```python
-from naq.utils import Timer, Benchmark
+from naq.utils import Timer, ErrorContext
+from naq.utils.decorators import retry
+from naq.utils.nats_helpers import nats_jetstream_context
 from naq.utils.logging import get_structured_logger
 
-async def process_with_monitoring(item):
-    logger = get_structured_logger("processor")
-    
+# Example usage in a component
+async def process_request(self, request):
     with Timer() as timer:
-        result = await self._process_item(item)
+        logger = get_structured_logger("component")
         
-        logger.info(
-            "Item processed",
-            item_id=item.id,
-            duration=timer.duration
-        )
-        
-        return result
-
-def benchmark_processing():
-    benchmark = Benchmark()
-    
-    with benchmark:
-        for i in range(1000):
-            process_with_monitoring(f"item_{i}")
-    
-    print(f"Average time: {benchmark.average_time:.4f}s")
+        try:
+            async with nats_jetstream_context() as (conn, js):
+                result = await retry(
+                    self._process_impl,
+                )(request, js)
+                
+                logger.info(
+                    "Request processed",
+                    request_id=request.id,
+                    duration=timer.duration
+                )
+                return result
+                
+        except Exception as e:
+            error_context = ErrorContext(
+                operation="request_processing",
+                exception=e,
+                request_id=request.id
+            )
+            logger.error("Request failed", error_context=error_context)
+            raise
 ```
 
-#### Retry Logic
-```python
-from naq.utils.retry import RetryConfig, retry_async
-
-async def unreliable_operation():
-    # This might fail
-    pass
-
-async def robust_operation():
-    retry_config = RetryConfig(
-        max_attempts=3,
-        base_delay=1.0,
-        max_delay=10.0,
-        retryable_exceptions=(ConnectionError, TimeoutError)
-    )
-    
-    return await retry_async(unreliable_operation, config=retry_config)
-```
-
-For more detailed information about the utils package architecture and comprehensive API documentation, see the [Utils Package Architecture](../architecture.qmd#utils-package-architecture) section in the architecture documentation.
+For more detailed information about the utils package architecture and usage patterns, see the [Utils Package Architecture](../architecture.qmd#utils-package-architecture) section in the architecture documentation.

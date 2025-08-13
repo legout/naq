@@ -8,34 +8,35 @@ This section covers advanced features and configuration options for optimizing `
 
 When enqueuing many jobs in a tight loop, creating a new NATS connection for each job is inefficient. `naq` provides several ways to manage connections for high-throughput scenarios.
 
-### Using a `Queue` Instance (Async)
+### Using a `Queue` Instance with ServiceManager (Async)
 
-For asynchronous applications, the most efficient way to enqueue jobs is to instantiate a `Queue` object and reuse it. The `Queue` instance manages a persistent connection to NATS.
+For asynchronous applications, the most efficient way to enqueue jobs is to instantiate a `Queue` object with a ServiceManager. The `Queue` instance achieves its efficiency by leveraging the ServiceManager for connection pooling and reuse, ensuring optimal resource utilization.
 
 ```python
 # async_batch_enqueue.py
 import asyncio
 from naq.queue import Queue
+from naq.services import ServiceManager
 
 async def my_task(i):
     return f"Processed item {i}"
 
 async def main():
-    # Create a single Queue instance for the 'high_volume' queue
-    queue = Queue(name="high_volume")
+    # Create a ServiceManager and Queue instance for the 'high_volume' queue
+    async with ServiceManager() as services:
+        queue = Queue(name="high_volume", services=services)
 
-    print("Enqueuing 1,000 jobs using a single connection...")
-    tasks = []
-    for i in range(1000):
-        task = queue.enqueue(my_task, i)
-        tasks.append(task)
+        print("Enqueuing 1,000 jobs using connection pooling...")
+        tasks = []
+        for i in range(1000):
+            task = queue.enqueue(my_task, i)
+            tasks.append(task)
 
-    await asyncio.gather(*tasks)
-    print("All jobs enqueued.")
+        await asyncio.gather(*tasks)
+        print("All jobs enqueued.")
 
-    # The connection remains open until the Queue object is no longer in use
-    # or explicitly closed.
-    await queue.close()
+        # The ServiceManager handles connection pooling and cleanup automatically
+        # No need to manually close connections
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -115,13 +116,14 @@ It is **strongly recommended** to use the `json` serializer in any environment w
 
 ### Key Concepts
 
-The event system is composed of a few core components:
+The event system is composed of a few core components, with the EventService serving as the central point for event logging and consumption:
 
+-   **`EventService`**: The central service that manages all event-related operations, including logging, storage, and processing. It provides a unified interface for event management across the system.
 -   **`JobEvent`**: A structured data object representing a single event in a job's lifecycle (e.g., `ENQUEUED`, `STARTED`, `FAILED`).
--   **`AsyncJobEventLogger`**: A high-performance, non-blocking logger that buffers events and flushes them to NATS in batches. This is integrated into the core `naq` components (`Queue`, `Worker`, `Scheduler`).
--   **`NATSJobEventStorage`**: The storage backend that persists events to a dedicated NATS JetStream stream.
--   **`AsyncJobEventProcessor`**: A real-time event processor that allows you to subscribe to event streams and react to events as they happen.
--   **`SharedEventLoggerManager`**: A singleton manager that provides centralized event logging across all components.
+-   **`AsyncJobEventLogger`**: A high-performance, non-blocking logger that buffers events and flushes them to NATS in batches. This is integrated into the core `naq` components (`Queue`, `Worker`, `Scheduler`) through the EventService.
+-   **`NATSJobEventStorage`**: The storage backend that persists events to a dedicated NATS JetStream stream, accessed through the EventService.
+-   **`AsyncJobEventProcessor`**: A real-time event processor that allows you to subscribe to event streams and react to events as they happen, using the EventService for event retrieval.
+-   **`SharedEventLoggerManager`**: A singleton manager that provides centralized event logging across all components, coordinated through the EventService.
 
 ### Enabling Event Logging
 
@@ -166,14 +168,15 @@ This command will start an `AsyncJobEventProcessor` with a default handler that 
 
 ### Building Reactive Applications with Event Handlers
 
-The real power of the event system lies in its ability to let you build reactive, event-driven applications. You can register custom handlers to react to specific job events.
+The real power of the event system lies in its ability to let you build reactive, event-driven applications. You can register custom handlers to react to specific job events through the EventService, which serves as the central point for event consumption.
 
-Here's an example of how to set up a custom event processor to send a Slack notification whenever a job fails:
+Here's an example of how to set up a custom event processor to send a Slack notification whenever a job fails, using the EventService:
 
 ```python
 # custom_handler.py
 import asyncio
-from naq.events import AsyncJobEventProcessor, NATSJobEventStorage, JobEventType
+from naq.services import ServiceManager
+from naq.events import AsyncJobEventProcessor, JobEventType
 
 async def send_failure_alert(event: naq.events.JobEvent):
     """Sends a Slack alert when a job fails."""
@@ -185,23 +188,27 @@ async def send_failure_alert(event: naq.events.JobEvent):
     # await slack_client.post_message(channel="#alerts", text=f"Job {event.job_id} failed!")
 
 async def main():
-    # Create the storage and processor
-    storage = NATSJobEventStorage()
-    processor = AsyncJobEventProcessor(storage)
+    # Create ServiceManager
+    async with ServiceManager() as services:
+        # Get EventService from the service manager
+        event_service = await services.get_service(EventService)
+        
+        # Create event processor using the EventService
+        processor = AsyncJobEventProcessor(event_service.get_event_storage())
 
-    # Register our custom handler for FAILED events
-    processor.add_handler(JobEventType.FAILED, send_failure_alert)
+        # Register our custom handler for FAILED events
+        processor.add_handler(JobEventType.FAILED, send_failure_alert)
 
-    # Start the processor
-    await processor.start()
+        # Start the processor
+        await processor.start()
 
-    try:
-        # Keep the processor running indefinitely
-        while True:
-            await asyncio.sleep(1)
-    finally:
-        # Ensure the processor is stopped cleanly
-        await processor.stop()
+        try:
+            # Keep the processor running indefinitely
+            while True:
+                await asyncio.sleep(1)
+        finally:
+            # Ensure the processor is stopped cleanly
+            await processor.stop()
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -1220,6 +1227,432 @@ These patterns and techniques demonstrate the power and flexibility of naq's eve
 ## Advanced Service Layer Usage
 
 The service layer architecture in `naq` provides a powerful foundation for building advanced applications with efficient resource management and clean separation of concerns. This section explores advanced patterns and techniques for leveraging the service layer in production environments.
+
+### Service Inter-Communication Patterns
+
+Services in `naq` are designed to work together through well-defined communication patterns. Understanding these patterns is key to building robust, maintainable applications.
+
+#### 1. Service Dependency Injection
+
+Services can depend on other services, with dependencies automatically managed by the ServiceManager:
+
+```python
+from naq.services import ServiceManager, ConnectionService, EventService
+
+class JobService:
+    def __init__(self, config, connection_service: ConnectionService, event_service: EventService):
+        self.config = config
+        self.connection_service = connection_service
+        self.event_service = event_service
+    
+    async def enqueue_job(self, job):
+        # Use connection_service and event_service
+        conn = await self.connection_service.get_connection()
+        await self.event_service.log_job_enqueued(job)
+        # ... implementation
+```
+
+#### 2. Service Event Broadcasting
+
+Services can broadcast events that other services can subscribe to:
+
+```python
+class MonitoringService:
+    def __init__(self, event_service: EventService):
+        self.event_service = event_service
+        self.metrics = {}
+    
+    async def start_monitoring(self):
+        # Subscribe to job events from other services
+        await self.event_service.subscribe_to_events(
+            event_types=['JOB_ENQUEUED', 'JOB_COMPLETED', 'JOB_FAILED'],
+            callback=self._handle_job_event
+        )
+    
+    async def _handle_job_event(self, event):
+        # Update metrics based on job events
+        self._update_metrics(event)
+```
+
+#### 3. Service Health Monitoring
+
+Services can monitor the health of dependent services:
+
+```python
+class HealthMonitorService:
+    def __init__(self, service_manager: ServiceManager):
+        self.service_manager = service_manager
+        self.health_status = {}
+    
+    async def check_all_services(self):
+        # Check health of all registered services
+        for service_type in [ConnectionService, EventService, JobService]:
+            try:
+                service = await self.service_manager.get_service(service_type)
+                health = await service.check_health()
+                self.health_status[service_type.__name__] = health
+            except Exception as e:
+                self.health_status[service_type.__name__] = {'status': 'error', 'error': str(e)}
+        
+        return self.health_status
+```
+
+### Service Decorators for Enhanced Functionality
+
+Decorators can enhance service functionality with common patterns like retry logic and metrics collection.
+
+#### Retry Decorator
+
+```python
+from functools import wraps
+from typing import Callable, Any
+import asyncio
+
+def service_retry(max_retries: int = 3, delay: float = 1.0, backoff_factor: float = 2.0):
+    """Decorator to add retry logic to service methods."""
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def wrapper(self, *args, **kwargs):
+            last_error = None
+            
+            for attempt in range(max_retries):
+                try:
+                    return await func(self, *args, **kwargs)
+                except Exception as e:
+                    last_error = e
+                    if attempt < max_retries - 1:
+                        wait_time = delay * (backoff_factor ** attempt)
+                        await asyncio.sleep(wait_time)
+                    else:
+                        break
+            
+            # All retries failed
+            raise ServiceError(f"Service operation failed after {max_retries} retries: {last_error}") from last_error
+        
+        return wrapper
+    return decorator
+```
+
+#### Metrics Collection Decorator
+
+```python
+import time
+from functools import wraps
+from typing import Callable, Any
+
+def service_metrics(metric_name: str):
+    """Decorator to collect metrics for service operations."""
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def wrapper(self, *args, **kwargs):
+            start_time = time.time()
+            
+            try:
+                result = await func(self, *args, **kwargs)
+                duration_ms = (time.time() - start_time) * 1000
+                
+                # Record success metric
+                if hasattr(self, '_metrics_collector'):
+                    await self._metrics_collector.record_success(
+                        metric_name, duration_ms
+                    )
+                
+                return result
+            except Exception as e:
+                duration_ms = (time.time() - start_time) * 1000
+                
+                # Record failure metric
+                if hasattr(self, '_metrics_collector'):
+                    await self._metrics_collector.record_failure(
+                        metric_name, duration_ms, str(e)
+                    )
+                
+                raise
+        
+        return wrapper
+    return decorator
+```
+
+#### Usage Example
+
+```python
+class EnhancedJobService(JobService):
+    """Job service with enhanced functionality."""
+    
+    @service_retry(max_retries=5, delay=2.0)
+    @service_metrics('enqueue_job')
+    async def enqueue_job(self, job):
+        """Enqueue a job with retry and metrics."""
+        # Implementation
+        await self.connection_service.get_connection()
+        await self.event_service.log_job_enqueued(job)
+        # ... rest of implementation
+```
+
+### Service Testing Strategies
+
+Testing services effectively requires specialized approaches to isolate dependencies and verify behavior.
+
+#### Mocking Services
+
+```python
+import pytest
+from unittest.mock import AsyncMock, MagicMock
+
+class MockConnectionService:
+    """Mock connection service for testing."""
+    
+    def __init__(self, config):
+        self.config = config
+        self._connections = {}
+        self._should_fail = False
+    
+    async def _do_initialize(self):
+        pass
+    
+    def set_failure_mode(self, should_fail: bool):
+        self._should_fail = should_fail
+    
+    async def get_connection(self, url=None):
+        if self._should_fail:
+            raise NaqConnectionError("Mock connection failure")
+        
+        target_url = url or self.config.get('nats', {}).get('url', 'nats://localhost:4222')
+        if target_url not in self._connections:
+            self._connections[target_url] = {'mock': True, 'url': target_url}
+        
+        return self._connections[target_url]
+
+@pytest.fixture
+async def mock_services():
+    """Fixture providing mock services."""
+    mock_connection = MockConnectionService({'nats': {'url': 'nats://test:4222'}})
+    await mock_connection.initialize()
+    
+    return {
+        'connection': mock_connection,
+        # Add other mock services as needed
+    }
+
+async def test_job_service_with_mocks(mock_services):
+    """Test JobService with mocked dependencies."""
+    config = {'nats': {'url': 'nats://test:4222'}}
+    
+    # Create service with mocked dependencies
+    job_service = JobService(config, mock_services['connection'])
+    await job_service.initialize()
+    
+    # Test success case
+    result = await job_service.enqueue_job(test_job)
+    assert result is not None
+    
+    # Test failure case
+    mock_services['connection'].set_failure_mode(True)
+    try:
+        await job_service.enqueue_job(test_job)
+        assert False, "Should have raised an exception"
+    except NaqConnectionError:
+        pass  # Expected
+    
+    await job_service.cleanup()
+```
+
+#### Integration Testing
+
+```python
+import pytest
+
+class ServiceIntegrationTest:
+    """Integration tests for service layer."""
+    
+    @pytest.mark.asyncio
+    async def test_service_lifecycle(self):
+        """Test service initialization and cleanup."""
+        config = {'nats': {'url': 'nats://localhost:4222'}}
+        
+        async with ServiceManager(config) as services:
+            # Get services
+            connection_service = await services.get_service(ConnectionService)
+            event_service = await services.get_service(EventService)
+            
+            # Verify services are initialized
+            assert connection_service._initialized is True
+            assert event_service._initialized is True
+            
+            # Use services
+            conn = await connection_service.get_connection()
+            assert conn is not None
+            
+            # Test service interaction
+            await event_service.log_event(test_event)
+        
+        # Verify services are cleaned up
+        assert connection_service._initialized is False
+        assert event_service._initialized is False
+    
+    @pytest.mark.asyncio
+    async def test_service_dependency_injection(self):
+        """Test that service dependencies are properly injected."""
+        config = {'nats': {'url': 'nats://localhost:4222'}}
+        
+        async with ServiceManager(config) as services:
+            # Get EventService which depends on ConnectionService
+            event_service = await services.get_service(EventService)
+            
+            # Verify dependency is injected
+            assert event_service._connection_service is not None
+            assert isinstance(event_service._connection_service, ConnectionService)
+            
+            # Verify both services share the same connection
+            conn_service = await services.get_service(ConnectionService)
+            assert event_service._connection_service is conn_service
+```
+
+### Performance Optimization with Services
+
+Services can be optimized for performance through careful configuration and implementation patterns.
+
+#### Connection Pool Tuning
+
+```python
+class TunedConnectionService(ConnectionService):
+    """Connection service with performance tuning."""
+    
+    def __init__(self, config):
+        super().__init__(config)
+        self._connection_pool_size = config.get('pool_size', 10)
+        self._connection_timeout = config.get('connection_timeout', 30.0)
+        self._connection_idle_timeout = config.get('idle_timeout', 300.0)
+        self._last_used = {}
+    
+    async def _do_initialize(self):
+        await super()._do_initialize()
+        
+        # Start connection cleanup task
+        asyncio.create_task(self._cleanup_idle_connections())
+    
+    async def _cleanup_idle_connections(self):
+        """Clean up idle connections."""
+        while True:
+            try:
+                await asyncio.sleep(60)  # Check every minute
+                
+                current_time = time.time()
+                idle_connections = []
+                
+                async with self._lock:
+                    for url, last_used in self._last_used.items():
+                        if current_time - last_used > self._connection_idle_timeout:
+                            idle_connections.append(url)
+                    
+                    # Close idle connections
+                    for url in idle_connections:
+                        if url in self._connections:
+                            try:
+                                await self._connections[url].close()
+                                del self._connections[url]
+                                del self._last_used[url]
+                                logger.info(f"Closed idle connection to {url}")
+                            except Exception as e:
+                                logger.error(f"Error closing idle connection to {url}: {e}")
+            
+            except Exception as e:
+                logger.error(f"Error in connection cleanup task: {e}")
+    
+    async def get_connection(self, url=None):
+        """Get connection with performance tracking."""
+        target_url = url if url is not None else self._default_url
+        
+        # Update last used time
+        self._last_used[target_url] = time.time()
+        
+        return await super().get_connection(target_url)
+```
+
+#### Batch Processing with Services
+
+```python
+class BatchJobService(JobService):
+    """Job service optimized for batch processing."""
+    
+    def __init__(self, config):
+        super().__init__(config)
+        self._batch_size = config.get('batch_size', 100)
+        self._batch_timeout = config.get('batch_timeout', 5.0)
+        self._pending_jobs = []
+        self._batch_event = asyncio.Event()
+    
+    async def _do_initialize(self):
+        await super()._do_initialize()
+        
+        # Start batch processing task
+        asyncio.create_task(self._process_batches())
+    
+    async def _process_batches(self):
+        """Process jobs in batches."""
+        while True:
+            try:
+                # Wait for batch to fill or timeout
+                await asyncio.wait_for(
+                    self._batch_event.wait(),
+                    timeout=self._batch_timeout
+                )
+                
+                # Process batch
+                async with self._lock:
+                    if not self._pending_jobs:
+                        self._batch_event.clear()
+                        continue
+                    
+                    batch = self._pending_jobs[:self._batch_size]
+                    self._pending_jobs = self._pending_jobs[self._batch_size:]
+                    self._batch_event.clear()
+                
+                # Execute batch
+                await self._execute_batch(batch)
+                
+            except asyncio.TimeoutError:
+                # Timeout is normal, process any pending jobs
+                async with self._lock:
+                    if self._pending_jobs:
+                        batch = self._pending_jobs[:]
+                        self._pending_jobs = []
+                        await self._execute_batch(batch)
+            except Exception as e:
+                logger.error(f"Error in batch processing: {e}")
+    
+    async def _execute_batch(self, batch):
+        """Execute a batch of jobs."""
+        logger.info(f"Executing batch of {len(batch)} jobs")
+        
+        # Execute jobs concurrently
+        tasks = [self.execute_job(job) for job in batch]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Process results
+        for job, result in zip(batch, results):
+            if isinstance(result, Exception):
+                logger.error(f"Job {job.job_id} failed: {result}")
+            else:
+                logger.debug(f"Job {job.job_id} completed successfully")
+    
+    async def execute_job(self, job):
+        """Execute a single job (overridden for batch processing)."""
+        # For batch processing, add to pending queue
+        async with self._lock:
+            self._pending_jobs.append(job)
+            self._batch_event.set()
+        
+        # Return a placeholder result
+        return JobResult(
+            job_id=job.job_id,
+            status="pending",
+            result=None,
+            error=None,
+            start_time=time.time(),
+            end_time=time.time()
+        )
+```
 
 ### Custom Service Implementation
 

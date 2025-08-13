@@ -91,7 +91,7 @@ async def use_custom_service():
 
 ### `ServiceManager`
 
-The central component that manages service instances and their dependencies.
+The `ServiceManager` is the central component responsible for managing service instances, handling their lifecycle (initialization and cleanup), and resolving dependencies between services. It ensures that services are created and configured correctly, promoting a clean and modular architecture.
 
 ```python
 class ServiceManager:
@@ -120,24 +120,67 @@ class ServiceManager:
 ```python
 from naq.services import ServiceManager, ConnectionService, StreamService
 
-async def service_manager_example():
-    config = {
+async def service_manager_basic_example():
+    # Configuration can be a simple dictionary or a NAQConfig object
+    config_dict = {
         'nats': {
             'url': 'nats://localhost:4222',
             'max_reconnect_attempts': 5
         }
     }
     
-    async with ServiceManager(config) as services:
-        # Get services - they are created and initialized on demand
+    # Initialize ServiceManager with the configuration
+    async with ServiceManager(config_dict) as services:
+        # Services are retrieved using get_service.
+        # They are created and initialized on demand the first time they are requested.
         connection_service = await services.get_service(ConnectionService)
         stream_service = await services.get_service(StreamService)
         
-        # Use the services
+        # You can now use the retrieved service instances
+        print(f"ConnectionService initialized: {connection_service._initialized}")
+        print(f"StreamService initialized: {stream_service._initialized}")
+
+        # Example: Use ConnectionService to get a NATS JetStream context
         js = await connection_service.get_jetstream()
-        stream_info = await stream_service.get_stream_info("my_stream")
+        print(f"Obtained JetStream context: {js is not None}")
+
+        # Example: Use StreamService to get stream information (assuming 'my_stream' exists)
+        try:
+            stream_info = await stream_service.get_stream_info("my_stream")
+            print(f"Stream 'my_stream' info: {stream_info.config.name}")
+        except Exception as e:
+            print(f"Could not get stream info for 'my_stream': {e}")
         
-        # All services are automatically cleaned up when exiting the context
+        # All services are automatically cleaned up when exiting the 'async with' block.
+        print("ServiceManager context exited. Services will be cleaned up.")
+
+async def service_manager_with_naqconfig():
+    from naq.config import NAQConfig
+
+    # NAQConfig provides structured and validated configuration
+    naq_config = NAQConfig.load_from_dict({
+        'nats': {
+            'url': 'nats://localhost:4222',
+            'connection_timeout': 10.0
+        },
+        'jobs': {
+            'default_timeout': 300
+        }
+    })
+
+    # Pass the NAQConfig object directly to ServiceManager
+    async with ServiceManager(naq_config) as services:
+        job_service = await services.get_service(JobService)
+        print(f"JobService initialized with config: {job_service.config.get('jobs', {}).get('default_timeout')}")
+
+        # Accessing configuration from within a service
+        conn_service = await services.get_service(ConnectionService)
+        print(f"Connection timeout from ConnectionService: {conn_service.config.get('nats', {}).get('connection_timeout')}")
+
+# To run these examples:
+# import asyncio
+# asyncio.run(service_manager_basic_example())
+# asyncio.run(service_manager_with_naqconfig())
 ```
 
 ## Core Services
@@ -592,7 +635,7 @@ async def scheduler_service_example():
 
 ## Service Configuration
 
-Services are configured through a centralized configuration dictionary that is passed to the `ServiceManager`. This configuration is then distributed to the individual services based on their needs.
+Services in NAQ are configured through a centralized configuration mechanism, primarily handled by the `ServiceManager`. The `ServiceManager` accepts a configuration object, typically an instance of `NAQConfig` (or a dictionary that can be converted to `NAQConfig`), which it then uses to initialize and configure individual services. This ensures a consistent and type-safe way to manage application settings across all services.
 
 ### Configuration Structure
 
@@ -621,6 +664,11 @@ config = {
         'enable_ha': True
     }
 }
+
+# When using NAQConfig, you would typically load it like this:
+# from naq.config import NAQConfig
+# naq_config = NAQConfig.load_from_dict(config)
+# Then pass `naq_config` to ServiceManager: `ServiceManager(naq_config)`
 ```
 
 ### Environment Variables
@@ -748,11 +796,246 @@ config = {
 config = {'nats': {'url': 'nats://localhost:4222'}}
 ```
 
+## Service Usage Patterns
+
+NAQ's service layer is designed to be flexible, supporting various application architectures and operational needs. Understanding these common usage patterns will help you integrate services effectively into your applications.
+
+### 1. Short-Lived Operations (e.g., CLI tools, one-off scripts)
+
+For applications that perform a specific task and then exit, using `ServiceManager` as an `async with` context manager ensures that all services are properly initialized before use and cleanly shut down afterward. This pattern is ideal for scripts where resources should be released immediately upon completion.
+
+```python
+from naq.services import ServiceManager, JobService
+from naq.models import Job
+from naq.config import NAQConfig
+
+async def run_short_task():
+    config = NAQConfig.load_from_dict({
+        'nats': {'url': 'nats://localhost:4222'}
+    })
+    
+    async with ServiceManager(config) as services:
+        job_service = await services.get_service(JobService)
+        
+        def my_function(x, y):
+            return x + y
+
+        job = Job(function=my_function, args=(1, 2), queue_name="my_queue")
+        result = await job_service.execute_job(job)
+        print(f"Job result: {result.return_value}")
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(run_short_task())
+```
+
+### 2. Long-Lived Components (e.g., Workers, Schedulers, Background Services)
+
+In applications with persistent components like NAQ Workers or Schedulers, the `ServiceManager` instance can be created once and passed to these components. The `ServiceManager` should still be managed within an `async with` block, typically at the entry point of your long-running application, to ensure its lifecycle aligns with the application's runtime.
+
+```python
+from naq.services import ServiceManager, ConnectionService
+from naq.config import NAQConfig
+from naq.worker import Worker # Assuming Worker takes ServiceManager
+
+async def run_long_lived_app():
+    config = NAQConfig.load_from_dict({
+        'nats': {'url': 'nats://localhost:4222'}
+    })
+    
+    async with ServiceManager(config) as services:
+        # Pass the ServiceManager instance to long-lived components
+        worker = Worker(queue_name="my_queue", services=services)
+        
+        # Start the worker (this would typically run indefinitely)
+        print("Worker started. Press Ctrl+C to stop.")
+        try:
+            await worker.run() # This method would block until interrupted
+        except asyncio.CancelledError:
+            print("Worker stopped.")
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(run_long_lived_app())
+```
+
+### 3. Sync API Compatibility
+
+While NAQ's core services are asynchronous, they seamlessly integrate with synchronous components through the use of sync helpers. These helpers internally leverage the `ServiceManager` and its services, abstracting away the asynchronous nature for sync code. This allows you to benefit from the service layer's centralized management even when working with traditional synchronous Python code.
+
+```python
+from naq.sync import Queue as SyncQueue # Assuming a sync Queue helper
+from naq.config import NAQConfig
+
+def run_sync_task():
+    config = NAQConfig.load_from_dict({
+        'nats': {'url': 'nats://localhost:4222'}
+    })
+    
+    # The sync Queue internally creates and manages its own ServiceManager
+    # or takes one if provided. For simplicity, here it manages its own.
+    queue = SyncQueue(name="my_sync_queue", config=config)
+    
+    def sync_add(a, b):
+        return a + b
+    
+    job_id = queue.enqueue(sync_add, 10, 20)
+    print(f"Enqueued sync job with ID: {job_id}")
+    
+    # In a real scenario, you'd likely have a worker processing this queue
+    # and then retrieve the result.
+```
+
+## Testing Strategy
+
+Unit testing services in NAQ involves isolating the service under test and mocking its dependencies. This ensures that your tests focus solely on the logic of the service itself, without requiring a live NATS connection or other external resources.
+
+### Mocking Dependencies
+
+When a service depends on other services (e.g., `StreamService` depends on `ConnectionService`), you should mock these dependencies. The `ServiceManager` can be configured to return mock objects for `get_service` calls.
+
+```python
+import pytest
+from unittest.mock import AsyncMock, MagicMock
+from naq.services import ServiceManager, ConnectionService, StreamService
+from naq.config import NAQConfig
+
+@pytest.fixture
+def mock_nats_client():
+    """Mock for nats.NATSClient."""
+    mock_nc = AsyncMock()
+    mock_nc.jetstream.return_value = AsyncMock() # Mock JetStream context
+    return mock_nc
+
+@pytest.fixture
+def mock_connection_service(mock_nats_client):
+    """Mock for ConnectionService."""
+    mock_conn_service = AsyncMock(spec=ConnectionService)
+    mock_conn_service.get_connection.return_value = mock_nats_client
+    mock_conn_service.get_jetstream.return_value = mock_nats_client.jetstream.return_value
+    return mock_conn_service
+
+@pytest.fixture
+async def service_manager_with_mocks(mock_connection_service):
+    """ServiceManager configured to return mock dependencies."""
+    config = NAQConfig.load_from_dict({})
+    sm = ServiceManager(config)
+    # Configure the ServiceManager to return specific mocks
+    sm._services[ConnectionService.__name__] = mock_connection_service
+    # Important: Mark the mock as initialized if necessary for tests
+    mock_connection_service._initialized = True
+    return sm
+
+@pytest.mark.asyncio
+async def test_stream_service_creation(service_manager_with_mocks):
+    """Test StreamService initialization with mocked ConnectionService."""
+    stream_service = await service_manager_with_mocks.get_service(StreamService)
+    
+    # Verify that the StreamService was initialized and used the mock connection service
+    assert isinstance(stream_service, StreamService)
+    # You might assert on internal state or mock calls if applicable
+    service_manager_with_mocks.get_service.assert_called_with(ConnectionService)
+
+@pytest.mark.asyncio
+async def test_stream_service_ensure_stream(service_manager_with_mocks, mock_nats_client):
+    """Test ensure_stream method of StreamService."""
+    stream_service = await service_manager_with_mocks.get_service(StreamService)
+    
+    # Mock the underlying JetStream context's add_stream method
+    mock_js = mock_nats_client.jetstream.return_value
+    mock_js.add_stream.return_value = AsyncMock() # Return a mock StreamInfo
+    
+    await stream_service.ensure_stream("test-stream", ["test.subject"])
+    
+    mock_js.add_stream.assert_called_once_with(
+        name="test-stream", subjects=["test.subject"]
+    )
+```
+
+### Testing `initialize` and `cleanup`
+
+Focus on testing the `_do_initialize` and `cleanup` methods of your custom `BaseService` implementations. These methods contain the service-specific logic for resource acquisition and release.
+
+```python
+import pytest
+from unittest.mock import AsyncMock
+from naq.services.base import BaseService
+from naq.config import NAQConfig
+
+class MyTestService(BaseService):
+    def __init__(self, config: NAQConfig):
+        super().__init__(config.dict()) # Pass config as dict
+        self.resource = None
+        
+    async def _do_initialize(self):
+        # Simulate resource acquisition
+        self.resource = AsyncMock(name="mock_resource")
+        await self.resource.connect()
+        
+    async def cleanup(self):
+        # Simulate resource release
+        if self.resource:
+            await self.resource.disconnect()
+        await super().cleanup()
+
+@pytest.mark.asyncio
+async def test_my_test_service_lifecycle():
+    config = NAQConfig.load_from_dict({})
+    service = MyTestService(config)
+    
+    assert service.resource is None
+    
+    async with service:
+        # After entering context, service should be initialized
+        assert service.resource is not None
+        service.resource.connect.assert_called_once()
+        
+    # After exiting context, service should be cleaned up
+    service.resource.disconnect.assert_called_once()
+    assert not service._initialized # BaseService cleanup sets this to False
+```
+
+## Performance Considerations
+
+Optimizing performance is crucial for high-throughput and low-latency systems. NAQ's service layer is designed with performance in mind, offering several features that contribute to efficient resource utilization.
+
+### Connection Pooling and Reusability
+
+The `ConnectionService` implements connection pooling, which significantly reduces the overhead of establishing new NATS connections for every operation. By reusing existing connections, `naq` minimizes latency and resource consumption, especially in scenarios with frequent interactions with the NATS server.
+
+*   **Benefit**: Avoids repeated TCP handshake and authentication, leading to faster operation execution.
+*   **Recommendation**: Leverage `ConnectionService` through `ServiceManager` to ensure connection pooling is effectively utilized.
+
+### Event Batching
+
+The `EventService` supports event batching, allowing multiple events to be grouped and sent to the NATS server in a single operation. This reduces the number of network requests and improves overall throughput, particularly in systems generating a high volume of job events.
+
+*   **Benefit**: Decreases network overhead and NATS server load.
+*   **Configuration**: Adjust `events.batch_size` and `events.flush_interval` in your `NAQConfig` to fine-tune batching behavior based on your application's event volume and latency requirements.
+
+### Asynchronous Operations
+
+All core services in NAQ are built on an asynchronous foundation (`asyncio`), enabling non-blocking I/O operations. This allows the application to perform multiple tasks concurrently without waiting for I/O operations to complete, leading to better responsiveness and higher concurrency.
+
+*   **Benefit**: Maximizes resource utilization by preventing I/O bound operations from blocking the event loop.
+*   **Recommendation**: When extending services or integrating with external systems, prioritize asynchronous libraries and patterns to maintain the performance benefits of the `asyncio` ecosystem.
+
+### Efficient Resource Management
+
+The `ServiceManager` ensures that resources (like NATS connections, JetStream contexts, and KV stores) are initialized only once per application lifecycle (or per `ServiceManager` instance) and are properly cleaned up when no longer needed. This prevents resource leaks and ensures efficient memory and connection management.
+
+*   **Benefit**: Reduces memory footprint and prevents accumulation of idle connections or open handles.
+*   **Recommendation**: Always use `ServiceManager` as a context manager (`async with`) to guarantee proper resource lifecycle management.
+
 ## Migration Guide
 
-### From Direct Connection Management
+### From Direct Connection Management to `ConnectionService`
 
-#### Before
+Transitioning from direct NATS client usage to `ConnectionService` centralizes connection management, pooling, and error handling.
+
+#### Before: Manual NATS Connection
+
+#### After: Using `ConnectionService`
 
 ```python
 class OldQueue:
@@ -773,7 +1056,7 @@ class OldQueue:
             await self._nc.close()
 ```
 
-#### After
+#### After: `ServiceManager` as Context Manager
 
 ```python
 class NewQueue:
@@ -793,7 +1076,9 @@ class NewQueue:
         await self._services.cleanup_all()
 ```
 
-### From Manual Service Creation
+### From Manual Service Creation to `ServiceManager` Context
+
+The `ServiceManager` simplifies the creation and lifecycle management of services by acting as a central factory and context manager.
 
 #### Before
 
@@ -814,7 +1099,7 @@ async def old_approach():
         await connection_service.cleanup()
 ```
 
-#### After
+#### After: `ServiceManager` as Context Manager
 
 ```python
 async def new_approach():

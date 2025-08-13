@@ -345,11 +345,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#service-infrastructure" id="toc-service-infrastructure" class="nav-link" data-scroll-target="#service-infrastructure">Service Infrastructure</a></li>
   <li><a href="#service-usage" id="toc-service-usage" class="nav-link" data-scroll-target="#service-usage">Service Usage</a></li>
   </ul></li>
-  <li><a href="#utils-package" id="toc-utils-package" class="nav-link" data-scroll-target="#utils-package">Utils Package</a>
-  <ul class="collapse">
-  <li><a href="#core-utils-modules" id="toc-core-utils-modules" class="nav-link" data-scroll-target="#core-utils-modules">Core Utils Modules</a></li>
-  <li><a href="#utils-usage-examples" id="toc-utils-usage-examples" class="nav-link" data-scroll-target="#utils-usage-examples">Utils Usage Examples</a></li>
-  </ul></li>
   </ul>
 </nav>
     </div>
@@ -440,135 +435,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>        </span>
 <span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Services are automatically cleaned up when context exits</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <p>For more detailed information about the service layer architecture and advanced usage patterns, see the <a href="../architecture.html#service-layer-architecture">Service Layer Architecture</a> section in the architecture documentation.</p>
-</section>
-</section>
-<section id="utils-package" class="level2">
-<h2 class="anchored" data-anchor-id="utils-package">Utils Package</h2>
-<p>The utils package provides a comprehensive collection of utilities extracted from various modules throughout the codebase. It offers common functionality used across all components of <code>naq</code>, eliminating code duplication and providing consistent tools for common operations.</p>
-<ul>
-<li><a href="utils.qmd"><strong><code>utils</code> Package</strong></a>: Core utilities including async helpers, configuration management, error handling, logging, NATS helpers, retry mechanisms, serialization, timing, types, and validation.</li>
-</ul>
-<section id="core-utils-modules" class="level3">
-<h3 class="anchored" data-anchor-id="core-utils-modules">Core Utils Modules</h3>
-<ul>
-<li><p><strong><a href="utils.qmd#async-helpers"><code>async_helpers</code></a></strong>: Utilities for bridging synchronous and asynchronous code, including <code>run_async()</code>, <code>run_sync()</code>, and conversion decorators.</p></li>
-<li><p><strong><a href="utils.qmd#config"><code>config</code></a></strong>: Configuration management system with multiple source support, including <code>ConfigManager</code>, environment variables, file-based config, and dataclass loading.</p></li>
-<li><p><strong><a href="utils.qmd#context-managers"><code>context_managers</code></a></strong>: Common context managers for resource management, including <code>managed_resource()</code>, <code>timeout_context()</code>, and <code>retry_context()</code>.</p></li>
-<li><p><strong><a href="utils.qmd#decorators"><code>decorators</code></a></strong>: Reusable decorators for common patterns, including <code>retry_decorator()</code>, <code>timeout_decorator()</code>, <code>benchmark_decorator()</code>, and <code>log_errors()</code>.</p></li>
-<li><p><strong><a href="utils.qmd#error-handling"><code>error_handling</code></a></strong>: Centralized error handling and reporting, including <code>ErrorContext</code>, <code>ErrorCategory</code>, <code>ErrorHandler</code>, and recovery strategies.</p></li>
-<li><p><strong><a href="utils.qmd#logging"><code>logging</code></a></strong>: Comprehensive logging utilities, including structured logging, performance logging, log handler management, and log correlation.</p></li>
-<li><p><strong><a href="utils.qmd#nats-helpers"><code>nats_helpers</code></a></strong>: NATS-specific utilities extracted from connection modules, including connection management, stream operations, KV store operations, subject utilities, and message handling.</p></li>
-<li><p><strong><a href="utils.qmd#retry"><code>retry</code></a></strong>: Comprehensive retry system with <code>RetryConfig</code>, <code>retry_async()</code>, <code>retry()</code>, various retry strategies, and jitter support.</p></li>
-<li><p><strong><a href="utils.qmd#serialization"><code>serialization</code></a></strong>: Serialization utilities for jobs and results, including <code>JobSerializer</code>, <code>ResultSerializer</code>, <code>SecureSerializer</code>, and extensible serializer protocols.</p></li>
-<li><p><strong><a href="utils.qmd#timing"><code>timing</code></a></strong>: Performance measurement and timing utilities, including <code>Timer</code>, <code>AsyncTimer</code>, <code>Benchmark</code>, <code>Scheduler</code>, and performance tracking.</p></li>
-<li><p><strong><a href="utils.qmd#types"><code>types</code></a></strong>: Comprehensive type definitions for the entire system, including basic type aliases, protocol definitions, generic types, validation helpers, and model types.</p></li>
-<li><p><strong><a href="utils.qmd#validation"><code>validation</code></a></strong>: Comprehensive validation utilities, including type validation, range validation, choice validation, string validation, URL/email validation, dictionary validation, and dataclass validation.</p></li>
-</ul>
-</section>
-<section id="utils-usage-examples" class="level3">
-<h3 class="anchored" data-anchor-id="utils-usage-examples">Utils Usage Examples</h3>
-<p>The utils package is designed to be used throughout all components of <code>naq</code>. Here are some common usage patterns:</p>
-<section id="configuration-management" class="level4">
-<h4 class="anchored" data-anchor-id="configuration-management">Configuration Management</h4>
-<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.config <span class="im">import</span> ConfigManager, EnvironmentConfigSource, load_naq_config</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Load configuration with multiple sources</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>config_manager <span class="op">=</span> ConfigManager([</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    EnvironmentConfigSource(prefix<span class="op">=</span><span class="st">"NAQ_"</span>),</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    FileConfigSource(<span class="st">"naq.yaml"</span>)</span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>])</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Get typed configuration values</span></span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>max_retries <span class="op">=</span> config_manager.get_typed(<span class="st">"job.max_retries"</span>, <span class="bu">int</span>, <span class="dv">3</span>)</span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>timeout <span class="op">=</span> config_manager.get_required_typed(<span class="st">"connection.timeout"</span>, <span class="bu">float</span>)</span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Load predefined configuration structures</span></span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>naq_config <span class="op">=</span> load_naq_config(config_manager)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-</section>
-<section id="error-handling" class="level4">
-<h4 class="anchored" data-anchor-id="error-handling">Error Handling</h4>
-<div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils <span class="im">import</span> ErrorContext, ErrorCategory, ErrorReporter</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> process_job(job):</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span>:</span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>        result <span class="op">=</span> <span class="cf">await</span> job.execute()</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> result</span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">except</span> <span class="pp">Exception</span> <span class="im">as</span> e:</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>        error_context <span class="op">=</span> ErrorContext(</span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>            operation<span class="op">=</span><span class="st">"job_execution"</span>,</span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>            exception<span class="op">=</span>e,</span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>            job_id<span class="op">=</span>job.<span class="bu">id</span></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>        error_context.category <span class="op">=</span> ErrorCategory.EXECUTION</span>
-<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>        reporter <span class="op">=</span> ErrorReporter()</span>
-<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> reporter.report_error(error_context)</span>
-<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>        <span class="cf">raise</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-</section>
-<section id="nats-operations" class="level4">
-<h4 class="anchored" data-anchor-id="nats-operations">NATS Operations</h4>
-<div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.nats_helpers <span class="im">import</span> nats_jetstream_context, create_stream_with_retry</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> setup_stream():</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> nats_jetstream_context() <span class="im">as</span> (conn, js):</span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>        stream_info <span class="op">=</span> <span class="cf">await</span> create_stream_with_retry(</span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>            js,</span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>            StreamConfigHelper(</span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>                name<span class="op">=</span><span class="st">"MY_STREAM"</span>,</span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>                subjects<span class="op">=</span>[<span class="st">"my.subject.*"</span>]</span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>            )</span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> stream_info</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-</section>
-<section id="performance-monitoring" class="level4">
-<h4 class="anchored" data-anchor-id="performance-monitoring">Performance Monitoring</h4>
-<div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils <span class="im">import</span> Timer, Benchmark</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.logging <span class="im">import</span> get_structured_logger</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> process_with_monitoring(item):</span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    logger <span class="op">=</span> get_structured_logger(<span class="st">"processor"</span>)</span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">with</span> Timer() <span class="im">as</span> timer:</span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>        result <span class="op">=</span> <span class="cf">await</span> <span class="va">self</span>._process_item(item)</span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>        logger.info(</span>
-<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>            <span class="st">"Item processed"</span>,</span>
-<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>            item_id<span class="op">=</span>item.<span class="bu">id</span>,</span>
-<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>            duration<span class="op">=</span>timer.duration</span>
-<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>        )</span>
-<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>        </span>
-<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> result</span>
-<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> benchmark_processing():</span>
-<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>    benchmark <span class="op">=</span> Benchmark()</span>
-<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>    <span class="cf">with</span> benchmark:</span>
-<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">1000</span>):</span>
-<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a>            process_with_monitoring(<span class="ss">f"item_</span><span class="sc">{</span>i<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Average time: </span><span class="sc">{</span>benchmark<span class="sc">.</span>average_time<span class="sc">:.4f}</span><span class="ss">s"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-</section>
-<section id="retry-logic" class="level4">
-<h4 class="anchored" data-anchor-id="retry-logic">Retry Logic</h4>
-<div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.retry <span class="im">import</span> RetryConfig, retry_async</span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> unreliable_operation():</span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="co"># This might fail</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">pass</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> robust_operation():</span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    retry_config <span class="op">=</span> RetryConfig(</span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>        max_attempts<span class="op">=</span><span class="dv">3</span>,</span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>        base_delay<span class="op">=</span><span class="fl">1.0</span>,</span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>        max_delay<span class="op">=</span><span class="fl">10.0</span>,</span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>        retryable_exceptions<span class="op">=</span>(<span class="pp">ConnectionError</span>, <span class="pp">TimeoutError</span>)</span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="cf">await</span> retry_async(unreliable_operation, config<span class="op">=</span>retry_config)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<p>For more detailed information about the utils package architecture and comprehensive API documentation, see the <a href="../architecture.html#utils-package-architecture">Utils Package Architecture</a> section in the architecture documentation.</p>
 
 
-</section>
 </section>
 </section>
 

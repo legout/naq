@@ -8,21 +8,25 @@ The `scheduler` module contains the `Scheduler` class, which is responsible for 
 
 You typically run the scheduler from the command line using `naq scheduler`, but you can also create and run a `Scheduler` instance programmatically.
 
-### `naq.scheduler.Scheduler(nats_url, poll_interval, instance_id, enable_ha, services)`
+### `naq.scheduler.Scheduler(config=None, services=None, ...)`
+
+The `Scheduler` class constructor now prioritizes the `config` and `services` parameters for centralized configuration and dependency injection. Parameters like `nats_url`, `poll_interval`, `instance_id`, and `enable_ha` are now typically managed via the `config` object or internally by the service layer.
 
 | Parameter       | Type                               | Description                                                                                             |
 | --------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `nats_url`      | `str`                              | The URL of the NATS server.                                                                             |
+| `config`        | `NAQConfig` &#124; `dict` &#124; `None` | Optional NAQConfig object or dictionary for scheduler and service configuration.                        |
+| `services`      | `ServiceManager` &#124; `None`     | Optional ServiceManager instance for dependency injection.                                               |
 | `poll_interval` | `float`                            | The interval (in seconds) at which the scheduler checks for due jobs. Defaults to `1.0`.                  |
 | `instance_id`   | `str` &#124; `None`                 | A unique ID for the scheduler instance, used for High Availability. A unique ID is generated if not provided. |
 | `enable_ha`     | `bool`                             | Whether to enable High Availability (HA) mode with leader election. Defaults to `True`.                  |
-| `services`      | `ServiceManager` &#124; `None`     | Optional ServiceManager instance for dependency injection.                                               |
+| `nats_url`      | `str`                              | *Deprecated.* The URL of the NATS server. Use `config` instead.                                         |
+
 
 ### Methods
 
 #### `run()`
 
-Starts the scheduler's main processing loop. This is an `async` method.
+Starts the scheduler's main processing loop. This method internally uses `SchedulerService` for managing scheduled jobs and `EventService` for logging events.
 
 ```python
 async def run(self) -> None
@@ -38,9 +42,65 @@ When `enable_ha` is `True`, you can run multiple `Scheduler` instances for redun
 
 The `Scheduler` class integrates with the service layer architecture to provide efficient resource management and connection pooling. When using the service layer, the scheduler automatically leverages centralized services for NATS connections, KV store operations, and event logging.
 
-### Using Scheduler with ServiceManager
+### Scheduler Class Definition and Service Layer Integration
 
-The recommended way to use the `Scheduler` class with the service layer is to provide a `ServiceManager` instance:
+The `Scheduler` class is designed to seamlessly integrate with NAQ's service layer, allowing it to leverage shared resources and centralized configuration.
+
+```python
+from naq.config import NAQConfig
+from naq.services import ServiceManager, SchedulerService, EventService, ConnectionService, KVStoreService
+from naq.scheduler.core import Scheduler as CoreScheduler
+from typing import Optional, Union, Dict, Any
+import asyncio
+
+class Scheduler(CoreScheduler):
+    def __init__(
+        self,
+        config: Optional[Union[NAQConfig, dict]] = None,
+        services: Optional[ServiceManager] = None,
+        poll_interval: Optional[float] = None,
+        instance_id: Optional[str] = None,
+        enable_ha: Optional[bool] = None,
+        # Deprecated parameters (managed by config or services)
+        nats_url: Optional[str] = None,
+    ):
+        super().__init__(
+            config=config,
+            services=services,
+            poll_interval=poll_interval,
+            instance_id=instance_id,
+            enable_ha=enable_ha,
+            nats_url=nats_url, # Passed for backward compatibility within core
+        )
+        self._scheduler_service: Optional[SchedulerService] = None
+        self._event_service: Optional[EventService] = None
+        self._connection_service: Optional[ConnectionService] = None
+        self._kv_store_service: Optional[KVStoreService] = None
+
+    async def _setup_services(self):
+        """Internal method to get service instances from ServiceManager."""
+        if self._services:
+            self._scheduler_service = await self._services.get_service(SchedulerService)
+            self._event_service = await self._services.get_service(EventService)
+            self._connection_service = await self._services.get_service(ConnectionService)
+            self._kv_store_service = await self._services.get_service(KVStoreService)
+
+    async def run(self) -> None:
+        """
+        Starts the scheduler's main processing loop.
+        This method now leverages SchedulerService for job management and EventService for logging.
+        """
+        await self._setup_services() # Ensure services are available
+        # The core run logic will then use self._scheduler_service and self._event_service
+        # for polling and managing scheduled jobs, and logging events.
+        await super().run() # Call the original run method from CoreScheduler
+
+```
+
+#### Usage Pattern with `ServiceManager`
+
+The recommended way to instantiate and run a `Scheduler` is by providing a `ServiceManager` instance. This allows the `Scheduler` to share and leverage the common services managed by the `ServiceManager`.
+
 
 ```python
 import asyncio
