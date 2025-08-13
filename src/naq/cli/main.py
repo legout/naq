@@ -11,6 +11,11 @@ from typing import Optional
 from rich.console import Console
 
 from .. import __version__
+from .event_commands import event_app
+from .job_commands import job_app
+from .scheduler_commands import scheduler_app
+from .system_commands import system_app
+from .worker_commands import worker_app
 
 app = typer.Typer(
     name="naq",
@@ -44,16 +49,7 @@ def main(
     pass
 
 
-# Placeholders for registering subcommand Typer instances
-# These will be populated during the refactoring process
-# when we move commands from cli.py to their respective modules
-worker_app = typer.Typer()
-job_app = typer.Typer()
-scheduler_app = typer.Typer()
-event_app = typer.Typer()
-system_app = typer.Typer()
-
-# Register subcommands (these will be implemented in their respective modules)
+# Register subcommands from their respective modules
 app.add_typer(worker_app, name="worker", help="Worker management commands")
 app.add_typer(job_app, name="job", help="Job management commands")
 app.add_typer(scheduler_app, name="scheduler", help="Scheduler management commands")
