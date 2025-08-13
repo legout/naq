@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
-naq = "naq.cli:app"
+naq = "naq.cli.main:app"
 
 [project.optional-dependencies]
 test = [
@@ -61,9 +61,12 @@ asyncio_default_fixture_loop_scope = "function"  # Add this line
 dev = [
     "anyio>=4.9.0",
     "ipython>=9.4.0",
+    "isort>=6.0.1",
     "nest-asyncio>=1.6.0",
+    "pytest>=8.4.1",
     "quarto>=0.1.0",
     "rq>=2.4.1",
+    "ruff>=0.12.8",
 ]
 test = [
     "freezegun>=1.5.4",
