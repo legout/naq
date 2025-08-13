@@ -16,7 +16,7 @@ from .exceptions import (
     NaqException,
     SerializationError,
 )
-from .results import Results
+#from .results import Results
 from .settings import (
     DEFAULT_NATS_URL,
     DEFAULT_QUEUE_NAME,
