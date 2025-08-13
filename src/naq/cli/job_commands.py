@@ -240,3 +240,7 @@ def job_control(
         logger.exception(f"Error performing {action} on job {job_id}: {e}")
         console.print(f"[red]Error:[/red] {str(e)}")
         raise typer.Exit(code=1)
+
+
+# Backward compatibility alias for tests
+job_commands = job_app

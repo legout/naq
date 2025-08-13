@@ -32,6 +32,7 @@ StreamName = str
 ConfigDict = Dict[str, Any]
 Headers = Dict[str, str]
 Metadata = Dict[str, Any]
+JobData = Dict[str, Any]  # For backward compatibility
 
 # Generic type variables
 T = TypeVar('T')

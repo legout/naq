@@ -451,3 +451,73 @@ def set_global_error_handler(handler: ErrorHandler):
     """Set the global error handler instance."""
     global _global_error_handler
     _global_error_handler = handler
+
+
+def handle_nats_error(error: Exception, context: Optional[str] = None) -> Exception:
+    """
+    Handle NATS-specific errors with appropriate wrapping and logging.
+    
+    Args:
+        error: The original exception
+        context: Optional context string for debugging
+        
+    Returns:
+        Properly wrapped NAQ exception
+    """
+    import nats.errors
+    
+    if isinstance(error, nats.errors.TimeoutError):
+        wrapped = NaqConnectionError(f"NATS operation timed out: {error}")
+    elif isinstance(error, nats.errors.NoServersError):
+        wrapped = NaqConnectionError(f"No NATS servers available: {error}")
+    elif isinstance(error, (ConnectionError, OSError)):
+        wrapped = NaqConnectionError(f"Connection error: {error}")
+    else:
+        wrapped = NaqException(f"NATS error: {error}")
+    
+    if context:
+        logger.error(f"NATS error in {context}: {error}")
+    else:
+        logger.error(f"NATS error: {error}")
+    
+    return wrapped
+
+
+def handle_serialization_error(error: Exception, data: Any = None) -> Exception:
+    """
+    Handle serialization errors with appropriate wrapping and logging.
+    
+    Args:
+        error: The original serialization exception
+        data: Optional data that failed to serialize
+        
+    Returns:
+        Properly wrapped SerializationError
+    """
+    if data is not None:
+        logger.error(f"Serialization error with data type {type(data)}: {error}")
+        wrapped = SerializationError(f"Failed to serialize data of type {type(data)}: {error}")
+    else:
+        logger.error(f"Serialization error: {error}")
+        wrapped = SerializationError(f"Serialization failed: {error}")
+    
+    return wrapped
+
+
+def safe_execute(func: Callable, *args, **kwargs) -> Any:
+    """
+    Safely execute a function with error handling.
+    
+    Args:
+        func: Function to execute
+        *args: Positional arguments
+        **kwargs: Keyword arguments
+        
+    Returns:
+        Function result or None if error occurred
+    """
+    try:
+        return func(*args, **kwargs)
+    except Exception as e:
+        logger.error(f"Error executing {func.__name__}: {e}")
+        return None

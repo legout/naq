@@ -317,3 +317,64 @@ _global_helper = ValidationHelper()
 def get_validation_helper() -> ValidationHelper:
     """Get the global validation helper."""
     return _global_helper
+
+
+def validate_job_config(config: Dict[str, Any]) -> bool:
+    """
+    Validate job configuration for backward compatibility.
+    
+    Args:
+        config: Job configuration dictionary
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    # Basic validation - check required fields
+    required_fields = ['function', 'queue_name']
+    for field in required_fields:
+        if field not in config:
+            return False
+    return True
+
+
+def validate_queue_name(queue_name: str) -> bool:
+    """
+    Validate queue name for backward compatibility.
+    
+    Args:
+        queue_name: Queue name to validate
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    if not queue_name or not isinstance(queue_name, str):
+        return False
+    # Basic validation - alphanumeric and underscores
+    import re
+    return bool(re.match(r'^[a-zA-Z0-9_-]+$', queue_name))
+
+
+def validate_worker_config(config: Dict[str, Any]) -> bool:
+    """
+    Validate worker configuration for backward compatibility.
+    
+    Args:
+        config: Worker configuration dictionary
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    # Basic validation - check for required worker fields
+    if not config or not isinstance(config, dict):
+        return False
+    
+    # Check concurrency is positive
+    if 'concurrency' in config:
+        try:
+            concurrency = int(config['concurrency'])
+            if concurrency <= 0:
+                return False
+        except (ValueError, TypeError):
+            return False
+    
+    return True

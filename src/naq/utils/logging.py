@@ -474,3 +474,21 @@ class MetricsHandler(logging.Handler):
         except Exception:
             # Don't let metrics collection break logging
             pass
+
+
+# Backward compatibility alias for tests
+setup_logging = setup_structured_logging
+
+
+def get_logger(name: str, **kwargs) -> StructuredLogger:
+    """
+    Get a structured logger instance for backward compatibility.
+    
+    Args:
+        name: Logger name
+        **kwargs: Additional arguments
+        
+    Returns:
+        StructuredLogger instance
+    """
+    return StructuredLogger(name, **kwargs)

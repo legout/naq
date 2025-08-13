@@ -318,3 +318,7 @@ def list_scheduled_jobs(
 
     # Run the async routine
     asyncio.run(_list_scheduled_jobs_async())
+
+
+# Backward compatibility alias for tests
+scheduler_commands = scheduler_app

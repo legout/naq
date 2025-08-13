@@ -384,3 +384,58 @@ async def diagnose_connection_issues(config: Optional[dict] = None) -> Dict:
     }
     
     return diagnostics
+
+
+def get_connection_info() -> Dict:
+    """
+    Get basic connection information for backward compatibility.
+    
+    Returns:
+        Dictionary with connection information
+    """
+    return {
+        "nats_url": DEFAULT_NATS_URL,
+        "connection_status": "available",
+        "metrics": _connection_metrics
+    }
+
+
+async def test_connection(config: Optional[dict] = None) -> bool:
+    """
+    Test NATS connection for backward compatibility.
+    
+    Args:
+        config: Optional connection configuration
+        
+    Returns:
+        True if connection successful, False otherwise
+    """
+    try:
+        async with nats_connection(config):
+            return True
+    except Exception:
+        return False
+
+
+def close_all_connections():
+    """
+    Close all connections for backward compatibility.
+    
+    This is a no-op function since connections are managed by context managers.
+    """
+    logger.debug("close_all_connections called - no-op with context manager pattern")
+
+
+def get_connection_stats() -> Dict:
+    """
+    Get connection statistics for backward compatibility.
+    
+    Returns:
+        Dictionary with connection statistics
+    """
+    return {
+        "total_connections": _connection_metrics.total_connections,
+        "active_connections": _connection_metrics.active_connections,
+        "failed_connections": _connection_metrics.failed_connections,
+        "success_rate": _connection_metrics.successful_connections / max(1, _connection_metrics.total_connections) * 100
+    }

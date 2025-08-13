@@ -61,6 +61,10 @@ def global_options(
     pass
 
 
+# Alias for backward compatibility with tests
+cli = app
+
+
 def main():
     """Main entry point for the NAQ CLI."""
     # Commands are already registered at module import

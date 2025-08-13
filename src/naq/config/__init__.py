@@ -33,6 +33,7 @@ from .loader import ConfigLoader
 from .types import NAQConfig
 from .validator import ConfigValidator
 from .defaults import get_default_config
+from ..utils.types import ConfigDict
 
 # Global configuration instance
 _config_instance: Optional[NAQConfig] = None
@@ -222,4 +223,5 @@ __all__ = [
     "NAQConfig",
     "ConfigLoader",
     "ConfigValidator",
+    "ConfigDict",
 ]

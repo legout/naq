@@ -312,3 +312,22 @@ def diff_configurations(config1: Dict[str, Any], config2: Dict[str, Any]) -> Dic
             }
     
     return differences
+
+
+class ConfigMerger:
+    """Configuration merger utility class."""
+    
+    @staticmethod
+    def merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+        """Merge configurations using deep merge strategy."""
+        return merge_configurations(base, override)
+    
+    @staticmethod
+    def apply_overrides(config: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply overrides using dot notation."""
+        return apply_overrides(config, overrides)
+    
+    @staticmethod
+    def validate_structure(config: Dict[str, Any]) -> bool:
+        """Validate configuration structure."""
+        return validate_config_structure(config)

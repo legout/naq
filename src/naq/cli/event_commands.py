@@ -535,3 +535,7 @@ def monitor_workers(
     
     # Run the async function
     asyncio.run(monitor_worker_status())
+
+
+# Backward compatibility alias for tests
+event_commands = event_app

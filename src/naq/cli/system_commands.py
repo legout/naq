@@ -263,3 +263,7 @@ def config_init(
     except ImportError:
         console.print("[red]Error:[/red] Configuration system not available.")
         raise typer.Exit(code=1)
+
+
+# Backward compatibility alias for tests
+system_commands = system_app

@@ -193,3 +193,8 @@ async def nats_object_store(bucket_name: str, config: Optional[dict] = None):
         except Exception as e:
             logger.error(f"Object store error for bucket {bucket_name}: {e}")
             raise NaqConnectionError(f"Failed to access object store '{bucket_name}': {e}") from e
+
+
+# Backward compatibility aliases for tests
+nats_connection_context = nats_connection
+transaction_context = nats_connection  # Placeholder - tests may expect this

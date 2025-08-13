@@ -403,3 +403,7 @@ def cache(
         
         return async_wrapper if asyncio.iscoroutinefunction(func) else sync_wrapper
     return decorator
+
+
+# Backward compatibility alias for tests
+cache_result = cache

@@ -413,3 +413,43 @@ def deserialize(data: bytes, serializer: str = "pickle", **kwargs) -> Any:
 def auto_deserialize(data: bytes, **kwargs) -> Tuple[Any, str]:
     """Auto-deserialize data using global helper."""
     return _global_helper.auto_deserialize(data, **kwargs)
+
+
+def serialize_job_data(data: Any, serializer: str = "pickle", **kwargs) -> bytes:
+    """
+    Serialize job data for backward compatibility.
+    
+    Args:
+        data: Data to serialize
+        serializer: Serializer to use
+        **kwargs: Additional arguments
+        
+    Returns:
+        Serialized data
+    """
+    return serialize(data, serializer, **kwargs)
+
+
+def deserialize_job_data(data: bytes, serializer: str = "pickle", **kwargs) -> Any:
+    """
+    Deserialize job data for backward compatibility.
+    
+    Args:
+        data: Serialized data
+        serializer: Serializer to use
+        **kwargs: Additional arguments
+        
+    Returns:
+        Deserialized data
+    """
+    return deserialize(data, serializer, **kwargs)
+
+
+def serialize_result(data: Any, serializer: str = "pickle", **kwargs) -> bytes:
+    """Serialize result data for backward compatibility."""
+    return serialize(data, serializer, **kwargs)
+
+
+def deserialize_result(data: bytes, serializer: str = "pickle", **kwargs) -> Any:
+    """Deserialize result data for backward compatibility."""
+    return deserialize(data, serializer, **kwargs)

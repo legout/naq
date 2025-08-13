@@ -336,3 +336,7 @@ def get_config_template(environment: str = "development") -> Dict[str, Any]:
         return get_minimal_config()
     else:
         return get_development_config()
+
+
+# Backward compatibility alias for tests
+DEFAULT_CONFIG = get_default_config()

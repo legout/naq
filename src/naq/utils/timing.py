@@ -450,3 +450,28 @@ _global_tracker = PerformanceTracker()
 def get_performance_tracker() -> PerformanceTracker:
     """Get the global performance tracker."""
     return _global_tracker
+
+
+def format_duration(seconds: float) -> str:
+    """
+    Format duration in seconds to human-readable string for backward compatibility.
+    
+    Args:
+        seconds: Duration in seconds
+        
+    Returns:
+        Formatted duration string
+    """
+    if seconds < 1:
+        return f"{seconds*1000:.1f}ms"
+    elif seconds < 60:
+        return f"{seconds:.1f}s"
+    elif seconds < 3600:
+        minutes = int(seconds // 60)
+        secs = seconds % 60
+        return f"{minutes}m {secs:.1f}s"
+    else:
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = seconds % 60
+        return f"{hours}h {minutes}m {secs:.1f}s"
