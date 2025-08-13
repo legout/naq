@@ -16,3 +16,6 @@ improvement_plan.md
 IMPROVEMENTS.md
 fix-gem-cli/
 sqlite/
+AGENTS.md
+package-lock.json
+package.json

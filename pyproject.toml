@@ -60,6 +60,7 @@ asyncio_default_fixture_loop_scope = "function"  # Add this line
 [dependency-groups]
 dev = [
     "anyio>=4.9.0",
+    "ipykernel>=6.30.1",
     "ipython>=9.4.0",
     "nest-asyncio>=1.6.0",
     "quarto>=0.1.0",
