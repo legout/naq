@@ -17,3 +17,7 @@ The API is organized into modules, each providing specific functionality.
 -   [**`scheduler` Module**](scheduler.qmd): Contains the `Scheduler` class, responsible for enqueuing scheduled and recurring jobs.
 
 -   [**`exceptions` Module**](exceptions.qmd): Defines custom exceptions raised by `naq`.
+
+## Services
+
+-   [**`kv_stores` Module**](kv_stores.qmd): Provides a robust, centralized service for managing NATS KeyValue stores with support for pooling, transactions, and TTL.

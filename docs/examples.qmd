@@ -126,6 +126,318 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+## Example 5: Using JobService Directly
+
+The `JobService` provides a centralized way to execute jobs, manage results, and handle job lifecycle events. This is useful when you need more control over job execution beyond simple enqueueing.
+
+```python
+# job_service_example.py
+import asyncio
+from naq.services.base import ServiceConfig
+from naq.services.connection import ConnectionService, ConnectionServiceConfig
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+from naq.services.events import EventService, EventServiceConfig
+from naq.services.jobs import JobService, JobServiceConfig
+from naq.models.jobs import Job
+
+async def process_data(data_id):
+    """Example job function that processes data."""
+    print(f"Processing data with ID: {data_id}")
+    await asyncio.sleep(1)  # Simulate processing time
+    return f"Processed data {data_id}"
+
+async def main():
+    # Initialize services
+    connection_config = ConnectionServiceConfig()
+    connection_service = ConnectionService(config=ServiceConfig(custom_settings=connection_config.as_dict()))
+    await connection_service.initialize()
+    
+    kv_store_config = KVStoreServiceConfig()
+    kv_store_service = KVStoreService(config=ServiceConfig(custom_settings=kv_store_config.as_dict()))
+    await kv_store_service.initialize()
+    
+    event_config = EventServiceConfig()
+    event_service = EventService(config=ServiceConfig(custom_settings=event_config.as_dict()), kv_store_service=kv_store_service)
+    await event_service.initialize()
+    
+    # Create JobService with all dependencies
+    job_config = JobServiceConfig(
+        enable_job_execution=True,
+        enable_result_storage=True,
+        enable_event_logging=True,
+        max_job_execution_time=30
+    )
+    job_service = JobService(
+        config=ServiceConfig(custom_settings=job_config.as_dict()),
+        connection_service=connection_service,
+        kv_store_service=kv_store_service,
+        event_service=event_service
+    )
+    await job_service.initialize()
+    
+    # Create a job
+    job = Job(
+        function=process_data,
+        args=("data-123",),
+        queue_name="processing",
+        max_retries=2,
+        retry_delay=1.0
+    )
+    
+    # Execute the job
+    print("Executing job...")
+    result = await job_service.execute_job(job, "worker-1")
+    print(f"Job completed with result: {result.result}")
+    print(f"Job status: {result.status}")
+    print(f"Execution time: {result.execution_time:.2f} seconds")
+    
+    # Retrieve the stored result
+    stored_result = await job_service.get_result(job.job_id)
+    print(f"Retrieved result: {stored_result.result}")
+    
+    # Get job events
+    job_events = await event_service.get_job_events(job.job_id)
+    print(f"Job events: {len(job_events)} events logged")
+    for event in job_events:
+        print(f"  - {event.event_type.value} at {event.timestamp}")
+    
+    # Cleanup
+    await job_service.cleanup()
+    await event_service.cleanup()
+    await kv_store_service.cleanup()
+    await connection_service.cleanup()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Handling Job Failures with JobService
+
+The `JobService` provides robust failure handling with automatic retries and detailed error logging.
+
+```python
+# job_failure_example.py
+import asyncio
+from naq.services.base import ServiceConfig
+from naq.services.connection import ConnectionService, ConnectionServiceConfig
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+from naq.services.events import EventService, EventServiceConfig
+from naq.services.jobs import JobService, JobServiceConfig
+from naq.models.jobs import Job
+
+async def unreliable_api_call():
+    """Example function that might fail."""
+    import random
+    if random.random() < 0.7:  # 70% chance of failure
+        raise ConnectionError("API temporarily unavailable")
+    return "API call successful"
+
+async def main():
+    # Initialize services (simplified for brevity)
+    connection_config = ConnectionServiceConfig()
+    connection_service = ConnectionService(config=ServiceConfig(custom_settings=connection_config.as_dict()))
+    await connection_service.initialize()
+    
+    kv_store_config = KVStoreServiceConfig()
+    kv_store_service = KVStoreService(config=ServiceConfig(custom_settings=kv_store_config.as_dict()))
+    await kv_store_service.initialize()
+    
+    event_config = EventServiceConfig()
+    event_service = EventService(config=ServiceConfig(custom_settings=event_config.as_dict()), kv_store_service=kv_store_service)
+    await event_service.initialize()
+    
+    # Create JobService with retry configuration
+    job_config = JobServiceConfig(
+        enable_job_execution=True,
+        enable_result_storage=True,
+        enable_event_logging=True
+    )
+    job_service = JobService(
+        config=ServiceConfig(custom_settings=job_config.as_dict()),
+        connection_service=connection_service,
+        kv_store_service=kv_store_service,
+        event_service=event_service
+    )
+    await job_service.initialize()
+    
+    # Create a job with retry configuration
+    job = Job(
+        function=unreliable_api_call,
+        queue_name="api_calls",
+        max_retries=3,  # Retry up to 3 times
+        retry_delay=2.0  # Wait 2 seconds between retries
+    )
+    
+    # Execute the job
+    try:
+        result = await job_service.execute_job(job, "worker-1")
+        print(f"Job succeeded: {result.result}")
+    except Exception as e:
+        print(f"Job failed after all retries: {e}")
+    
+    # Check the stored result regardless of success/failure
+    stored_result = await job_service.get_result(job.job_id)
+    if stored_result:
+        print(f"Final job status: {stored_result.status}")
+        if stored_result.status == "failed":
+            print(f"Error: {stored_result.error}")
+            print(f"Traceback: {stored_result.traceback}")
+    
+    # Get failure events
+    job_events = await event_service.get_job_events(job.job_id)
+    failure_events = [e for e in job_events if e.event_type.value == "failed"]
+    retry_events = [e for e in job_events if e.event_type.value == "retry_scheduled"]
+    
+    print(f"Failure events: {len(failure_events)}")
+    print(f"Retry events: {len(retry_events)}")
+    
+    # Cleanup
+    await job_service.cleanup()
+    await event_service.cleanup()
+    await kv_store_service.cleanup()
+    await connection_service.cleanup()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Custom JobService Configuration
+
+You can customize the `JobService` behavior through its configuration.
+
+```python
+# custom_job_config.py
+import asyncio
+from naq.services.base import ServiceConfig
+from naq.services.connection import ConnectionService, ConnectionServiceConfig
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+from naq.services.events import EventService, EventServiceConfig
+from naq.services.jobs import JobService, JobServiceConfig
+from naq.models.jobs import Job
+
+async def long_running_task():
+    """Example long-running task."""
+    await asyncio.sleep(5)  # Simulate 5 seconds of work
+    return "Task completed"
+
+async def main():
+    # Initialize services (simplified for brevity)
+    connection_config = ConnectionServiceConfig()
+    connection_service = ConnectionService(config=ServiceConfig(custom_settings=connection_config.as_dict()))
+    await connection_service.initialize()
+    
+    kv_store_config = KVStoreServiceConfig()
+    kv_store_service = KVStoreService(config=ServiceConfig(custom_settings=kv_store_config.as_dict()))
+    await kv_store_service.initialize()
+    
+    event_config = EventServiceConfig()
+    event_service = EventService(config=ServiceConfig(custom_settings=event_config.as_dict()), kv_store_service=kv_store_service)
+    await event_service.initialize()
+    
+    # Create JobService with custom configuration
+    job_config = JobServiceConfig(
+        enable_job_execution=True,
+        enable_result_storage=True,
+        enable_event_logging=True,
+        max_job_execution_time=10,  # Maximum 10 seconds per job
+        default_result_ttl=3600,    # Store results for 1 hour
+        results_bucket_name="custom_results",
+        auto_create_buckets=True
+    )
+    job_service = JobService(
+        config=ServiceConfig(custom_settings=job_config.as_dict()),
+        connection_service=connection_service,
+        kv_store_service=kv_store_service,
+        event_service=event_service
+    )
+    await job_service.initialize()
+    
+    # Check configuration
+    print(f"Job execution enabled: {job_service.is_job_execution_enabled}")
+    print(f"Result storage enabled: {job_service.is_result_storage_enabled}")
+    print(f"Event logging enabled: {job_service.is_event_logging_enabled}")
+    print(f"Max execution time: {job_service.job_config.max_job_execution_time} seconds")
+    
+    # Create and execute a job
+    job = Job(
+        function=long_running_task,
+        queue_name="long_tasks",
+        max_retries=1
+    )
+    
+    try:
+        result = await job_service.execute_job(job, "worker-1")
+        print(f"Job completed: {result.result}")
+    except Exception as e:
+        print(f"Job failed: {e}")
+    
+    # Cleanup
+    await job_service.cleanup()
+    await event_service.cleanup()
+    await kv_store_service.cleanup()
+    await connection_service.cleanup()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Using JobService with Minimal Dependencies
+
+If you only need basic job execution without all services, you can initialize `JobService` with minimal dependencies.
+
+```python
+# minimal_job_service.py
+import asyncio
+from naq.services.base import ServiceConfig
+from naq.services.connection import ConnectionService, ConnectionServiceConfig
+from naq.services.jobs import JobService, JobServiceConfig
+from naq.models.jobs import Job
+
+async def simple_task(x, y):
+    """Simple task that adds two numbers."""
+    return x + y
+
+async def main():
+    # Initialize only the connection service
+    connection_config = ConnectionServiceConfig()
+    connection_service = ConnectionService(config=ServiceConfig(custom_settings=connection_config.as_dict()))
+    await connection_service.initialize()
+    
+    # Create JobService with minimal configuration
+    job_config = JobServiceConfig(
+        enable_job_execution=True,
+        enable_result_storage=False,  # Disable result storage
+        enable_event_logging=False    # Disable event logging
+    )
+    job_service = JobService(
+        config=ServiceConfig(custom_settings=job_config.as_dict()),
+        connection_service=connection_service
+        # KVStoreService and EventService will be created automatically
+    )
+    await job_service.initialize()
+    
+    # Create and execute a job
+    job = Job(
+        function=simple_task,
+        args=(5, 7),
+        queue_name="simple_tasks"
+    )
+    
+    result = await job_service.execute_job(job, "worker-1")
+    print(f"Job result: {result.result}")
+    
+    # Result storage is disabled, so get_result will return None
+    stored_result = await job_service.get_result(job.job_id)
+    print(f"Stored result: {stored_result}")  # Will be None
+    
+    # Cleanup
+    await job_service.cleanup()
+    await connection_service.cleanup()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
 ::: {.callout-note}
 **Retry Strategies**
 

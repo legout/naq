@@ -1,0 +1,302 @@
+---
+title: "KeyValue Store API"
+---
+
+The `kv_stores` module provides a robust, centralized service for managing NATS KeyValue stores with support for pooling, transactions, and TTL (Time-To-Live).
+
+## `KVStoreService` Class
+
+The `KVStoreService` class provides a high-level interface for interacting with NATS KeyValue stores, offering features like connection pooling, transaction support, and automatic bucket management.
+
+### `naq.services.kv_stores.KVStoreService(config)`
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `config` | `KVStoreServiceConfig` | Configuration for the KV store service. |
+
+### Methods
+
+#### `get_kv_store()`
+
+Retrieves a KeyValue store instance for a specific bucket.
+
+```python
+async def get_kv_store(
+    self, 
+    bucket_name: str, 
+    auto_create: bool = True
+) -> KeyValue
+```
+
+| Parameter | Type | Default | Description |
+| --------- | ---- | ------- | ----------- |
+| `bucket_name` | `str` | - | The name of the KV bucket. |
+| `auto_create` | `bool` | `True` | Whether to automatically create the bucket if it doesn't exist. |
+
+Returns a `KeyValue` instance from the NATS client.
+
+#### `put()`
+
+Stores a key-value pair in the specified bucket.
+
+```python
+async def put(
+    self, 
+    bucket_name: str, 
+    key: str, 
+    value: Any, 
+    auto_create: bool = True
+) -> bool
+```
+
+| Parameter | Type | Default | Description |
+| --------- | ---- | ------- | ----------- |
+| `bucket_name` | `str` | - | The name of the KV bucket. |
+| `key` | `str` | - | The key to store the value under. |
+| `value` | `Any` | - | The value to store (will be serialized with cloudpickle). |
+| `auto_create` | `bool` | `True` | Whether to automatically create the bucket if it doesn't exist. |
+
+Returns `True` if the operation was successful.
+
+#### `get()`
+
+Retrieves a value by key from the specified bucket.
+
+```python
+async def get(
+    self, 
+    bucket_name: str, 
+    key: str, 
+    default: Any = None
+) -> Any
+```
+
+| Parameter | Type | Default | Description |
+| --------- | ---- | ------- | ----------- |
+| `bucket_name` | `str` | - | The name of the KV bucket. |
+| `key` | `str` | - | The key to retrieve. |
+| `default` | `Any` | `None` | Default value to return if key doesn't exist. |
+
+Returns the deserialized value or `default` if the key doesn't exist.
+
+#### `delete()`
+
+Removes a key from the specified bucket.
+
+```python
+async def delete(self, bucket_name: str, key: str) -> bool
+```
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `bucket_name` | `str` | The name of the KV bucket. |
+| `key` | `str` | The key to delete. |
+
+Returns `True` if the key was deleted, `False` if the key didn't exist.
+
+#### `keys()`
+
+Lists all keys in the specified bucket.
+
+```python
+async def keys(self, bucket_name: str) -> List[str]
+```
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `bucket_name` | `str` | The name of the KV bucket. |
+
+Returns a list of all keys in the bucket.
+
+#### `kv_transaction()`
+
+Creates a transaction context for atomic operations.
+
+```python
+async def kv_transaction(
+    self, 
+    bucket_name: str, 
+    auto_create: bool = True
+) -> KVTransaction
+```
+
+| Parameter | Type | Default | Description |
+| --------- | ---- | ------- | ----------- |
+| `bucket_name` | `str` | - | The name of the KV bucket. |
+| `auto_create` | `bool` | `True` | Whether to automatically create the bucket if it doesn't exist. |
+
+Returns a `KVTransaction` context manager.
+
+## `KVTransaction` Class
+
+The `KVTransaction` class provides a context manager for performing atomic operations on a KeyValue store.
+
+### Usage
+
+```python
+async with kv_service.kv_transaction("my_bucket") as tx:
+    await tx.put("key1", "value1")
+    await tx.put("key2", "value2")
+    # All operations are atomic - they either all succeed or all fail
+```
+
+### Methods
+
+#### `put()`
+
+Stores a key-value pair within the transaction.
+
+```python
+async def put(self, key: str, value: Any) -> None
+```
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `key` | `str` | The key to store the value under. |
+| `value` | `Any` | The value to store. |
+
+#### `get()`
+
+Retrieves a value by key within the transaction.
+
+```python
+async def get(self, key: str, default: Any = None) -> Any
+```
+
+| Parameter | Type | Default | Description |
+| --------- | ---- | ------- | ----------- |
+| `key` | `str` | - | The key to retrieve. |
+| `default` | `Any` | `None` | Default value to return if key doesn't exist. |
+
+#### `delete()`
+
+Removes a key within the transaction.
+
+```python
+async def delete(self, key: str) -> bool
+```
+
+| Parameter | Type | Description |
+| --------- | ---- | ----------- |
+| `key` | `str` | The key to delete. |
+
+Returns `True` if the key was deleted, `False` if the key didn't exist.
+
+## `KVStoreServiceConfig` Class
+
+Configuration class for the `KVStoreService`.
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+| --------- | ---- | ------- | ----------- |
+| `nats_url` | `str` | `"nats://localhost:4222"` | The URL of the NATS server. |
+| `pool_size` | `int` | `10` | The maximum number of connections in the pool. |
+| `connection_timeout` | `float` | `5.0` | Connection timeout in seconds. |
+| `max_retries` | `int` | `3` | Maximum number of connection retries. |
+| `retry_delay` | `float` | `0.1` | Delay between retries in seconds. |
+| `enable_transactions` | `bool` | `True` | Whether to enable transaction support. |
+
+## Usage Examples
+
+### Basic Operations
+
+```python
+import asyncio
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+
+async def main():
+    # Create a KV store service
+    config = KVStoreServiceConfig(
+        nats_url="nats://localhost:4222",
+        pool_size=5
+    )
+    kv_service = KVStoreService(config)
+    
+    # Store a value
+    await kv_service.put("my_bucket", "user:123", {"name": "Alice", "age": 30})
+    
+    # Retrieve a value
+    user = await kv_service.get("my_bucket", "user:123")
+    print(user)  # {"name": "Alice", "age": 30}
+    
+    # Delete a key
+    deleted = await kv_service.delete("my_bucket", "user:123")
+    print(f"Deleted: {deleted}")  # Deleted: True
+
+asyncio.run(main())
+```
+
+### Using Transactions
+
+```python
+import asyncio
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+
+async def main():
+    config = KVStoreServiceConfig()
+    kv_service = KVStoreService(config)
+    
+    try:
+        async with kv_service.kv_transaction("inventory") as tx:
+            # Check stock
+            stock = await tx.get("item:widget", 0)
+            if stock < 10:
+                # Restock
+                await tx.put("item:widget", stock + 50)
+                # Log the restock
+                await tx.put("log:restock", {"item": "widget", "amount": 50})
+            # Transaction commits automatically on exit
+    except Exception as e:
+        print(f"Transaction failed: {e}")
+        # Transaction rolls back automatically on exception
+
+asyncio.run(main())
+```
+
+### Working with Multiple Buckets
+
+```python
+import asyncio
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+
+async def main():
+    config = KVStoreServiceConfig()
+    kv_service = KVStoreService(config)
+    
+    # Store data in different buckets
+    await kv_service.put("users", "user:123", {"name": "Alice"})
+    await kv_service.put("sessions", "session:abc", {"user_id": "123", "expires": "2023-12-31"})
+    await kv_service.put("cache", "page:home", "<html>...</html>")
+    
+    # List keys in a bucket
+    user_keys = await kv_service.keys("users")
+    print(f"User keys: {user_keys}")
+
+asyncio.run(main())
+```
+
+### Error Handling
+
+```python
+import asyncio
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+from naq.exceptions import NaqException
+
+async def main():
+    config = KVStoreServiceConfig()
+    kv_service = KVStoreService(config)
+    
+    try:
+        # This will raise an exception for invalid bucket names
+        await kv_service.put("", "key", "value")
+    except NaqException as e:
+        print(f"Error: {e}")
+    
+    try:
+        # This will raise an exception for invalid keys
+        await kv_service.put("bucket", "key with spaces", "value")
+    except NaqException as e:
+        print(f"Error: {e}")
+
+asyncio.run(main())
