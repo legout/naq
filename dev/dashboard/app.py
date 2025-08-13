@@ -14,7 +14,7 @@ from ..settings import DEFAULT_NATS_URL, NAQ_PREFIX  # Import default NATS URL
 # Import worker listing function
 from ..worker import Worker
 from ..queue import Queue, ScheduledJobManager, SCHEDULED_JOB_STATUS
-from ..job import Job, get_serializer
+from ..models.jobs import Job, get_serializer
 from ..results import Results
 from ..settings import FAILED_JOB_STREAM_NAME, FAILED_JOB_SUBJECT_PREFIX, RESULT_KV_NAME
 
@@ -345,7 +345,7 @@ async def api_cancel_scheduled_job(request, job_id: str):
 
 
 import uuid
-from ..job import Job, get_serializer
+from ..models.jobs import Job, get_serializer
 from ..results import Results
 from ..settings import FAILED_JOB_STREAM_NAME, FAILED_JOB_SUBJECT_PREFIX, RESULT_KV_NAME
 

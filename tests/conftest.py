@@ -228,9 +228,9 @@ async def worker_instance_dict( # Add async keyword
     
     # Patch NATS connections for _connect
     mock_nc, mock_js = mock_nats
-    mocker.patch('naq.worker.get_nats_connection', return_value=mock_nc)
-    mocker.patch('naq.worker.get_jetstream_context', return_value=mock_js)
-    mocker.patch('naq.worker.ensure_stream')
+    mocker.patch('naq.connection.get_nats_connection', return_value=mock_nc)
+    mocker.patch('naq.connection.get_jetstream_context', return_value=mock_js)
+    mocker.patch('naq.connection.ensure_stream')
 
 
     # Create worker with basic args from worker_dict, but ensure queues is correct for this context

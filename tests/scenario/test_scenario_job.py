@@ -5,7 +5,7 @@ from naq.job import Job
 from naq.settings import (
     RETRY_STRATEGY
 )
-from naq.job import JOB_STATUS
+from naq.models.enums import JOB_STATUS
 
 
 # --- Helper Functions ---

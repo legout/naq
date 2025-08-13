@@ -3,10 +3,10 @@ import pytest_asyncio
 from unittest.mock import MagicMock, AsyncMock
 from datetime import datetime, timedelta, timezone
 import cloudpickle
-from naq.queue import Queue
+from naq.queue.core import Queue
+from naq.models import SCHEDULED_JOB_STATUS
 from naq.settings import (
     NAQ_PREFIX,
-    SCHEDULED_JOB_STATUS,
     SCHEDULED_JOBS_KV_NAME
 )
 
@@ -18,9 +18,9 @@ class TestQueue:
     async def queue(self, mock_nats, mocker):
         """Setup a test queue with mocked NATS."""
         mock_nc, mock_js = mock_nats
-        mocker.patch('naq.queue.get_nats_connection', return_value=mock_nc)
-        mocker.patch('naq.queue.get_jetstream_context', return_value=mock_js)
-        mocker.patch('naq.queue.ensure_stream')
+        mocker.patch('naq.connection.get_nats_connection', return_value=mock_nc)
+        mocker.patch('naq.connection.get_jetstream_context', return_value=mock_js)
+        mocker.patch('naq.connection.ensure_stream')
         q = Queue(name="test")
         return q
 

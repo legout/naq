@@ -5,9 +5,9 @@ import cloudpickle
 
 from naq.worker import Worker
 from naq.job import Job
+from naq.models import JOB_STATUS
+from naq.models import WORKER_STATUS
 from naq.settings import (
-    WORKER_STATUS,
-    JOB_STATUS,
     NAQ_PREFIX,
     RESULT_KV_NAME,
 )
@@ -94,11 +94,19 @@ class TestWorkerSmoke:
 
         # Get the mock KV store and verify persisted job status
         mock_kv_store = await mock_worker._js.key_value(RESULT_KV_NAME)
+        
+        # Debug output
+        print(f"Mock KV store: {mock_kv_store}")
+        print(f"Mock KV store put method: {mock_kv_store.put}")
+        print(f"Mock KV store put call count: {mock_kv_store.put.call_count}")
+        print(f"Mock KV store put mock calls: {mock_kv_store.put.mock_calls}")
+        
         mock_kv_store.put.assert_called()
 
         # Find the call with matching job ID
         persisted_data = None
         for call in mock_kv_store.put.mock_calls:
+            print(f"Call args: {call.args}")
             if call.args[0] == job.job_id.encode("utf-8"):
                 persisted_data = cloudpickle.loads(call.args[1])
                 break

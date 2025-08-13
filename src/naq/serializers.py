@@ -6,7 +6,8 @@ from dataclasses import asdict, is_dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union, Protocol
 
 from .exceptions import SerializationError
-from .job import JOB_STATUS
+from .models.enums import JOB_STATUS
+from .models.jobs import Job
 from .settings import (
     DEFAULT_QUEUE_NAME,
     JOB_SERIALIZER,
@@ -28,17 +29,17 @@ class Serializer(Protocol):
     """Protocol defining the interface for job serializers."""
 
     @staticmethod
-    def serialize_job(job: "Job") -> bytes:
+    def serialize_job(job: Job) -> bytes:
         """Serialize a job to bytes."""
         ...
 
     @staticmethod
-    def deserialize_job(data: bytes) -> "Job":
+    def deserialize_job(data: bytes) -> Job:
         """Deserialize bytes to a job."""
         ...
 
     @staticmethod
-    def serialize_failed_job(job: "Job") -> bytes:
+    def serialize_failed_job(job: Job) -> bytes:
         """Serialize a failed job to bytes."""
         ...
 
@@ -62,7 +63,7 @@ class PickleSerializer:
     """Serializes jobs and results using cloudpickle."""
 
     @staticmethod
-    def serialize_job(job: "Job") -> bytes:
+    def serialize_job(job: Job) -> bytes:
         """Serialize a job to bytes using cloudpickle."""
         try:
             payload = {
@@ -92,7 +93,7 @@ class PickleSerializer:
             raise SerializationError(f"Failed to pickle job: {e}") from e
 
     @staticmethod
-    def deserialize_job(data: bytes) -> "Job":
+    def deserialize_job(data: bytes) -> Job:
         """Deserialize bytes to a job using cloudpickle."""
         try:
             payload = cloudpickle.loads(data)
@@ -101,7 +102,7 @@ class PickleSerializer:
             kwargs = cloudpickle.loads(payload["kwargs"])
 
             # Create the job with all the saved attributes
-            from .job import Job  # Import here to avoid circular imports
+            from .models.jobs import Job  # Import here to avoid circular imports
 
             job = Job(
                 function=function,
@@ -124,7 +125,7 @@ class PickleSerializer:
             raise SerializationError(f"Failed to unpickle job: {e}") from e
 
     @staticmethod
-    def serialize_failed_job(job: "Job") -> bytes:
+    def serialize_failed_job(job: Job) -> bytes:
         """Serialize a failed job to bytes using cloudpickle."""
         try:
             payload = {
@@ -272,7 +273,7 @@ class JsonSerializer:
         return enc, dec
 
     @staticmethod
-    def serialize_job(job: "Job") -> bytes:
+    def serialize_job(job: Job) -> bytes:
         try:
             func_path = JsonSerializer._qualname(job.function)
         except SerializationError as e:
@@ -308,22 +309,28 @@ class JsonSerializer:
         except (TypeError, ValueError) as e:
             raise SerializationError(f"Failed to JSON-serialize job: {e}") from e
         except Exception as e:
-            raise SerializationError(f"Unexpected error during JSON serialization: {e}") from e
+            raise SerializationError(
+                f"Unexpected error during JSON serialization: {e}"
+            ) from e
 
     @staticmethod
-    def deserialize_job(data: bytes) -> "Job":
+    def deserialize_job(data: bytes) -> Job:
         _Encoder, Decoder = JsonSerializer._get_json_hooks()
         try:
             payload = json.loads(data.decode("utf-8"), cls=Decoder)
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             raise SerializationError(f"Failed to parse JSON job: {e}") from e
         except Exception as e:
-            raise SerializationError(f"Unexpected error during JSON parsing: {e}") from e
+            raise SerializationError(
+                f"Unexpected error during JSON parsing: {e}"
+            ) from e
 
         try:
             function = JsonSerializer._resolve_dotted_path(payload["function"])
         except KeyError:
-            raise SerializationError("Job data missing required 'function' field") from None
+            raise SerializationError(
+                "Job data missing required 'function' field"
+            ) from None
         except Exception as e:
             raise SerializationError(f"Failed to resolve function: {e}") from e
 
@@ -342,7 +349,7 @@ class JsonSerializer:
             payload.get("retry_strategy", RETRY_STRATEGY.LINEAR)
         )
 
-        from .job import Job  # Import here to avoid circular imports
+        from .models.jobs import Job  # Import here to avoid circular imports
 
         job = Job(
             function=function,
@@ -362,7 +369,7 @@ class JsonSerializer:
         return job
 
     @staticmethod
-    def serialize_failed_job(job: "Job") -> bytes:
+    def serialize_failed_job(job: Job) -> bytes:
         payload = {
             "job_id": job.job_id,
             "enqueue_time": job.enqueue_time,
@@ -381,7 +388,9 @@ class JsonSerializer:
         except (TypeError, ValueError) as e:
             raise SerializationError(f"Failed to JSON-serialize failed job: {e}") from e
         except Exception as e:
-            raise SerializationError(f"Unexpected error during JSON failed job serialization: {e}") from e
+            raise SerializationError(
+                f"Unexpected error during JSON failed job serialization: {e}"
+            ) from e
 
     @staticmethod
     def serialize_result(
@@ -392,8 +401,10 @@ class JsonSerializer:
     ) -> bytes:
         # status to value for storage
         status_value = status.value if hasattr(status, "value") else str(status)
-        is_completed = hasattr(status, "value") and status.value == JOB_STATUS.COMPLETED.value
-        
+        is_completed = (
+            hasattr(status, "value") and status.value == JOB_STATUS.COMPLETED.value
+        )
+
         payload = {
             "status": status_value,
             "result": result if is_completed else None,
@@ -406,7 +417,9 @@ class JsonSerializer:
         except (TypeError, ValueError) as e:
             raise SerializationError(f"Failed to JSON-serialize result: {e}") from e
         except Exception as e:
-            raise SerializationError(f"Unexpected error during JSON result serialization: {e}") from e
+            raise SerializationError(
+                f"Unexpected error during JSON result serialization: {e}"
+            ) from e
 
     @staticmethod
     def deserialize_result(data: bytes) -> Dict[str, Any]:
@@ -417,7 +430,9 @@ class JsonSerializer:
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             raise SerializationError(f"Failed to parse JSON result: {e}") from e
         except Exception as e:
-            raise SerializationError(f"Unexpected error during JSON result parsing: {e}") from e
+            raise SerializationError(
+                f"Unexpected error during JSON result parsing: {e}"
+            ) from e
 
 
 # Factory function to get the appropriate serializer

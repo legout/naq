@@ -6,10 +6,10 @@ General Rules for Python Development
 ### Commands
 - Build: `hatchling build`
 - Lint: `ruff check src/`
-- Format: `ruff format src/`
+- Format: `ruff format src/ && isort src/`
 - Test: `pytest tests/`
-- Single test: `pytest tests/path/to/test.py::test_name`
-- Type check: `ruff check src/ --select E,F,W`
+## - Single test: `pytest tests/path/to/test.py::test_name`
+## - Type check: `ruff check src/ --select E,F,W`
 - Run: `uv run`
 
 ### Code Style

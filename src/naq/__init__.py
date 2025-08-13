@@ -19,12 +19,13 @@ from .exceptions import (
     NaqException,
     SerializationError,
 )
-from .job import Job, RetryDelayType
+from .models.jobs import Job, RetryDelayType
 from .results import Results
 
 # Make key classes and functions available directly from the 'naq' package
 from .queue import (
     Queue,
+    ScheduledJobManager,
     cancel_scheduled_job,
     cancel_scheduled_job_sync,
     enqueue,
@@ -43,52 +44,27 @@ from .queue import (
     resume_scheduled_job_sync,
     schedule,
     schedule_sync,
+    close_sync_connections,
 )
-from .job import JOB_STATUS
+#from .models import JOB_STATUS
 from .scheduler import Scheduler
 
-from .settings import SCHEDULED_JOB_STATUS, WORKER_STATUS
+#from .models.enums import SCHEDULED_JOB_STATUS, WORKER_STATUS
 from .worker import Worker
 
 __version__ = "0.1.3"  # Bump version for worker monitoring
 
-
-# Basic configuration/convenience
-# setup_logging is now centralized in src/naq/utils.py
-
-# Global connection management (optional convenience)
-_default_loop = None
-
-
-def _get_loop():
-    global _default_loop
-    if _default_loop is None:
-        try:
-            _default_loop = asyncio.get_running_loop()
-        except RuntimeError:
-            _default_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(_default_loop)
-    return _default_loop
-
-
-async def connect(url: str = DEFAULT_NATS_URL):
-    """Convenience function to establish default NATS connection."""
-    return await get_nats_connection(url=url)
-
-
-async def disconnect():
-    """Convenience function to close default NATS connection."""
-    await close_nats_connection()
-
-
-# --- Make result fetching available ---
-# Expose static methods directly if desired, or users can use Job.fetch_result
-fetch_job_result = Job.fetch_result
-fetch_job_result_sync = Job.fetch_result_sync
-
-# Make Results class available for direct use
-Results = Results
-
-# --- Make worker listing available ---
-list_workers = Worker.list_workers
-list_workers_sync = Worker.list_workers_sync
+__all__ = [
+    "Worker",
+    "Scheduler",
+    "JOB_STATUS",
+    "SCHEDULED_JOB_STATUS",
+    "WORKER_STATUS",
+    "Job",
+    "JobResult",
+    "RetryDelayType",
+    "Schedule",
+    "get_nats_connection",
+    "get_jetstream_context",
+    "close_nats_connection",
+]

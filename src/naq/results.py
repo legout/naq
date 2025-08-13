@@ -4,16 +4,20 @@ from typing import Any, Dict, List, Optional
 from nats.js import JetStreamContext
 from nats.js.errors import KeyNotFoundError
 
-from .connection import close_nats_connection, get_jetstream_context, get_nats_connection
+from .connection import (
+    close_nats_connection,
+    get_jetstream_context,
+    get_nats_connection,
+)
 from .exceptions import JobNotFoundError, NaqException
-from .job import Job
+from .models.jobs import Job
 from .settings import DEFAULT_NATS_URL, DEFAULT_RESULT_TTL_SECONDS, RESULT_KV_NAME
 
 
 class Results:
     """
     Manages job results stored in NATS Key-Value store.
-    
+
     This class encapsulates all operations related to storing, retrieving,
     and managing job results in the NATS KV store.
     """
@@ -28,10 +32,7 @@ class Results:
         self.nats_url = nats_url
 
     async def add_job_result(
-        self, 
-        job_id: str, 
-        result_data: Dict[str, Any], 
-        result_ttl: Optional[int] = None
+        self, job_id: str, result_data: Dict[str, Any], result_ttl: Optional[int] = None
     ) -> None:
         """
         Store a job result in the KV store.
@@ -39,7 +40,7 @@ class Results:
         Args:
             job_id: The ID of the job.
             result_data: The result data to store.
-            result_ttl: Time-to-live for the result in seconds. 
+            result_ttl: Time-to-live for the result in seconds.
                        Defaults to DEFAULT_RESULT_TTL_SECONDS.
 
         Raises:
@@ -49,23 +50,23 @@ class Results:
         try:
             nc = await get_nats_connection(url=self.nats_url)
             js = await get_jetstream_context(nc=nc)
-            
+
             kv = await js.key_value(bucket=RESULT_KV_NAME)
-            
+
             # Serialize the result data
             serialized_result = Job.serialize_result(
                 result=result_data.get("result"),
                 status=result_data.get("status"),
                 error=result_data.get("error"),
-                traceback_str=result_data.get("traceback")
+                traceback_str=result_data.get("traceback"),
             )
-            
+
             # Set TTL (default to settings value if not provided)
             ttl = result_ttl if result_ttl is not None else DEFAULT_RESULT_TTL_SECONDS
-            
+
             # Store the result with TTL
             await kv.put(job_id, serialized_result, ttl=ttl)
-            
+
         except Exception as e:
             raise NaqException(f"Failed to store result for job {job_id}: {e}") from e
         finally:
@@ -90,9 +91,9 @@ class Results:
         try:
             nc = await get_nats_connection(url=self.nats_url)
             js = await get_jetstream_context(nc=nc)
-            
+
             kv = await js.key_value(bucket=RESULT_KV_NAME)
-            
+
             try:
                 entry = await kv.get(job_id)
                 result_data = Job.deserialize_result(entry.value)
@@ -102,7 +103,7 @@ class Results:
                     f"Result for job {job_id} not found. It may not have completed, "
                     f"failed, or the result expired."
                 ) from None
-                
+
         except Exception as e:
             if isinstance(e, JobNotFoundError):
                 raise
@@ -125,13 +126,13 @@ class Results:
         try:
             nc = await get_nats_connection(url=self.nats_url)
             js = await get_jetstream_context(nc=nc)
-            
+
             kv = await js.key_value(bucket=RESULT_KV_NAME)
-            
+
             # Get all keys in the KV store
             keys = await kv.keys()
             return list(keys)
-            
+
         except Exception as e:
             raise NaqException(f"Failed to list job results: {e}") from e
         finally:
@@ -149,14 +150,14 @@ class Results:
         try:
             nc = await get_nats_connection(url=self.nats_url)
             js = await get_jetstream_context(nc=nc)
-            
+
             kv = await js.key_value(bucket=RESULT_KV_NAME)
-            
+
             # Get all keys and delete them
             keys = await kv.keys()
             for key in keys:
                 await kv.delete(key)
-                
+
         except Exception as e:
             raise NaqException(f"Failed to purge job results: {e}") from e
         finally:
@@ -177,16 +178,16 @@ class Results:
         try:
             nc = await get_nats_connection(url=self.nats_url)
             js = await get_jetstream_context(nc=nc)
-            
+
             kv = await js.key_value(bucket=RESULT_KV_NAME)
-            
+
             try:
                 await kv.delete(job_id)
             except KeyNotFoundError:
                 # If the key doesn't exist, we don't need to raise an error
                 # as the end result is the same - the key doesn't exist
                 pass
-                
+
         except Exception as e:
             raise NaqException(f"Failed to delete result for job {job_id}: {e}") from e
         finally:

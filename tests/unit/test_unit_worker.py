@@ -8,9 +8,10 @@ import socket
 import os
 
 from naq.worker import Worker
-from naq.job import Job, JOB_STATUS
+from naq.models.jobs import Job
+from naq.models.enums import JOB_STATUS
+from naq.models import WORKER_STATUS
 from naq.settings import (
-    WORKER_STATUS,
     NAQ_PREFIX,
     WORKER_KV_NAME,
     RESULT_KV_NAME,
@@ -24,9 +25,9 @@ async def worker(mock_nats, mocker, settings_with_valid_queue, mock_queue_manage
     mock_nc, mock_js = mock_nats
 
     # Patch worker dependencies with our mocks
-    mocker.patch('naq.worker.get_nats_connection', return_value=mock_nc)
-    mocker.patch('naq.worker.get_jetstream_context', return_value=mock_js)
-    mocker.patch('naq.worker.ensure_stream')
+    mocker.patch('naq.connection.get_nats_connection', return_value=mock_nc)
+    mocker.patch('naq.connection.get_jetstream_context', return_value=mock_js)
+    mocker.patch('naq.connection.ensure_stream')
     mocker.patch('naq.worker.JobStatusManager', return_value=mock_job_status_manager)
     mocker.patch('naq.worker.WorkerStatusManager', return_value=mock_worker_status_manager)
     mocker.patch('naq.worker.FailedJobHandler', return_value=mock_failed_job_handler)
@@ -96,16 +97,16 @@ class TestWorker:
         # Create a test job
         job_func = lambda: "test"
         job = Job(
+            function=job_func,
             job_id="test_job",
             queue_name="test_queue",
-            function=job_func,
             args=(),
             kwargs={}
         )
 
         # Create mock message with job data
         mock_msg = AsyncMock()
-        mock_msg.data = cloudpickle.dumps(job.__dict__)
+        mock_msg.data = cloudpickle.dumps(job)
         
         # Process the message
         await worker.process_message(mock_msg)
@@ -137,9 +138,9 @@ class TestWorker:
         mock_func = AsyncMock(return_value=mock_result)
         
         job = Job(
+            function=mock_func,
             job_id="test_job",
             queue_name="test_queue",
-            function=mock_func,
             args=(),
             kwargs={}
         )
@@ -158,9 +159,9 @@ class TestWorker:
         mock_func = AsyncMock(side_effect=ValueError(error_msg))
         
         job = Job(
+            function=mock_func,
             job_id="test_job",
             queue_name="test_queue",
-            function=mock_func,
             args=(),
             kwargs={},
             max_retries=0  # No retries for this test
@@ -181,9 +182,9 @@ class TestWorker:
     
         mock_func = AsyncMock(return_value="success")
         job = Job(
+            function=mock_func,
             job_id="test_job",
             queue_name="test_queue",
-            function=mock_func,
             args=(),
             kwargs={}
         )
@@ -223,9 +224,9 @@ class TestWorker:
         error_msg = "Test error"
         mock_func = AsyncMock(side_effect=ValueError(error_msg))
         job = Job(
+            function=mock_func,
             job_id="test_job",
             queue_name="test_queue",
-            function=mock_func,
             args=(),
             kwargs={},
             max_retries=0
@@ -233,9 +234,8 @@ class TestWorker:
         
         # Act
         await worker_instance.process_message(job)
-        
+    
         # Assert
-        # Verify job status updates
         mock_jsm.store_result.assert_awaited_with(job)
         assert job.status == JOB_STATUS.FAILED
         
@@ -267,9 +267,9 @@ class TestWorker:
             return "success"
             
         job = Job(
+            function=test_func,
             job_id="test_job",
             queue_name="test_queue",
-            function=test_func,
             args=(),
             kwargs={}
         )
@@ -326,9 +326,9 @@ class TestWorker:
             jobs = []
             for i in range(4):  # Create 4 jobs
                 job = Job(
+                    function=slow_job,
                     job_id=f"test_job_{i}",
                     queue_name="test_queue",
-                    function=slow_job,
                     args=(),
                     kwargs={}
                 )
@@ -397,9 +397,9 @@ class TestWorker:
         # Create a test job
         mock_func = AsyncMock(return_value="success")
         job = Job(
+            function=mock_func,
             job_id="test_job",
             queue_name="test_queue",
-            function=mock_func,
             args=(),
             kwargs={}
         )
@@ -436,9 +436,9 @@ class TestWorker:
             return "done"
 
         job = Job(
+            function=long_running_job,
             job_id="test_job",
             queue_name="test_queue",
-            function=long_running_job,
             args=(),
             kwargs={}
         )

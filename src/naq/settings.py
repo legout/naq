@@ -62,30 +62,11 @@ FAILED_JOB_SUBJECT_PREFIX = f"{NAQ_PREFIX}.failed"
 FAILED_JOB_STREAM_NAME = f"{NAQ_PREFIX}_failed_jobs"
 
 
-class SCHEDULED_JOB_STATUS(Enum):
-    """Enum representing the possible states of a scheduled job."""
-
-    ACTIVE = "active"
-    PAUSED = "paused"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
 # --- Result Backend Settings ---
 # KV bucket name for storing job results/errors
 RESULT_KV_NAME = f"{NAQ_PREFIX}_results"
 # Default TTL (in seconds) for job results stored in the KV store (e.g., 7 days)
 DEFAULT_RESULT_TTL_SECONDS = int(os.getenv("NAQ_DEFAULT_RESULT_TTL", 604800))
-
-
-# --- Worker Monitoring Settings ---
-class WORKER_STATUS(Enum):
-    """Enum representing the possible states of a worker."""
-
-    STARTING = "starting"
-    IDLE = "idle"
-    BUSY = "busy"
-    STOPPING = "stopping"
 
 
 # KV bucket name for storing worker status and heartbeats
@@ -120,11 +101,8 @@ DEPENDENCY_CHECK_DELAY_SECONDS = 5
 
 
 # --- Job Retry Settings ---
-class RETRY_STRATEGY(Enum):
-    """Enum representing the retry strategies for job execution."""
-
-    LINEAR = "linear"
-    EXPONENTIAL = "exponential"
+# Import RETRY_STRATEGY from models package
+from .models.enums import RETRY_STRATEGY
 
 
 # --- Logging Settings ---

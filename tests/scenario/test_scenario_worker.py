@@ -9,7 +9,7 @@ import pytest
 from nats.aio.client import Client as NATS
 
 from naq.job import Job
-from naq.queue import Queue
+from naq.queue.core import Queue
 from naq.worker import Worker
 
 def dummy_job_func(job_id: str) -> str:
