@@ -30,6 +30,18 @@ from .settings import (
 )
 from .utils import run_async_from_sync, setup_logging
 
+# Import services for integration
+try:
+    from .services.base import ServiceManager
+    from .services.kv_stores import KVStoreService
+    from .services.connection import ConnectionService
+    SERVICES_AVAILABLE = True
+except ImportError:
+    SERVICES_AVAILABLE = False
+    ServiceManager = None
+    KVStoreService = None
+    ConnectionService = None
+
 
 class ScheduledJobManager:
     """
@@ -37,40 +49,41 @@ class ScheduledJobManager:
     Handles storing, retrieving, and managing scheduled jobs in the NATS KV store.
     """
 
-    def __init__(self, queue_name: str, nats_url: str = DEFAULT_NATS_URL):
+    def __init__(self, queue_name: str, nats_url: str = DEFAULT_NATS_URL, service_manager: Optional[ServiceManager] = None):
         self.queue_name = queue_name
         self._nats_url = nats_url
-        self._kv: Optional[KeyValue] = None
+        self._service_manager = service_manager or ServiceManager()
+        self._kv_store_service: Optional[KVStoreService] = None
 
-    async def get_kv(self) -> KeyValue:
-        """Gets the KeyValue store for scheduled jobs, creating it if needed."""
-        if self._kv is not None:
-            return self._kv
-
-        # Ensure the KV store is created if it doesn't exist
-        nc = await get_nats_connection(url=self._nats_url)
-        js = await get_jetstream_context(nc=nc)
-        try:
-            # Try to connect to existing KV store
-            self._kv = await js.key_value(bucket=SCHEDULED_JOBS_KV_NAME)
-            logger.debug(f"Connected to KV store '{SCHEDULED_JOBS_KV_NAME}'")
-            return self._kv
-        except Exception:
-            # Attempt to create if not found
+    async def _get_kv_store_service(self) -> KVStoreService:
+        """Gets the KV store service, initializing if needed."""
+        if self._kv_store_service is None:
+            # Register service types if not already registered
             try:
-                logger.info(
-                    f"KV store '{SCHEDULED_JOBS_KV_NAME}' not found, creating..."
-                )
-                self._kv = await js.create_key_value(
-                    bucket=SCHEDULED_JOBS_KV_NAME,
-                    description="Stores naq scheduled job details",
-                )
-                logger.info(f"KV store '{SCHEDULED_JOBS_KV_NAME}' created.")
-                return self._kv
-            except Exception as create_e:
-                raise NaqConnectionError(
-                    f"Failed to access or create KV store '{SCHEDULED_JOBS_KV_NAME}': {create_e}"
-                ) from create_e
+                self._service_manager.register_service_type("connection", ConnectionService)
+                self._service_manager.register_service_type("kv_store", KVStoreService)
+            except Exception:
+                # Service types might already be registered
+                pass
+            
+            # Get connection service first
+            connection_service = await self._service_manager.get_service(
+                "connection", 
+                {"nats_url": self._nats_url}
+            )
+            
+            # Get KV store service
+            self._kv_store_service = await self._service_manager.get_service(
+                "kv_store", 
+                {"connection_service": connection_service}
+            )
+        
+        return self._kv_store_service
+
+    async def get_kv(self):
+        """Gets the KeyValue store for scheduled jobs."""
+        kv_store_service = await self._get_kv_store_service()
+        return await kv_store_service.get_kv_store(SCHEDULED_JOBS_KV_NAME)
 
     async def store_job(
         self,
@@ -344,6 +357,7 @@ class Queue:
         nats_url: str = DEFAULT_NATS_URL,
         default_timeout: Optional[int] = None,
         prefer_thread_local: bool = False,
+        service_manager: Optional[ServiceManager] = None,
     ):
         """
         Initialize a Queue instance.
@@ -372,7 +386,7 @@ class Queue:
         self._nats_url = nats_url
         self._js: Optional[nats.js.JetStreamContext] = None
         self._default_timeout = default_timeout
-        self._scheduled_job_manager = ScheduledJobManager(name, nats_url)
+        self._scheduled_job_manager = ScheduledJobManager(name, nats_url, service_manager)
         self._prefer_thread_local = prefer_thread_local
 
         setup_logging()  # Ensure logging is set up

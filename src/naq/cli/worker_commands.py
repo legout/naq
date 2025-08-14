@@ -25,6 +25,24 @@ from ..settings import (
 from ..utils import setup_logging
 from ..worker import Worker
 
+# Import services for integration
+try:
+    from ..services.base import ServiceManager
+    from ..services.connection import ConnectionService
+    from ..services.streams import StreamService
+    from ..services.kv_stores import KVStoreService
+    from ..services.jobs import JobService
+    from ..services.events import EventService
+    SERVICES_AVAILABLE = True
+except ImportError:
+    SERVICES_AVAILABLE = False
+    ServiceManager = None
+    ConnectionService = None
+    StreamService = None
+    KVStoreService = None
+    JobService = None
+    EventService = None
+
 worker_app = typer.Typer(help="Worker management commands")
 console = Console()
 
@@ -77,29 +95,40 @@ def worker(
         ),
     ),
 ):
-    """
+"""
     Starts a naq worker process to listen for and execute jobs on the specified queues.
     """
-    setup_logging(log_level if log_level else None)
-
-    # If no queues are provided, let the Worker class handle the default
-    if queues is None:
-        queues = []
-
-    # Use loguru directly
-    logger.info(
-        f"Starting worker '{name or 'default'}' for queues: "
-        f"{queues if queues else [DEFAULT_QUEUE_NAME]}"
-    )
-    logger.info(f"NATS URL: {nats_url}")
-    logger.info(f"Concurrency: {concurrency}")
-
+    setup_logging(log_level or "INFO")
+    logger.info(f"Starting worker with NATS URL: {nats_url}")
+    
+    # Initialize service manager if services are available
+    service_manager = None
+    if SERVICES_AVAILABLE and ServiceManager is not None:
+        try:
+            service_manager = ServiceManager()
+            # Register service types
+            if ConnectionService is not None:
+                service_manager.register_service_type("connection", ConnectionService)
+            if StreamService is not None:
+                service_manager.register_service_type("stream", StreamService)
+            if KVStoreService is not None:
+                service_manager.register_service_type("kv_store", KVStoreService)
+            if JobService is not None:
+                service_manager.register_service_type("job", JobService)
+            if EventService is not None:
+                service_manager.register_service_type("event", EventService)
+        except Exception as e:
+            logger.warning(f"Failed to initialize service manager: {e}")
+            # If service manager fails to initialize, fall back to direct connections
+            service_manager = None
+    
     w = Worker(
         queues=queues,
         nats_url=nats_url,
         concurrency=concurrency,
         worker_name=name,
         module_paths=module_paths,
+        service_manager=service_manager,
     )
     try:
         # Use synchronous interface backed by AnyIO BlockingPortal
@@ -113,32 +142,6 @@ def worker(
         raise typer.Exit(code=1)
     finally:
         logger.info("Worker process finished.")
-
-
-@worker_app.command("list")
-def list_workers_command(
-    nats_url: str = typer.Option(
-        DEFAULT_NATS_URL,
-        "--nats-url",
-        "-u",
-        help="URL of the NATS server.",
-        envvar="NAQ_NATS_URL",
-    ),
-    log_level: Optional[str] = typer.Option(
-        None,
-        "--log-level",
-        "-l",
-        help=(
-            "Set logging level (e.g., DEBUG, INFO, WARNING, ERROR). Defaults to "
-            "NAQ_LOG_LEVEL env var or CRITICAL."
-        ),
-    ),
-):
-    """
-    Lists all currently active workers registered in the system.
-    """
-    setup_logging(log_level if log_level else None)
-    logger.info(f"Listing active workers from NATS at {nats_url}")
 
     try:
         # Use synchronous interface to list workers
@@ -212,4 +215,4 @@ def list_workers_command(
         try:
             asyncio.run(close_nats_connection())
         except Exception:
-            pass
+            pass  # Ignore errors when closing connection

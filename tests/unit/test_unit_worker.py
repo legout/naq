@@ -24,12 +24,12 @@ async def worker(mock_nats, mocker, settings_with_valid_queue, mock_queue_manage
     mock_nc, mock_js = mock_nats
 
     # Patch worker dependencies with our mocks
-    mocker.patch('naq.worker.get_nats_connection', return_value=mock_nc)
-    mocker.patch('naq.worker.get_jetstream_context', return_value=mock_js)
-    mocker.patch('naq.worker.ensure_stream')
-    mocker.patch('naq.worker.JobStatusManager', return_value=mock_job_status_manager)
-    mocker.patch('naq.worker.WorkerStatusManager', return_value=mock_worker_status_manager)
-    mocker.patch('naq.worker.FailedJobHandler', return_value=mock_failed_job_handler)
+    mocker.patch('naq.worker.core.get_nats_connection', return_value=mock_nc)
+    mocker.patch('naq.worker.core.get_jetstream_context', return_value=mock_js)
+    mocker.patch('naq.worker.core.ensure_stream')
+    mocker.patch('naq.worker.core.WorkerStatusManager', return_value=mock_worker_status_manager)
+    mocker.patch('naq.worker.core.JobStatusManager', return_value=mock_job_status_manager)
+    mocker.patch('naq.worker.core.FailedJobHandler', return_value=mock_failed_job_handler)
 
     # Create worker instance with required arguments
     worker_instance = Worker(

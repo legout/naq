@@ -29,6 +29,16 @@ from ..settings import (
 )
 from ..utils import setup_logging
 
+# Import services for integration
+try:
+    from ..services.base import ServiceManager
+    from ..services.scheduler import SchedulerService
+    SERVICES_AVAILABLE = True
+except ImportError:
+    SERVICES_AVAILABLE = False
+    ServiceManager = None
+    SchedulerService = None
+
 scheduler_app = typer.Typer(help="Scheduler management commands")
 console = Console()
 
@@ -89,7 +99,30 @@ def scheduler(
     logger.info(f"Poll interval: {poll_interval}s")
     logger.info(f"High availability mode: {'enabled' if enable_ha else 'disabled'}")
 
+    # Initialize service manager if services are available
+    service_manager = None
+    if SERVICES_AVAILABLE:
+        try:
+            service_manager = ServiceManager()
+        except Exception:
+            # If service manager fails to initialize, fall back to direct connections
+            service_manager = None
+    
+    # Initialize service manager if services are available
+    service_manager = None
+    if SERVICES_AVAILABLE:
+        try:
+            service_manager = ServiceManager()
+            # Register service types
+            service_manager.register_service_type("connection", ConnectionService)
+            service_manager.register_service_type("kv_store", KVStoreService)
+            service_manager.register_service_type("scheduler", SchedulerService)
+        except Exception:
+            # If service manager fails to initialize, fall back to direct connections
+            service_manager = None
+    
     s = Scheduler(
+        service_manager=service_manager,
         nats_url=nats_url,
         poll_interval=poll_interval,
         instance_id=instance_id,

@@ -240,7 +240,7 @@ class Job(msgspec.Struct):
 
         return 0.0
 
-    async def execute(self) -> Any:
+async def execute(self) -> Any:
         """
         Execute the job function with the provided arguments.
 
@@ -257,41 +257,37 @@ class Job(msgspec.Struct):
         The method manages the job's execution state by setting start_time and finish_time,
         and capturing any errors or tracebacks that occur during execution.
         """
-        print(f"[DEBUG] Starting job execution for job {self.job_id}")
-        print(f"[DEBUG] Job function: {self.function}")
-        print(f"[DEBUG] Job args: {self.args}")
-        print(f"[DEBUG] Job kwargs: {self.kwargs}")
         self._start_time = time.time()
         try:
             if asyncio.iscoroutinefunction(self.function):
-                print("[DEBUG] Executing async function")
                 # For async functions, use await as before
                 self.result = await self.function(*self.args, **self.kwargs)
             else:
-                print("[DEBUG] Executing sync function in thread")
                 # For sync functions, run them in a separate thread to avoid blocking
                 # the event loop. This allows true parallel execution when
                 # multiple sync jobs are processed concurrently.
                 self.result = await asyncio.to_thread(
                     self.function, *self.args, **self.kwargs
                 )
-            print(f"[DEBUG] Job execution completed with result: {self.result}")
             self._finish_time = time.time()
             return self.result
-        except Exception as e:
-            print(f"[DEBUG] Job execution failed with exception: {e}")
-            self.error = str(e)
-            self.traceback = traceback.format_exc()
-            # self.status is a property derived from self.error, no direct assignment needed
+
+    def serialize(self) -> bytes::
+        """
+        Serializes the job data for sending over NATS.
             # Do not re-raise, allow Worker.process_message to handle storing result/error
         finally:
             self._finish_time = time.time()
-            print(f"[DEBUG] Job execution finished for job {self.job_id}")
-
+        return self.result
 
     def serialize(self) -> bytes:
         """
         Serializes the job data for sending over NATS.
+        Returns:
+            bytes: Serialized job data suitable for transmission over NATS.
+
+        This method uses the configured serializer (pickle or JSON) to convert
+        the job object into a byte representation that can be sent over NATS.
         """
         from ..serializers import get_serializer
 

@@ -222,15 +222,15 @@ async def worker_instance_dict( # Add async keyword
     """Fixture that returns a dict with a 'worker' key containing a Worker instance (with patched managers) and mock managers."""
     
     # Patch manager classes before Worker instantiation
-    mocker.patch('naq.worker.JobStatusManager', return_value=mock_job_status_manager)
-    mocker.patch('naq.worker.WorkerStatusManager', return_value=mock_worker_status_manager)
-    mocker.patch('naq.worker.FailedJobHandler', return_value=mock_failed_job_handler)
+    mocker.patch('naq.worker.core.WorkerStatusManager', return_value=mock_worker_status_manager)
+    mocker.patch('naq.worker.core.JobStatusManager', return_value=mock_job_status_manager)
+    mocker.patch('naq.worker.core.FailedJobHandler', return_value=mock_failed_job_handler)
     
     # Patch NATS connections for _connect
     mock_nc, mock_js = mock_nats
-    mocker.patch('naq.worker.get_nats_connection', return_value=mock_nc)
-    mocker.patch('naq.worker.get_jetstream_context', return_value=mock_js)
-    mocker.patch('naq.worker.ensure_stream')
+    mocker.patch('naq.worker.core.get_nats_connection', return_value=mock_nc)
+    mocker.patch('naq.worker.core.get_jetstream_context', return_value=mock_js)
+    mocker.patch('naq.worker.core.ensure_stream')
 
 
     # Create worker with basic args from worker_dict, but ensure queues is correct for this context

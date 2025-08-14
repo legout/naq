@@ -23,6 +23,20 @@ from ..queue import (
 from ..settings import DEFAULT_NATS_URL
 from ..utils import setup_logging
 
+# Import services for integration
+try:
+    from ..services.base import ServiceManager
+    from ..services.scheduler import SchedulerService
+    from ..services.kv_stores import KVStoreService
+    from ..services.connection import ConnectionService
+    SERVICES_AVAILABLE = True
+except ImportError:
+    SERVICES_AVAILABLE = False
+    ServiceManager = None
+    SchedulerService = None
+    KVStoreService = None
+    ConnectionService = None
+
 job_app = typer.Typer(help="Job management commands")
 console = Console()
 

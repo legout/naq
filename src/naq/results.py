@@ -1,4 +1,5 @@
 # src/naq/results.py
+import asyncio
 from typing import Any, Dict, List, Optional
 
 from nats.js import JetStreamContext
@@ -9,6 +10,18 @@ from .exceptions import JobNotFoundError, NaqException
 from .models.jobs import Job
 from .settings import DEFAULT_NATS_URL, DEFAULT_RESULT_TTL_SECONDS, RESULT_KV_NAME
 
+try:
+    from loguru import logger
+except ImportError:
+    import logging
+    logger = logging.getLogger(__name__)
+
+# Import service manager for type checking
+try:
+    from .services.base import ServiceManager
+except ImportError:
+    ServiceManager = None
+
 
 class Results:
     """
@@ -18,14 +31,16 @@ class Results:
     and managing job results in the NATS KV store.
     """
 
-    def __init__(self, nats_url: str = DEFAULT_NATS_URL):
+    def __init__(self, nats_url: str = DEFAULT_NATS_URL, service_manager = None):
         """
         Initialize the Results manager.
 
         Args:
             nats_url: NATS server URL. Defaults to DEFAULT_NATS_URL.
+            service_manager: Optional service manager to use for connections.
         """
         self.nats_url = nats_url
+        self._service_manager = service_manager
 
     async def add_job_result(
         self, 
@@ -45,6 +60,40 @@ class Results:
         Raises:
             NaqException: If storing the result fails.
         """
+        # Try to use service layer if available
+        if self._service_manager is not None:
+            try:
+                logger.debug(f"Using service manager: {self._service_manager}")
+                logger.debug(f"Service manager type: {type(self._service_manager)}")
+                # Get KV store service
+                kv_store_service = await self._service_manager.get_service("kv_store")
+                logger.debug(f"Got KV store service: {kv_store_service}")
+                
+                # Serialize the result data
+                serialized_result = Job.serialize_result(
+                    result=result_data.get("result"),
+                    status=result_data.get("status"),
+                    error=result_data.get("error"),
+                    traceback_str=result_data.get("traceback")
+                )
+                logger.debug(f"Serialized result for job {job_id}")
+                
+                # Set TTL (default to settings value if not provided)
+                ttl = result_ttl if result_ttl is not None else DEFAULT_RESULT_TTL_SECONDS
+                logger.debug(f"Using TTL: {ttl}")
+                
+                # Store the result with TTL using service layer
+                logger.debug(f"Putting result in KV store: bucket={RESULT_KV_NAME}, key={job_id}")
+                await kv_store_service.put(RESULT_KV_NAME, job_id, serialized_result)
+                logger.debug(f"Successfully stored result for job {job_id}")
+                # Add a small delay to ensure the write is processed
+                await asyncio.sleep(0.01)
+                return
+            except Exception as e:
+                # Fall back to direct connection if service layer fails
+                logger.warning(f"Failed to use service layer for storing result, falling back to direct connection: {e}", exc_info=True)
+        
+        # Fallback to direct connection
         nc = None
         try:
             nc = await get_nats_connection(url=self.nats_url)
@@ -65,6 +114,8 @@ class Results:
             
             # Store the result with TTL
             await kv.put(job_id, serialized_result, ttl=ttl)
+            # Add a small delay to ensure the write is processed
+            await asyncio.sleep(0.01)
             
         except Exception as e:
             raise NaqException(f"Failed to store result for job {job_id}: {e}") from e
