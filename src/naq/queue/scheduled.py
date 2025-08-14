@@ -8,25 +8,19 @@ from datetime import timedelta, timezone
 from typing import Any, Dict, Optional
 
 import cloudpickle
-import nats
 from loguru import logger
-from nats.js.errors import KeyNotFoundError
+from nats.js.errors import KeyNotFoundError, APIError
 from nats.js.kv import KeyValue
 
-from ..connection import (
-    get_jetstream_context,
-    get_nats_connection,
-)
 from ..exceptions import (
     ConfigurationError,
     JobNotFoundError,
-    NaqConnectionError,
     NaqException,
 )
 from ..models.jobs import Job
 from ..models.enums import SCHEDULED_JOB_STATUS
+from ..services import ServiceManager, ConnectionService, KVStoreService
 from ..settings import (
-    DEFAULT_NATS_URL,
     JOB_SERIALIZER,
     SCHEDULED_JOBS_KV_NAME,
 )
@@ -38,40 +32,40 @@ class ScheduledJobManager:
     Handles storing, retrieving, and managing scheduled jobs in the NATS KV store.
     """
 
-    def __init__(self, queue_name: str, nats_url: str = DEFAULT_NATS_URL):
+    def __init__(self, queue_name: str, service_manager: ServiceManager):
         self.queue_name = queue_name
-        self._nats_url = nats_url
+        self._service_manager = service_manager
+        self._connection_service: Optional[ConnectionService] = None
+        self._kv_store_service: Optional[KVStoreService] = None
         self._kv: Optional[KeyValue] = None
+
+    async def _get_services(self) -> tuple[ConnectionService, KVStoreService]:
+        """Get the connection and KV store services from the service manager."""
+        if self._connection_service is None:
+            self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
+        
+        if self._kv_store_service is None:
+            self._kv_store_service = await self._service_manager.get_service("kv_store", KVStoreService)
+        
+        return self._connection_service, self._kv_store_service
 
     async def get_kv(self) -> KeyValue:
         """Gets the KeyValue store for scheduled jobs, creating it if needed."""
         if self._kv is not None:
             return self._kv
 
-        # Ensure the KV store is created if it doesn't exist
-        nc = await get_nats_connection(url=self._nats_url)
-        js = await get_jetstream_context(nc=nc)
+        # Get the KV store service
+        _, kv_store_service = await self._get_services()
+        
         try:
-            # Try to connect to existing KV store
-            self._kv = await js.key_value(bucket=SCHEDULED_JOBS_KV_NAME)
+            # Get the KV store
+            self._kv = await kv_store_service.get_kv_store(SCHEDULED_JOBS_KV_NAME)
             logger.debug(f"Connected to KV store '{SCHEDULED_JOBS_KV_NAME}'")
             return self._kv
-        except Exception:
-            # Attempt to create if not found
-            try:
-                logger.info(
-                    f"KV store '{SCHEDULED_JOBS_KV_NAME}' not found, creating..."
-                )
-                self._kv = await js.create_key_value(
-                    bucket=SCHEDULED_JOBS_KV_NAME,
-                    description="Stores naq scheduled job details",
-                )
-                logger.info(f"KV store '{SCHEDULED_JOBS_KV_NAME}' created.")
-                return self._kv
-            except Exception as create_e:
-                raise NaqConnectionError(
-                    f"Failed to access or create KV store '{SCHEDULED_JOBS_KV_NAME}': {create_e}"
-                ) from create_e
+        except Exception as e:
+            raise NaqException(
+                f"Failed to access or create KV store '{SCHEDULED_JOBS_KV_NAME}': {e}"
+            ) from e
 
     async def store_job(
         self,
@@ -94,7 +88,7 @@ class ScheduledJobManager:
         Raises:
             NaqException: If storing the job fails
         """
-        kv = await self.get_kv()
+        _, kv_store_service = await self._get_services()
         original_job_payload = job.serialize()
 
         schedule_data = {
@@ -113,8 +107,7 @@ class ScheduledJobManager:
         }
 
         try:
-            serialized_schedule_data = cloudpickle.dumps(schedule_data)
-            await kv.put(job.job_id.encode("utf-8"), serialized_schedule_data)
+            await kv_store_service.put(SCHEDULED_JOBS_KV_NAME, job.job_id, schedule_data)
         except Exception as e:
             raise NaqException(
                 f"Failed to store scheduled job {job.job_id} in KV store: {e}"
@@ -134,15 +127,15 @@ class ScheduledJobManager:
             NaqException: For errors other than job not found
         """
         logger.info(f"Attempting to cancel scheduled job '{job_id}'")
-        kv = await self.get_kv()
+        _, kv_store_service = await self._get_services()
         try:
             # Use delete with purge=True to ensure it's fully removed
-            await kv.delete(job_id.encode("utf-8"), purge=True)
-            logger.info(f"Scheduled job '{job_id}' cancelled successfully.")
-            return True
-        except KeyNotFoundError:
-            logger.warning(f"Scheduled job '{job_id}' not found. Cannot cancel.")
-            return False
+            deleted = await kv_store_service.delete(SCHEDULED_JOBS_KV_NAME, job_id, purge=True)
+            if deleted:
+                logger.info(f"Scheduled job '{job_id}' cancelled successfully.")
+            else:
+                logger.warning(f"Scheduled job '{job_id}' not found. Cannot cancel.")
+            return deleted
         except Exception as e:
             logger.error(f"Error cancelling scheduled job '{job_id}': {e}")
             raise NaqException(f"Failed to cancel scheduled job: {e}") from e
@@ -162,27 +155,31 @@ class ScheduledJobManager:
             JobNotFoundError: If job doesn't exist
             NaqException: For other errors
         """
-        kv = await self.get_kv()
+        _, kv_store_service = await self._get_services()
         try:
-            entry = await kv.get(job_id.encode("utf-8"))
-            if not entry:
-                raise JobNotFoundError(f"Scheduled job '{job_id}' not found.")
-
-            schedule_data = cloudpickle.loads(entry.value)
+            # Get the current job data
+            schedule_data = await kv_store_service.get(SCHEDULED_JOBS_KV_NAME, job_id)
+            
             if schedule_data.get("status") == status:
                 logger.info(f"Scheduled job '{job_id}' already has status '{status}'.")
                 return True  # No change needed
 
-            schedule_data["status"] = status
-            serialized_schedule_data = cloudpickle.dumps(schedule_data)
-
-            # Use update with revision check for optimistic concurrency control
-            await kv.update(entry.key, serialized_schedule_data, last=entry.revision)
+            # Use transaction for atomic update
+            async with kv_store_service.kv_transaction(SCHEDULED_JOBS_KV_NAME) as transaction:
+                # Get the latest data within the transaction
+                current_data = await transaction.get(job_id)
+                
+                # Update the status
+                current_data["status"] = status
+                
+                # Put the updated data
+                await transaction.put(job_id, current_data)
+            
             logger.info(f"Scheduled job '{job_id}' status updated to '{status}'.")
             return True
         except KeyNotFoundError:
             raise JobNotFoundError(f"Scheduled job '{job_id}' not found.")
-        except nats.js.errors.APIError as e:
+        except APIError as e:
             # Handle potential revision mismatch (another process updated it)
             if "wrong last sequence" in str(e).lower():
                 logger.warning(
@@ -215,7 +212,7 @@ class ScheduledJobManager:
         logger.info(
             f"Attempting to modify scheduled job '{job_id}' with updates: {updates}"
         )
-        kv = await self.get_kv()
+        _, kv_store_service = await self._get_services()
         supported_keys = {"cron", "interval", "repeat", "scheduled_timestamp_utc"}
         update_keys = set(updates.keys())
 
@@ -225,11 +222,10 @@ class ScheduledJobManager:
             )
 
         try:
-            entry = await kv.get(job_id.encode("utf-8"))
-            if not entry:
-                raise JobNotFoundError(f"Scheduled job '{job_id}' not found.")
-
-            schedule_data = cloudpickle.loads(entry.value)
+            # Use transaction for atomic update
+            async with kv_store_service.kv_transaction(SCHEDULED_JOBS_KV_NAME) as transaction:
+                # Get the current job data within the transaction
+                schedule_data = await transaction.get(job_id)
 
             # Apply updates
             needs_next_run_recalc = False
@@ -277,14 +273,15 @@ class ScheduledJobManager:
                         f"Could not determine next run time for job '{job_id}' after modification. Check parameters."
                     )
 
-            serialized_schedule_data = cloudpickle.dumps(schedule_data)
-            await kv.update(entry.key, serialized_schedule_data, last=entry.revision)
+                # Put the updated data
+                await transaction.put(job_id, schedule_data)
+            
             logger.info(f"Scheduled job '{job_id}' modified successfully.")
             return True
 
         except KeyNotFoundError:
             raise JobNotFoundError(f"Scheduled job '{job_id}' not found.")
-        except nats.js.errors.APIError as e:
+        except APIError as e:
             if "wrong last sequence" in str(e).lower():
                 logger.warning(
                     f"Concurrent modification detected for job '{job_id}'. Update failed. Please retry."

@@ -11,25 +11,16 @@ import os
 import signal
 import socket
 import sys
-import traceback
 import uuid
 from typing import Any, Dict, List, Optional, Sequence
 
 import nats
 from loguru import logger
-from nats.aio.msg import Msg
 from nats.js import JetStreamContext
 from nats.js.api import ConsumerConfig
 
-from ..connection import (
-    close_nats_connection,
-    ensure_stream,
-    get_jetstream_context,
-    get_nats_connection,
-)
 from ..exceptions import NaqException
-from ..models.jobs import Job
-from ..models.enums import JOB_STATUS, WORKER_STATUS
+from ..models.enums import WORKER_STATUS
 from ..settings import (
     DEFAULT_NATS_URL,
     DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
@@ -39,7 +30,8 @@ from ..settings import (
     ACK_WAIT_PER_QUEUE,
     DEFAULT_QUEUE_NAME,
 )
-from ..utils import run_async_from_sync, setup_logging
+from ..services import ServiceManager, ConnectionService, StreamService, KVStoreService
+from ..utils import setup_logging
 from .status import WorkerStatusManager
 from .jobs import JobStatusManager
 from .failed import FailedJobHandler
@@ -68,6 +60,7 @@ class Worker:
             int | Dict[str, int]
         ] = None,  # seconds; can be per-queue dict
         module_paths: Optional[Sequence[str] | str] = None,
+        service_manager: Optional[ServiceManager] = None,
     ):
         if isinstance(queues, str):
             queues = [queues]
@@ -104,6 +97,12 @@ class Worker:
         # Ack wait configuration
         self._ack_wait_arg: Optional[int | Dict[str, int]] = ack_wait
 
+        # Service manager and services
+        self._service_manager = service_manager
+        self._connection_service: Optional[ConnectionService] = None
+        self._stream_service: Optional[StreamService] = None
+        self._kv_store_service: Optional[KVStoreService] = None
+
         # Connection and state variables
         self._nc: Optional[nats.aio.client.Client] = None
         self._js: Optional[JetStreamContext] = None
@@ -121,7 +120,7 @@ class Worker:
         self.consumer_prefix = f"{NAQ_PREFIX}-worker"
 
         # Create component managers
-        self.status_manager = WorkerStatusManager(self)
+        self.status_manager = WorkerStatusManager(self, service_manager=self._service_manager)
         self.job_manager = JobStatusManager(self)
         self.failed_handler = FailedJobHandler(self)
         self.job_processor = JobProcessor(self)
@@ -132,8 +131,33 @@ class Worker:
     async def _connect(self) -> None:
         """Establish NATS connection, JetStream context, and initialize components."""
         if self._nc is None or not self._nc.is_connected:
-            self._nc = await get_nats_connection(url=self._nats_url)
-            self._js = await get_jetstream_context(nc=self._nc)
+            # Get or create services
+            if self._service_manager is None:
+                # Create a default service manager if none provided
+                from ..services import ServiceManager, ServiceConfig
+                
+                config = ServiceConfig(nats_url=self._nats_url)
+                self._service_manager = ServiceManager(config)
+                
+                # Register and initialize services
+                self._connection_service = await self._service_manager.register_service(
+                    "connection", ConnectionService, config, initialize=True
+                )
+                self._stream_service = await self._service_manager.register_service(
+                    "stream", StreamService, config, initialize=True
+                )
+                self._kv_store_service = await self._service_manager.register_service(
+                    "kv_store", KVStoreService, config, initialize=True
+                )
+            else:
+                # Get services from the provided service manager
+                self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
+                self._stream_service = await self._service_manager.get_service("stream", StreamService)
+                self._kv_store_service = await self._service_manager.get_service("kv_store", KVStoreService)
+            
+            # Get connection and JetStream context
+            self._nc = await self._connection_service.get_connection()
+            self._js = await self._connection_service.get_jetstream()
             logger.info(f"Worker '{self.worker_id}' connected to NATS and JetStream.")
 
             # Initialize component managers
@@ -275,8 +299,7 @@ class Worker:
             await self.status_manager.start_heartbeat_loop()
 
             # Ensure the main work stream exists
-            await ensure_stream(
-                js=self._js,
+            await self._stream_service.ensure_stream(
                 stream_name=self.stream_name,
                 subjects=[f"{NAQ_PREFIX}.queue.*"],
             )
@@ -372,7 +395,8 @@ class Worker:
 
         # Finally close NATS connection
         try:
-            await close_nats_connection()
+            if self._connection_service:
+                await self._connection_service.close_connection()
         except Exception as e:
             logger.error(f"Error closing NATS connection: {e}")
 
@@ -414,12 +438,45 @@ class Worker:
     @staticmethod
     async def list_workers(nats_url: str = DEFAULT_NATS_URL) -> List[Dict[str, Any]]:
         """Lists active workers by querying the worker status KV store."""
-        return await WorkerMonitor.list_workers(nats_url)
+        from ..services import ServiceManager, ServiceConfig
+        
+        # Create a temporary WorkerMonitor with ServiceManager
+        config = ServiceConfig(nats_url=nats_url)
+        service_manager = ServiceManager(config)
+        monitor = WorkerMonitor(service_manager=service_manager, nats_url=nats_url)
+        
+        try:
+            return await monitor.list_workers(nats_url)
+        finally:
+            # Clean up the service manager
+            await service_manager.cleanup_all()
 
     @staticmethod
     def list_workers_sync(nats_url: str = DEFAULT_NATS_URL) -> List[Dict[str, Any]]:
         """Synchronous version of list_workers."""
-        return WorkerMonitor.list_workers_sync(nats_url)
+        from ..services import ServiceManager, ServiceConfig
+        
+        # Create a temporary WorkerMonitor with ServiceManager
+        config = ServiceConfig(nats_url=nats_url)
+        service_manager = ServiceManager(config)
+        monitor = WorkerMonitor(service_manager=service_manager, nats_url=nats_url)
+        
+        try:
+            return monitor.list_workers_sync(nats_url)
+        finally:
+            # Clean up the service manager
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Create a task for cleanup if loop is running
+                    asyncio.create_task(service_manager.cleanup_all())
+                else:
+                    # Run cleanup directly if loop is not running
+                    loop.run_until_complete(service_manager.cleanup_all())
+            except Exception:
+                # If we can't get a loop or cleanup fails, just continue
+                pass
 
     # --- Sync interface for long-running worker using anyio.BlockingPortal ---
     def run_sync(self) -> None:

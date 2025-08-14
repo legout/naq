@@ -1,5 +1,6 @@
 """Event monitoring CLI commands for naq."""
 
+import asyncio
 from typing import Optional
 
 import typer
@@ -7,6 +8,7 @@ from loguru import logger
 from rich.console import Console
 
 from ..settings import DEFAULT_NATS_URL
+from ..services import ServiceManager, EventService, ConnectionService, ServiceConfig
 from ..utils import setup_logging
 
 # Create a Typer instance for event commands
@@ -42,9 +44,41 @@ def events(
     setup_logging(log_level if log_level else None)
     console = Console()
 
-    logger.info(f"Monitoring events from NATS at {nats_url}")
-    console.print("[yellow]Event monitoring not yet implemented.[/yellow]")
-    console.print("This command will display real-time events from the naq system.")
+    async def _monitor_events():
+        try:
+            # Create service manager with configuration
+            service_manager = ServiceManager(
+                config=ServiceConfig(
+                    nats_url=nats_url, custom_settings={"log_level": log_level}
+                )
+            )
+
+            # Register required services
+            connection_service = await service_manager.register_service(
+                "connection", ConnectionService, initialize=True
+            )
+            event_service = await service_manager.register_service(
+                "events",
+                EventService,
+                config=ServiceConfig(custom_settings={"enable_event_logging": True}),
+                initialize=True,
+            )
+
+            logger.info(f"Monitoring events from NATS at {nats_url}")
+            console.print("[yellow]Event monitoring not yet implemented.[/yellow]")
+            console.print(
+                "This command will display real-time events from the naq system."
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to monitor events: {e}")
+            console.print(f"[red]Error: {str(e)}[/red]")
+        finally:
+            if "service_manager" in locals():
+                await service_manager.cleanup_all()
+
+    # Run the async function
+    asyncio.run(_monitor_events())
 
 
 @event_app.command("history")
@@ -78,11 +112,42 @@ def event_history(
     setup_logging(log_level if log_level else None)
     console = Console()
 
-    logger.info(f"Fetching event history from NATS at {nats_url}")
-    console.print("[yellow]Event history not yet implemented.[/yellow]")
-    console.print(
-        f"This command will display the last {limit} events from the naq system."
-    )
+    async def _get_event_history():
+        try:
+            # Create service manager with configuration
+            service_manager = ServiceManager(
+                config=ServiceConfig(
+                    nats_url=nats_url, custom_settings={"log_level": log_level}
+                )
+            )
+
+            # Register required services
+            connection_service = await service_manager.register_service(
+                "connection", ConnectionService, initialize=True
+            )
+            event_service = await service_manager.register_service(
+                "events",
+                EventService,
+                config=ServiceConfig(custom_settings={"enable_event_logging": True}),
+                initialize=True,
+            )
+
+            logger.info(f"Fetching event history from NATS at {nats_url}")
+            console.print("[yellow]Event history not yet implemented.[/yellow]")
+            console.print(
+                f"This command will display the last {limit} events "
+                "from the naq system."
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to fetch event history: {e}")
+            console.print(f"[red]Error: {str(e)}[/red]")
+        finally:
+            if "service_manager" in locals():
+                await service_manager.cleanup_all()
+
+    # Run the async function
+    asyncio.run(_get_event_history())
 
 
 @event_app.command("stats")
@@ -110,11 +175,41 @@ def event_stats(
     setup_logging(log_level if log_level else None)
     console = Console()
 
-    logger.info(f"Fetching event statistics from NATS at {nats_url}")
-    console.print("[yellow]Event statistics not yet implemented.[/yellow]")
-    console.print(
-        "This command will display statistics about events in the naq system."
-    )
+    async def _get_event_stats():
+        try:
+            # Create service manager with configuration
+            service_manager = ServiceManager(
+                config=ServiceConfig(
+                    nats_url=nats_url, custom_settings={"log_level": log_level}
+                )
+            )
+
+            # Register required services
+            connection_service = await service_manager.register_service(
+                "connection", ConnectionService, initialize=True
+            )
+            event_service = await service_manager.register_service(
+                "events",
+                EventService,
+                config=ServiceConfig(custom_settings={"enable_event_logging": True}),
+                initialize=True,
+            )
+
+            logger.info(f"Fetching event statistics from NATS at {nats_url}")
+            console.print("[yellow]Event statistics not yet implemented.[/yellow]")
+            console.print(
+                "This command will display statistics about events in the naq system."
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to fetch event statistics: {e}")
+            console.print(f"[red]Error: {str(e)}[/red]")
+        finally:
+            if "service_manager" in locals():
+                await service_manager.cleanup_all()
+
+    # Run the async function
+    asyncio.run(_get_event_stats())
 
 
 @event_app.command("worker")
@@ -145,6 +240,36 @@ def worker_events(
     setup_logging(log_level if log_level else None)
     console = Console()
 
-    logger.info(f"Monitoring events for worker {worker_id} from NATS at {nats_url}")
-    console.print("[yellow]Worker event monitoring not yet implemented.[/yellow]")
-    console.print(f"This command will display events for worker {worker_id}.")
+    async def _monitor_worker_events():
+        try:
+            # Create service manager with configuration
+            service_manager = ServiceManager(
+                config=ServiceConfig(
+                    nats_url=nats_url, custom_settings={"log_level": log_level}
+                )
+            )
+
+            # Register required services
+            connection_service = await service_manager.register_service(
+                "connection", ConnectionService, initialize=True
+            )
+            event_service = await service_manager.register_service(
+                "events",
+                EventService,
+                config=ServiceConfig(custom_settings={"enable_event_logging": True}),
+                initialize=True,
+            )
+
+            logger.info(f"Monitoring events for worker {worker_id} from NATS at {nats_url}")
+            console.print("[yellow]Worker event monitoring not yet implemented.[/yellow]")
+            console.print(f"This command will display events for worker {worker_id}.")
+
+        except Exception as e:
+            logger.error(f"Failed to monitor worker events: {e}")
+            console.print(f"[red]Error: {str(e)}[/red]")
+        finally:
+            if "service_manager" in locals():
+                await service_manager.cleanup_all()
+
+    # Run the async function
+    asyncio.run(_monitor_worker_events())

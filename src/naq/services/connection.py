@@ -23,24 +23,16 @@ from .base import (
     ServiceInitializationError,
     ServiceRuntimeError,
 )
+from .config import ConnectionServiceConfig as BaseConnectionServiceConfig
 
 
-class ConnectionServiceConfig(msgspec.Struct):
+class ConnectionServiceConfig(BaseConnectionServiceConfig):
     """
     Configuration for the ConnectionService.
 
-    Attributes:
-        nats_url: URL of the NATS server
-        max_reconnect_attempts: Maximum number of reconnection attempts
-        reconnect_time_wait: Time to wait between reconnection attempts (seconds)
-        connection_timeout: Timeout for establishing a connection (seconds)
-        ping_interval: Interval for sending ping commands (seconds)
-        max_outstanding_pings: Maximum number of outstanding pings before
-            connection is considered stale
-        prefer_thread_local: Whether to prefer thread-local connections
+    Extends the base ConnectionServiceConfig with connection-specific settings.
     """
 
-    nats_url: Optional[str] = None
     max_reconnect_attempts: int = 5
     reconnect_time_wait: float = 2.0
     connection_timeout: float = 10.0
@@ -78,15 +70,15 @@ class ConnectionService(BaseService):
         Returns:
             ConnectionServiceConfig instance with connection parameters.
         """
-        # Start with default config
-        connection_config = ConnectionServiceConfig()
+        # Start with default config from base
+        connection_config = ConnectionServiceConfig(
+            nats_url=self._config.nats_url if self._config else None,
+            log_level=self._config.log_level if self._config else None,
+        )
 
-        # Override with service config if provided
+        # Override with service config custom settings if provided
         if self._config and self._config.custom_settings:
             custom_settings = self._config.custom_settings
-
-            if "nats_url" in custom_settings:
-                connection_config.nats_url = custom_settings["nats_url"]
 
             if "max_reconnect_attempts" in custom_settings:
                 connection_config.max_reconnect_attempts = custom_settings[
@@ -115,14 +107,6 @@ class ConnectionService(BaseService):
                 connection_config.prefer_thread_local = custom_settings[
                     "prefer_thread_local"
                 ]
-
-        # Use service config nats_url if connection config doesn't have it
-        if (
-            connection_config.nats_url is None
-            and self._config
-            and self._config.nats_url
-        ):
-            connection_config.nats_url = self._config.nats_url
 
         return connection_config
 
@@ -172,14 +156,26 @@ class ConnectionService(BaseService):
         try:
             self._logger.info("Cleaning up ConnectionService")
 
-            # Cancel all reconnection tasks
-            for url, task in self._reconnect_tasks.items():
-                if not task.done():
-                    task.cancel()
+            # Cancel all reconnection tasks with timeout
+            if self._reconnect_tasks:
+                cancel_tasks = []
+                for url, task in self._reconnect_tasks.items():
+                    if not task.done():
+                        self._logger.debug(f"Cancelling reconnection task for {url}")
+                        task.cancel()
+                        cancel_tasks.append(task)
+                
+                # Wait for all tasks to be cancelled with timeout
+                if cancel_tasks:
                     try:
-                        await task
-                    except asyncio.CancelledError:
-                        self._logger.debug(f"Reconnection task for {url} cancelled")
+                        await asyncio.wait_for(
+                            asyncio.gather(*cancel_tasks, return_exceptions=True),
+                            timeout=5.0
+                        )
+                    except asyncio.TimeoutError:
+                        self._logger.warning("Timeout while waiting for reconnection tasks to cancel")
+                    except Exception as e:
+                        self._logger.warning(f"Error while cancelling reconnection tasks: {e}")
 
             self._reconnect_tasks.clear()
 
@@ -340,6 +336,11 @@ class ConnectionService(BaseService):
             nc: NATS client to monitor.
         """
         try:
+            # Check if the connection is still valid before monitoring
+            if not nc or not hasattr(nc, 'is_connected'):
+                self._logger.warning(f"Invalid connection object for {url}, stopping monitor")
+                return
+                
             while True:
                 # Check if connection is still active
                 if not nc.is_connected:

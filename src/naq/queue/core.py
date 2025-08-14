@@ -11,21 +11,17 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import cloudpickle
 import nats
 from loguru import logger
+from nats.js import JetStreamContext
 from nats.js.errors import KeyNotFoundError
 from nats.js.kv import KeyValue
 
-from ..connection import (
-    close_nats_connection,
-    ensure_stream,
-    get_jetstream_context,
-    get_nats_connection,
-)
 from ..exceptions import ConfigurationError
 from ..exceptions import NaqConnectionError
 from ..exceptions import JobNotFoundError, NaqException
 from ..models.jobs import Job, RetryDelayType
 from .scheduled import ScheduledJobManager
 from ..models.enums import SCHEDULED_JOB_STATUS
+from ..services import ServiceManager, ConnectionService, StreamService
 from ..settings import (
     DEFAULT_QUEUE_NAME,
     DEFAULT_NATS_URL,
@@ -48,6 +44,7 @@ class Queue:
         nats_url: str = DEFAULT_NATS_URL,
         default_timeout: Optional[int] = None,
         prefer_thread_local: bool = False,
+        service_manager: Optional[ServiceManager] = None,
     ):
         """
         Initialize a Queue instance.
@@ -58,6 +55,8 @@ class Queue:
             nats_url: Optional NATS server URL override
             default_timeout: Optional default job timeout in seconds
             prefer_thread_local: When True, reuse a thread-local connection/JS context.
+            service_manager: Optional ServiceManager instance for managing services.
+                           If not provided, services will be created directly.
 
         Raises:
             ValueError: If queue name is empty or contains invalid characters
@@ -74,12 +73,44 @@ class Queue:
         self.subject = f"{NAQ_PREFIX}.queue.{self.name}"
         self.stream_name = f"{NAQ_PREFIX}_jobs"
         self._nats_url = nats_url
-        self._js: Optional[nats.js.JetStreamContext] = None
+        self._js: Optional[JetStreamContext] = None
         self._default_timeout = default_timeout
         self._scheduled_job_manager = ScheduledJobManager(name, nats_url)
         self._prefer_thread_local = prefer_thread_local
+        self._service_manager = service_manager
+        self._connection_service: Optional[ConnectionService] = None
+        self._stream_service: Optional[StreamService] = None
 
         setup_logging()  # Ensure logging is set up
+
+    async def _ensure_services(self) -> None:
+        """Ensure that ConnectionService and StreamService are available."""
+        if self._connection_service is None or self._stream_service is None:
+            if self._service_manager:
+                # Get services from ServiceManager
+                if self._service_manager.has_service("connection"):
+                    self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
+                else:
+                    # Register ConnectionService if not available
+                    self._connection_service = await self._service_manager.register_service("connection", ConnectionService)
+                
+                if self._service_manager.has_service("stream"):
+                    self._stream_service = await self._service_manager.get_service("stream", StreamService)
+                else:
+                    # Register StreamService if not available
+                    self._stream_service = await self._service_manager.register_service("stream", StreamService)
+            else:
+                # Create services directly if no ServiceManager
+                from ..services import ServiceConfig
+                config = ServiceConfig(nats_url=self._nats_url)
+                
+                if self._connection_service is None:
+                    self._connection_service = ConnectionService(config)
+                    await self._connection_service.initialize()
+                
+                if self._stream_service is None:
+                    self._stream_service = StreamService(config, self._connection_service)
+                    await self._stream_service.initialize()
 
     async def __aenter__(self):
         """Async context manager entry."""
@@ -89,20 +120,17 @@ class Queue:
         """Async context manager exit."""
         await self.close()
 
-    async def _get_js(self) -> nats.js.JetStreamContext:
+    async def _get_js(self) -> JetStreamContext:
         """Gets the JetStream context, initializing if needed."""
         if self._js is None:
-            # First, get the NATS connection
-            nc = await get_nats_connection(
-                url=self._nats_url, prefer_thread_local=self._prefer_thread_local
-            )
-            # Then, get the JetStream context using the connection
-            self._js = await get_jetstream_context(
-                nc=nc, prefer_thread_local=self._prefer_thread_local
-            )
+            # Get or create services
+            await self._ensure_services()
+            
+            # Get JetStream context from ConnectionService
+            self._js = await self._connection_service.get_jetstream(url=self._nats_url)
+            
             # Ensure the stream exists when the queue is first used
-            await ensure_stream(
-                js=self._js,
+            await self._stream_service.ensure_stream(
                 stream_name=self.stream_name,
                 subjects=[f"{NAQ_PREFIX}.queue.*"],
             )
@@ -391,27 +419,13 @@ class Queue:
             f"Purging queue '{self.name}' (subject: {self.subject} in stream: {self.stream_name})"
         )
         try:
-            js = await self._get_js()
-            # Ensure the stream exists first
-            await ensure_stream(
-                js=js, stream_name=self.stream_name, subjects=[f"{NAQ_PREFIX}.queue.*"]
-            )
-
+            # Ensure services are available
+            await self._ensure_services()
+            
             # Purge messages for this queue's subject
-            resp = await js.purge_stream(
-                name=self.stream_name,
-                subject=self.subject,
-            )
+            success = await self._stream_service.purge_stream(self.stream_name)
             logger.info(f"Purge successful for queue '{self.name}'.")
-            return resp
-        except nats.js.errors.NotFoundError:
-            logger.warning(
-                f"Stream '{self.stream_name}' not found. Nothing to purge for queue '{self.name}'."
-            )
-            return 0  # Stream doesn't exist, so 0 messages purged
-        except nats.errors.Error as e:
-            logger.error(f"NATS error purging queue '{self.name}': {e}")
-            raise NaqConnectionError(f"NATS error during purge: {e}") from e
+            return 1 if success else 0
         except Exception as e:
             logger.error(f"Error purging queue '{self.name}': {e}")
             raise NaqException(f"Failed to purge queue: {e}") from e
@@ -489,7 +503,8 @@ class Queue:
 
     async def close(self) -> None:
         """Closes NATS connection and cleans up resources."""
-        await close_nats_connection()
+        if self._connection_service:
+            await self._connection_service.close_connection(url=self._nats_url)
         self._js = None
 
     def __repr__(self) -> str:

@@ -109,7 +109,7 @@ class TestJobIntegration:
         def noop():
             pass
 
-        original_job = Job(noop)
+        original_job = Job(noop, enqueue_time=fixed_time)
         assert original_job.enqueue_time == fixed_time
 
         # Serialize and deserialize

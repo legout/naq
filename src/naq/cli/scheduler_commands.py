@@ -13,13 +13,15 @@ from rich.table import Table
 
 import cloudpickle
 
-from ..settings import DEFAULT_NATS_URL, SCHEDULED_JOB_STATUS, SCHEDULED_JOBS_KV_NAME
+from ..settings import DEFAULT_NATS_URL, SCHEDULED_JOBS_KV_NAME
+from ..models.enums import SCHEDULED_JOB_STATUS
 from ..utils import setup_logging
 from ..scheduler import Scheduler
-from ..connection import (
-    close_nats_connection,
-    get_jetstream_context,
-    get_nats_connection,
+from ..services import (
+    ServiceManager,
+    SchedulerService,
+    ConnectionService,
+    ServiceConfig,
 )
 
 # Create a Typer instance for scheduler commands
@@ -84,21 +86,54 @@ def start_scheduler(
     logger.info(f"Poll interval: {poll_interval}s")
     logger.info(f"High availability mode: {'enabled' if enable_ha else 'disabled'}")
 
-    s = Scheduler(
-        nats_url=nats_url,
-        poll_interval=poll_interval,
-        instance_id=instance_id,
-        enable_ha=enable_ha,
-    )
-    try:
-        asyncio.run(s.run())
-    except KeyboardInterrupt:
-        logger.info("Scheduler interrupted by user (KeyboardInterrupt). Shutting down.")
-    except Exception as e:
-        logger.exception(f"Scheduler failed unexpectedly: {e}")
-        raise typer.Exit(code=1)
-    finally:
-        logger.info("Scheduler process finished.")
+    async def _run_scheduler():
+        try:
+            # Create service manager with configuration
+            service_manager = ServiceManager(
+                config=ServiceConfig(
+                    nats_url=nats_url,
+                    custom_settings={
+                        "log_level": log_level,
+                        "poll_interval": poll_interval,
+                        "instance_id": instance_id,
+                        "enable_ha": enable_ha,
+                    },
+                )
+            )
+
+            # Register required services
+            connection_service = await service_manager.register_service(
+                "connection", ConnectionService, initialize=True
+            )
+            scheduler_service = await service_manager.register_service(
+                "scheduler", SchedulerService, initialize=True
+            )
+
+            # Create and run scheduler with services
+            s = Scheduler(
+                nats_url=nats_url,
+                poll_interval=poll_interval,
+                instance_id=instance_id,
+                enable_ha=enable_ha,
+                connection_service=connection_service,
+                scheduler_service=scheduler_service,
+            )
+            await s.run()
+
+        except KeyboardInterrupt:
+            logger.info(
+                "Scheduler interrupted by user (KeyboardInterrupt). Shutting down."
+            )
+        except Exception as e:
+            logger.exception(f"Scheduler failed unexpectedly: {e}")
+            raise typer.Exit(code=1)
+        finally:
+            logger.info("Scheduler process finished.")
+            if "service_manager" in locals():
+                await service_manager.cleanup_all()
+
+    # Run the async function
+    asyncio.run(_run_scheduler())
 
 
 @scheduler_app.command("jobs")
@@ -156,63 +191,65 @@ def list_scheduled_jobs(
 
     async def _list_scheduled_jobs_async():
         try:
-            nc = await get_nats_connection(url=nats_url)
-            js = await get_jetstream_context(nc=nc)
-
-            try:
-                kv = await js.key_value(bucket=SCHEDULED_JOBS_KV_NAME)
-            except Exception as e:
-                logger.error(
-                    f"Failed to access KV store '{SCHEDULED_JOBS_KV_NAME}': {e}"
+            # Create service manager with configuration
+            service_manager = ServiceManager(
+                config=ServiceConfig(
+                    nats_url=nats_url, custom_settings={"log_level": log_level}
                 )
+            )
+
+            # Register required services
+            connection_service = await service_manager.register_service(
+                "connection", ConnectionService, initialize=True
+            )
+            scheduler_service = await service_manager.register_service(
+                "scheduler", SchedulerService, initialize=True
+            )
+
+            # Parse status filter
+            status_filter = None
+            if status:
+                try:
+                    status_filter = SCHEDULED_JOB_STATUS(status)
+                except ValueError:
+                    logger.error(f"Invalid status filter: {status}")
+                    console.print(f"[red]Invalid status: {status}[/red]")
+                    return
+
+            # Get scheduled jobs using the service
+            try:
+                jobs_data = []
+                schedules = await scheduler_service.list_scheduled_jobs(status_filter)
+                
+                for schedule in schedules:
+                    # Convert schedule to job data format for compatibility
+                    job_data = {
+                        "job_id": schedule.job_id,
+                        "queue_name": schedule.queue_name,
+                        "status": schedule.status,
+                        "scheduled_timestamp_utc": schedule.scheduled_timestamp_utc,
+                        "cron": schedule.cron,
+                        "interval_seconds": schedule.interval_seconds,
+                        "repeat": schedule.repeat,
+                        "last_enqueued_utc": schedule.last_enqueued_utc,
+                        "schedule_failure_count": schedule.schedule_failure_count,
+                    }
+                    
+                    # Apply filters
+                    if job_id and job_id != schedule.job_id:
+                        continue
+                    if queue and schedule.queue_name != queue:
+                        continue
+                    
+                    jobs_data.append(job_data)
+                    
+            except Exception as e:
+                logger.error(f"Failed to list scheduled jobs: {e}")
                 console.print(
                     "[yellow]No scheduled jobs found or cannot access "
                     "job store.[/yellow]"
                 )
                 return
-
-            # Get all keys
-            try:
-                keys = await kv.keys()
-                if not keys:
-                    console.print("[yellow]No scheduled jobs found.[/yellow]")
-                    return
-            except nats.js.errors.NoKeysError:
-                console.print("[yellow]No scheduled jobs found.[/yellow]")
-                return
-
-            jobs_data = []
-
-            for key_bytes in keys:
-                key = None
-                try:
-                    key = (
-                        key_bytes.decode("utf-8")
-                        if isinstance(key_bytes, bytes)
-                        else key_bytes
-                    )
-                    if job_id and job_id != key:
-                        continue
-
-                    entry = await kv.get(key_bytes)
-                    if not entry:
-                        continue
-
-                    job_data = cloudpickle.loads(entry.value)
-
-                    current_status = job_data.get("status")
-                    if status and current_status != status:
-                        continue
-                    if queue and job_data.get("queue_name") != queue:
-                        continue
-
-                    jobs_data.append(job_data)
-                except Exception as e:
-                    key_repr = key if key is not None else repr(key_bytes)
-                    logger.error(
-                        f"Error processing scheduled job entry '{key_repr}': {e}"
-                    )
-                    continue
 
             jobs_data.sort(key=lambda j: j.get("scheduled_timestamp_utc", 0))
 
@@ -311,7 +348,8 @@ def list_scheduled_jobs(
             logger.exception(f"Error listing scheduled jobs: {e}")
             console.print(f"[red]Error listing scheduled jobs: {str(e)}[/red]")
         finally:
-            await close_nats_connection()
+            if "service_manager" in locals():
+                await service_manager.cleanup_all()
 
     # Run the async routine
     asyncio.run(_list_scheduled_jobs_async())

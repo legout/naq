@@ -26,8 +26,6 @@ from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
 def connection_service_config():
     """Create a ConnectionServiceConfig for testing."""
     return ConnectionServiceConfig(
-        enable_connection_pooling=True,
-        max_connections=10,
         connection_timeout=30
     )
 

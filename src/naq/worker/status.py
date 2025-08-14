@@ -13,21 +13,14 @@ from typing import Any, Dict, List, Optional
 
 import cloudpickle
 from loguru import logger
-from nats.js.errors import BucketNotFoundError
-from nats.js.kv import KeyValue
 
-from ..connection import (
-    close_nats_connection,
-    get_jetstream_context,
-    get_nats_connection,
-)
-from ..exceptions import NaqConnectionError, NaqException
+from ..exceptions import NaqException
 from ..models.enums import WORKER_STATUS
 from ..settings import (
-    DEFAULT_NATS_URL,
     DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
     WORKER_KV_NAME,
 )
+from ..services import ServiceManager, ConnectionService, KVStoreService
 
 
 class WorkerStatusManager:
@@ -40,41 +33,42 @@ class WorkerStatusManager:
     active workers.
     """
 
-    def __init__(self, worker):
+    def __init__(self, worker, service_manager: Optional[ServiceManager] = None):
         """Initialize the worker status manager.
 
         Args:
             worker: The worker instance this status manager belongs to.
+            service_manager: Optional ServiceManager for accessing services.
         """
         self.worker = worker
+        self._service_manager = service_manager
         self._current_status = WORKER_STATUS.STARTING
-        self._kv_store = None
+        self._kv_store_service: Optional[KVStoreService] = None
         self._heartbeat_task = None
 
-    async def _get_kv_store(self) -> Optional[KeyValue]:
-        """Initialize and return the NATS Key-Value store for worker statuses."""
-        if self._kv_store is None:
-            if not self.worker._js:
-                logger.error("JetStream context not available")
-                return None
+    async def _get_kv_store_service(self) -> Optional[KVStoreService]:
+        """Initialize and return the KVStoreService for worker statuses."""
+        if self._kv_store_service is None:
             try:
-                self._kv_store = await self.worker._js.key_value(bucket=WORKER_KV_NAME)
-            except BucketNotFoundError:
-                try:
-                    self._kv_store = await self.worker._js.create_key_value(
-                        bucket=WORKER_KV_NAME,
-                        ttl=self.worker._worker_ttl
-                        if self.worker._worker_ttl > 0
-                        else 0,
-                        description="Stores naq worker status and heartbeats",
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to create worker status KV store: {e}")
-                    self._kv_store = None
+                if self._service_manager:
+                    # Get KVStoreService from ServiceManager
+                    self._kv_store_service = await self._service_manager.get_service("kv_store", KVStoreService)
+                else:
+                    # Fallback to direct service creation for backward compatibility
+                    from ..services import KVStoreService, ServiceConfig
+                    
+                    # Get ConnectionService from worker if available
+                    connection_service = None
+                    if hasattr(self.worker, '_connection_service') and self.worker._connection_service:
+                        connection_service = self.worker._connection_service
+                    
+                    config = ServiceConfig(nats_url=getattr(self.worker, '_nats_url', None))
+                    self._kv_store_service = KVStoreService(config=config, connection_service=connection_service)
+                    await self._kv_store_service.initialize()
             except Exception as e:
-                logger.error(f"Failed to get worker status KV store: {e}")
-                self._kv_store = None
-        return self._kv_store
+                logger.error(f"Failed to initialize KVStoreService: {e}")
+                self._kv_store_service = None
+        return self._kv_store_service
 
     async def update_status(
         self, status: WORKER_STATUS | str, job_id: Optional[str] = None
@@ -96,8 +90,9 @@ class WorkerStatusManager:
                 logger.warning(f"Invalid status string '{status}', defaulting to IDLE")
         else:
             self._current_status = status
-        kv_store = await self._get_kv_store()
-        if not kv_store:
+            
+        kv_store_service = await self._get_kv_store_service()
+        if not kv_store_service:
             return
 
         payload = {
@@ -111,7 +106,7 @@ class WorkerStatusManager:
             payload["job_id"] = str(job_id)
 
         try:
-            await kv_store.put(self.worker.worker_id, cloudpickle.dumps(payload))
+            await kv_store_service.put(WORKER_KV_NAME, self.worker.worker_id, payload)
         except Exception as e:
             logger.error(f"Failed to update worker status: {e}")
 
@@ -147,8 +142,8 @@ class WorkerStatusManager:
 
     async def unregister_worker(self) -> None:
         """Delete the worker's status entry from the KV store."""
-        kv_store = await self._get_kv_store()
-        if not kv_store:
+        kv_store_service = await self._get_kv_store_service()
+        if not kv_store_service:
             logger.warning(
                 f"Worker status KV store not available. Cannot unregister worker "
                 f"{self.worker.worker_id}"
@@ -156,13 +151,13 @@ class WorkerStatusManager:
             return
 
         try:
-            await kv_store.delete(self.worker.worker_id)
+            await kv_store_service.delete(WORKER_KV_NAME, self.worker.worker_id)
             logger.info(f"Unregistered worker {self.worker.worker_id}")
         except Exception as e:
             logger.error(f"Failed to unregister worker {self.worker.worker_id}: {e}")
 
     @staticmethod
-    async def list_workers(nats_url: str = DEFAULT_NATS_URL) -> List[Dict[str, Any]]:
+    async def list_workers(nats_url: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Lists active workers by querying the worker status KV store.
 
@@ -173,26 +168,31 @@ class WorkerStatusManager:
             A list of dictionaries, each containing information about a worker.
 
         Raises:
-            NaqConnectionError: If connection fails.
-            NaqException: For other errors.
+            NaqException: For errors.
         """
         workers = []
-        nc = None
-        kv = None
+        kv_store_service = None
+        
         try:
-            nc = await get_nats_connection(url=nats_url)
-            js = await get_jetstream_context(nc=nc)
-            try:
-                kv = await js.key_value(bucket=WORKER_KV_NAME)
-            except Exception as e:
-                # Only return empty list for KV store access issues
-                # For other errors, raise NaqException
-                if "not accessible" in str(e).lower() or "not found" in str(e).lower():
-                    logger.warning(f"Worker status KV store '{WORKER_KV_NAME}' not accessible: {e}")
-                    return []
-                else:
-                    raise NaqException(f"Error accessing worker status KV store '{WORKER_KV_NAME}': {e}") from e
-
+            # Create a temporary KVStoreService for listing workers
+            from ..services import KVStoreService, ServiceConfig, ConnectionService, ServiceManager
+            
+            # Create a service manager with the provided URL
+            config = ServiceConfig(nats_url=nats_url)
+            service_manager = ServiceManager(config)
+            
+            # Register and initialize services
+            connection_service = await service_manager.register_service(
+                "connection", ConnectionService, config, initialize=True
+            )
+            kv_store_service = await service_manager.register_service(
+                "kv_store", KVStoreService, config, initialize=True
+            )
+            
+            # Get the KV store
+            kv = await kv_store_service.get_kv_store(WORKER_KV_NAME)
+            
+            # Get all keys
             keys = await kv.keys()
             for key_bytes in keys:
                 try:
@@ -207,10 +207,18 @@ class WorkerStatusManager:
 
             return workers
 
-        except NaqConnectionError:
-            raise
         except Exception as e:
-            raise NaqException(f"Error listing workers: {e}") from e
+            # Only return empty list for KV store access issues
+            # For other errors, raise NaqException
+            if "not accessible" in str(e).lower() or "not found" in str(e).lower():
+                logger.warning(f"Worker status KV store '{WORKER_KV_NAME}' not accessible: {e}")
+                return []
+            else:
+                raise NaqException(f"Error listing workers: {e}") from e
         finally:
-            if nc:
-                await close_nats_connection()
+            # Clean up services if they were created
+            if kv_store_service and hasattr(kv_store_service, 'cleanup'):
+                try:
+                    await kv_store_service.cleanup()
+                except Exception:
+                    pass

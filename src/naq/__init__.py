@@ -52,6 +52,9 @@ from .scheduler import Scheduler
 #from .models.enums import SCHEDULED_JOB_STATUS, WORKER_STATUS
 from .worker import Worker
 
+# Import worker monitoring functions
+from .worker.monitoring import list_workers, list_workers_sync
+
 __version__ = "0.1.3"  # Bump version for worker monitoring
 
 __all__ = [
@@ -67,4 +70,6 @@ __all__ = [
     "get_nats_connection",
     "get_jetstream_context",
     "close_nats_connection",
+    "list_workers",
+    "list_workers_sync",
 ]

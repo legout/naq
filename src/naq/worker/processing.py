@@ -21,7 +21,7 @@ class JobProcessor:
     def __init__(self, worker):
         """Initialize the job processor with a reference to the worker."""
         self.worker = worker
-        self.error_handler = JobErrorHandler(worker)
+        self.error_handler = JobErrorHandler(worker._service_manager)
 
     async def process_message(self, msg: Any) -> None:
         """Process a received job message."""

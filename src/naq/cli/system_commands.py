@@ -9,6 +9,8 @@ import typer
 
 from naq import __version__
 from naq.utils import setup_logging
+from naq.services import ServiceManager, ConnectionService, ServiceConfig
+from naq.settings import DEFAULT_NATS_URL
 
 # Create a Typer app for system commands
 system_app = typer.Typer(
@@ -86,7 +88,7 @@ def version():
 @system_app.command()
 def health(
     nats_url: str = typer.Option(
-        "nats://localhost:4222",
+        DEFAULT_NATS_URL,
         "--nats-url",
         "-u",
         help="URL of the NATS server to check.",
@@ -98,27 +100,51 @@ def health(
         "-t",
         help="Timeout in seconds for the health check.",
     ),
+    log_level: Optional[str] = typer.Option(
+        None,
+        "--log-level",
+        "-l",
+        help=(
+            "Set logging level (e.g., DEBUG, INFO, WARNING, ERROR). "
+            "Defaults to NAQ_LOG_LEVEL env var or CRITICAL."
+        ),
+    ),
 ):
     """
     Check the health of the NATS connection and naq system.
     """
-    setup_logging(None)
+    setup_logging(log_level if log_level else None)
     logger.info(f"Checking health of NATS at {nats_url}")
 
     try:
         # Import here to avoid circular imports
-        from naq.connection import get_nats_connection
         import asyncio
 
         async def check_health():
             try:
-                nc = await asyncio.wait_for(
-                    get_nats_connection(url=nats_url), timeout=timeout
+                # Create service manager with configuration
+                service_manager = ServiceManager(
+                    config=ServiceConfig(
+                        nats_url=nats_url, custom_settings={"log_level": log_level}
+                    )
                 )
-                await nc.close()
+
+                # Register required services
+                connection_service = await service_manager.register_service(
+                    "connection", ConnectionService, initialize=True
+                )
+
+                # Test connection
+                nc = await asyncio.wait_for(
+                    connection_service.get_connection(), timeout=timeout
+                )
+                await connection_service.close_connection()
                 return True, "NATS connection successful"
             except Exception as e:
                 return False, f"NATS connection failed: {str(e)}"
+            finally:
+                if "service_manager" in locals():
+                    await service_manager.cleanup_all()
 
         is_healthy, message = asyncio.run(check_health())
 

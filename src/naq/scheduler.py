@@ -9,11 +9,7 @@ from datetime import timezone
 from typing import Any, Dict, Optional
 
 import cloudpickle
-import nats
 from loguru import logger
-from nats.js import JetStreamContext
-from nats.js.errors import KeyNotFoundError
-from nats.js.kv import KeyValue
 
 from .utils import setup_logging
 
@@ -23,11 +19,6 @@ try:
 except ImportError:
     croniter = None  # type: ignore
 
-from .connection import (
-    close_nats_connection,
-    get_jetstream_context,
-    get_nats_connection,
-)
 from .exceptions import NaqConnectionError
 from .exceptions import SerializationError
 from .settings import DEFAULT_NATS_URL
@@ -41,11 +32,16 @@ from .settings import (
     SCHEDULER_LOCK_TTL_SECONDS,
 )
 from .models.enums import SCHEDULED_JOB_STATUS
+from .services import ServiceManager
+from .services import ConnectionService
+from .services import KVStoreService
+from .services import EventService
+from .services import SchedulerService
 
 
 class LeaderElection:
     """
-    Handles leader election for high availability schedulers using NATS Key-Value store.
+    Handles leader election for high availability schedulers using KVStoreService.
     """
 
     def __init__(
@@ -57,36 +53,25 @@ class LeaderElection:
         self.instance_id = instance_id
         self.lock_ttl = lock_ttl
         self.lock_renew_interval = lock_renew_interval
-        self._lock_kv: Optional[KeyValue] = None
+        self._kv_store_service: Optional[KVStoreService] = None
         self._shutdown_event = asyncio.Event()
         self._is_leader = False
         self._lock_renewal_task: Optional[asyncio.Task] = None
 
-    async def initialize(self, js: JetStreamContext) -> None:
-        """Initialize the leader election system with a JetStream context."""
+    async def initialize(self, kv_store_service: KVStoreService) -> None:
+        """Initialize the leader election system with a KVStoreService."""
         try:
-            self._lock_kv = await js.key_value(bucket=SCHEDULER_LOCK_KV_NAME)
+            self._kv_store_service = kv_store_service
             logger.info(
                 f"Connected to leader election KV store '{SCHEDULER_LOCK_KV_NAME}'"
             )
         except Exception as e:
-            try:
-                # Try to create the lock KV bucket
-                self._lock_kv = await js.create_key_value(
-                    bucket=SCHEDULER_LOCK_KV_NAME,
-                    description="Scheduler leader election lock",
-                    history=1,  # Only need latest value
-                )
-                logger.info(
-                    f"Created leader election KV store '{SCHEDULER_LOCK_KV_NAME}'"
-                )
-            except Exception as create_e:
-                logger.error(
-                    f"Failed to get or create lock KV store '{SCHEDULER_LOCK_KV_NAME}': {create_e}"
-                )
-                raise NaqConnectionError(
-                    f"Failed to access lock KV store: {create_e}"
-                ) from create_e
+            logger.error(
+                f"Failed to initialize leader election with KV store '{SCHEDULER_LOCK_KV_NAME}': {e}"
+            )
+            raise NaqConnectionError(
+                f"Failed to access lock KV store: {e}"
+            ) from e
 
     async def try_become_leader(self) -> bool:
         """
@@ -95,17 +80,20 @@ class LeaderElection:
         Returns:
             True if this instance is now the leader, False otherwise
         """
-        if not self._lock_kv:
-            logger.error("Lock KV store not initialized")
+        if not self._kv_store_service:
+            logger.error("KV store service not initialized")
             return False
 
         try:
             # Try to get the current lock
             try:
-                entry = await self._lock_kv.get(SCHEDULER_LOCK_KEY)
-                if entry:
+                lock_data = await self._kv_store_service.get(
+                    SCHEDULER_LOCK_KV_NAME,
+                    SCHEDULER_LOCK_KEY,
+                    deserialize=True
+                )
+                if lock_data:
                     # Lock exists - see if it's expired
-                    lock_data = cloudpickle.loads(entry.value)
                     lock_time = lock_data.get("timestamp", 0)
                     lock_owner = lock_data.get("instance_id", "unknown")
 
@@ -118,7 +106,7 @@ class LeaderElection:
                             f"Lock already held by '{lock_owner}', cannot become leader"
                         )
                         return False
-            except KeyNotFoundError:
+            except Exception:
                 # No existing lock, we can try to take it
                 pass
 
@@ -128,8 +116,12 @@ class LeaderElection:
                 "timestamp": time.time(),
                 "hostname": socket.gethostname(),
             }
-            serialized_lock = cloudpickle.dumps(lock_data)
-            await self._lock_kv.put(SCHEDULER_LOCK_KEY, serialized_lock)
+            await self._kv_store_service.put(
+                SCHEDULER_LOCK_KV_NAME,
+                SCHEDULER_LOCK_KEY,
+                lock_data,
+                serialize=True
+            )
             logger.info(
                 f"Acquired scheduler leader lock. This instance ({self.instance_id}) is now the leader."
             )
@@ -154,15 +146,19 @@ class LeaderElection:
         """
         while running_flag and self._is_leader:
             try:
-                if self._lock_kv:
+                if self._kv_store_service:
                     # Update the lock with fresh timestamp
                     lock_data = {
                         "instance_id": self.instance_id,
                         "timestamp": time.time(),
                         "hostname": socket.gethostname(),
                     }
-                    serialized_lock = cloudpickle.dumps(lock_data)
-                    await self._lock_kv.put(SCHEDULER_LOCK_KEY, serialized_lock)
+                    await self._kv_store_service.put(
+                        SCHEDULER_LOCK_KV_NAME,
+                        SCHEDULER_LOCK_KEY,
+                        lock_data,
+                        serialize=True
+                    )
                     logger.debug(
                         f"Renewed leader lock. Next renewal in {self.lock_renew_interval}s"
                     )
@@ -199,9 +195,9 @@ class LeaderElection:
 
     async def release_lock(self) -> None:
         """Explicitly release the leader lock when shutting down."""
-        if self._is_leader and self._lock_kv:
+        if self._is_leader and self._kv_store_service:
             try:
-                await self._lock_kv.delete(SCHEDULER_LOCK_KEY)
+                await self._kv_store_service.delete(SCHEDULER_LOCK_KV_NAME, SCHEDULER_LOCK_KEY)
                 logger.info("Released scheduler leader lock")
             except Exception as e:
                 logger.error(f"Error releasing leader lock: {e}")
@@ -215,12 +211,18 @@ class LeaderElection:
 
 class ScheduledJobProcessor:
     """
-    Handles the processing of scheduled jobs from the NATS KV store.
+    Handles the processing of scheduled jobs using the service layer.
     """
 
-    def __init__(self, js: JetStreamContext, kv: KeyValue):
-        self._js = js
-        self._kv = kv
+    def __init__(
+        self,
+        connection_service: ConnectionService,
+        kv_store_service: KVStoreService,
+        event_service: EventService
+    ):
+        self._connection_service = connection_service
+        self._kv_store_service = kv_store_service
+        self._event_service = event_service
 
     async def _enqueue_job(self, queue_name: str, subject: str, payload: bytes) -> bool:
         """
@@ -230,7 +232,8 @@ class ScheduledJobProcessor:
             True if enqueuing was successful, False otherwise
         """
         try:
-            ack = await self._js.publish(subject=subject, payload=payload)
+            js = await self._connection_service.get_jetstream()
+            ack = await js.publish(subject=subject, payload=payload)
             logger.debug(
                 f"Enqueued job to {subject}. Stream: {ack.stream}, Seq: {ack.seq}"
             )
@@ -292,37 +295,14 @@ class ScheduledJobProcessor:
         error_count = 0
 
         try:
-            keys = await self._kv.keys()
+            # Get all keys from the scheduled jobs bucket
+            kv = await self._kv_store_service.get_kv_store(SCHEDULED_JOBS_KV_NAME)
+            # Note: KVStoreService doesn't have a direct keys() method,
+            # so we'll need to handle this differently
+            # For now, we'll rely on the SchedulerService to handle this
+            logger.debug("Scheduled job processing delegated to SchedulerService")
+            return 0, 0
 
-            if not keys:
-                logger.debug("No scheduled jobs found in KV store.")
-                return 0, 0
-
-            logger.debug(f"Found {len(keys)} potential scheduled jobs.")
-
-            for key_bytes in keys:
-                # Abort if we're no longer leader
-                if not is_leader:
-                    logger.info(
-                        "Lost leadership during job processing loop, stopping check."
-                    )
-                    break
-
-                # Process this job
-                processed, had_error = await self._process_single_job(key_bytes, now_ts)
-                processed_count += processed
-                error_count += had_error
-
-        except nats.errors.Error as e:
-            # Handle the "no keys found" error as a normal case
-            error_message = str(e).lower()
-            if "no keys found" in error_message:
-                logger.debug(
-                    "No scheduled jobs found (received NATS 'no keys found' message)."
-                )
-            else:
-                logger.error(f"NATS error during scheduler check: {e}")
-                error_count += 1
         except Exception as e:
             logger.exception(f"Unexpected error during scheduler check: {e}")
             error_count += 1
@@ -334,6 +314,8 @@ class ScheduledJobProcessor:
     ) -> tuple[int, int]:
         """
         Process a single scheduled job.
+        
+        Note: This method is now simplified as most processing is handled by SchedulerService.
 
         Args:
             key_bytes: The KV store key
@@ -342,147 +324,9 @@ class ScheduledJobProcessor:
         Returns:
             Tuple of (processed_count, error_count)
         """
-        processed = 0
-        errors = 0
-        key = key_bytes.decode("utf-8") if isinstance(key_bytes, bytes) else key_bytes
-
-        try:
-            entry = await self._kv.get(key_bytes)
-            if entry is None:
-                return 0, 0
-
-            schedule_data: Dict[str, Any] = cloudpickle.loads(entry.value)
-
-            # Skip paused jobs
-            status = schedule_data.get("status")
-            if status == SCHEDULED_JOB_STATUS.PAUSED:
-                logger.debug(f"Skipping paused job '{key}'")
-                return 0, 0
-
-            # Skip failed jobs that exceeded retry attempts
-            if status == SCHEDULED_JOB_STATUS.FAILED:
-                logger.debug(f"Skipping failed job '{key}' that exceeded retry limits")
-                return 0, 0
-
-            # Check if job is ready to run
-            scheduled_ts = schedule_data.get("scheduled_timestamp_utc")
-            if scheduled_ts is None or scheduled_ts > now_ts:
-                return 0, 0  # Not ready yet
-
-            # Job is ready to run
-            job_id = schedule_data.get("job_id", "unknown")
-            queue_name = schedule_data.get("queue_name")
-            original_payload = schedule_data.get("_orig_job_payload")
-            cron = schedule_data.get("cron")
-            interval_seconds = schedule_data.get("interval_seconds")
-            repeat = schedule_data.get("repeat")  # None means infinite
-
-            # Validate job data
-            if not queue_name or not original_payload:
-                logger.error(
-                    f"Invalid schedule data for key '{key}' (missing queue_name or payload). Deleting."
-                )
-                await self._kv.delete(key_bytes)
-                return 0, 1
-
-            # Enqueue the job
-            logger.info(f"Job {job_id} is ready. Enqueueing to queue '{queue_name}'.")
-            target_subject = f"{NAQ_PREFIX}.queue.{queue_name}"
-
-            enqueue_success = await self._enqueue_job(
-                queue_name, target_subject, original_payload
-            )
-
-            # Track success/failure
-            if enqueue_success:
-                processed += 1
-                # Reset failure count on success
-                schedule_data["schedule_failure_count"] = 0
-                schedule_data["last_enqueued_utc"] = now_ts
-            else:
-                errors += 1
-                # Track failures for potential retry limiting
-                failure_count = schedule_data.get("schedule_failure_count", 0) + 1
-                schedule_data["schedule_failure_count"] = failure_count
-
-                # Check if we should mark the job as permanently failed
-                if MAX_SCHEDULE_FAILURES and failure_count >= MAX_SCHEDULE_FAILURES:
-                    logger.warning(
-                        f"Job {job_id} has failed scheduling {failure_count} times, marking as failed"
-                    )
-                    schedule_data["status"] = SCHEDULED_JOB_STATUS.FAILED
-                    serialized_data = cloudpickle.dumps(schedule_data)
-                    await self._kv.put(key_bytes, serialized_data)
-                    return 0, 1
-                else:
-                    # Just log and continue - will retry on next check cycle
-                    logger.warning(
-                        f"Failed to enqueue job {job_id} (attempt {failure_count}). "
-                        f"Will retry on next cycle."
-                    )
-                    serialized_data = cloudpickle.dumps(schedule_data)
-                    await self._kv.put(key_bytes, serialized_data)
-                    return 0, 1
-
-            # Handle recurrence or deletion
-            if not enqueue_success:
-                return processed, errors
-
-            # Calculate next run time if this is a recurring job
-            next_scheduled_ts = self._calculate_next_runtime(
-                schedule_data, scheduled_ts
-            )
-            delete_entry = True  # Assume deletion unless rescheduled
-
-            if next_scheduled_ts is not None:
-                # Check repeat count
-                if repeat is not None:
-                    if repeat > 1:
-                        schedule_data["repeat"] = repeat - 1
-                        schedule_data["scheduled_timestamp_utc"] = next_scheduled_ts
-                        schedule_data["next_run_utc"] = next_scheduled_ts
-                        delete_entry = False  # Reschedule
-                        logger.debug(
-                            f"Rescheduling job {job_id} for {next_scheduled_ts}. Repeats left: {repeat - 1}"
-                        )
-                    else:
-                        # Last repetition
-                        logger.debug(f"Job {job_id} finished its repetitions.")
-                        delete_entry = True
-                else:
-                    # Infinite repeat
-                    schedule_data["scheduled_timestamp_utc"] = next_scheduled_ts
-                    schedule_data["next_run_utc"] = next_scheduled_ts
-                    delete_entry = False  # Reschedule
-                    logger.debug(
-                        f"Rescheduling job {job_id} for {next_scheduled_ts} (infinite)."
-                    )
-
-            # Update or delete the KV entry
-            if delete_entry:
-                logger.debug(f"Deleting schedule entry for job {job_id}.")
-                await self._kv.delete(key_bytes)
-            else:
-                logger.debug(f"Updating schedule entry for job {job_id}.")
-                updated_payload = cloudpickle.dumps(schedule_data)
-                await self._kv.put(key_bytes, updated_payload)
-
-            return processed, errors
-
-        except SerializationError as e:
-            logger.error(
-                f"Failed to deserialize schedule data for key '{key}': {e}. Deleting entry."
-            )
-            try:
-                await self._kv.delete(key_bytes)
-            except Exception as del_e:
-                logger.error(
-                    f"Failed to delete corrupted schedule entry '{key}': {del_e}"
-                )
-            return 0, 1
-        except Exception as e:
-            logger.exception(f"Error processing schedule key '{key}': {e}")
-            return 0, 1
+        # This method is now a no-op as processing is delegated to SchedulerService
+        # The SchedulerService.trigger_due_jobs() method handles all the logic
+        return 0, 0
 
 
 class Scheduler:
@@ -493,16 +337,13 @@ class Scheduler:
 
     def __init__(
         self,
-        nats_url: str = DEFAULT_NATS_URL,
+        service_manager: ServiceManager,
         poll_interval: float = 1.0,  # Check for jobs every second
         instance_id: Optional[str] = None,  # For HA leader election
         enable_ha: bool = True,  # Whether to enable HA leader election
     ):
-        self._nats_url = nats_url
+        self._service_manager = service_manager
         self._poll_interval = poll_interval
-        self._nc: Optional[nats.aio.client.Client] = None
-        self._js: Optional[JetStreamContext] = None
-        self._kv: Optional[KeyValue] = None
         self._running = False
         self._shutdown_event = asyncio.Event()
 
@@ -520,43 +361,42 @@ class Scheduler:
         )
         self._job_processor: Optional[ScheduledJobProcessor] = None
 
+        # Services will be initialized during _connect()
+        self._connection_service: Optional[ConnectionService] = None
+        self._kv_store_service: Optional[KVStoreService] = None
+        self._event_service: Optional[EventService] = None
+        self._scheduler_service: Optional[SchedulerService] = None
+
         setup_logging()  # Set up logging
 
     async def _connect(self) -> None:
-        """Establish NATS connection, JetStream context, and KV handles."""
-        if self._nc is None or not self._nc.is_connected:
-            self._nc = await get_nats_connection(url=self._nats_url)
-            self._js = await get_jetstream_context(nc=self._nc)
+        """Establish service connections and initialize components."""
+        try:
+            # Get services from service manager
+            self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
+            self._kv_store_service = await self._service_manager.get_service("kv_store", KVStoreService)
+            self._event_service = await self._service_manager.get_service("event", EventService)
+            self._scheduler_service = await self._service_manager.get_service("scheduler", SchedulerService)
 
-            # Connect to the scheduled jobs KV store
-            try:
-                self._kv = await self._js.key_value(bucket=SCHEDULED_JOBS_KV_NAME)
-                logger.info(
-                    f"Scheduler connected to NATS and KV store '{SCHEDULED_JOBS_KV_NAME}'."
-                )
-            except Exception as e:
-                try:
-                    # Try to create the KV bucket if it doesn't exist
-                    self._kv = await self._js.create_key_value(
-                        bucket=SCHEDULED_JOBS_KV_NAME,
-                        description="Scheduler job schedule storage",
-                    )
-                    logger.info(f"Created KV store '{SCHEDULED_JOBS_KV_NAME}'")
-                except Exception as create_e:
-                    logger.error(
-                        f"Failed to get or create KV store '{SCHEDULED_JOBS_KV_NAME}': {create_e}"
-                    )
-                    raise NaqConnectionError(
-                        f"Failed to access KV store: {create_e}"
-                    ) from create_e
+            logger.info(
+                f"Scheduler connected to services and KV store '{SCHEDULED_JOBS_KV_NAME}'."
+            )
 
             # Initialize components
             if self._enable_ha:
-                await self._leader_election.initialize(self._js)
+                await self._leader_election.initialize(self._kv_store_service)
 
             # Create job processor
-            if self._js and self._kv:
-                self._job_processor = ScheduledJobProcessor(self._js, self._kv)
+            if self._kv_store_service and self._connection_service:
+                self._job_processor = ScheduledJobProcessor(
+                    self._connection_service,
+                    self._kv_store_service,
+                    self._event_service
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to connect to services: {e}")
+            raise NaqConnectionError(f"Failed to connect to services: {e}") from e
 
     async def run(self) -> None:
         """Starts the scheduler loop with leader election."""
@@ -594,11 +434,9 @@ class Scheduler:
                     if not was_leader:
                         self._leader_election._is_leader = True
 
-                # Process jobs only if leader and job processor exists
-                if self.is_leader and self._job_processor:
-                    processed, errors = await self._job_processor.process_jobs(
-                        self.is_leader
-                    )
+                # Process jobs only if leader and scheduler service exists
+                if self.is_leader and self._scheduler_service:
+                    processed, errors = await self._scheduler_service.trigger_due_jobs()
                     # Log summary only if something happened
                     if processed > 0 or errors > 0:
                         logger.info(
@@ -644,11 +482,12 @@ class Scheduler:
             logger.info("Scheduler shutdown complete.")
 
     async def _close(self) -> None:
-        """Closes NATS connection and cleans up resources."""
-        await close_nats_connection()  # Use the shared close function
-        self._nc = None
-        self._js = None
-        self._kv = None
+        """Cleans up resources."""
+        # Services are managed by the ServiceManager, so we don't close them here
+        self._connection_service = None
+        self._kv_store_service = None
+        self._event_service = None
+        self._scheduler_service = None
         self._job_processor = None
 
     def signal_handler(self, sig, frame) -> None:
