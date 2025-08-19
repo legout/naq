@@ -549,3 +549,678 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+## Service Layer Examples
+
+The service layer provides a modular architecture for managing different aspects of the `naq` system. Each service can be used independently or composed together to create complex workflows.
+
+### Using ConnectionService
+
+The `ConnectionService` manages the NATS connection and provides a centralized way to connect to the NATS server.
+
+```python
+# connection_service_example.py
+import asyncio
+from naq.services.base import ServiceConfig
+from naq.services.connection import ConnectionService, ConnectionServiceConfig
+
+async def main():
+    # Create connection configuration
+    connection_config = ConnectionServiceConfig(
+        servers=["nats://localhost:4222"],
+        max_reconnect_attempts=5,
+        reconnect_time_wait=2.0
+    )
+    
+    # Initialize the connection service
+    connection_service = ConnectionService(
+        config=ServiceConfig(custom_settings=connection_config.as_dict())
+    )
+    
+    # Connect to NATS
+    await connection_service.initialize()
+    print(f"Connected to NATS cluster: {connection_service.get_connected_servers()}")
+    
+    # Check connection status
+    print(f"Connection status: {connection_service.is_connected}")
+    
+    # Publish a simple message
+    await connection_service.publish("test.subject", b"Hello, NATS!")
+    print("Message published to test.subject")
+    
+    # Subscribe to a subject
+    async def message_handler(msg):
+        print(f"Received message: {msg.data.decode()}")
+    
+    subscription = await connection_service.subscribe("test.subject", message_handler)
+    print(f"Subscribed to test.subject with subscription ID: {subscription}")
+    
+    # Wait for a message
+    await asyncio.sleep(1)
+    
+    # Unsubscribe
+    await connection_service.unsubscribe(subscription)
+    print("Unsubscribed from test.subject")
+    
+    # Close the connection
+    await connection_service.cleanup()
+    print("Connection closed")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Using KVStoreService
+
+The `KVStoreService` provides a key-value store interface using NATS KV.
+
+```python
+# kv_store_example.py
+import asyncio
+from naq.services.base import ServiceConfig
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+
+async def main():
+    # Create KV store configuration
+    kv_config = KVStoreServiceConfig(
+        bucket_name="user_data",
+        history=10,  # Keep 10 revisions of each key
+        stream_name="user_data_stream"
+    )
+    
+    # Initialize the KV store service
+    kv_store_service = KVStoreService(
+        config=ServiceConfig(custom_settings=kv_config.as_dict())
+    )
+    
+    # Create the bucket if it doesn't exist
+    await kv_store_service.initialize()
+    print(f"KV store bucket '{kv_store_service.bucket_name}' initialized")
+    
+    # Set a key-value pair
+    await kv_store_service.put("user:123", {"name": "Alice", "age": 30})
+    print("Stored user data for user:123")
+    
+    # Get a value
+    user_data = await kv_store_service.get("user:123")
+    print(f"Retrieved user data: {user_data}")
+    
+    # Update a value
+    await kv_store_service.put("user:123", {"name": "Alice", "age": 31})
+    print("Updated user data for user:123")
+    
+    # Get history of a key
+    history = await kv_store_service.get_history("user:123")
+    print(f"History for user:123 ({len(history)} revisions):")
+    for revision in history:
+        print(f"  - {revision.revision}: {revision.value}")
+    
+    # Delete a key
+    await kv_store_service.delete("user:123")
+    print("Deleted user:123")
+    
+    # Watch for changes
+    async def watch_callback(key, value, revision):
+        print(f"Key changed: {key} at revision {revision}: {value}")
+    
+    watch_task = asyncio.create_task(
+        kv_store_service.watch("user:123", watch_callback)
+    )
+    
+    # Put a value to trigger the watch
+    await kv_store_service.put("user:123", {"name": "Bob", "age": 25})
+    await asyncio.sleep(0.5)  # Wait for the watch callback
+    
+    # Cancel the watch
+    watch_task.cancel()
+    
+    # Cleanup
+    await kv_store_service.cleanup()
+    print("KV store service cleaned up")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Using EventService
+
+The `EventService` provides a structured way to log and retrieve events.
+
+```python
+# event_service_example.py
+import asyncio
+from datetime import datetime
+from naq.services.base import ServiceConfig
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+from naq.services.events import EventService, EventServiceConfig
+from naq.models.events import Event, EventType
+
+async def main():
+    # Initialize KV store service (required for EventService)
+    kv_config = KVStoreServiceConfig(bucket_name="events")
+    kv_store_service = KVStoreService(
+        config=ServiceConfig(custom_settings=kv_config.as_dict())
+    )
+    await kv_store_service.initialize()
+    
+    # Create event service configuration
+    event_config = EventServiceConfig(
+        event_bucket_name="system_events",
+        event_ttl=86400  # Store events for 24 hours
+    )
+    
+    # Initialize the event service
+    event_service = EventService(
+        config=ServiceConfig(custom_settings=event_config.as_dict()),
+        kv_store_service=kv_store_service
+    )
+    await event_service.initialize()
+    print("Event service initialized")
+    
+    # Log different types of events
+    await event_service.log_event(
+        Event(
+            job_id="job-123",
+            event_type=EventType.started,
+            message="Job processing started",
+            timestamp=datetime.utcnow()
+        )
+    )
+    
+    await event_service.log_event(
+        Event(
+            job_id="job-123",
+            event_type=EventType.progress,
+            message="50% complete",
+            timestamp=datetime.utcnow()
+        )
+    )
+    
+    await event_service.log_event(
+        Event(
+            job_id="job-123",
+            event_type=EventType.completed,
+            message="Job completed successfully",
+            timestamp=datetime.utcnow()
+        )
+    )
+    
+    # Get events for a specific job
+    job_events = await event_service.get_job_events("job-123")
+    print(f"Events for job-123 ({len(job_events)} events):")
+    for event in job_events:
+        print(f"  - {event.event_type.value}: {event.message} at {event.timestamp}")
+    
+    # Get events by type
+    completed_events = await event_service.get_events_by_type(EventType.completed)
+    print(f"Completed events: {len(completed_events)}")
+    
+    # Get events within a time range
+    start_time = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    end_time = datetime.utcnow()
+    time_range_events = await event_service.get_events_in_range(start_time, end_time)
+    print(f"Events today: {len(time_range_events)}")
+    
+    # Cleanup
+    await event_service.cleanup()
+    await kv_store_service.cleanup()
+    print("Event service cleaned up")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Using StreamService
+
+The `StreamService` provides a way to work with NATS JetStream streams.
+
+```python
+# stream_service_example.py
+import asyncio
+from naq.services.base import ServiceConfig
+from naq.services.connection import ConnectionService, ConnectionServiceConfig
+from naq.services.streams import StreamService, StreamServiceConfig
+
+async def main():
+    # Initialize connection service
+    connection_config = ConnectionServiceConfig()
+    connection_service = ConnectionService(
+        config=ServiceConfig(custom_settings=connection_config.as_dict())
+    )
+    await connection_service.initialize()
+    
+    # Create stream service configuration
+    stream_config = StreamServiceConfig(
+        stream_name="orders",
+        subjects=["orders.>"],  # Match all subjects starting with "orders."
+        retention_limit=1000,   # Keep up to 1000 messages
+        max_age=3600            # Keep messages for 1 hour
+    )
+    
+    # Initialize the stream service
+    stream_service = StreamService(
+        config=ServiceConfig(custom_settings=stream_config.as_dict()),
+        connection_service=connection_service
+    )
+    await stream_service.initialize()
+    print(f"Stream service initialized for stream: {stream_service.stream_name}")
+    
+    # Create or get the stream
+    stream_info = await stream_service.create_or_get_stream()
+    print(f"Stream info: {stream_info.config.name} with {stream_info.state.messages} messages")
+    
+    # Add a consumer
+    consumer_info = await stream_service.add_consumer(
+        "orders_processor",
+        durable_name="order_processor",
+        ack_policy="explicit"  # Require explicit acknowledgment
+    )
+    print(f"Consumer created: {consumer_info.name}")
+    
+    # Publish messages to the stream
+    for i in range(5):
+        message_data = f"Order {i+1} data"
+        sequence = await stream_service.publish(f"orders.order_{i+1}", message_data.encode())
+        print(f"Published message with sequence: {sequence}")
+    
+    # Get stream information
+    stream_info = await stream_service.get_stream_info()
+    print(f"Stream has {stream_info.state.messages} messages and {stream_info.state.consumers} consumers")
+    
+    # Get consumer information
+    consumer_info = await stream_service.get_consumer_info("order_processor")
+    print(f"Consumer has delivered {consumer_info.num_ack_pending} messages")
+    
+    # Cleanup
+    await stream_service.cleanup()
+    await connection_service.cleanup()
+    print("Stream service cleaned up")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Using WorkerService
+
+The `WorkerService` provides a way to manage workers for processing jobs.
+
+```python
+# worker_service_example.py
+import asyncio
+from naq.services.base import ServiceConfig
+from naq.services.connection import ConnectionService, ConnectionServiceConfig
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+from naq.services.events import EventService, EventServiceConfig
+from naq.services.worker import WorkerService, WorkerServiceConfig
+from naq.models.jobs import Job
+
+async def process_order(order_id):
+    """Example job function that processes an order."""
+    print(f"Processing order {order_id}...")
+    await asyncio.sleep(2)  # Simulate processing time
+    return f"Order {order_id} processed successfully"
+
+async def main():
+    # Initialize required services
+    connection_config = ConnectionServiceConfig()
+    connection_service = ConnectionService(
+        config=ServiceConfig(custom_settings=connection_config.as_dict())
+    )
+    await connection_service.initialize()
+    
+    kv_store_config = KVStoreServiceConfig(bucket_name="worker_data")
+    kv_store_service = KVStoreService(
+        config=ServiceConfig(custom_settings=kv_store_config.as_dict())
+    )
+    await kv_store_service.initialize()
+    
+    event_config = EventServiceConfig()
+    event_service = EventService(
+        config=ServiceConfig(custom_settings=event_config.as_dict()),
+        kv_store_service=kv_store_service
+    )
+    await event_service.initialize()
+    
+    # Create worker service configuration
+    worker_config = WorkerServiceConfig(
+        worker_name="order_processor",
+        queues=["orders"],
+        max_concurrent_jobs=5,
+        heartbeat_interval=30
+    )
+    
+    # Initialize the worker service
+    worker_service = WorkerService(
+        config=ServiceConfig(custom_settings=worker_config.as_dict()),
+        connection_service=connection_service,
+        kv_store_service=kv_store_service,
+        event_service=event_service
+    )
+    await worker_service.initialize()
+    print(f"Worker service initialized for worker: {worker_service.worker_name}")
+    
+    # Register job handlers
+    @worker_service.register_job_handler("process_order")
+    async def handle_process_order(job: Job):
+        return await process_order(job.args[0])
+    
+    # Start processing jobs
+    await worker_service.start_processing()
+    print("Worker started processing jobs")
+    
+    # Keep the worker running for a while
+    await asyncio.sleep(10)
+    
+    # Stop processing
+    await worker_service.stop_processing()
+    print("Worker stopped processing jobs")
+    
+    # Get worker statistics
+    stats = worker_service.get_worker_stats()
+    print(f"Worker stats: {stats}")
+    
+    # Cleanup
+    await worker_service.cleanup()
+    await event_service.cleanup()
+    await kv_store_service.cleanup()
+    await connection_service.cleanup()
+    print("Worker service cleaned up")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Using SchedulerService
+
+The `SchedulerService` provides a way to manage scheduled jobs.
+
+```python
+# scheduler_service_example.py
+import asyncio
+from datetime import datetime, timedelta
+from naq.services.base import ServiceConfig
+from naq.services.connection import ConnectionService, ConnectionServiceConfig
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+from naq.services.events import EventService, EventServiceConfig
+from naq.services.scheduler import SchedulerService, SchedulerServiceConfig
+from naq.models.schedules import Schedule, ScheduleType
+
+async def send_daily_report():
+    """Example scheduled job function."""
+    print("Sending daily report...")
+    # Logic to generate and send report
+    return "Daily report sent"
+
+async def main():
+    # Initialize required services
+    connection_config = ConnectionServiceConfig()
+    connection_service = ConnectionService(
+        config=ServiceConfig(custom_settings=connection_config.as_dict())
+    )
+    await connection_service.initialize()
+    
+    kv_store_config = KVStoreServiceConfig(bucket_name="scheduler_data")
+    kv_store_service = KVStoreService(
+        config=ServiceConfig(custom_settings=kv_store_config.as_dict())
+    )
+    await kv_store_service.initialize()
+    
+    event_config = EventServiceConfig()
+    event_service = EventService(
+        config=ServiceConfig(custom_settings=event_config.as_dict()),
+        kv_store_service=kv_store_service
+    )
+    await event_service.initialize()
+    
+    # Create scheduler service configuration
+    scheduler_config = SchedulerServiceConfig(
+        scheduler_name="main_scheduler",
+        check_interval=5,  # Check for scheduled jobs every 5 seconds
+        max_concurrent_schedules=10
+    )
+    
+    # Initialize the scheduler service
+    scheduler_service = SchedulerService(
+        config=ServiceConfig(custom_settings=scheduler_config.as_dict()),
+        connection_service=connection_service,
+        kv_store_service=kv_store_service,
+        event_service=event_service
+    )
+    await scheduler_service.initialize()
+    print(f"Scheduler service initialized for scheduler: {scheduler_service.scheduler_name}")
+    
+    # Schedule a one-time job
+    one_time_schedule = Schedule(
+        schedule_id="report_2023-08-14",
+        schedule_type=ScheduleType.ONCE,
+        run_at=datetime.utcnow() + timedelta(minutes=5),
+        function=send_daily_report,
+        queue_name="scheduled_jobs",
+        args=(),
+        kwargs={}
+    )
+    
+    await scheduler_service.add_schedule(one_time_schedule)
+    print(f"Scheduled one-time job: {one_time_schedule.schedule_id}")
+    
+    # Schedule a recurring job
+    recurring_schedule = Schedule(
+        schedule_id="daily_report",
+        schedule_type=ScheduleType.CRON,
+        cron="0 9 * * *",  # Every day at 9:00 AM UTC
+        function=send_daily_report,
+        queue_name="scheduled_jobs",
+        args=(),
+        kwargs={}
+    )
+    
+    await scheduler_service.add_schedule(recurring_schedule)
+    print(f"Scheduled recurring job: {recurring_schedule.schedule_id}")
+    
+    # Get all schedules
+    schedules = await scheduler_service.get_all_schedules()
+    print(f"Total schedules: {len(schedules)}")
+    
+    # Get a specific schedule
+    schedule = await scheduler_service.get_schedule("daily_report")
+    print(f"Schedule info: {schedule.schedule_type.value} - {schedule.cron}")
+    
+    # Remove a schedule
+    await scheduler_service.remove_schedule("report_2023-08-14")
+    print("Removed one-time schedule")
+    
+    # Start the scheduler
+    await scheduler_service.start()
+    print("Scheduler started")
+    
+    # Keep the scheduler running for a while
+    await asyncio.sleep(30)
+    
+    # Stop the scheduler
+    await scheduler_service.stop()
+    print("Scheduler stopped")
+    
+    # Cleanup
+    await scheduler_service.cleanup()
+    await event_service.cleanup()
+    await kv_store_service.cleanup()
+    await connection_service.cleanup()
+    print("Scheduler service cleaned up")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Using ServiceManager
+
+The `ServiceManager` provides a centralized way to manage all services.
+
+```python
+# service_manager_example.py
+import asyncio
+from naq.services.base import ServiceConfig
+from naq.services.connection import ConnectionServiceConfig
+from naq.services.kv_stores import KVStoreServiceConfig
+from naq.services.events import EventServiceConfig
+from naq.services.streams import StreamServiceConfig
+from naq.services.worker import WorkerServiceConfig
+from naq.services.scheduler import SchedulerServiceConfig
+from naq.services.manager import ServiceManager
+
+async def main():
+    # Create service configurations
+    services_config = {
+        "connection": ConnectionServiceConfig(
+            servers=["nats://localhost:4222"]
+        ),
+        "kv_store": KVStoreServiceConfig(
+            bucket_name="app_data"
+        ),
+        "events": EventServiceConfig(
+            event_bucket_name="app_events"
+        ),
+        "streams": StreamServiceConfig(
+            stream_name="app_streams",
+            subjects=["app.>"]
+        ),
+        "worker": WorkerServiceConfig(
+            worker_name="app_worker",
+            queues=["default"]
+        ),
+        "scheduler": SchedulerServiceConfig(
+            scheduler_name="app_scheduler",
+            check_interval=10
+        )
+    }
+    
+    # Initialize the service manager
+    service_manager = ServiceManager(
+        config=ServiceConfig(custom_settings=services_config)
+    )
+    
+    # Start all services
+    await service_manager.initialize_all()
+    print("All services initialized")
+    
+    # Get a specific service
+    connection_service = service_manager.get_service("connection")
+    print(f"Connection service status: {connection_service.is_connected}")
+    
+    # Get all service statuses
+    service_statuses = service_manager.get_all_service_statuses()
+    print("Service statuses:")
+    for name, status in service_statuses.items():
+        print(f"  - {name}: {status}")
+    
+    # Use the services
+    kv_store_service = service_manager.get_service("kv_store")
+    await kv_store_service.put("app_status", "running")
+    print("App status stored")
+    
+    # Keep services running for a while
+    await asyncio.sleep(10)
+    
+    # Stop all services
+    await service_manager.cleanup_all()
+    print("All services cleaned up")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Composing Services for a Complete Workflow
+
+Here's an example of how to compose multiple services to create a complete workflow:
+
+```python
+# complete_workflow_example.py
+import asyncio
+from datetime import datetime
+from naq.services.base import ServiceConfig
+from naq.services.connection import ConnectionService, ConnectionServiceConfig
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+from naq.services.events import EventService, EventServiceConfig
+from naq.services.jobs import JobService, JobServiceConfig
+from naq.models.jobs import Job
+
+async def unreliable_api_call():
+    """Example function that might fail."""
+    import random
+    if random.random() < 0.7:  # 70% chance of failure
+        raise ConnectionError("API temporarily unavailable")
+    return "API call successful"
+
+async def main():
+    # Initialize all required services
+    connection_config = ConnectionServiceConfig()
+    connection_service = ConnectionService(config=ServiceConfig(custom_settings=connection_config.as_dict()))
+    await connection_service.initialize()
+    
+    kv_store_config = KVStoreServiceConfig()
+    kv_store_service = KVStoreService(config=ServiceConfig(custom_settings=kv_store_config.as_dict()))
+    await kv_store_service.initialize()
+    
+    event_config = EventServiceConfig()
+    event_service = EventService(config=ServiceConfig(custom_settings=event_config.as_dict()), kv_store_service=kv_store_service)
+    await event_service.initialize()
+    
+    # Create JobService with retry configuration
+    job_config = JobServiceConfig(
+        enable_job_execution=True,
+        enable_result_storage=True,
+        enable_event_logging=True
+    )
+    job_service = JobService(
+        config=ServiceConfig(custom_settings=job_config.as_dict()),
+        connection_service=connection_service,
+        kv_store_service=kv_store_service,
+        event_service=event_service
+    )
+    await job_service.initialize()
+    
+    # Create a job with retry configuration
+    job = Job(
+        function=unreliable_api_call,
+        queue_name="api_calls",
+        max_retries=3,  # Retry up to 3 times
+        retry_delay=2.0  # Wait 2 seconds between retries
+    )
+    
+    # Execute the job
+    try:
+        result = await job_service.execute_job(job, "worker-1")
+        print(f"Job succeeded: {result.result}")
+    except Exception as e:
+        print(f"Job failed after all retries: {e}")
+    
+    # Check the stored result regardless of success/failure
+    stored_result = await job_service.get_result(job.job_id)
+    if stored_result:
+        print(f"Final job status: {stored_result.status}")
+        if stored_result.status == "failed":
+            print(f"Error: {stored_result.error}")
+            print(f"Traceback: {stored_result.traceback}")
+    
+    # Get failure events
+    job_events = await event_service.get_job_events(job.job_id)
+    failure_events = [e for e in job_events if e.event_type.value == "failed"]
+    retry_events = [e for e in job_events if e.event_type.value == "retry_scheduled"]
+    
+    print(f"Failure events: {len(failure_events)}")
+    print(f"Retry events: {len(retry_events)}")
+    
+    # Cleanup
+    await job_service.cleanup()
+    await event_service.cleanup()
+    await kv_store_service.cleanup()
+    await connection_service.cleanup()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+::: {.callout-note}
+**Service Dependencies**
+
+Services can depend on other services. For example, `EventService` requires a `KVStoreService`, and `JobService` requires `ConnectionService`, `KVStoreService`, and `EventService`. The `ServiceManager` automatically handles these dependencies.
+:::

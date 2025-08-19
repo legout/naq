@@ -87,8 +87,152 @@ To get your development environment set up, follow these steps:
 
     Open a pull request from your fork to the `main` branch of the `naq` repository. Provide a clear description of your changes and reference any related issues.
 
-## Code of Conduct
+## Developing Services
 
-Please note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by its terms.
+When contributing to the service layer, please follow these guidelines:
 
-Thank you for contributing to `naq`!
+### Service Architecture
+
+All services should inherit from the base [`Service`](src/naq/services/base.py:1) class and implement the required methods:
+
+- `initialize()`: Set up the service and establish connections
+- `cleanup()`: Clean up resources and close connections
+100|
+101| Services should be designed to be:
+102|
+103| - **Modular**: Each service should have a single responsibility
+104| - **Testable**: Services should be easy to test in isolation
+105| - **Composable**: Services should work well together
+106| - **Configurable**: Services should be configurable through environment variables and parameters
+107|
+108|### Configuration
+109|
+110| Services use [`msgspec.Struct`](src/naq/services/base.py:1) for configuration. Configuration classes should:
+111|
+112| - Inherit from [`ServiceConfigBase`](src/naq/services/base.py:1)
+113| - Provide default values for all settings
+114| - Validate settings in the `__post_init__` method
+115| - Use type hints for all configuration parameters
+116|
+117| Example:
+118|
+119| ```python
+120| # src/naq/services/my_service.py
+121| from msgspec import Struct
+122| from naq.services.base import ServiceConfigBase
+123|
+124| class MyServiceConfig(ServiceConfigBase):
+125|     timeout: int = 30
+126|     max_retries: int = 3
+127|
+128|     def __post_init__(self):
+129|         if self.timeout <= 0:
+130|             raise ValueError("Timeout must be positive")
+131|         if self.max_retries < 0:
+132|             raise ValueError("Max retries cannot be negative")
+133| ```
+134|
+135|### Dependencies
+136|
+137| Services can depend on other services. Dependencies should be:
+138|
+139| - Injected through the constructor
+140| - Optional when possible (with sensible defaults)
+141| - Properly documented in the service's docstring
+142|
+143| Example:
+144|
+145| ```python
+146| # src/naq/services/my_service.py
+147| from naq.services.base import Service
+148| from naq.services.connection import ConnectionService
+149| from naq.services.kv_stores import KVStoreService
+150|
+151| class MyService(Service):
+152|     def __init__(self, config, connection_service: ConnectionService, kv_store_service: KVStoreService | None = None):
+153|         super().__init__(config)
+154|         self.connection_service = connection_service
+155|         self.kv_store_service = kv_store_service
+156| ```
+157|
+158|### Error Handling
+159|
+160| Services should:
+161|
+162| - Use custom exceptions from the `.exceptions` module
+163| - Log errors using `loguru`
+164| - Provide meaningful error messages
+165| - Implement retry logic for transient failures
+166|
+167| Example:
+168|
+169| ```python
+170| # src/naq/services/my_service.py
+171| import asyncio
+172| from loguru import logger
+173| from naq.exceptions import ServiceError
+174|
+175| class MyService(Service):
+176|     async def do_something(self):
+177|         try:
+178|             result = await self.connection_service.publish("subject", b"data")
+179|             return result
+180|         except Exception as e:
+181|             logger.error(f"Failed to publish message: {e}")
+182|             raise ServiceError(f"Could not publish message: {e}") from e
+183| ```
+184|
+185|### Testing
+186|
+187| When testing services:
+188|
+189| - Use pytest with async support
+190| - Mock external dependencies (NATS, etc.)
+191| - Test both success and failure scenarios
+192| - Test configuration validation
+193|
+194| Example test:
+195|
+196| ```python
+197| # tests/unit/test_my_service.py
+198| import pytest
+199| from unittest.mock import AsyncMock, MagicMock
+200|
+201| from naq.services.my_service import MyService, MyServiceConfig
+202| from naq.services.base import ServiceConfig
+203|
+204| @pytest.mark.asyncio
+205| async def test_my_service_initialization():
+206|     config = MyServiceConfig()
+207|     service = MyService(ServiceConfig(custom_settings=config.as_dict()))
+208|
+209|     await service.initialize()
+210|     assert service.is_initialized
+211|     await service.cleanup()
+212| ```
+213|
+214|### Documentation
+215|
+216| When adding a new service:
+217|
+218| - Add a comprehensive docstring to the service class
+219| - Document all public methods with type hints
+220| - Include examples in the docstring
+221| - Update the [architecture documentation](architecture.qmd)
+222| - Add usage examples to [examples.qmd](examples.qmd)
+223|
+224|### Naming Conventions
+225|
+226| Follow these naming conventions for services:
+227|
+228| - Service classes: PascalCase (e.g., `MyService`)
+229| - Service files: snake_case (e.g., `my_service.py`)
+230| - Configuration classes: PascalCase with `Config` suffix (e.g., `MyServiceConfig`)
+231| - Service methods: snake_case
+232| - Service constants: UPPER_SNAKE_CASE
+233|
+234|## Code of Conduct
+235|
+236| Please note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by its terms.
+237|
+238| Thank you for contributing to `naq`!

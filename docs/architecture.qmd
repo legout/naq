@@ -6,12 +6,51 @@ title: "Architecture Overview"
 
 ## Core Components
 
-The `naq` ecosystem consists of four main components:
+The `naq` ecosystem consists of two main architectural layers:
 
-1.  **The Client (Producer)**: Any application that enqueues jobs. This could be a web server, a script, or any other part of your system that needs to offload work.
-2.  **NATS Server (with JetStream)**: The message broker that provides persistence, message delivery, and storage for job results and worker metadata.
-3.  **The Worker(s)**: The processes that subscribe to queues, execute jobs, and report back their results. You can run as many workers as you need, on as many machines as you want.
-4.  **The Scheduler**: A dedicated process that handles time-based events, such as scheduled jobs and recurring tasks.
+### 1. Service Layer Architecture
+
+The service layer provides a modular, extensible foundation for all `naq` functionality. Each service is responsible for a specific domain and can be used independently or composed together to create complex workflows.
+
+**Core Services:**
+
+- **ConnectionService**: Manages NATS connections, connection pooling, and JetStream contexts with automatic reconnection and monitoring.
+- **KVStoreService**: Provides centralized access to NATS KeyValue stores with transaction support and TTL management.
+- **StreamService**: Handles JetStream stream creation, management, and configuration with consistent parameters.
+- **EventService**: Logs and retrieves job and worker events with configurable retention policies.
+- **JobService**: Manages job execution, result storage, and lifecycle events with integrated failure handling.
+- **WorkerService**: Tracks worker registration, status, and heartbeats with lifecycle management.
+- **SchedulerService**: Handles job scheduling, triggering, cancellation, and pausing with support for recurring jobs.
+
+**Base Infrastructure:**
+
+- **BaseService**: Abstract base class for all services with consistent lifecycle management and error handling.
+- **ServiceManager**: Centralized service registration, dependency injection, and coordinated cleanup.
+- **Configuration System**: Hierarchical configuration with environment variable support and service-specific settings.
+
+31 ### 2. Application Layer
+
+The application layer builds on the service layer to provide the high-level task queue functionality:
+
+- **Client (Producer)**: Any application that enqueues jobs using the service layer or simplified enqueue functions.
+- **Worker(s)**: Processes that subscribe to queues, execute jobs, and report results using the JobService.
+- **Scheduler**: Dedicated process that uses the SchedulerService to handle time-based events.
+
+**NATS Infrastructure:**
+
+- **NATS Server (with JetStream)**: The message broker that provides persistence, message delivery, and storage for job results and worker metadata.
+
+## Service Layer Benefits
+
+The service layer architecture provides several key advantages:
+
+- **Modularity**: Each service has a single responsibility and can be used independently or composed as needed.
+- **Testability**: Services can be easily mocked or stubbed for unit testing, and dependencies can be injected.
+- **Reusability**: Services can be shared across different parts of an application or even different applications.
+- **Consistency**: All services follow the same lifecycle pattern and error handling conventions.
+- **Extensibility**: New services can be added without modifying existing ones, following the open/closed principle.
+- **Dependency Management**: The ServiceManager handles service initialization, dependency resolution, and cleanup in the correct order.
+- **Configuration Flexibility**: Services can be configured globally or individually, with environment variable support.
 
 ## How It Works: The Job Lifecycle
 
@@ -20,43 +59,90 @@ Here is a high-level overview of what happens when a job is enqueued and process
 
 ```{mermaid}
 graph TD
-    subgraph "Your Application"
+    subgraph "Application Layer"
         Client[Client]
-        PythonCode[Python Code]
-    end
-
-    subgraph "NAQ Processes"
         Worker[Worker]
         Scheduler[Scheduler]
     end
+    
+    subgraph "Service Layer"
+        JobService[JobService]
+        ConnectionService[ConnectionService]
+        KVStoreService[KVStoreService]
+        EventService[EventService]
+        WorkerService[WorkerService]
+        SchedulerService[SchedulerService]
+    end
 
-    subgraph "NATS Server (JetStream)"
+    subgraph "NATS Infrastructure"
         QueueStream[Queue Stream]
         ResultStore[Result KV Store]
         ScheduledJobs[Scheduled Jobs KV]
+        WorkerStatus[Worker Status KV]
     end
 
-    Client -- "1. Enqueue Job" --> QueueStream
-    Scheduler -- "7. Check for Due Jobs" --> ScheduledJobs
-    ScheduledJobs -- "Job is Due" --> Scheduler
-    Scheduler -- "8. Enqueue Due Job" --> QueueStream
-    Worker -- "3. Fetch Job" --> QueueStream
-    Worker -- "4. Execute Function" --> PythonCode
-    PythonCode -- "5. Return Result" --> Worker
-    Worker -- "6. Store Result" --> ResultStore
+    Client -- "1. Enqueue Job" --> JobService
+    JobService -- "2. Publish to NATS" --> QueueStream
+    
+    Scheduler -- "3. Check for Due Jobs" --> SchedulerService
+    SchedulerService -- "4. Trigger Due Jobs" --> QueueStream
+    
+    Worker -- "5. Fetch Job" --> QueueStream
+    Worker -- "6. Execute via JobService" --> JobService
+    JobService -- "7. Store Result" --> ResultStore
+    JobService -- "8. Log Events" --> EventService
+    
+    Worker -- "9. Register/Update Status" --> WorkerService
+    WorkerService -- "10. Store Status" --> WorkerStatus
 ```
 
-1.  **Enqueueing**: The client calls an `enqueue` function (e.g., `enqueue_sync`). The function, its arguments, and other metadata are serialized into a job payload. This payload is then published as a message to a NATS subject that corresponds to the target queue.
+1.  **Enqueueing**: The client calls an `enqueue` function or directly uses the JobService. The function, its arguments, and metadata are serialized into a job payload and published to a NATS subject.
 
-2.  **Persistence**: NATS JetStream receives this message and persists it in a **Stream**. Each queue in `naq` maps directly to a JetStream Stream. This ensures that even if no workers are online, the job is safely stored and will be processed later.
+2.  **Service Processing**: The JobService handles the publishing to NATS and can optionally log the job event through the EventService.
 
-3.  **Fetching**: A `naq` worker process is constantly listening on the queue's Stream. When a new job is available, the worker consumes the message, acknowledging it to NATS so that it isn't delivered to another worker.
+3.  **Persistence**: NATS JetStream receives the message and persists it in a **Stream**. Each queue maps directly to a JetStream Stream.
 
-4.  **Execution**: The worker deserializes the job payload and executes the specified Python function with the provided arguments.
+4.  **Fetching**: A worker process fetches jobs from the queue's Stream. The WorkerService tracks worker registration and status.
 
-5.  **Result Handling**: Once the function completes, its return value is serialized. The worker then stores this result in a NATS **Key-Value (KV) Store**, using the unique job ID as the key. This result has a configurable Time-To-Live (TTL), after which it is automatically purged by NATS.
+5.  **Execution**: The worker uses the JobService to execute the job, which handles the actual function execution, result storage, and event logging.
 
-6.  **Scheduled Jobs**: The `naq scheduler` process periodically scans a dedicated KV store for jobs that are due to run. When it finds one, it enqueues it into the appropriate queue, and the job follows the normal lifecycle from there.
+6.  **Result Handling**: The JobService stores results in a NATS **Key-Value (KV) Store** with configurable TTL and logs completion events.
+
+7.  **Scheduled Jobs**: The SchedulerService periodically checks for due jobs and triggers them by publishing to the appropriate queue.
+
+8.  **Worker Management**: The WorkerService tracks worker registration, status updates, and heartbeats in a dedicated KV store.
+
+## Service Dependencies and Relationships
+
+Services are designed to work together with clear dependency relationships:
+
+```{mermaid}
+graph TD
+    ConnectionService -- "provides" --> KVStoreService
+    ConnectionService -- "provides" --> StreamService
+    ConnectionService -- "provides" --> JobService
+    ConnectionService -- "provides" --> WorkerService
+    ConnectionService -- "provides" --> SchedulerService
+    ConnectionService -- "provides" --> EventService
+    
+    KVStoreService -- "used by" --> EventService
+    KVStoreService -- "used by" --> JobService
+    KVStoreService -- "used by" --> WorkerService
+    KVStoreService -- "used by" --> SchedulerService
+    
+    EventService -- "used by" --> JobService
+    EventService -- "used by" --> WorkerService
+    EventService -- "used by" --> SchedulerService
+    
+    WorkerService -- "manages" --> WorkerStatus
+    SchedulerService -- "manages" --> ScheduledJobs
+    JobService -- "stores" --> JobResults
+```
+
+- **ConnectionService** is the foundation service that provides NATS connectivity to all other services.
+- **KVStoreService** depends on ConnectionService and provides storage capabilities used by most other services.
+- **EventService** depends on both ConnectionService and KVStoreService to provide event logging functionality.
+- **JobService**, **WorkerService**, and **SchedulerService** all depend on the lower-level services to provide their domain-specific functionality.
 
 ## Why NATS?
 
@@ -66,3 +152,4 @@ Using NATS and JetStream as the foundation provides several key advantages:
 -   **Scalability**: You can add more workers at any time to increase your processing capacity. NATS handles the load balancing of jobs to available workers automatically.
 -   **Resilience**: If a worker crashes, JetStream ensures that the job it was processing will be re-delivered to another worker after a timeout. If the entire `naq` system goes down, the jobs are safe in the NATS stream, ready to be processed when the system comes back online.
 -   **Simplicity**: By offloading the complexities of persistence, delivery guarantees, and storage to NATS, the `naq` codebase can remain focused on the core logic of job execution and scheduling.
+-   **Service Flexibility**: The service layer architecture allows each component to leverage NATS features independently while maintaining a consistent interface.

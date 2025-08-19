@@ -2,7 +2,7 @@
 title: "Quickstart Guide"
 ---
 
-This guide will walk you through the basics of setting up a task, enqueuing it, and running a worker to process it.
+This guide will walk you through the basics of setting up a task, enqueuing it, and running a worker to process it using `naq`'s service layer architecture.
 
 ## 1. Define a Task
 
@@ -77,8 +77,92 @@ Found 25 words.
 
 Congratulations! You've successfully enqueued and processed your first background job with `naq`.
 
+## Using the Service Layer
+
+For more control and advanced features, you can use `naq`'s service layer directly. The service layer provides modular components that can be used independently or composed together.
+
+Here's how to set up the same task using the service layer:
+
+```python
+# service_layer_example.py
+import asyncio
+from naq.services.base import ServiceConfig
+from naq.services.connection import ConnectionService, ConnectionServiceConfig
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+from naq.services.events import EventService, EventServiceConfig
+from naq.services.jobs import JobService, JobServiceConfig
+from naq.models.jobs import Job
+from tasks import count_words
+
+async def main():
+    # Initialize all required services
+    connection_config = ConnectionServiceConfig()
+    connection_service = ConnectionService(config=ServiceConfig(custom_settings=connection_config.as_dict()))
+    await connection_service.initialize()
+    
+    kv_store_config = KVStoreServiceConfig()
+    kv_store_service = KVStoreService(config=ServiceConfig(custom_settings=kv_store_config.as_dict()))
+    await kv_store_service.initialize()
+    
+    event_config = EventServiceConfig()
+    event_service = EventService(config=ServiceConfig(custom_settings=event_config.as_dict()), kv_store_service=kv_store_service)
+    await event_service.initialize()
+    
+    # Create JobService with configuration
+    job_config = JobServiceConfig(
+        enable_job_execution=True,
+        enable_result_storage=True,
+        enable_event_logging=True
+    )
+    job_service = JobService(
+        config=ServiceConfig(custom_settings=job_config.as_dict()),
+        connection_service=connection_service,
+        kv_store_service=kv_store_service,
+        event_service=event_service
+    )
+    await job_service.initialize()
+    
+    # Create a job
+    long_text = (
+        "A journey of a thousand miles begins with a single step. "
+        "The best time to plant a tree was 20 years ago. "
+        "The second best time is now."
+    )
+    
+    job = Job(
+        function=count_words,
+        args=(long_text,),
+        queue_name="default"
+    )
+    
+    # Execute the job
+    print("Executing job using service layer...")
+    result = await job_service.execute_job(job, "worker-1")
+    print(f"Job completed with result: {result.result}")
+    
+    # Cleanup
+    await job_service.cleanup()
+    await event_service.cleanup()
+    await kv_store_service.cleanup()
+    await connection_service.cleanup()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Service Layer Benefits
+
+Using the service layer provides several advantages:
+
+- **Modularity**: Use only the services you need
+- **Control**: Fine-grained configuration and management
+- **Composability**: Services can be combined to create complex workflows
+- **Monitoring**: Built-in event logging and statistics
+- **Persistence**: Automatic result storage and retrieval
+
 ## What's Next?
 
 -   Explore how to [schedule jobs](examples.qmd) to run in the future.
 -   Learn about the [architecture](architecture.qmd) of `naq`.
 -   Check out more complex [examples](examples.qmd).
+-   Discover how to use individual [services](examples.qmd#service-layer-examples).
