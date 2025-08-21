@@ -8,7 +8,9 @@ from loguru import logger
 from rich.console import Console
 
 from ..settings import DEFAULT_NATS_URL
-from ..services import ServiceManager, EventService, ConnectionService, ServiceConfig
+from ..services import ServiceManager, EventService, ServiceConfig
+from ..services.config import GlobalServiceConfig
+from ..connection.context_managers import nats_connection
 from ..utils import setup_logging
 
 # Create a Typer instance for event commands
@@ -45,30 +47,34 @@ def events(
     console = Console()
 
     async def _monitor_events():
+        # Create global config with NATS URL and custom settings
+        config = GlobalServiceConfig()
+        config.nats_url = nats_url
+        config.custom_settings.update({"log_level": log_level})
+        
         try:
-            # Create service manager with configuration
-            service_manager = ServiceManager(
-                config=ServiceConfig(
-                    nats_url=nats_url, custom_settings={"log_level": log_level}
+            # Use the new context manager for NATS connection
+            async with nats_connection(config) as nc:
+                # Create service manager with configuration
+                service_manager = ServiceManager(
+                    config=ServiceConfig(
+                        nats_url=nats_url, custom_settings={"log_level": log_level}
+                    )
                 )
-            )
 
-            # Register required services
-            connection_service = await service_manager.register_service(
-                "connection", ConnectionService, initialize=True
-            )
-            event_service = await service_manager.register_service(
-                "events",
-                EventService,
-                config=ServiceConfig(custom_settings={"enable_event_logging": True}),
-                initialize=True,
-            )
+                # Register required services
+                event_service = await service_manager.register_service(
+                    "events",
+                    EventService,
+                    config=ServiceConfig(custom_settings={"enable_event_logging": True}),
+                    initialize=True,
+                )
 
-            logger.info(f"Monitoring events from NATS at {nats_url}")
-            console.print("[yellow]Event monitoring not yet implemented.[/yellow]")
-            console.print(
-                "This command will display real-time events from the naq system."
-            )
+                logger.info(f"Monitoring events from NATS at {nats_url}")
+                console.print("[yellow]Event monitoring not yet implemented.[/yellow]")
+                console.print(
+                    "This command will display real-time events from the naq system."
+                )
 
         except Exception as e:
             logger.error(f"Failed to monitor events: {e}")
@@ -113,31 +119,35 @@ def event_history(
     console = Console()
 
     async def _get_event_history():
+        # Create global config with NATS URL and custom settings
+        config = GlobalServiceConfig()
+        config.nats_url = nats_url
+        config.custom_settings.update({"log_level": log_level})
+        
         try:
-            # Create service manager with configuration
-            service_manager = ServiceManager(
-                config=ServiceConfig(
-                    nats_url=nats_url, custom_settings={"log_level": log_level}
+            # Use the new context manager for NATS connection
+            async with nats_connection(config) as nc:
+                # Create service manager with configuration
+                service_manager = ServiceManager(
+                    config=ServiceConfig(
+                        nats_url=nats_url, custom_settings={"log_level": log_level}
+                    )
                 )
-            )
 
-            # Register required services
-            connection_service = await service_manager.register_service(
-                "connection", ConnectionService, initialize=True
-            )
-            event_service = await service_manager.register_service(
-                "events",
-                EventService,
-                config=ServiceConfig(custom_settings={"enable_event_logging": True}),
-                initialize=True,
-            )
+                # Register required services
+                event_service = await service_manager.register_service(
+                    "events",
+                    EventService,
+                    config=ServiceConfig(custom_settings={"enable_event_logging": True}),
+                    initialize=True,
+                )
 
-            logger.info(f"Fetching event history from NATS at {nats_url}")
-            console.print("[yellow]Event history not yet implemented.[/yellow]")
-            console.print(
-                f"This command will display the last {limit} events "
-                "from the naq system."
-            )
+                logger.info(f"Fetching event history from NATS at {nats_url}")
+                console.print("[yellow]Event history not yet implemented.[/yellow]")
+                console.print(
+                    f"This command will display the last {limit} events "
+                    "from the naq system."
+                )
 
         except Exception as e:
             logger.error(f"Failed to fetch event history: {e}")
@@ -176,30 +186,34 @@ def event_stats(
     console = Console()
 
     async def _get_event_stats():
+        # Create global config with NATS URL and custom settings
+        config = GlobalServiceConfig()
+        config.nats_url = nats_url
+        config.custom_settings.update({"log_level": log_level})
+        
         try:
-            # Create service manager with configuration
-            service_manager = ServiceManager(
-                config=ServiceConfig(
-                    nats_url=nats_url, custom_settings={"log_level": log_level}
+            # Use the new context manager for NATS connection
+            async with nats_connection(config) as nc:
+                # Create service manager with configuration
+                service_manager = ServiceManager(
+                    config=ServiceConfig(
+                        nats_url=nats_url, custom_settings={"log_level": log_level}
+                    )
                 )
-            )
 
-            # Register required services
-            connection_service = await service_manager.register_service(
-                "connection", ConnectionService, initialize=True
-            )
-            event_service = await service_manager.register_service(
-                "events",
-                EventService,
-                config=ServiceConfig(custom_settings={"enable_event_logging": True}),
-                initialize=True,
-            )
+                # Register required services
+                event_service = await service_manager.register_service(
+                    "events",
+                    EventService,
+                    config=ServiceConfig(custom_settings={"enable_event_logging": True}),
+                    initialize=True,
+                )
 
-            logger.info(f"Fetching event statistics from NATS at {nats_url}")
-            console.print("[yellow]Event statistics not yet implemented.[/yellow]")
-            console.print(
-                "This command will display statistics about events in the naq system."
-            )
+                logger.info(f"Fetching event statistics from NATS at {nats_url}")
+                console.print("[yellow]Event statistics not yet implemented.[/yellow]")
+                console.print(
+                    "This command will display statistics about events in the naq system."
+                )
 
         except Exception as e:
             logger.error(f"Failed to fetch event statistics: {e}")
@@ -241,28 +255,32 @@ def worker_events(
     console = Console()
 
     async def _monitor_worker_events():
+        # Create global config with NATS URL and custom settings
+        config = GlobalServiceConfig()
+        config.nats_url = nats_url
+        config.custom_settings.update({"log_level": log_level})
+        
         try:
-            # Create service manager with configuration
-            service_manager = ServiceManager(
-                config=ServiceConfig(
-                    nats_url=nats_url, custom_settings={"log_level": log_level}
+            # Use the new context manager for NATS connection
+            async with nats_connection(config) as nc:
+                # Create service manager with configuration
+                service_manager = ServiceManager(
+                    config=ServiceConfig(
+                        nats_url=nats_url, custom_settings={"log_level": log_level}
+                    )
                 )
-            )
 
-            # Register required services
-            connection_service = await service_manager.register_service(
-                "connection", ConnectionService, initialize=True
-            )
-            event_service = await service_manager.register_service(
-                "events",
-                EventService,
-                config=ServiceConfig(custom_settings={"enable_event_logging": True}),
-                initialize=True,
-            )
+                # Register required services
+                event_service = await service_manager.register_service(
+                    "events",
+                    EventService,
+                    config=ServiceConfig(custom_settings={"enable_event_logging": True}),
+                    initialize=True,
+                )
 
-            logger.info(f"Monitoring events for worker {worker_id} from NATS at {nats_url}")
-            console.print("[yellow]Worker event monitoring not yet implemented.[/yellow]")
-            console.print(f"This command will display events for worker {worker_id}.")
+                logger.info(f"Monitoring events for worker {worker_id} from NATS at {nats_url}")
+                console.print("[yellow]Worker event monitoring not yet implemented.[/yellow]")
+                console.print(f"This command will display events for worker {worker_id}.")
 
         except Exception as e:
             logger.error(f"Failed to monitor worker events: {e}")

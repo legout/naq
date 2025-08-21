@@ -9,10 +9,8 @@ import datetime
 from datetime import timedelta
 from typing import Any, Callable, List, Optional, Union
 
-from ..connection import (
-    close_nats_connection,
-)
 from ..models.jobs import Job, RetryDelayType
+from ..services.config import create_global_config, GlobalServiceConfig
 from ..settings import (
     DEFAULT_QUEUE_NAME,
     DEFAULT_NATS_URL,
@@ -43,6 +41,7 @@ def enqueue_sync(
     retry_delay: RetryDelayType = 0,
     depends_on: Optional[Union[str, List[str], Job, List[Job]]] = None,
     timeout: Optional[int] = None,
+    config: Optional[GlobalServiceConfig] = None,
     **kwargs: Any,
 ) -> Job:
     """
@@ -86,6 +85,7 @@ def enqueue_sync(
             depends_on=depends_on,
             timeout=timeout,
             prefer_thread_local=True,
+            config=config or create_global_config(),
             **kwargs,
         )
         # Do not close thread-local connection here; allow reuse across sync calls.
@@ -103,6 +103,7 @@ def enqueue_at_sync(
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
     timeout: Optional[int] = None,
+    config: Optional[GlobalServiceConfig] = None,
     **kwargs: Any,
 ) -> Job:
     """
@@ -124,6 +125,7 @@ def enqueue_at_sync(
             retry_delay=retry_delay,
             timeout=timeout,
             prefer_thread_local=True,
+            config=config or create_global_config(),
             **kwargs,
         )
         return job
@@ -140,6 +142,7 @@ def enqueue_in_sync(
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
     timeout: Optional[int] = None,
+    config: Optional[GlobalServiceConfig] = None,
     **kwargs: Any,
 ) -> Job:
     """
@@ -160,6 +163,7 @@ def enqueue_in_sync(
             retry_delay=retry_delay,
             timeout=timeout,
             prefer_thread_local=True,
+            config=config or create_global_config(),
             **kwargs,
         )
         return job
@@ -178,6 +182,7 @@ def schedule_sync(
     max_retries: Optional[int] = 0,
     retry_delay: RetryDelayType = 0,
     timeout: Optional[int] = None,
+    config: Optional[GlobalServiceConfig] = None,
     **kwargs: Any,
 ) -> Job:
     """
@@ -201,6 +206,7 @@ def schedule_sync(
             retry_delay=retry_delay,
             timeout=timeout,
             prefer_thread_local=True,
+            config=config or create_global_config(),
             **kwargs,
         )
         return job
@@ -211,6 +217,7 @@ def schedule_sync(
 def purge_queue_sync(
     queue_name: str = DEFAULT_QUEUE_NAME,
     nats_url: str = DEFAULT_NATS_URL,
+    config: Optional[GlobalServiceConfig] = None,
 ) -> int:
     """
     Helper to purge jobs from a specific queue (synchronous).
@@ -220,14 +227,17 @@ def purge_queue_sync(
 
     async def _main():
         count = await purge_queue(
-            queue_name=queue_name, nats_url=nats_url, prefer_thread_local=True
+            queue_name=queue_name,
+            nats_url=nats_url,
+            prefer_thread_local=True,
+            config=config or create_global_config()
         )
         return count
 
     return run_async_from_sync(_main)
 
 
-def cancel_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL) -> bool:
+def cancel_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL, config: Optional[GlobalServiceConfig] = None) -> bool:
     """
     Helper to cancel a scheduled job (sync).
 
@@ -236,14 +246,17 @@ def cancel_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL) -> 
 
     async def _main():
         res = await cancel_scheduled_job(
-            job_id, nats_url=nats_url, prefer_thread_local=True
+            job_id,
+            nats_url=nats_url,
+            prefer_thread_local=True,
+            config=config or create_global_config()
         )
         return res
 
     return run_async_from_sync(_main)
 
 
-def pause_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL) -> bool:
+def pause_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL, config: Optional[GlobalServiceConfig] = None) -> bool:
     """
     Helper to pause a scheduled job (sync).
 
@@ -252,14 +265,17 @@ def pause_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL) -> b
 
     async def _main():
         res = await pause_scheduled_job(
-            job_id, nats_url=nats_url, prefer_thread_local=True
+            job_id,
+            nats_url=nats_url,
+            prefer_thread_local=True,
+            config=config or create_global_config()
         )
         return res
 
     return run_async_from_sync(_main)
 
 
-def resume_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL) -> bool:
+def resume_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL, config: Optional[GlobalServiceConfig] = None) -> bool:
     """
     Helper to resume a scheduled job (sync).
 
@@ -268,7 +284,10 @@ def resume_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL) -> 
 
     async def _main():
         res = await resume_scheduled_job(
-            job_id, nats_url=nats_url, prefer_thread_local=True
+            job_id,
+            nats_url=nats_url,
+            prefer_thread_local=True,
+            config=config or create_global_config()
         )
         return res
 
@@ -276,7 +295,7 @@ def resume_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL) -> 
 
 
 def modify_scheduled_job_sync(
-    job_id: str, nats_url: str = DEFAULT_NATS_URL, **updates: Any
+    job_id: str, nats_url: str = DEFAULT_NATS_URL, config: Optional[GlobalServiceConfig] = None, **updates: Any
 ) -> bool:
     """
     Helper to modify a scheduled job (sync).
@@ -286,7 +305,11 @@ def modify_scheduled_job_sync(
 
     async def _main():
         res = await modify_scheduled_job(
-            job_id, nats_url=nats_url, prefer_thread_local=True, **updates
+            job_id,
+            nats_url=nats_url,
+            prefer_thread_local=True,
+            config=config or create_global_config(),
+            **updates
         )
         return res
 
@@ -301,9 +324,14 @@ def close_sync_connections(nats_url: str = DEFAULT_NATS_URL) -> None:
     Use this to explicitly end a synchronous batch when you know no further
     enqueue_sync (or other sync helpers) will be called from the current thread.
     This can release the connection resources earlier than process exit.
+    
+    Note: With context managers, connections are automatically closed when the
+    context exits. This function is kept for backward compatibility.
     """
 
     async def _main():
-        await close_nats_connection(url=nats_url, thread_local=True)
+        # With context managers, connections are automatically managed
+        # This function is kept for backward compatibility
+        pass
 
     return run_async_from_sync(_main)

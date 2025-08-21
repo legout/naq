@@ -72,42 +72,31 @@ class WorkerMonitor:
             A list of dictionaries, each containing information about a worker.
         """
         workers = []
-        kv_store_service = None
         url_to_use = nats_url or self._nats_url
 
         try:
-            # Get KVStoreService
-            if url_to_use != self._nats_url:
-                # If different URL provided, create a temporary service
-                from ..services import ConnectionService
-
-                config = ServiceConfig(nats_url=url_to_use)
-                temp_service_manager = ServiceManager(config)
-
-                await temp_service_manager.register_service(
-                    "connection", ConnectionService, config, initialize=True
-                )
-                kv_store_service = await temp_service_manager.register_service(
-                    "kv_store", KVStoreService, config, initialize=True
-                )
-            else:
-                kv_store_service = await self._get_kv_store_service()
-
-            # Get the KV store
-            kv = await kv_store_service.get_kv_store(WORKER_KV_NAME)
-
-            # Get all keys
-            keys = await kv.keys()
-            for key_bytes in keys:
-                try:
-                    entry = await kv.get(key_bytes)
-                    if entry:
-                        worker_data = cloudpickle.loads(entry.value)
-                        workers.append(worker_data)
-                except Exception as e:
-                    logger.error(
-                        f"Error reading worker data for key '{key_bytes.decode()}': {e}"
-                    )
+            # Use the new context manager for KV store access
+            from ..connection.context_managers import nats_kv_store
+            from ..services.config import create_global_config
+            
+            # Create config with the provided URL
+            config = create_global_config()
+            config.nats_url = url_to_use
+            
+            # Use the KV store context manager
+            async with nats_kv_store(WORKER_KV_NAME, config) as kv:
+                # Get all keys
+                keys = await kv.keys()
+                for key_bytes in keys:
+                    try:
+                        entry = await kv.get(key_bytes)
+                        if entry:
+                            worker_data = cloudpickle.loads(entry.value)
+                            workers.append(worker_data)
+                    except Exception as e:
+                        logger.error(
+                            f"Error reading worker data for key '{key_bytes.decode()}': {e}"
+                        )
 
             return workers
 
@@ -121,17 +110,6 @@ class WorkerMonitor:
                 return []
             else:
                 raise NaqException(f"Error listing workers: {e}") from e
-        finally:
-            # Clean up temporary service if it was created
-            if (
-                kv_store_service
-                and url_to_use != self._nats_url
-                and hasattr(kv_store_service, "cleanup")
-            ):
-                try:
-                    await kv_store_service.cleanup()
-                except Exception:
-                    pass
 
     def list_workers_sync(self, nats_url: Optional[str] = None) -> List[Dict[str, Any]]:
         """Synchronous version of list_workers.

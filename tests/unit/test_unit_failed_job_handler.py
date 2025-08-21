@@ -10,6 +10,13 @@ from naq.exceptions import SerializationError
 
 
 @pytest_asyncio.fixture
+def mock_service_manager():
+    """Fixture for a mock service manager instance."""
+    service_manager = MagicMock()
+    return service_manager
+
+
+@pytest_asyncio.fixture
 def mock_worker():
     """Fixture for a mock worker instance."""
     worker = MagicMock()
@@ -28,15 +35,15 @@ def mock_js():
 
 
 @pytest_asyncio.fixture
-def failed_job_handler(mock_worker):
+def failed_job_handler(mock_service_manager):
     """Fixture for a FailedJobHandler instance."""
-    return FailedJobHandler(worker=mock_worker)
+    return FailedJobHandler(service_manager=mock_service_manager)
 
 
 @pytest.mark.asyncio
-async def test_failed_job_handler_init(failed_job_handler, mock_worker):
+async def test_failed_job_handler_init(failed_job_handler, mock_service_manager):
     """Test FailedJobHandler initialization."""
-    assert failed_job_handler.worker == mock_worker
+    assert failed_job_handler._service_manager == mock_service_manager
     assert failed_job_handler._js is None
 
 

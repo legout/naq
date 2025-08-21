@@ -384,41 +384,43 @@ class JobStatusManager:
                 logger.error("JetStream context not available")
                 return
 
-            kv_store = await self.worker._js.key_value(bucket=RESULT_KV_NAME)
-            if not kv_store:
-                logger.warning(
-                    f"Result KV store not available. Cannot store result for job {job.job_id}"
+            # Use the new context manager for KV store operations
+            from ..connection.context_managers import nats_kv_store
+            from ..services.config import create_global_config
+            
+            # Create config
+            config = create_global_config()
+            
+            # Use the KV store context manager
+            async with nats_kv_store(RESULT_KV_NAME, config) as kv_store:
+                # Prepare result data
+                if job.error:
+                    # Store failure information
+                    result_data = {
+                        "status": JOB_STATUS.FAILED.value,
+                        "error": job.error,
+                        "traceback": job.traceback,
+                    }
+                    logger.debug(f"Storing failure info for job {job.job_id}")
+                else:
+                    # Store successful result
+                    result_data = {
+                        "status": JOB_STATUS.COMPLETED.value,
+                        "result": job.result,
+                    }
+                    logger.debug(f"Storing result for job {job.job_id}")
+
+                # Serialize the result data
+                serialized_result = Job.serialize_result(
+                    result=result_data.get("result"),
+                    status=result_data.get("status"),
+                    error=result_data.get("error"),
+                    traceback_str=result_data.get("traceback"),
                 )
-                return
 
-            # Prepare result data
-            if job.error:
-                # Store failure information
-                result_data = {
-                    "status": JOB_STATUS.FAILED.value,
-                    "error": job.error,
-                    "traceback": job.traceback,
-                }
-                logger.debug(f"Storing failure info for job {job.job_id}")
-            else:
-                # Store successful result
-                result_data = {
-                    "status": JOB_STATUS.COMPLETED.value,
-                    "result": job.result,
-                }
-                logger.debug(f"Storing result for job {job.job_id}")
-
-            # Serialize the result data
-            serialized_result = Job.serialize_result(
-                result=result_data.get("result"),
-                status=result_data.get("status"),
-                error=result_data.get("error"),
-                traceback_str=result_data.get("traceback"),
-            )
-
-            # Store the result with TTL
-            await kv_store.put(job.job_id, serialized_result)
-            logger.debug(f"Stored result for job {job.job_id} using direct connection")
+                # Store the result with TTL
+                await kv_store.put(job.job_id, serialized_result)
+                logger.debug(f"Stored result for job {job.job_id} using direct connection")
 
         except Exception as e:
             # Log error but don't let result storage failure stop job processing

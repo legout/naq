@@ -37,11 +37,12 @@ from .services import ConnectionService
 from .services import KVStoreService
 from .services import EventService
 from .services import SchedulerService
+from .connection.context_managers import nats_jetstream, nats_kv_store
 
 
 class LeaderElection:
     """
-    Handles leader election for high availability schedulers using KVStoreService.
+    Handles leader election for high availability schedulers using NATS KV store.
     """
 
     def __init__(
@@ -53,17 +54,15 @@ class LeaderElection:
         self.instance_id = instance_id
         self.lock_ttl = lock_ttl
         self.lock_renew_interval = lock_renew_interval
-        self._kv_store_service: Optional[KVStoreService] = None
         self._shutdown_event = asyncio.Event()
         self._is_leader = False
         self._lock_renewal_task: Optional[asyncio.Task] = None
 
-    async def initialize(self, kv_store_service: KVStoreService) -> None:
-        """Initialize the leader election system with a KVStoreService."""
+    async def initialize(self) -> None:
+        """Initialize the leader election system."""
         try:
-            self._kv_store_service = kv_store_service
             logger.info(
-                f"Connected to leader election KV store '{SCHEDULER_LOCK_KV_NAME}'"
+                f"Initialized leader election for KV store '{SCHEDULER_LOCK_KV_NAME}'"
             )
         except Exception as e:
             logger.error(
@@ -80,52 +79,43 @@ class LeaderElection:
         Returns:
             True if this instance is now the leader, False otherwise
         """
-        if not self._kv_store_service:
-            logger.error("KV store service not initialized")
-            return False
-
         try:
-            # Try to get the current lock
-            try:
-                lock_data = await self._kv_store_service.get(
-                    SCHEDULER_LOCK_KV_NAME,
-                    SCHEDULER_LOCK_KEY,
-                    deserialize=True
+            # Use the nats_kv_store context manager for KV operations
+            async with nats_kv_store(SCHEDULER_LOCK_KV_NAME) as kv:
+                # Try to get the current lock
+                try:
+                    entry = await kv.get(SCHEDULER_LOCK_KEY.encode("utf-8"))
+                    if entry:
+                        lock_data = cloudpickle.loads(entry.value)
+                        # Lock exists - see if it's expired
+                        lock_time = lock_data.get("timestamp", 0)
+                        lock_owner = lock_data.get("instance_id", "unknown")
+
+                        # If lock is still valid and owned by someone else, can't become leader
+                        if (
+                            time.time() - lock_time < self.lock_ttl
+                            and lock_owner != self.instance_id
+                        ):
+                            logger.debug(
+                                f"Lock already held by '{lock_owner}', cannot become leader"
+                            )
+                            return False
+                except Exception:
+                    # No existing lock, we can try to take it
+                    pass
+
+                # Attempt to set the lock with our instance ID
+                lock_data = {
+                    "instance_id": self.instance_id,
+                    "timestamp": time.time(),
+                    "hostname": socket.gethostname(),
+                }
+                serialized_lock_data = cloudpickle.dumps(lock_data)
+                await kv.put(SCHEDULER_LOCK_KEY.encode("utf-8"), serialized_lock_data)
+                logger.info(
+                    f"Acquired scheduler leader lock. This instance ({self.instance_id}) is now the leader."
                 )
-                if lock_data:
-                    # Lock exists - see if it's expired
-                    lock_time = lock_data.get("timestamp", 0)
-                    lock_owner = lock_data.get("instance_id", "unknown")
-
-                    # If lock is still valid and owned by someone else, can't become leader
-                    if (
-                        time.time() - lock_time < self.lock_ttl
-                        and lock_owner != self.instance_id
-                    ):
-                        logger.debug(
-                            f"Lock already held by '{lock_owner}', cannot become leader"
-                        )
-                        return False
-            except Exception:
-                # No existing lock, we can try to take it
-                pass
-
-            # Attempt to set the lock with our instance ID
-            lock_data = {
-                "instance_id": self.instance_id,
-                "timestamp": time.time(),
-                "hostname": socket.gethostname(),
-            }
-            await self._kv_store_service.put(
-                SCHEDULER_LOCK_KV_NAME,
-                SCHEDULER_LOCK_KEY,
-                lock_data,
-                serialize=True
-            )
-            logger.info(
-                f"Acquired scheduler leader lock. This instance ({self.instance_id}) is now the leader."
-            )
-            return True
+                return True
 
         except Exception as e:
             logger.error(f"Error during leader election: {e}")
@@ -146,19 +136,16 @@ class LeaderElection:
         """
         while running_flag and self._is_leader:
             try:
-                if self._kv_store_service:
+                # Use the nats_kv_store context manager for KV operations
+                async with nats_kv_store(SCHEDULER_LOCK_KV_NAME) as kv:
                     # Update the lock with fresh timestamp
                     lock_data = {
                         "instance_id": self.instance_id,
                         "timestamp": time.time(),
                         "hostname": socket.gethostname(),
                     }
-                    await self._kv_store_service.put(
-                        SCHEDULER_LOCK_KV_NAME,
-                        SCHEDULER_LOCK_KEY,
-                        lock_data,
-                        serialize=True
-                    )
+                    serialized_lock_data = cloudpickle.dumps(lock_data)
+                    await kv.put(SCHEDULER_LOCK_KEY.encode("utf-8"), serialized_lock_data)
                     logger.debug(
                         f"Renewed leader lock. Next renewal in {self.lock_renew_interval}s"
                     )
@@ -195,10 +182,12 @@ class LeaderElection:
 
     async def release_lock(self) -> None:
         """Explicitly release the leader lock when shutting down."""
-        if self._is_leader and self._kv_store_service:
+        if self._is_leader:
             try:
-                await self._kv_store_service.delete(SCHEDULER_LOCK_KV_NAME, SCHEDULER_LOCK_KEY)
-                logger.info("Released scheduler leader lock")
+                # Use the nats_kv_store context manager for KV operations
+                async with nats_kv_store(SCHEDULER_LOCK_KV_NAME) as kv:
+                    await kv.delete(SCHEDULER_LOCK_KEY.encode("utf-8"), purge=True)
+                    logger.info("Released scheduler leader lock")
             except Exception as e:
                 logger.error(f"Error releasing leader lock: {e}")
         self._is_leader = False
@@ -211,15 +200,16 @@ class LeaderElection:
 
 class ScheduledJobProcessor:
     """
-    Handles the processing of scheduled jobs using the service layer.
+    Handles the processing of scheduled jobs using context managers.
     """
 
     def __init__(
         self,
-        connection_service: ConnectionService,
-        kv_store_service: KVStoreService,
-        event_service: EventService
+        connection_service: Optional[ConnectionService] = None,
+        kv_store_service: Optional[KVStoreService] = None,
+        event_service: Optional[EventService] = None
     ):
+        # Services are kept for compatibility but not used in context manager approach
         self._connection_service = connection_service
         self._kv_store_service = kv_store_service
         self._event_service = event_service
@@ -232,12 +222,13 @@ class ScheduledJobProcessor:
             True if enqueuing was successful, False otherwise
         """
         try:
-            js = await self._connection_service.get_jetstream()
-            ack = await js.publish(subject=subject, payload=payload)
-            logger.debug(
-                f"Enqueued job to {subject}. Stream: {ack.stream}, Seq: {ack.seq}"
-            )
-            return True
+            # Use the nats_jetstream context manager for connection management
+            async with nats_jetstream() as (nc, js):
+                ack = await js.publish(subject=subject, payload=payload)
+                logger.debug(
+                    f"Enqueued job to {subject}. Stream: {ack.stream}, Seq: {ack.seq}"
+                )
+                return True
         except Exception as e:
             logger.error(f"Failed to enqueue job payload to subject '{subject}': {e}")
             return False
@@ -384,15 +375,14 @@ class Scheduler:
 
             # Initialize components
             if self._enable_ha:
-                await self._leader_election.initialize(self._kv_store_service)
+                await self._leader_election.initialize()
 
             # Create job processor
-            if self._kv_store_service and self._connection_service:
-                self._job_processor = ScheduledJobProcessor(
-                    self._connection_service,
-                    self._kv_store_service,
-                    self._event_service
-                )
+            self._job_processor = ScheduledJobProcessor(
+                self._connection_service,
+                self._kv_store_service,
+                self._event_service
+            )
 
         except Exception as e:
             logger.error(f"Failed to connect to services: {e}")

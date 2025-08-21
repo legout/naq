@@ -6,9 +6,8 @@ from typing import Optional
 from loguru import logger
 
 from .connection import (
-    close_nats_connection,
-    get_jetstream_context,
-    get_nats_connection,
+    nats_jetstream,
+    nats_kv_store,
 )
 from .settings import DEFAULT_NATS_URL
 from .exceptions import (
@@ -67,9 +66,8 @@ __all__ = [
     "JobResult",
     "RetryDelayType",
     "Schedule",
-    "get_nats_connection",
-    "get_jetstream_context",
-    "close_nats_connection",
+    "nats_jetstream",
+    "nats_kv_store",
     "list_workers",
     "list_workers_sync",
 ]

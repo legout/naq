@@ -171,39 +171,31 @@ class WorkerStatusManager:
             NaqException: For errors.
         """
         workers = []
-        kv_store_service = None
         
         try:
-            # Create a temporary KVStoreService for listing workers
-            from ..services import KVStoreService, ServiceConfig, ConnectionService, ServiceManager
+            # Use the new context manager for KV store access
+            from ..connection.context_managers import nats_kv_store
+            from ..services.config import create_global_config
             
-            # Create a service manager with the provided URL
-            config = ServiceConfig(nats_url=nats_url)
-            service_manager = ServiceManager(config)
+            # Create config with the provided URL
+            config = create_global_config()
+            if nats_url:
+                config.nats_url = nats_url
             
-            # Register and initialize services
-            connection_service = await service_manager.register_service(
-                "connection", ConnectionService, config, initialize=True
-            )
-            kv_store_service = await service_manager.register_service(
-                "kv_store", KVStoreService, config, initialize=True
-            )
-            
-            # Get the KV store
-            kv = await kv_store_service.get_kv_store(WORKER_KV_NAME)
-            
-            # Get all keys
-            keys = await kv.keys()
-            for key_bytes in keys:
-                try:
-                    entry = await kv.get(key_bytes)
-                    if entry:
-                        worker_data = cloudpickle.loads(entry.value)
-                        workers.append(worker_data)
-                except Exception as e:
-                    logger.error(
-                        f"Error reading worker data for key '{key_bytes.decode()}': {e}"
-                    )
+            # Use the KV store context manager
+            async with nats_kv_store(WORKER_KV_NAME, config) as kv:
+                # Get all keys
+                keys = await kv.keys()
+                for key_bytes in keys:
+                    try:
+                        entry = await kv.get(key_bytes)
+                        if entry:
+                            worker_data = cloudpickle.loads(entry.value)
+                            workers.append(worker_data)
+                    except Exception as e:
+                        logger.error(
+                            f"Error reading worker data for key '{key_bytes.decode()}': {e}"
+                        )
 
             return workers
 
@@ -215,10 +207,3 @@ class WorkerStatusManager:
                 return []
             else:
                 raise NaqException(f"Error listing workers: {e}") from e
-        finally:
-            # Clean up services if they were created
-            if kv_store_service and hasattr(kv_store_service, 'cleanup'):
-                try:
-                    await kv_store_service.cleanup()
-                except Exception:
-                    pass

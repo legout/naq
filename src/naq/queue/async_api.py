@@ -12,6 +12,7 @@ from typing import Any, Callable, List, Optional, Union
 
 from ..models.jobs import Job, RetryDelayType
 from .core import Queue
+from ..services.config import create_global_config, GlobalServiceConfig
 from ..settings import (
     DEFAULT_QUEUE_NAME,
     DEFAULT_NATS_URL,
@@ -28,11 +29,15 @@ async def enqueue(
     depends_on: Optional[Union[str, List[str], Job, List[Job]]] = None,
     timeout: Optional[int] = None,
     prefer_thread_local: bool = False,
+    config: Optional[GlobalServiceConfig] = None,
     **kwargs: Any,
 ) -> Job:
     """Helper to enqueue a job onto a specific queue (async)."""
     q = Queue(
-        name=queue_name, nats_url=nats_url, prefer_thread_local=prefer_thread_local
+        name=queue_name,
+        nats_url=nats_url,
+        prefer_thread_local=prefer_thread_local,
+        config=config or create_global_config()
     )
     job = await q.enqueue(
         func,
@@ -56,11 +61,15 @@ async def enqueue_at(
     retry_delay: RetryDelayType = 0,
     timeout: Optional[int] = None,
     prefer_thread_local: bool = False,
+    config: Optional[GlobalServiceConfig] = None,
     **kwargs: Any,
 ) -> Job:
     """Helper to schedule a job for a specific time (async)."""
     q = Queue(
-        name=queue_name, nats_url=nats_url, prefer_thread_local=prefer_thread_local
+        name=queue_name,
+        nats_url=nats_url,
+        prefer_thread_local=prefer_thread_local,
+        config=config or create_global_config()
     )
     return await q.enqueue_at(
         dt,
@@ -83,11 +92,15 @@ async def enqueue_in(
     retry_delay: RetryDelayType = 0,
     timeout: Optional[int] = None,
     prefer_thread_local: bool = False,
+    config: Optional[GlobalServiceConfig] = None,
     **kwargs: Any,
 ) -> Job:
     """Helper to schedule a job after a delay (async)."""
     q = Queue(
-        name=queue_name, nats_url=nats_url, prefer_thread_local=prefer_thread_local
+        name=queue_name,
+        nats_url=nats_url,
+        prefer_thread_local=prefer_thread_local,
+        config=config or create_global_config()
     )
     return await q.enqueue_in(
         delta,
@@ -112,11 +125,15 @@ async def schedule(
     retry_delay: RetryDelayType = 0,
     timeout: Optional[int] = None,
     prefer_thread_local: bool = False,
+    config: Optional[GlobalServiceConfig] = None,
     **kwargs: Any,
 ) -> Job:
     """Helper to schedule a recurring job (async)."""
     q = Queue(
-        name=queue_name, nats_url=nats_url, prefer_thread_local=prefer_thread_local
+        name=queue_name,
+        nats_url=nats_url,
+        prefer_thread_local=prefer_thread_local,
+        config=config or create_global_config()
     )
     return await q.schedule(
         func,
@@ -135,37 +152,54 @@ async def purge_queue(
     queue_name: str = DEFAULT_QUEUE_NAME,
     nats_url: str = DEFAULT_NATS_URL,
     prefer_thread_local: bool = False,
+    config: Optional[GlobalServiceConfig] = None,
 ) -> int:
     """Helper to purge jobs from a specific queue (async)."""
     q = Queue(
-        name=queue_name, nats_url=nats_url, prefer_thread_local=prefer_thread_local
+        name=queue_name,
+        nats_url=nats_url,
+        prefer_thread_local=prefer_thread_local,
+        config=config or create_global_config()
     )
     return await q.purge()
 
 
 async def cancel_scheduled_job(
-    job_id: str, nats_url: str = DEFAULT_NATS_URL, prefer_thread_local: bool = False
+    job_id: str, nats_url: str = DEFAULT_NATS_URL, prefer_thread_local: bool = False,
+    config: Optional[GlobalServiceConfig] = None
 ) -> bool:
     """Helper to cancel a scheduled job (async)."""
     q = Queue(
-        nats_url=nats_url, prefer_thread_local=prefer_thread_local
+        nats_url=nats_url,
+        prefer_thread_local=prefer_thread_local,
+        config=config or create_global_config()
     )  # Queue name doesn't matter here
     return await q.cancel_scheduled_job(job_id)
 
 
 async def pause_scheduled_job(
-    job_id: str, nats_url: str = DEFAULT_NATS_URL, prefer_thread_local: bool = False
+    job_id: str, nats_url: str = DEFAULT_NATS_URL, prefer_thread_local: bool = False,
+    config: Optional[GlobalServiceConfig] = None
 ) -> bool:
     """Helper to pause a scheduled job (async)."""
-    q = Queue(nats_url=nats_url, prefer_thread_local=prefer_thread_local)
+    q = Queue(
+        nats_url=nats_url,
+        prefer_thread_local=prefer_thread_local,
+        config=config or create_global_config()
+    )
     return await q.pause_scheduled_job(job_id)
 
 
 async def resume_scheduled_job(
-    job_id: str, nats_url: str = DEFAULT_NATS_URL, prefer_thread_local: bool = False
+    job_id: str, nats_url: str = DEFAULT_NATS_URL, prefer_thread_local: bool = False,
+    config: Optional[GlobalServiceConfig] = None
 ) -> bool:
     """Helper to resume a scheduled job (async)."""
-    q = Queue(nats_url=nats_url, prefer_thread_local=prefer_thread_local)
+    q = Queue(
+        nats_url=nats_url,
+        prefer_thread_local=prefer_thread_local,
+        config=config or create_global_config()
+    )
     return await q.resume_scheduled_job(job_id)
 
 
@@ -173,8 +207,13 @@ async def modify_scheduled_job(
     job_id: str,
     nats_url: str = DEFAULT_NATS_URL,
     prefer_thread_local: bool = False,
+    config: Optional[GlobalServiceConfig] = None,
     **updates: Any,
 ) -> bool:
     """Helper to modify a scheduled job (async)."""
-    q = Queue(nats_url=nats_url, prefer_thread_local=prefer_thread_local)
+    q = Queue(
+        nats_url=nats_url,
+        prefer_thread_local=prefer_thread_local,
+        config=config or create_global_config()
+    )
     return await q.modify_scheduled_job(job_id, **updates)

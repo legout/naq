@@ -12,11 +12,12 @@ from ..settings import DEFAULT_NATS_URL
 from ..services import (
     ServiceManager,
     JobService,
-    ConnectionService,
     SchedulerService,
     StreamService,
     ServiceConfig,
 )
+from ..services.config import GlobalServiceConfig
+from ..connection.context_managers import nats_connection
 from ..utils import setup_logging
 
 # Create a Typer instance for job commands
@@ -54,48 +55,51 @@ def purge(
     console = Console()
 
     async def _purge_queues():
+        # Create global config with NATS URL and custom settings
+        config = GlobalServiceConfig()
+        config.nats_url = nats_url
+        config.custom_settings.update({"log_level": log_level})
+        
         try:
-            # Create service manager with configuration
-            service_manager = ServiceManager(
-                config=ServiceConfig(
-                    nats_url=nats_url, custom_settings={"log_level": log_level}
+            # Use the new context manager for NATS JetStream connection
+            async with nats_jetstream(config) as (nc, js):
+                # Create service manager with configuration
+                service_manager = ServiceManager(
+                    config=ServiceConfig(
+                        nats_url=nats_url, custom_settings={"log_level": log_level}
+                    )
                 )
-            )
 
-            # Register required services
-            connection_service = await service_manager.register_service(
-                "connection", ConnectionService, initialize=True
-            )
-            job_service = await service_manager.register_service(
-                "job", JobService, initialize=True
-            )
-            stream_service = await service_manager.register_service(
-                "stream", StreamService, initialize=True
-            )
+                # Register required services
+                job_service = await service_manager.register_service(
+                    "job", JobService, initialize=True
+                )
+                stream_service = await service_manager.register_service(
+                    "stream", StreamService, initialize=True
+                )
 
-            logger.info(f"Attempting to purge queues: {queues}")
-            logger.info(f"Using NATS URL: {nats_url}")
+                logger.info(f"Attempting to purge queues: {queues}")
+                logger.info(f"Using NATS URL: {nats_url}")
 
-            # Use services to purge queues
-            from ..settings import NAQ_PREFIX
+                # Use services to purge queues
+                from ..settings import NAQ_PREFIX
 
-            results = {}
-            total_purged = 0
-            for queue_name in queues:
-                try:
-                    # Get JetStream context and purge the stream
-                    js = await connection_service.get_jetstream()
-                    stream_name = f"{NAQ_PREFIX}_queue_{queue_name}"
-                    
-                    # Purge the stream
-                    await stream_service.purge_stream(stream_name)
-                    purged_count = 0  # NATS doesn't return count for purge
-                    
-                    results[queue_name] = {"status": "success", "count": purged_count}
-                    total_purged += purged_count
-                except Exception as e:
-                    results[queue_name] = {"status": "error", "error": str(e)}
-                    logger.error(f"Failed to purge queue '{queue_name}': {e}")
+                results = {}
+                total_purged = 0
+                for queue_name in queues:
+                    try:
+                        # Use JetStream context from the context manager
+                        stream_name = f"{NAQ_PREFIX}_queue_{queue_name}"
+                        
+                        # Purge the stream
+                        await stream_service.purge_stream(stream_name)
+                        purged_count = 0  # NATS doesn't return count for purge
+                        
+                        results[queue_name] = {"status": "success", "count": purged_count}
+                        total_purged += purged_count
+                    except Exception as e:
+                        results[queue_name] = {"status": "error", "error": str(e)}
+                        logger.error(f"Failed to purge queue '{queue_name}': {e}")
 
             # --- Report Results using Rich ---
             success_count = sum(1 for r in results.values() if r["status"] == "success")
@@ -225,23 +229,27 @@ def job_control(
             raise typer.Exit(code=1)
 
     async def _control_job():
+        # Create global config with NATS URL and custom settings
+        config = GlobalServiceConfig()
+        config.nats_url = nats_url
+        config.custom_settings.update({"log_level": log_level})
+        
         try:
-            # Create service manager with configuration
-            service_manager = ServiceManager(
-                config=ServiceConfig(
-                    nats_url=nats_url, custom_settings={"log_level": log_level}
+            # Use the new context manager for NATS connection
+            async with nats_connection(config) as nc:
+                # Create service manager with configuration
+                service_manager = ServiceManager(
+                    config=ServiceConfig(
+                        nats_url=nats_url, custom_settings={"log_level": log_level}
+                    )
                 )
-            )
 
-            # Register required services
-            connection_service = await service_manager.register_service(
-                "connection", ConnectionService, initialize=True
-            )
-            scheduler_service = await service_manager.register_service(
-                "scheduler", SchedulerService, initialize=True
-            )
+                # Register required services
+                scheduler_service = await service_manager.register_service(
+                    "scheduler", SchedulerService, initialize=True
+                )
 
-            logger.info(f"Performing {action} on job {job_id}")
+                logger.info(f"Performing {action} on job {job_id}")
 
             try:
                 if action == "cancel":

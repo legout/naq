@@ -9,7 +9,9 @@ from loguru import logger
 from ..settings import DEFAULT_NATS_URL, DEFAULT_QUEUE_NAME
 from ..utils import setup_logging
 from ..worker import Worker
-from ..services import ServiceManager, WorkerService, ConnectionService, ServiceConfig
+from ..services import ServiceManager, WorkerService, ServiceConfig
+from ..services.config import GlobalServiceConfig
+from ..connection.context_managers import nats_connection
 
 # Create a Typer instance for worker commands
 worker_app = typer.Typer(
@@ -85,43 +87,52 @@ def start_worker(
     logger.info(f"Concurrency: {concurrency}")
 
     async def _run_worker():
+        # Create global config with NATS URL and custom settings
+        config = GlobalServiceConfig()
+        config.nats_url = nats_url
+        config.custom_settings.update({
+            "log_level": log_level,
+            "concurrency": concurrency,
+            "worker_name": name,
+            "module_paths": module_paths,
+        })
+        
         try:
-            # Create service manager with configuration
-            service_manager = ServiceManager(
-                config=ServiceConfig(
-                    nats_url=nats_url,
-                    custom_settings={
-                        "log_level": log_level,
-                        "concurrency": concurrency,
-                        "worker_name": name,
-                        "module_paths": module_paths,
-                    },
+            # Use the new context manager for NATS connection
+            async with nats_connection(config) as nc:
+                # Create service manager with configuration
+                service_manager = ServiceManager(
+                    config=ServiceConfig(
+                        nats_url=nats_url,
+                        custom_settings={
+                            "log_level": log_level,
+                            "concurrency": concurrency,
+                            "worker_name": name,
+                            "module_paths": module_paths,
+                        },
+                    )
                 )
-            )
 
-            # Register required services
-            connection_service = await service_manager.register_service(
-                "connection", ConnectionService, initialize=True
-            )
-            worker_service = await service_manager.register_service(
-                "worker", WorkerService, initialize=True
-            )
+                # Register required services
+                worker_service = await service_manager.register_service(
+                    "worker", WorkerService, initialize=True
+                )
 
-            # Create and run worker
-            w = Worker(
-                queues=queues,
-                nats_url=nats_url,
-                concurrency=concurrency,
-                worker_name=name,
-                module_paths=module_paths,
-                connection_service=connection_service,
-                worker_service=worker_service,
-            )
-            
-            # Register the worker with the service
-            await worker_service.register_worker(w)
-            
-            await w.run()
+                # Create and run worker
+                w = Worker(
+                    queues=queues,
+                    nats_url=nats_url,
+                    concurrency=concurrency,
+                    worker_name=name,
+                    module_paths=module_paths,
+                    connection_service=None,  # Not needed with context manager
+                    worker_service=worker_service,
+                )
+                
+                # Register the worker with the service
+                await worker_service.register_worker(w)
+                
+                await w.run()
 
         except KeyboardInterrupt:
             logger.info(
@@ -163,7 +174,6 @@ def list_workers(
     """
     Lists all currently active workers registered in the system.
     """
-    import asyncio
     import datetime
     import time
     from datetime import timezone
@@ -178,24 +188,28 @@ def list_workers(
     console = Console()
 
     async def _list_workers():
+        # Create global config with NATS URL and custom settings
+        config = GlobalServiceConfig()
+        config.nats_url = nats_url
+        config.custom_settings.update({"log_level": log_level})
+        
         try:
-            # Create service manager with configuration
-            service_manager = ServiceManager(
-                config=ServiceConfig(
-                    nats_url=nats_url, custom_settings={"log_level": log_level}
+            # Use the new context manager for NATS connection
+            async with nats_connection(config) as nc:
+                # Create service manager with configuration
+                service_manager = ServiceManager(
+                    config=ServiceConfig(
+                        nats_url=nats_url, custom_settings={"log_level": log_level}
+                    )
                 )
-            )
 
-            # Register required services
-            connection_service = await service_manager.register_service(
-                "connection", ConnectionService, initialize=True
-            )
-            worker_service = await service_manager.register_service(
-                "worker", WorkerService, initialize=True
-            )
+                # Register required services
+                worker_service = await service_manager.register_service(
+                    "worker", WorkerService, initialize=True
+                )
 
-            # Use worker service to list workers
-            workers = await worker_service.list_workers()
+                # Use worker service to list workers
+                workers = await worker_service.list_workers()
             if not workers:
                 console.print("[yellow]No active workers found.[/yellow]")
                 return

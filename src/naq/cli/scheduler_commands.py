@@ -20,9 +20,10 @@ from ..scheduler import Scheduler
 from ..services import (
     ServiceManager,
     SchedulerService,
-    ConnectionService,
     ServiceConfig,
 )
+from ..services.config import GlobalServiceConfig
+from ..connection.context_managers import nats_connection
 
 # Create a Typer instance for scheduler commands
 scheduler_app = typer.Typer(
@@ -87,38 +88,47 @@ def start_scheduler(
     logger.info(f"High availability mode: {'enabled' if enable_ha else 'disabled'}")
 
     async def _run_scheduler():
+        # Create global config with NATS URL and custom settings
+        config = GlobalServiceConfig()
+        config.nats_url = nats_url
+        config.custom_settings.update({
+            "log_level": log_level,
+            "poll_interval": poll_interval,
+            "instance_id": instance_id,
+            "enable_ha": enable_ha,
+        })
+        
         try:
-            # Create service manager with configuration
-            service_manager = ServiceManager(
-                config=ServiceConfig(
-                    nats_url=nats_url,
-                    custom_settings={
-                        "log_level": log_level,
-                        "poll_interval": poll_interval,
-                        "instance_id": instance_id,
-                        "enable_ha": enable_ha,
-                    },
+            # Use the new context manager for NATS connection
+            async with nats_connection(config) as nc:
+                # Create service manager with configuration
+                service_manager = ServiceManager(
+                    config=ServiceConfig(
+                        nats_url=nats_url,
+                        custom_settings={
+                            "log_level": log_level,
+                            "poll_interval": poll_interval,
+                            "instance_id": instance_id,
+                            "enable_ha": enable_ha,
+                        },
+                    )
                 )
-            )
 
-            # Register required services
-            connection_service = await service_manager.register_service(
-                "connection", ConnectionService, initialize=True
-            )
-            scheduler_service = await service_manager.register_service(
-                "scheduler", SchedulerService, initialize=True
-            )
+                # Register required services
+                scheduler_service = await service_manager.register_service(
+                    "scheduler", SchedulerService, initialize=True
+                )
 
-            # Create and run scheduler with services
-            s = Scheduler(
-                nats_url=nats_url,
-                poll_interval=poll_interval,
-                instance_id=instance_id,
-                enable_ha=enable_ha,
-                connection_service=connection_service,
-                scheduler_service=scheduler_service,
-            )
-            await s.run()
+                # Create and run scheduler with services
+                s = Scheduler(
+                    nats_url=nats_url,
+                    poll_interval=poll_interval,
+                    instance_id=instance_id,
+                    enable_ha=enable_ha,
+                    connection_service=None,  # Not needed with context manager
+                    scheduler_service=scheduler_service,
+                )
+                await s.run()
 
         except KeyboardInterrupt:
             logger.info(
@@ -190,38 +200,42 @@ def list_scheduled_jobs(
     console = Console()
 
     async def _list_scheduled_jobs_async():
+        # Create global config with NATS URL and custom settings
+        config = GlobalServiceConfig()
+        config.nats_url = nats_url
+        config.custom_settings.update({"log_level": log_level})
+        
         try:
-            # Create service manager with configuration
-            service_manager = ServiceManager(
-                config=ServiceConfig(
-                    nats_url=nats_url, custom_settings={"log_level": log_level}
+            # Use the new context manager for NATS connection
+            async with nats_connection(config) as nc:
+                # Create service manager with configuration
+                service_manager = ServiceManager(
+                    config=ServiceConfig(
+                        nats_url=nats_url, custom_settings={"log_level": log_level}
+                    )
                 )
-            )
 
-            # Register required services
-            connection_service = await service_manager.register_service(
-                "connection", ConnectionService, initialize=True
-            )
-            scheduler_service = await service_manager.register_service(
-                "scheduler", SchedulerService, initialize=True
-            )
+                # Register required services
+                scheduler_service = await service_manager.register_service(
+                    "scheduler", SchedulerService, initialize=True
+                )
 
-            # Parse status filter
-            status_filter = None
-            if status:
+                # Parse status filter
+                status_filter = None
+                if status:
+                    try:
+                        status_filter = SCHEDULED_JOB_STATUS(status)
+                    except ValueError:
+                        logger.error(f"Invalid status filter: {status}")
+                        console.print(f"[red]Invalid status: {status}[/red]")
+                        return
+
+                # Get scheduled jobs using the service
                 try:
-                    status_filter = SCHEDULED_JOB_STATUS(status)
-                except ValueError:
-                    logger.error(f"Invalid status filter: {status}")
-                    console.print(f"[red]Invalid status: {status}[/red]")
-                    return
-
-            # Get scheduled jobs using the service
-            try:
-                jobs_data = []
-                schedules = await scheduler_service.list_scheduled_jobs(status_filter)
-                
-                for schedule in schedules:
+                    jobs_data = []
+                    schedules = await scheduler_service.list_scheduled_jobs(status_filter)
+                    
+                    for schedule in schedules:
                     # Convert schedule to job data format for compatibility
                     job_data = {
                         "job_id": schedule.job_id,
@@ -243,14 +257,14 @@ def list_scheduled_jobs(
                     
                     jobs_data.append(job_data)
                     
-            except Exception as e:
+                except Exception as e:
                 logger.error(f"Failed to list scheduled jobs: {e}")
                 console.print(
                     "[yellow]No scheduled jobs found or cannot access "
                     "job store.[/yellow]"
                 )
                 return
-
+                
             jobs_data.sort(key=lambda j: j.get("scheduled_timestamp_utc", 0))
 
             if detailed:

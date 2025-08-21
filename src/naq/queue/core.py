@@ -9,12 +9,9 @@ from datetime import timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import cloudpickle
-import nats
 from loguru import logger
-from nats.js import JetStreamContext
-from nats.js.errors import KeyNotFoundError
-from nats.js.kv import KeyValue
 
+from ..connection.context_managers import nats_jetstream, nats_kv_store
 from ..exceptions import ConfigurationError
 from ..exceptions import NaqConnectionError
 from ..exceptions import JobNotFoundError, NaqException
@@ -22,6 +19,7 @@ from ..models.jobs import Job, RetryDelayType
 from .scheduled import ScheduledJobManager
 from ..models.enums import SCHEDULED_JOB_STATUS
 from ..services import ServiceManager, ConnectionService, StreamService
+from ..services.config import create_global_config, GlobalServiceConfig
 from ..settings import (
     DEFAULT_QUEUE_NAME,
     DEFAULT_NATS_URL,
@@ -45,6 +43,7 @@ class Queue:
         default_timeout: Optional[int] = None,
         prefer_thread_local: bool = False,
         service_manager: Optional[ServiceManager] = None,
+        config: Optional[GlobalServiceConfig] = None,
     ):
         """
         Initialize a Queue instance.
@@ -57,6 +56,7 @@ class Queue:
             prefer_thread_local: When True, reuse a thread-local connection/JS context.
             service_manager: Optional ServiceManager instance for managing services.
                            If not provided, services will be created directly.
+            config: Optional GlobalServiceConfig for connection configuration.
 
         Raises:
             ValueError: If queue name is empty or contains invalid characters
@@ -73,13 +73,14 @@ class Queue:
         self.subject = f"{NAQ_PREFIX}.queue.{self.name}"
         self.stream_name = f"{NAQ_PREFIX}_jobs"
         self._nats_url = nats_url
-        self._js: Optional[JetStreamContext] = None
+        self._js: Optional[object] = None  # Will be JetStreamContext
         self._default_timeout = default_timeout
-        self._scheduled_job_manager = ScheduledJobManager(name, nats_url)
+        self._scheduled_job_manager = ScheduledJobManager(name, nats_url, config=config)
         self._prefer_thread_local = prefer_thread_local
         self._service_manager = service_manager
         self._connection_service: Optional[ConnectionService] = None
         self._stream_service: Optional[StreamService] = None
+        self._config = config or create_global_config()
 
         setup_logging()  # Ensure logging is set up
 
@@ -120,20 +121,28 @@ class Queue:
         """Async context manager exit."""
         await self.close()
 
-    async def _get_js(self) -> JetStreamContext:
+    async def _get_js(self):
         """Gets the JetStream context, initializing if needed."""
         if self._js is None:
-            # Get or create services
-            await self._ensure_services()
+            # Create config with the specific NATS URL
+            config = create_global_config()
+            config.nats_url = self._nats_url
             
-            # Get JetStream context from ConnectionService
-            self._js = await self._connection_service.get_jetstream(url=self._nats_url)
-            
-            # Ensure the stream exists when the queue is first used
-            await self._stream_service.ensure_stream(
-                stream_name=self.stream_name,
-                subjects=[f"{NAQ_PREFIX}.queue.*"],
-            )
+            # Use the context manager to get JetStream context
+            async with nats_jetstream(config) as (nc, js):
+                self._js = js
+                
+                # Ensure the stream exists when the queue is first used
+                try:
+                    await js.stream_info(self.stream_name)
+                    logger.debug(f"Stream '{self.stream_name}' already exists")
+                except Exception:
+                    # Stream doesn't exist, create it
+                    await js.add_stream(
+                        name=self.stream_name,
+                        subjects=[f"{NAQ_PREFIX}.queue.*"],
+                    )
+                    logger.info(f"Stream '{self.stream_name}' created")
         return self._js
 
     async def enqueue(
@@ -196,18 +205,22 @@ class Queue:
             logger.info(f"Job {job.job_id} depends on: {job.dependency_ids}")
 
         try:
-            js = await self._get_js()
-            serialized_job = job.serialize()
+            # Use the context manager for JetStream operations
+            config = create_global_config()
+            config.nats_url = self._nats_url
+            
+            async with nats_jetstream(config) as (nc, js):
+                serialized_job = job.serialize()
 
-            # Publish the job to the specific subject for this queue
-            ack = await js.publish(
-                subject=self.subject,
-                payload=serialized_job,
-            )
-            logger.info(
-                f"Job {job.job_id} published successfully. Stream: {ack.stream}, Seq: {ack.seq}"
-            )
-            return job
+                # Publish the job to the specific subject for this queue
+                ack = await js.publish(
+                    subject=self.subject,
+                    payload=serialized_job,
+                )
+                logger.info(
+                    f"Job {job.job_id} published successfully. Stream: {ack.stream}, Seq: {ack.seq}"
+                )
+                return job
         except Exception as e:
             logger.error(f"Error enqueueing job {job.job_id}: {e}", exc_info=True)
             raise NaqException(f"Failed to enqueue job: {e}") from e
@@ -419,13 +432,19 @@ class Queue:
             f"Purging queue '{self.name}' (subject: {self.subject} in stream: {self.stream_name})"
         )
         try:
-            # Ensure services are available
-            await self._ensure_services()
+            # Use the context manager for JetStream operations
+            config = create_global_config()
+            config.nats_url = self._nats_url
             
-            # Purge messages for this queue's subject
-            success = await self._stream_service.purge_stream(self.stream_name)
-            logger.info(f"Purge successful for queue '{self.name}'.")
-            return 1 if success else 0
+            async with nats_jetstream(config) as (nc, js):
+                # Purge messages for this queue's stream
+                try:
+                    await js.purge_stream(self.stream_name)
+                    logger.info(f"Purge successful for queue '{self.name}'.")
+                    return 1
+                except Exception as purge_error:
+                    logger.error(f"Error purging stream '{self.stream_name}': {purge_error}")
+                    return 0
         except Exception as e:
             logger.error(f"Error purging queue '{self.name}': {e}")
             raise NaqException(f"Failed to purge queue: {e}") from e
@@ -503,8 +522,8 @@ class Queue:
 
     async def close(self) -> None:
         """Closes NATS connection and cleans up resources."""
-        if self._connection_service:
-            await self._connection_service.close_connection(url=self._nats_url)
+        # With context managers, connections are automatically closed
+        # Just reset our reference
         self._js = None
 
     def __repr__(self) -> str:

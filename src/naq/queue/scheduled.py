@@ -10,8 +10,8 @@ from typing import Any, Dict, Optional
 import cloudpickle
 from loguru import logger
 from nats.js.errors import KeyNotFoundError, APIError
-from nats.js.kv import KeyValue
 
+from ..connection.context_managers import nats_kv_store
 from ..exceptions import (
     ConfigurationError,
     JobNotFoundError,
@@ -20,6 +20,7 @@ from ..exceptions import (
 from ..models.jobs import Job
 from ..models.enums import SCHEDULED_JOB_STATUS
 from ..services import ServiceManager, ConnectionService, KVStoreService
+from ..services.config import create_global_config, GlobalServiceConfig
 from ..settings import (
     JOB_SERIALIZER,
     SCHEDULED_JOBS_KV_NAME,
@@ -32,15 +33,20 @@ class ScheduledJobManager:
     Handles storing, retrieving, and managing scheduled jobs in the NATS KV store.
     """
 
-    def __init__(self, queue_name: str, service_manager: ServiceManager):
+    def __init__(self, queue_name: str, nats_url: str, config: Optional[GlobalServiceConfig] = None):
         self.queue_name = queue_name
-        self._service_manager = service_manager
+        self._nats_url = nats_url
+        self._config = config or create_global_config()
+        self._service_manager: Optional[ServiceManager] = None
         self._connection_service: Optional[ConnectionService] = None
         self._kv_store_service: Optional[KVStoreService] = None
         self._kv: Optional[KeyValue] = None
 
     async def _get_services(self) -> tuple[ConnectionService, KVStoreService]:
         """Get the connection and KV store services from the service manager."""
+        if self._service_manager is None:
+            raise NaqException("ServiceManager is required for service-based operations")
+        
         if self._connection_service is None:
             self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
         
@@ -49,7 +55,7 @@ class ScheduledJobManager:
         
         return self._connection_service, self._kv_store_service
 
-    async def get_kv(self) -> KeyValue:
+    async def get_kv(self):
         """Gets the KeyValue store for scheduled jobs, creating it if needed."""
         if self._kv is not None:
             return self._kv
@@ -88,7 +94,6 @@ class ScheduledJobManager:
         Raises:
             NaqException: If storing the job fails
         """
-        _, kv_store_service = await self._get_services()
         original_job_payload = job.serialize()
 
         schedule_data = {
@@ -107,7 +112,12 @@ class ScheduledJobManager:
         }
 
         try:
-            await kv_store_service.put(SCHEDULED_JOBS_KV_NAME, job.job_id, schedule_data)
+            # Use the context manager for KV store operations
+            config = create_global_config()
+            config.nats_url = self._nats_url
+            
+            async with nats_kv_store(SCHEDULED_JOBS_KV_NAME, config) as kv:
+                await kv.put(job.job_id, schedule_data)
         except Exception as e:
             raise NaqException(
                 f"Failed to store scheduled job {job.job_id} in KV store: {e}"
@@ -127,15 +137,20 @@ class ScheduledJobManager:
             NaqException: For errors other than job not found
         """
         logger.info(f"Attempting to cancel scheduled job '{job_id}'")
-        _, kv_store_service = await self._get_services()
         try:
-            # Use delete with purge=True to ensure it's fully removed
-            deleted = await kv_store_service.delete(SCHEDULED_JOBS_KV_NAME, job_id, purge=True)
-            if deleted:
-                logger.info(f"Scheduled job '{job_id}' cancelled successfully.")
-            else:
-                logger.warning(f"Scheduled job '{job_id}' not found. Cannot cancel.")
-            return deleted
+            # Use the context manager for KV store operations
+            config = create_global_config()
+            config.nats_url = self._nats_url
+            
+            async with nats_kv_store(SCHEDULED_JOBS_KV_NAME, config) as kv:
+                # Use delete with purge=True to ensure it's fully removed
+                try:
+                    await kv.delete(job_id, purge=True)
+                    logger.info(f"Scheduled job '{job_id}' cancelled successfully.")
+                    return True
+                except KeyNotFoundError:
+                    logger.warning(f"Scheduled job '{job_id}' not found. Cannot cancel.")
+                    return False
         except Exception as e:
             logger.error(f"Error cancelling scheduled job '{job_id}': {e}")
             raise NaqException(f"Failed to cancel scheduled job: {e}") from e
@@ -155,25 +170,25 @@ class ScheduledJobManager:
             JobNotFoundError: If job doesn't exist
             NaqException: For other errors
         """
-        _, kv_store_service = await self._get_services()
         try:
-            # Get the current job data
-            schedule_data = await kv_store_service.get(SCHEDULED_JOBS_KV_NAME, job_id)
+            # Use the context manager for KV store operations
+            config = create_global_config()
+            config.nats_url = self._nats_url
             
-            if schedule_data.get("status") == status:
-                logger.info(f"Scheduled job '{job_id}' already has status '{status}'.")
-                return True  # No change needed
-
-            # Use transaction for atomic update
-            async with kv_store_service.kv_transaction(SCHEDULED_JOBS_KV_NAME) as transaction:
-                # Get the latest data within the transaction
-                current_data = await transaction.get(job_id)
+            async with nats_kv_store(SCHEDULED_JOBS_KV_NAME, config) as kv:
+                # Get the current job data
+                entry = await kv.get(job_id)
+                schedule_data = cloudpickle.loads(entry.value)
                 
+                if schedule_data.get("status") == status:
+                    logger.info(f"Scheduled job '{job_id}' already has status '{status}'.")
+                    return True  # No change needed
+
                 # Update the status
-                current_data["status"] = status
+                schedule_data["status"] = status
                 
                 # Put the updated data
-                await transaction.put(job_id, current_data)
+                await kv.put(job_id, schedule_data)
             
             logger.info(f"Scheduled job '{job_id}' status updated to '{status}'.")
             return True
@@ -212,7 +227,6 @@ class ScheduledJobManager:
         logger.info(
             f"Attempting to modify scheduled job '{job_id}' with updates: {updates}"
         )
-        _, kv_store_service = await self._get_services()
         supported_keys = {"cron", "interval", "repeat", "scheduled_timestamp_utc"}
         update_keys = set(updates.keys())
 
@@ -222,59 +236,63 @@ class ScheduledJobManager:
             )
 
         try:
-            # Use transaction for atomic update
-            async with kv_store_service.kv_transaction(SCHEDULED_JOBS_KV_NAME) as transaction:
-                # Get the current job data within the transaction
-                schedule_data = await transaction.get(job_id)
+            # Use the context manager for KV store operations
+            config = create_global_config()
+            config.nats_url = self._nats_url
+            
+            async with nats_kv_store(SCHEDULED_JOBS_KV_NAME, config) as kv:
+                # Get the current job data
+                entry = await kv.get(job_id)
+                schedule_data = cloudpickle.loads(entry.value)
 
-            # Apply updates
-            needs_next_run_recalc = False
-            if "cron" in updates:
-                schedule_data["cron"] = updates["cron"]
-                schedule_data["interval_seconds"] = (
-                    None  # Clear interval if cron is set
-                )
-                needs_next_run_recalc = True
-
-            if "interval" in updates:
-                interval = updates["interval"]
-                if isinstance(interval, (int, float)):
-                    interval = timedelta(seconds=interval)
-                if isinstance(interval, timedelta):
-                    schedule_data["interval_seconds"] = interval.total_seconds()
-                    schedule_data["cron"] = None  # Clear cron if interval is set
+                # Apply updates
+                needs_next_run_recalc = False
+                if "cron" in updates:
+                    schedule_data["cron"] = updates["cron"]
+                    schedule_data["interval_seconds"] = (
+                        None  # Clear interval if cron is set
+                    )
                     needs_next_run_recalc = True
-                else:
-                    raise ConfigurationError(
-                        "'interval' must be timedelta or numeric seconds."
-                    )
 
-            if "repeat" in updates:
-                schedule_data["repeat"] = updates["repeat"]
+                if "interval" in updates:
+                    interval = updates["interval"]
+                    if isinstance(interval, (int, float)):
+                        interval = timedelta(seconds=interval)
+                    if isinstance(interval, timedelta):
+                        schedule_data["interval_seconds"] = interval.total_seconds()
+                        schedule_data["cron"] = None  # Clear cron if interval is set
+                        needs_next_run_recalc = True
+                    else:
+                        raise ConfigurationError(
+                            "'interval' must be timedelta or numeric seconds."
+                        )
 
-            if "scheduled_timestamp_utc" in updates:
-                # Allow explicitly setting the next run time
-                schedule_data["scheduled_timestamp_utc"] = updates[
-                    "scheduled_timestamp_utc"
-                ]
-                schedule_data["next_run_utc"] = updates["scheduled_timestamp_utc"]
-                needs_next_run_recalc = False  # Explicitly set, no recalc needed now
+                if "repeat" in updates:
+                    schedule_data["repeat"] = updates["repeat"]
 
-            # Recalculate next run time if cron/interval changed and not explicitly set
-            if needs_next_run_recalc:
-                next_run_ts = self._calculate_next_run_time(schedule_data)
+                if "scheduled_timestamp_utc" in updates:
+                    # Allow explicitly setting the next run time
+                    schedule_data["scheduled_timestamp_utc"] = updates[
+                        "scheduled_timestamp_utc"
+                    ]
+                    schedule_data["next_run_utc"] = updates["scheduled_timestamp_utc"]
+                    needs_next_run_recalc = False  # Explicitly set, no recalc needed now
 
-                if next_run_ts is not None:
-                    schedule_data["scheduled_timestamp_utc"] = next_run_ts
-                    schedule_data["next_run_utc"] = next_run_ts
-                else:
-                    # This case might occur if a one-off job's time is modified without providing a new time
-                    logger.warning(
-                        f"Could not determine next run time for job '{job_id}' after modification. Check parameters."
-                    )
+                # Recalculate next run time if cron/interval changed and not explicitly set
+                if needs_next_run_recalc:
+                    next_run_ts = self._calculate_next_run_time(schedule_data)
+
+                    if next_run_ts is not None:
+                        schedule_data["scheduled_timestamp_utc"] = next_run_ts
+                        schedule_data["next_run_utc"] = next_run_ts
+                    else:
+                        # This case might occur if a one-off job's time is modified without providing a new time
+                        logger.warning(
+                            f"Could not determine next run time for job '{job_id}' after modification. Check parameters."
+                        )
 
                 # Put the updated data
-                await transaction.put(job_id, schedule_data)
+                await kv.put(job_id, schedule_data)
             
             logger.info(f"Scheduled job '{job_id}' modified successfully.")
             return True
