@@ -1,7 +1,10 @@
 """Connection utilities for NATS connection management."""
 
-from typing import Optional, List
+from typing import List
 import msgspec
+from loguru import logger
+
+from .context_managers import nats_connection
 
 
 class ConnectionMetrics(msgspec.Struct):
@@ -70,6 +73,39 @@ class ConnectionMonitor:
         Increments the failed_connections metric.
         """
         self.metrics.failed_connections += 1
+
+
+async def test_nats_connection() -> bool:
+    """
+    Test the health and connectivity of the NATS server.
+    
+    This function uses the nats_connection context manager to establish a connection
+    and performs a simple NATS ping/flush operation to verify connectivity.
+    
+    Returns:
+        bool: True if the connection test is successful, False otherwise.
+        
+    Example:
+        ```python
+        # Test NATS connection
+        is_connected = await test_nats_connection()
+        if is_connected:
+            print("NATS connection is healthy")
+        else:
+            print("NATS connection test failed")
+        ```
+    """
+    try:
+        # Use the nats_connection context manager
+        async with nats_connection() as nc:
+            # Perform a simple ping/flush operation to verify connectivity
+            await nc.flush()
+            logger.debug("NATS connection test successful")
+            return True
+    except Exception as e:
+        error_msg = f"NATS connection test failed: {e}"
+        logger.error(error_msg)
+        return False
 
 
 # Global connection monitor instance
