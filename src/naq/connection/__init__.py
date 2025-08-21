@@ -6,7 +6,7 @@ context managers for proper resource handling and connection lifecycle managemen
 """
 
 from .context_managers import nats_connection, jetstream_context, nats_jetstream
-from .decorators import with_nats_connection
+from .decorators import with_nats_connection, with_jetstream_context
 from .manager import (
     ConnectionManager,
     close_nats_connection,
@@ -22,6 +22,7 @@ __all__ = [
     "jetstream_context",
     "nats_jetstream",
     "with_nats_connection",
+    "with_jetstream_context",
     "ConnectionManager",
     "ConnectionMetrics",
     "ConnectionMonitor",
