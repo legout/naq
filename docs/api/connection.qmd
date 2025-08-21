@@ -195,3 +195,32 @@ if is_connected:
 else:
     print("NATS connection test failed")
 ```
+
+### `wait_for_nats_connection(timeout: float = 30.0, retry_delay: float = 1.0) -> bool`
+
+Wait for NATS connection to become available.
+
+This function repeatedly calls `test_nats_connection` until successful or the timeout is reached. It includes a delay between retries to avoid overwhelming the system with connection attempts.
+
+**Parameters:**
+- `timeout` (`float`): Maximum time in seconds to wait for a successful connection. Defaults to 30.0.
+- `retry_delay` (`float`): Delay in seconds between connection attempts. Defaults to 1.0.
+
+**Returns:**
+- `bool`: True if connection becomes available within timeout, False otherwise.
+
+**Example:**
+
+```python
+from naq.connection.utils import wait_for_nats_connection
+
+# Wait for NATS connection with default timeout and retry delay
+is_connected = await wait_for_nats_connection()
+if is_connected:
+    print("NATS connection is available")
+else:
+    print("NATS connection not available within timeout")
+    
+# Wait for NATS connection with custom timeout and retry delay
+is_connected = await wait_for_nats_connection(timeout=60.0, retry_delay=2.0)
+```
