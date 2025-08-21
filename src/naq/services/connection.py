@@ -14,7 +14,7 @@ import nats
 from nats.aio.client import Client as NATSClient
 from nats.js import JetStreamContext
 
-from ..connection import ConnectionManager
+from ..connection.manager import ConnectionManager
 from ..exceptions import NaqConnectionError
 from ..settings import DEFAULT_NATS_URL
 from .base import (

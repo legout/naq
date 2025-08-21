@@ -1,0 +1,175 @@
+---
+title: "Connection API"
+format: html
+editor: visual
+---
+
+# Connection API
+
+The Connection API provides utilities for managing NATS connections, including connection monitoring and metrics tracking.
+
+## ConnectionMetrics
+
+`ConnectionMetrics` is a data class that stores and tracks various metrics related to NATS connection usage and performance.
+
+### Attributes
+
+- `total_connections` (`int`): Total number of connection attempts made
+- `active_connections` (`int`): Number of currently active connections
+- `failed_connections` (`int`): Number of failed connection attempts
+- `average_connection_time` (`float`): Average time in seconds to establish a connection
+
+### Example
+
+```python
+from naq.connection import ConnectionMetrics
+
+metrics = ConnectionMetrics()
+print(f"Total connections: {metrics.total_connections}")
+print(f"Active connections: {metrics.active_connections}")
+```
+
+## ConnectionMonitor
+
+`ConnectionMonitor` is a class that monitors and tracks NATS connection metrics. It provides methods to record connection events and calculate connection statistics.
+
+### Methods
+
+#### `__init__()`
+
+Initialize the ConnectionMonitor with empty metrics and durations list.
+
+#### `record_connection_start()`
+
+Record the start of a new connection. Increments both `total_connections` and `active_connections` metrics.
+
+#### `record_connection_end(duration: float)`
+
+Record the end of a connection with its duration. Decrements `active_connections`, records the duration, and updates the `average_connection_time` based on all recorded durations.
+
+**Parameters:**
+- `duration` (`float`): The duration of the connection in seconds
+
+#### `record_connection_failure()`
+
+Record a failed connection attempt. Increments the `failed_connections` metric.
+
+### Example
+
+```python
+from naq.connection import ConnectionMonitor
+
+monitor = ConnectionMonitor()
+
+# Record connection start
+monitor.record_connection_start()
+
+# Record connection end after 1.5 seconds
+monitor.record_connection_end(1.5)
+
+# Record connection failure
+monitor.record_connection_failure()
+
+# Access metrics
+print(f"Total connections: {monitor.metrics.total_connections}")
+print(f"Active connections: {monitor.metrics.active_connections}")
+print(f"Failed connections: {monitor.metrics.failed_connections}")
+print(f"Average connection time: {monitor.metrics.average_connection_time}")
+```
+
+## Global Connection Monitor
+
+A global `connection_monitor` instance is available for use throughout the application:
+
+```python
+from naq.connection import connection_monitor
+
+# Use the global connection monitor
+connection_monitor.record_connection_start()
+# ... connection logic ...
+connection_monitor.record_connection_end(2.0)
+```
+
+## ConnectionManager
+
+`ConnectionManager` manages NATS connections with pooling and optional thread-local reuse.
+
+### Key Features
+
+- Async paths reuse a single connection per URL within the process
+- Sync helper paths can reuse a thread-local connection to avoid connect/close per call
+
+### Methods
+
+#### `get_connection(url: str, *, prefer_thread_local: bool = False) -> NATSClient`
+
+Gets a NATS client connection from the pool or creates a new one.
+
+**Parameters:**
+- `url` (`str`): NATS server URL
+- `prefer_thread_local` (`bool`): When True, reuse a thread-local connection (for sync helpers)
+
+**Returns:**
+- `NATSClient`: A connected NATS client
+
+#### `get_jetstream(url: str, *, prefer_thread_local: bool = False) -> JetStreamContext`
+
+Gets a JetStream context for a specific connection.
+
+**Parameters:**
+- `url` (`str`): NATS server URL
+- `prefer_thread_local` (`bool`): When True, reuse a thread-local JS context (for sync helpers)
+
+**Returns:**
+- `JetStreamContext`: A JetStream context
+
+#### `close_connection(url: str, *, thread_local: bool = False) -> None`
+
+Closes a specific NATS connection.
+
+**Parameters:**
+- `url` (`str`): NATS server URL to close
+- `thread_local` (`bool`): When True, closes the thread-local connection if present
+
+#### `close_all() -> None`
+
+Closes all NATS connections in the pool (both process and thread-local).
+
+### Example
+
+```python
+from naq.connection import ConnectionManager
+
+manager = ConnectionManager()
+
+# Get a connection
+nc = await manager.get_connection("nats://localhost:4222")
+
+# Get JetStream context
+js = await manager.get_jetstream("nats://localhost:4222")
+
+# Close connection
+await manager.close_connection("nats://localhost:4222")
+```
+
+## Utility Functions
+
+### `get_nats_connection(url: str, *, prefer_thread_local: bool = False) -> NATSClient`
+
+Gets a NATS client connection, reusing if possible.
+
+### `get_jetstream_context(nc: Optional[NATSClient] = None, *, prefer_thread_local: bool = False) -> JetStreamContext`
+
+Gets a JetStream context from a NATS connection.
+
+### `close_nats_connection(url: str, *, thread_local: bool = False)`
+
+Closes a specific NATS connection.
+
+### `close_all_connections()`
+
+Closes all NATS connections managed by the connection pool.
+
+### `ensure_stream(js: Optional[JetStreamContext] = None, stream_name: str = "naq_jobs", subjects: Optional[list[str]] = None) -> None`
+
+Ensures a JetStream stream exists.

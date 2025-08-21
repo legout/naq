@@ -16,6 +16,8 @@ The API is organized into modules, each providing specific functionality.
 
 -   [**`scheduler` Module**](scheduler.qmd): Contains the `Scheduler` class, responsible for enqueuing scheduled and recurring jobs.
 
+-   [**`connection` Module**](connection.qmd): Provides utilities for managing NATS connections, including connection monitoring, metrics tracking, and connection pooling.
+
 -   [**`exceptions` Module**](exceptions.qmd): Defines custom exceptions raised by `naq`.
 
 ## Services
