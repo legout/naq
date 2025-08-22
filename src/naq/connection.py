@@ -22,6 +22,7 @@ from .connection import (
     manager,
     utils,
 )
+from .services.config import GlobalServiceConfig
 
 # Import the new connection management components
 ConnectionManager = manager.ConnectionManager
@@ -158,21 +159,30 @@ async def ensure_stream(
     js: Optional[JetStreamContext] = None,
     stream_name: str = "naq_jobs",  # Default stream name
     subjects: Optional[list[str]] = None,
+    config: Optional[GlobalServiceConfig] = None,
 ) -> None:
     """
     Ensures a JetStream stream exists.
     
-    This function is kept for backward compatibility but consider using the
-    `nats_jetstream` context manager for new code.
+    .. deprecated::
+        Use the `nats_jetstream` context manager instead for better resource management.
+        This function will be removed in a future version.
 
     Args:
         js: Optional JetStream context. If None, a new one will be obtained.
         stream_name: Name of the stream to ensure exists
         subjects: List of subjects for the stream. If None, defaults to [f"{stream_name}.*"]
+        config: Optional configuration object for the NATS connection.
 
     Raises:
         NaqConnectionError: If stream creation or verification fails
     """
+    warnings.warn(
+        "ensure_stream is deprecated. Use the nats_jetstream context manager instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    
     if js is None:
         js = await get_jetstream_context()
 

@@ -35,7 +35,7 @@ class ConnectionServiceConfig(BaseConnectionServiceConfig):
 
     max_reconnect_attempts: int = 5
     reconnect_time_wait: float = 2.0
-    connection_timeout: float = 10.0
+    connection_timeout: float = 30.0 # Increased timeout for resilience
     ping_interval: float = 30.0
     max_outstanding_pings: int = 3
     prefer_thread_local: bool = False
@@ -155,6 +155,7 @@ class ConnectionService(BaseService):
         """
         try:
             self._logger.info("Cleaning up ConnectionService")
+            self._logger.debug("Attempting to cancel reconnection tasks...")
 
             # Cancel all reconnection tasks with timeout
             if self._reconnect_tasks:
@@ -172,19 +173,24 @@ class ConnectionService(BaseService):
                             asyncio.gather(*cancel_tasks, return_exceptions=True),
                             timeout=5.0
                         )
+                        self._logger.debug("Reconnection tasks cancelled successfully.")
                     except asyncio.TimeoutError:
                         self._logger.warning("Timeout while waiting for reconnection tasks to cancel")
                     except Exception as e:
                         self._logger.warning(f"Error while cancelling reconnection tasks: {e}")
 
             self._reconnect_tasks.clear()
+            self._logger.debug("Reconnection tasks cleared.")
 
             # Close all connections
+            self._logger.debug("Attempting to close all NATS connections via ConnectionManager...")
             await self._connection_manager.close_all()
+            self._logger.debug("All NATS connections closed via ConnectionManager.")
 
             # Clear our caches
             self._connections.clear()
             self._jetstream_contexts.clear()
+            self._logger.debug("Internal connection caches cleared.")
 
             self._logger.info("ConnectionService cleaned up successfully")
 
@@ -386,7 +392,8 @@ class ConnectionService(BaseService):
                 if nc.is_connected:
                     await nc.close()
 
-                # Create a new connection
+                # Create a new connection using nats.connect directly
+                # since we need a long-lived connection for caching
                 new_nc = await nats.connect(
                     url,
                     name="naq_client",

@@ -84,13 +84,19 @@ async def nats_server():
         )
     # Optionally, test connection
     try:
-        nc = await nats.connect()
+        # Increased timeouts for more robust connection testing in fixtures
+        print("DEBUG: conftest: Attempting to connect to NATS server for fixture check.")
+        nc = await nats.connect(connect_timeout=30, flush_timeout=30)
+        print("DEBUG: conftest: NATS connection successful for fixture check. Closing.")
         await nc.close()
-    except Exception:
+        print("DEBUG: conftest: NATS connection closed for fixture check.")
+    except Exception as e:
+        print(f"DEBUG: conftest: NATS connection failed for fixture check: {e}")
         pytest.skip(
             "Could not connect to NATS server at localhost:4222. Please ensure it is running."
         )
     yield "nats://localhost:4222"
+    print("DEBUG: conftest: NATS server fixture tearing down.")
 
 
 @pytest_asyncio.fixture
@@ -164,18 +170,24 @@ async def nats_client(nats_server):
     """
     nc = None
     try:
-        nc = await nats.connect(nats_server)
+        print(f"DEBUG: conftest: nats_client fixture: Attempting to connect to {nats_server}")
+        # Increased timeouts for more robust connection testing in fixtures
+        nc = await nats.connect(nats_server, connect_timeout=30, flush_timeout=30)
+        print(f"DEBUG: conftest: nats_client fixture: Connection to {nats_server} established.")
         yield nc
     finally:
         if nc:
+            print(f"DEBUG: conftest: nats_client fixture: Tearing down connection to {nats_server}.")
             try:
                 await nc.drain()
+                print(f"DEBUG: conftest: nats_client fixture: Connection to {nats_server} drained.")
             except Exception as e:
-                print(f"Error during NATS client drain: {e}")
+                print(f"ERROR: conftest: nats_client fixture: Error during NATS client drain to {nats_server}: {e}")
             try:
                 await nc.close()
+                print(f"DEBUG: conftest: nats_client fixture: Connection to {nats_server} closed.")
             except Exception as e:
-                print(f"Error during NATS client close: {e}")
+                print(f"ERROR: conftest: nats_client fixture: Error during NATS client close to {nats_server}: {e}")
 
 
 @pytest.fixture

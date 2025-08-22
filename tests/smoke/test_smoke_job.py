@@ -74,7 +74,7 @@ def test_job_lifecycle_status(mock_nats):
     )
     success_result = job.deserialize_result(success_data)
 
-    assert success_result["status"] == JOB_STATUS.COMPLETED
+    assert success_result["status"] == JOB_STATUS.COMPLETED.value
     assert success_result["result"] == "test_result"
     assert success_result["error"] is None
 
@@ -87,7 +87,7 @@ def test_job_lifecycle_status(mock_nats):
     )
     error_result = job.deserialize_result(error_data)
 
-    assert error_result["status"] == JOB_STATUS.FAILED
+    assert error_result["status"] == JOB_STATUS.FAILED.value
     assert error_result["result"] is None
     assert error_result["error"] == "Test error"
     assert error_result["traceback"] == "Test traceback"

@@ -163,7 +163,7 @@ class Worker:
             # Initialize component managers
             await self.status_manager.start_heartbeat_loop()
             await self.job_manager.initialize(self._js)
-            await self.failed_handler.initialize(self._js)
+            await self.failed_handler.initialize()
 
     def _resolve_ack_wait_seconds(self, queue_name: str) -> int:
         """

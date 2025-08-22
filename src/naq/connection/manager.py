@@ -9,6 +9,7 @@ from nats.js import JetStreamContext
 
 from ..exceptions import NaqConnectionError
 from ..settings import DEFAULT_NATS_URL
+from ..services.config import GlobalServiceConfig
 
 
 class ConnectionManager:
@@ -57,41 +58,50 @@ class ConnectionManager:
             tls_conns, _ = self._get_tls_maps()
             nc = tls_conns.get(url)
             if nc and nc.is_connected:
+                logger.debug(f"ConnectionManager: Found existing thread-local connection for {url}")
                 return nc
 
-        async with self._lock:
-            # Process-wide pooled connection
-            if not prefer_thread_local:
-                if url in self._connections and self._connections[url].is_connected:
-                    return self._connections[url]
+        # Use timeout to prevent indefinite lock waiting
+        try:
+            async with asyncio.wait_for(self._lock, timeout=30.0):
+                # Process-wide pooled connection
+                if not prefer_thread_local:
+                    if url in self._connections and self._connections[url].is_connected:
+                        return self._connections[url]
 
-            # If prefer_thread_local, try to re-check TLS map under lock to avoid racing creation
-            if prefer_thread_local:
-                tls_conns, _ = self._get_tls_maps()
-                nc = tls_conns.get(url)
-                if nc and nc.is_connected:
-                    return nc
+                # If prefer_thread_local, try to re-check TLS map under lock to avoid racing creation
+                if prefer_thread_local:
+                    tls_conns, _ = self._get_tls_maps()
+                    nc = tls_conns.get(url)
+                    if nc and nc.is_connected:
+                        return nc
 
             # Create a new connection
-            try:
-                nc = await nats.connect(url, name="naq_client")
-                logger.info(f"NATS connection established to {url}")
-                if prefer_thread_local:
-                    tls_conns[url] = nc
-                else:
-                    self._connections[url] = nc
-                return nc
-            except Exception as e:
-                # Clean up any partial connection
-                if not prefer_thread_local and url in self._connections:
-                    del self._connections[url]
-                else:
-                    tls_conns, _ = self._get_tls_maps()
-                    if url in tls_conns:
-                        del tls_conns[url]
-                raise NaqConnectionError(
-                    f"Failed to connect to NATS at {url}: {e}"
-                ) from e
+                try:
+                    nc = await nats.connect(url, name="naq_client")
+                    logger.info(f"NATS connection established to {url}")
+                    if prefer_thread_local:
+                        tls_conns[url] = nc
+                    else:
+                        self._connections[url] = nc
+                    return nc
+                except Exception as e:
+                    # Clean up any partial connection
+                    if not prefer_thread_local and url in self._connections:
+                        del self._connections[url]
+                    else:
+                        tls_conns, _ = self._get_tls_maps()
+                        if url in tls_conns:
+                            del tls_conns[url]
+                    raise NaqConnectionError(
+                        f"Failed to connect to NATS at {url}: {e}"
+                    ) from e
+        except asyncio.TimeoutError:
+            logger.error(f"ConnectionManager: Timeout waiting for lock for {url}")
+            raise NaqConnectionError(f"Timeout waiting for connection lock for {url}")
+        except asyncio.CancelledError:
+            logger.warning(f"ConnectionManager: Lock acquisition cancelled for {url}")
+            raise
 
     async def get_jetstream(
         self, url: str = DEFAULT_NATS_URL, *, prefer_thread_local: bool = False
@@ -179,22 +189,46 @@ class ConnectionManager:
     async def close_all(self) -> None:
         """Closes all NATS connections in the pool (both process and thread-local)."""
         async with self._lock:
+            logger.debug("ConnectionManager: Starting close_all process-wide connections.")
             # Process-wide connections
             for url, nc in list(self._connections.items()):
                 if nc.is_connected:
-                    await nc.close()
-                    logger.info(f"NATS connection to {url} closed")
+                    logger.debug(f"ConnectionManager: Attempting to drain and close process-wide NATS connection to {url}")
+                    try:
+                        await nc.drain()
+                        await nc.close()
+                        logger.info(f"NATS connection to {url} closed")
+                    except nats.errors.FlushTimeoutError:
+                        logger.warning(f"ConnectionManager: Flush timeout when draining NATS connection to {url}. Forcing close.")
+                        await nc.close() # Attempt to force close
+                    except Exception as e:
+                        logger.error(f"ConnectionManager: Error closing NATS connection to {url}: {e}")
+                else:
+                    logger.debug(f"ConnectionManager: Process-wide NATS connection to {url} already disconnected or not found.")
             self._connections.clear()
             self._js_contexts.clear()
+            logger.debug("ConnectionManager: Process-wide connection caches cleared.")
 
+            logger.debug("ConnectionManager: Starting close_all thread-local connections.")
             # Thread-local connections for current thread
             tls_conns, tls_js = self._get_tls_maps()
             for url, nc in list(tls_conns.items()):
                 if nc.is_connected:
-                    await nc.close()
-                    logger.info(f"[TLS] NATS connection to {url} closed")
+                    logger.debug(f"ConnectionManager: Attempting to drain and close thread-local NATS connection to {url}")
+                    try:
+                        await nc.drain()
+                        await nc.close()
+                        logger.info(f"[TLS] NATS connection to {url} closed")
+                    except nats.errors.FlushTimeoutError:
+                        logger.warning(f"ConnectionManager: [TLS] Flush timeout when draining NATS connection to {url}. Forcing close.")
+                        await nc.close() # Attempt to force close
+                    except Exception as e:
+                        logger.error(f"ConnectionManager: [TLS] Error closing NATS connection to {url}: {e}")
+                else:
+                    logger.debug(f"ConnectionManager: Thread-local NATS connection to {url} already disconnected or not found.")
             tls_conns.clear()
             tls_js.clear()
+            logger.debug("ConnectionManager: Thread-local connection caches cleared.")
 
 
 # Create a singleton instance
@@ -205,14 +239,40 @@ _manager = ConnectionManager()
 async def get_nats_connection(
     url: str = DEFAULT_NATS_URL, *, prefer_thread_local: bool = False
 ) -> NATSClient:
-    """Gets a NATS client connection, reusing if possible."""
+    """
+    Gets a NATS client connection, reusing if possible.
+    
+    .. deprecated::
+        Use the `nats_connection` context manager instead for better resource management.
+        This function will be removed in a future version.
+    """
+    import warnings
+    warnings.warn(
+        "get_nats_connection is deprecated. Use the nats_connection context manager instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return await _manager.get_connection(url, prefer_thread_local=prefer_thread_local)
 
 
 async def get_jetstream_context(
     nc: Optional[NATSClient] = None, *, prefer_thread_local: bool = False
 ) -> JetStreamContext:
-    """Gets a JetStream context from a NATS connection."""
+    """
+    Gets a JetStream context from a NATS connection.
+    
+    .. deprecated::
+        Use the `jetstream_context` or `nats_jetstream` context managers instead
+        for better resource management. This function will be removed in a future version.
+    """
+    import warnings
+    warnings.warn(
+        "get_jetstream_context is deprecated. Use the jetstream_context or "
+        "nats_jetstream context managers instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    
     if nc is not None:
         # If a connection is provided directly, use it
         try:
@@ -241,7 +301,20 @@ async def ensure_stream(
     stream_name: str = "naq_jobs",  # Default stream name
     subjects: Optional[list[str]] = None,
 ) -> None:
-    """Ensures a JetStream stream exists."""
+    """
+    Ensures a JetStream stream exists.
+    
+    .. deprecated::
+        Use the `nats_jetstream` context manager instead for better resource management.
+        This function will be removed in a future version.
+    """
+    import warnings
+    warnings.warn(
+        "ensure_stream is deprecated. Use the nats_jetstream context manager instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    
     if js is None:
         js = await get_jetstream_context()
 

@@ -25,6 +25,8 @@ class KVStoreServiceConfig(msgspec.Struct):
     Configuration for the KVStoreService.
 
     Attributes:
+        nats_url: URL of the NATS server (optional, for direct connection)
+        log_level: Logging level for the service (optional)
         default_bucket_ttl: Default TTL for KV buckets in seconds
         default_key_ttl: Default TTL for keys in seconds
         max_pool_size: Maximum number of KV stores to pool
@@ -32,6 +34,8 @@ class KVStoreServiceConfig(msgspec.Struct):
         auto_create_buckets: Whether to automatically create buckets if they don't exist
     """
 
+    nats_url: Optional[str] = None
+    log_level: Optional[str] = None
     default_bucket_ttl: Optional[int] = None
     default_key_ttl: Optional[int] = None
     max_pool_size: int = 10
@@ -41,6 +45,8 @@ class KVStoreServiceConfig(msgspec.Struct):
     def as_dict(self) -> Dict[str, Any]:
         """Convert the configuration to a dictionary."""
         return {
+            "nats_url": self.nats_url,
+            "log_level": self.log_level,
             "default_bucket_ttl": self.default_bucket_ttl,
             "default_key_ttl": self.default_key_ttl,
             "max_pool_size": self.max_pool_size,
@@ -186,30 +192,14 @@ class KVStoreService(BaseService):
                 # Get JetStream context from connection service or NATS client
                 if self._connection_service is not None:
                     js = await self._connection_service.get_jetstream()
+                    # Get or create KV store using connection service
+                    kv = await self._get_or_create_kv_store(js, bucket_name)
                 else:
-                    # Use direct NATS client
-                    js = self._nats_client.jetstream()
-
-                # Try to get existing KV store
-                try:
-                    kv = await js.key_value(bucket=bucket_name)
-                    self._logger.debug(f"Connected to KV store '{bucket_name}'")
-                except Exception:
-                    # Try to create if not found and auto-create is enabled
-                    if self._kv_config.auto_create_buckets:
-                        self._logger.info(
-                            f"KV store '{bucket_name}' not found, creating..."
-                        )
-                        kv = await js.create_key_value(
-                            bucket=bucket_name,
-                            ttl=self._kv_config.default_bucket_ttl or 0,
-                            description=f"NAQ KV store for {bucket_name}",
-                        )
-                        self._logger.info(f"KV store '{bucket_name}' created")
-                    else:
-                        raise NaqException(
-                            f"KV store '{bucket_name}' not found and auto_create is disabled"
-                        )
+                    # Use jetstream_context with direct NATS client
+                    from ..connection.context_managers import jetstream_context
+                    async with jetstream_context(self._nats_client) as js:
+                        # Get or create KV store using context manager
+                        kv = await self._get_or_create_kv_store(js, bucket_name)
 
                 # Cache the KV store
                 self._kv_stores[bucket_name] = kv
@@ -227,6 +217,43 @@ class KVStoreService(BaseService):
                 error_msg = f"Failed to get KV store '{bucket_name}': {e}"
                 self._logger.error(error_msg)
                 raise NaqException(error_msg) from e
+
+    async def _get_or_create_kv_store(self, js, bucket_name: str) -> KeyValue:
+        """
+        Get an existing KV store or create a new one.
+
+        Args:
+            js: JetStream context.
+            bucket_name: Name of the KV bucket.
+
+        Returns:
+            A KeyValue store instance.
+
+        Raises:
+            NaqException: If getting or creating the KV store fails.
+        """
+        # Try to get existing KV store
+        try:
+            kv = await js.key_value(bucket=bucket_name)
+            self._logger.debug(f"Connected to KV store '{bucket_name}'")
+            return kv
+        except Exception:
+            # Try to create if not found and auto-create is enabled
+            if self._kv_config.auto_create_buckets:
+                self._logger.info(
+                    f"KV store '{bucket_name}' not found, creating..."
+                )
+                kv = await js.create_key_value(
+                    bucket=bucket_name,
+                    ttl=self._kv_config.default_bucket_ttl or 0,
+                    description=f"NAQ KV store for {bucket_name}",
+                )
+                self._logger.info(f"KV store '{bucket_name}' created")
+                return kv
+            else:
+                raise NaqException(
+                    f"KV store '{bucket_name}' not found and auto_create is disabled"
+                )
 
     async def put(
         self,

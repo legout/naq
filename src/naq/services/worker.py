@@ -165,7 +165,7 @@ class WorkerService(BaseService):
                 
                 event_config = EventServiceConfig(
                     enable_event_logging=self._worker_config.enable_event_logging,
-                    auto_create_bucket=self._worker_config.auto_create_buckets
+                    auto_create_bucket=self._worker_config.auto_create_bucket
                 )
                 self._event_service = EventService(
                     config=ServiceConfig(custom_settings=event_config.as_dict()),

@@ -109,6 +109,7 @@ class PickleSerializer:
                 args=args,
                 kwargs=kwargs,
                 job_id=payload.get("job_id"),
+                enqueue_time=payload.get("enqueue_time"), # Added enqueue_time
                 queue_name=payload.get("queue_name"),
                 max_retries=payload.get("max_retries", 0),
                 retry_delay=payload.get("retry_delay", 0),
@@ -147,7 +148,7 @@ class PickleSerializer:
     @staticmethod
     def serialize_result(
         result: Any,
-        status: JOB_STATUS,
+        status: str,
         error: Optional[str] = None,
         traceback_str: Optional[str] = None,
     ) -> bytes:
@@ -156,7 +157,7 @@ class PickleSerializer:
         try:
             payload = {
                 "status": status,
-                "result": result if status == JOB_STATUS.COMPLETED else None,
+                "result": result if status == JOB_STATUS.COMPLETED.value else None,
                 "error": error,
                 "traceback": traceback_str,
             }
@@ -365,6 +366,7 @@ class JsonSerializer:
             depends_on=depends_on,
             result_ttl=payload.get("result_ttl"),
             timeout=payload.get("timeout"),
+            enqueue_time=payload.get("enqueue_time", time.time()), # Added enqueue_time
         )
         return job
 

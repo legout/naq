@@ -50,7 +50,7 @@ async def jetstream_context(nc: NATSClient):
     js = None
     try:
         logger.debug("Creating JetStream context")
-        js = await nc.jetstream()
+        js = nc.jetstream()
         logger.debug("JetStream context created successfully")
         yield js
     except Exception as e:
@@ -121,10 +121,10 @@ async def nats_connection(config: Optional[GlobalServiceConfig] = None):
             connect_timeout=connect_timeout,
             ping_interval=ping_interval,
             max_outstanding_pings=max_outstanding_pings,
-            error_cb=lambda err: logger.error(f"NATS connection error: {err}"),
-            disconnected_cb=lambda: logger.warning("NATS connection disconnected"),
-            reconnected_cb=lambda: logger.info("NATS connection reconnected"),
-            closed_cb=lambda: logger.info("NATS connection closed"),
+            error_cb=nats_error_cb,
+            disconnected_cb=nats_disconnected_cb,
+            reconnected_cb=nats_reconnected_cb,
+            closed_cb=nats_closed_cb,
         )
 
         logger.info(f"NATS connection established successfully to {servers}")
@@ -162,6 +162,18 @@ async def nats_connection(config: Optional[GlobalServiceConfig] = None):
                 logger.error(error_msg)
                 # Don't raise here as we're in finally block
 
+
+async def nats_error_cb(err):
+    logger.error(f"NATS connection error: {err}")
+
+async def nats_disconnected_cb():
+    logger.warning("NATS connection disconnected")
+
+async def nats_reconnected_cb():
+    logger.info("NATS connection reconnected")
+
+async def nats_closed_cb():
+    logger.info("NATS connection closed")
 
 @contextlib.asynccontextmanager
 async def nats_jetstream(config: Optional[GlobalServiceConfig] = None):

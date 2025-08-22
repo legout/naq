@@ -22,13 +22,23 @@ async def noop_job() -> str:
 
 
 @pytest_asyncio.fixture
-async def mock_worker(mock_nats):
+async def mock_worker(mock_nats, mocker):
     """Setup a test worker with mocked NATS connection."""
     mock_nc, mock_js = mock_nats
+    # Create proper async mock services
+    mock_connection_service = AsyncMock()
+    mock_connection_service.get_connection = AsyncMock(return_value=mock_nc)
+    mock_connection_service.get_jetstream = AsyncMock(return_value=mock_js)
+
+    mock_stream_service = AsyncMock()
+    mock_stream_service.ensure_stream = AsyncMock()
+
+    mock_kv_store_service = AsyncMock()
+
     with (
-        patch("naq.worker.get_nats_connection", return_value=mock_nc),
-        patch("naq.worker.get_jetstream_context", return_value=mock_js),
-        patch("naq.worker.ensure_stream"),
+        mocker.patch("naq.worker.core.ConnectionService", return_value=mock_connection_service),
+        mocker.patch("naq.worker.core.StreamService", return_value=mock_stream_service),
+        mocker.patch("naq.worker.core.KVStoreService", return_value=mock_kv_store_service),
     ):
         worker = Worker(queues="test_queue", worker_name="test_worker")
         await worker._connect()  # Establish mock connections

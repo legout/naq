@@ -8,6 +8,7 @@ with actual service implementations.
 
 import asyncio
 import pytest
+import pytest_asyncio
 import time
 from unittest.mock import patch
 
@@ -34,9 +35,8 @@ def connection_service_config():
 def kv_store_service_config():
     """Create a KVStoreServiceConfig for testing."""
     return KVStoreServiceConfig(
-        default_bucket_name="test_jobs",
         auto_create_buckets=True,
-        default_ttl=3600
+        default_bucket_ttl=3600
     )
 
 
@@ -45,10 +45,9 @@ def event_service_config():
     """Create an EventServiceConfig for testing."""
     return EventServiceConfig(
         enable_event_logging=True,
-        auto_create_buckets=True,
-        default_event_ttl=86400,
-        max_events_per_job=100,
-        max_events_per_worker=100
+        auto_create_bucket=True,
+        event_retention_seconds=86400,
+        max_events_per_job=100
     )
 
 
@@ -65,40 +64,80 @@ def job_service_config():
     )
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def connection_service(connection_service_config):
     """Create and initialize a ConnectionService for testing."""
-    config = ServiceConfig(custom_settings=connection_service_config.as_dict())
+    config = ServiceConfig(
+        nats_url=connection_service_config.nats_url,
+        log_level=connection_service_config.log_level,
+        custom_settings={
+            "max_reconnect_attempts": connection_service_config.max_reconnect_attempts,
+            "reconnect_time_wait": connection_service_config.reconnect_time_wait,
+            "connection_timeout": connection_service_config.connection_timeout,
+            "ping_interval": connection_service_config.ping_interval,
+            "max_outstanding_pings": connection_service_config.max_outstanding_pings,
+            "prefer_thread_local": connection_service_config.prefer_thread_local,
+        }
+    )
     service = ConnectionService(config=config)
     await service.initialize()
     yield service
     await service.cleanup()
 
 
-@pytest.fixture
-async def kv_store_service(kv_store_service_config):
+@pytest_asyncio.fixture
+async def kv_store_service(kv_store_service_config, connection_service):
     """Create and initialize a KVStoreService for testing."""
-    config = ServiceConfig(custom_settings=kv_store_service_config.as_dict())
-    service = KVStoreService(config=config)
+    config = ServiceConfig(
+        nats_url=kv_store_service_config.nats_url,
+        log_level=kv_store_service_config.log_level,
+        custom_settings={
+            "auto_create_buckets": kv_store_service_config.auto_create_buckets,
+            "default_bucket_ttl": kv_store_service_config.default_bucket_ttl,
+        }
+    )
+    service = KVStoreService(config=config, connection_service=connection_service)
     await service.initialize()
     yield service
     await service.cleanup()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def event_service(event_service_config, kv_store_service):
     """Create and initialize an EventService for testing."""
-    config = ServiceConfig(custom_settings=event_service_config.as_dict())
+    config = ServiceConfig(
+        nats_url=event_service_config.nats_url,
+        log_level=event_service_config.log_level,
+        custom_settings={
+            "events_bucket_name": event_service_config.events_bucket_name,
+            "max_events_per_job": event_service_config.max_events_per_job,
+            "event_retention_seconds": event_service_config.event_retention_seconds,
+            "enable_event_logging": event_service_config.enable_event_logging,
+            "auto_create_bucket": event_service_config.auto_create_bucket,
+        }
+    )
     service = EventService(config=config, kv_store_service=kv_store_service)
     await service.initialize()
     yield service
     await service.cleanup()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def job_service(job_service_config, connection_service, kv_store_service, event_service):
     """Create and initialize a JobService for testing."""
-    config = ServiceConfig(custom_settings=job_service_config.as_dict())
+    config = ServiceConfig(
+        nats_url=job_service_config.nats_url,
+        log_level=job_service_config.log_level,
+        custom_settings={
+            "results_bucket_name": job_service_config.results_bucket_name,
+            "default_result_ttl": job_service_config.default_result_ttl,
+            "enable_job_execution": job_service_config.enable_job_execution,
+            "enable_result_storage": job_service_config.enable_result_storage,
+            "enable_event_logging": job_service_config.enable_event_logging,
+            "auto_create_buckets": job_service_config.auto_create_buckets,
+            "max_job_execution_time": job_service_config.max_job_execution_time,
+        }
+    )
     service = JobService(
         config=config,
         connection_service=connection_service,
@@ -378,7 +417,7 @@ class TestJobServiceIntegration:
         
         # Verify EventService was created and initialized
         assert job_service._event_service is not None
-        assert job_service._event_service.is_initialized
+        assert job_service._event_service.is_initialized is True
         
         # Cleanup
         await job_service.cleanup()
@@ -396,9 +435,9 @@ class TestJobServiceIntegration:
         assert job_service.is_initialized is False
         
         # Verify dependencies are still initialized (they weren't created by JobService)
-        assert job_service._connection_service.is_initialized
-        assert job_service._kv_store_service.is_initialized
-        assert job_service._event_service.is_initialized
+        assert job_service._connection_service.is_initialized is True
+        assert job_service._kv_store_service.is_initialized is True
+        assert job_service._event_service.is_initialized is True
 
     @pytest.mark.asyncio
     async def test_concurrent_job_execution(self, job_service, event_service):
