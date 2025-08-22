@@ -12,7 +12,6 @@ import nats
 from nats.aio.client import Client as NATSClient
 from nats.aio.errors import ErrNoServers, ErrTimeout, ErrConnectionClosed
 from nats.js.errors import BucketNotFoundError
-from nats.js.kv import KeyValue
 from loguru import logger
 
 from ..settings import DEFAULT_NATS_URL
@@ -166,14 +165,18 @@ async def nats_connection(config: Optional[GlobalServiceConfig] = None):
 async def nats_error_cb(err):
     logger.error(f"NATS connection error: {err}")
 
+
 async def nats_disconnected_cb():
     logger.warning("NATS connection disconnected")
+
 
 async def nats_reconnected_cb():
     logger.info("NATS connection reconnected")
 
+
 async def nats_closed_cb():
     logger.info("NATS connection closed")
+
 
 @contextlib.asynccontextmanager
 async def nats_jetstream(config: Optional[GlobalServiceConfig] = None):
@@ -279,17 +282,21 @@ async def nats_kv_store(bucket_name: str, config: Optional[GlobalServiceConfig] 
         config = create_global_config()
 
     try:
-        logger.debug(f"Establishing NATS connection and JetStream context for KV store '{bucket_name}'")
+        logger.debug(
+            f"Establishing NATS connection and JetStream context for KV store '{bucket_name}'"
+        )
 
         # Use the existing nats_jetstream context manager
         async with nats_jetstream(config) as (nc, js):
             logger.debug(f"Attempting to access KV store '{bucket_name}'")
-            
+
             kv = None
             try:
                 # Try to get existing KV store
                 kv = await js.key_value(bucket=bucket_name)
-                logger.debug(f"Successfully connected to existing KV store '{bucket_name}'")
+                logger.debug(
+                    f"Successfully connected to existing KV store '{bucket_name}'"
+                )
             except BucketNotFoundError:
                 # Try to create the KV store if it doesn't exist
                 logger.info(f"KV store '{bucket_name}' not found, creating...")
@@ -300,7 +307,9 @@ async def nats_kv_store(bucket_name: str, config: Optional[GlobalServiceConfig] 
                     )
                     logger.info(f"Successfully created KV store '{bucket_name}'")
                 except Exception as create_error:
-                    error_msg = f"Failed to create KV store '{bucket_name}': {create_error}"
+                    error_msg = (
+                        f"Failed to create KV store '{bucket_name}': {create_error}"
+                    )
                     logger.error(error_msg)
                     raise NaqConnectionError(error_msg) from create_error
             except Exception as e:
@@ -311,6 +320,8 @@ async def nats_kv_store(bucket_name: str, config: Optional[GlobalServiceConfig] 
             yield kv
 
     except Exception as e:
-        error_msg = f"Failed to establish NATS KV store context for '{bucket_name}': {e}"
+        error_msg = (
+            f"Failed to establish NATS KV store context for '{bucket_name}': {e}"
+        )
         logger.error(error_msg)
         raise NaqConnectionError(error_msg) from e

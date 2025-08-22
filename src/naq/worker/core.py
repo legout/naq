@@ -120,7 +120,9 @@ class Worker:
         self.consumer_prefix = f"{NAQ_PREFIX}-worker"
 
         # Create component managers
-        self.status_manager = WorkerStatusManager(self, service_manager=self._service_manager)
+        self.status_manager = WorkerStatusManager(
+            self, service_manager=self._service_manager
+        )
         self.job_manager = JobStatusManager(self)
         self.failed_handler = FailedJobHandler(self)
         self.job_processor = JobProcessor(self)
@@ -135,10 +137,10 @@ class Worker:
             if self._service_manager is None:
                 # Create a default service manager if none provided
                 from ..services import ServiceManager, ServiceConfig
-                
+
                 config = ServiceConfig(nats_url=self._nats_url)
                 self._service_manager = ServiceManager(config)
-                
+
                 # Register and initialize services
                 self._connection_service = await self._service_manager.register_service(
                     "connection", ConnectionService, config, initialize=True
@@ -151,10 +153,16 @@ class Worker:
                 )
             else:
                 # Get services from the provided service manager
-                self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
-                self._stream_service = await self._service_manager.get_service("stream", StreamService)
-                self._kv_store_service = await self._service_manager.get_service("kv_store", KVStoreService)
-            
+                self._connection_service = await self._service_manager.get_service(
+                    "connection", ConnectionService
+                )
+                self._stream_service = await self._service_manager.get_service(
+                    "stream", StreamService
+                )
+                self._kv_store_service = await self._service_manager.get_service(
+                    "kv_store", KVStoreService
+                )
+
             # Get connection and JetStream context
             self._nc = await self._connection_service.get_connection()
             self._js = await self._connection_service.get_jetstream()
@@ -250,7 +258,9 @@ class Worker:
                         # Acquire semaphore before starting processing task
                         await self._semaphore.acquire()
                         # Create task to process the message
-                        task = asyncio.create_task(self.job_processor.process_message(msg))
+                        task = asyncio.create_task(
+                            self.job_processor.process_message(msg)
+                        )
                         # Add a callback to release the semaphore when the task completes (success or failure)
                         task.add_done_callback(lambda t: self._semaphore.release())
                         # Keep track of tasks (optional, for clean shutdown)
@@ -281,7 +291,6 @@ class Worker:
                 exc_info=True,
             )
 
-
     async def run(self) -> None:
         """Starts the worker, connects to NATS, and begins processing jobs."""
         self._running = True
@@ -291,9 +300,7 @@ class Worker:
             await self._connect()
 
             # Register worker initially
-            await self.status_manager.update_status(
-                status=WORKER_STATUS.STARTING
-            )
+            await self.status_manager.update_status(status=WORKER_STATUS.STARTING)
 
             # Start heartbeat task
             await self.status_manager.start_heartbeat_loop()
@@ -321,9 +328,7 @@ class Worker:
             await self._shutdown_event.wait()
 
             logger.info("Shutdown signal received. Waiting for tasks to complete...")
-            await self.status_manager.update_status(
-                status=WORKER_STATUS.STOPPING
-            )
+            await self.status_manager.update_status(status=WORKER_STATUS.STOPPING)
 
             # Stop heartbeat task
             await self.status_manager.stop_heartbeat_loop()
@@ -349,9 +354,7 @@ class Worker:
             logger.info("Run task cancelled.")
         except Exception as e:
             logger.error(f"Worker run loop encountered an error: {e}", exc_info=True)
-            await self.status_manager.update_status(
-                status=WORKER_STATUS.STOPPING
-            )
+            await self.status_manager.update_status(status=WORKER_STATUS.STOPPING)
         finally:
             logger.info("Worker shutting down...")
             await self._close()
@@ -439,12 +442,12 @@ class Worker:
     async def list_workers(nats_url: str = DEFAULT_NATS_URL) -> List[Dict[str, Any]]:
         """Lists active workers by querying the worker status KV store."""
         from ..services import ServiceManager, ServiceConfig
-        
+
         # Create a temporary WorkerMonitor with ServiceManager
         config = ServiceConfig(nats_url=nats_url)
         service_manager = ServiceManager(config)
         monitor = WorkerMonitor(service_manager=service_manager, nats_url=nats_url)
-        
+
         try:
             return await monitor.list_workers(nats_url)
         finally:
@@ -455,17 +458,18 @@ class Worker:
     def list_workers_sync(nats_url: str = DEFAULT_NATS_URL) -> List[Dict[str, Any]]:
         """Synchronous version of list_workers."""
         from ..services import ServiceManager, ServiceConfig
-        
+
         # Create a temporary WorkerMonitor with ServiceManager
         config = ServiceConfig(nats_url=nats_url)
         service_manager = ServiceManager(config)
         monitor = WorkerMonitor(service_manager=service_manager, nats_url=nats_url)
-        
+
         try:
             return monitor.list_workers_sync(nats_url)
         finally:
             # Clean up the service manager
             import asyncio
+
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():

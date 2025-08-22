@@ -126,7 +126,7 @@ def health(
             config = GlobalServiceConfig()
             config.nats_url = nats_url
             config.custom_settings.update({"log_level": log_level})
-            
+
             try:
                 # Use the new context manager for NATS connection
                 async with nats_connection(config) as nc:

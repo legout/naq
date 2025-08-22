@@ -72,6 +72,8 @@ if __name__ == "__main__":
 
 Many of `naq`'s settings can be configured using environment variables, which is ideal for production and containerized deployments.
 
+### Basic Configuration
+
 | Variable                      | Default                        | Description                                                                                             |
 | ----------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | `NAQ_NATS_URL`                | `nats://localhost:4222`        | The URL of the NATS server.                                                                             |
@@ -82,6 +84,63 @@ Many of `naq`'s settings can be configured using environment variables, which is
 | `NAQ_WORKER_TTL`              | `60`                           | TTL (in seconds) for a worker's heartbeat. If a worker is silent for this long, it's considered dead.    |
 | `NAQ_WORKER_HEARTBEAT_INTERVAL` | `15`                           | How often (in seconds) a worker sends a heartbeat to NATS.                                              |
 | `NAQ_LOG_LEVEL`               | `CRITICAL`                     | The logging level for `naq` components. Can be `DEBUG`, `INFO`, `WARNING`, `ERROR`.                       |
+
+### NATS Connection Configuration
+
+For more advanced NATS connection management, you can configure the following connection parameters:
+
+| Variable                          | Default    | Description                                                                                             |
+| --------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------- |
+| `NAQ_MAX_RECONNECT_ATTEMPTS`      | `5`        | Maximum number of reconnection attempts.                                                                 |
+| `NAQ_RECONNECT_TIME_WAIT`         | `2.0`      | Time to wait between reconnection attempts (in seconds).                                                 |
+| `NAQ_CONNECTION_TIMEOUT`          | `10.0`     | Timeout for establishing a connection (in seconds).                                                      |
+| `NAQ_PING_INTERVAL`               | `30.0`     | Interval for sending ping messages (in seconds).                                                         |
+| `NAQ_MAX_OUTSTANDING_PINGS`       | `3`        | Maximum number of outstanding pings before connection is considered dead.                                |
+| `NAQ_PREFER_THREAD_LOCAL`         | `false`    | Whether to prefer thread-local connections for sync helpers.                                             |
+| `NAQ_CLIENT_NAME`                 | `naq_client` | Name to identify this client connection.                                                                 |
+| `NAQ_NO_RANDOMIZE`                | `false`    | Whether to disable server randomization.                                                                 |
+| `NAQ_USER`                        | (none)     | Username for authentication.                                                                             |
+| `NAQ_PASSWORD`                    | (none)     | Password for authentication.                                                                             |
+| `NAQ_TOKEN`                       | (none)     | Token for authentication.                                                                                |
+| `NAQ_NKEY`                        | (none)     | NKey for authentication.                                                                                 |
+| `NAQ_CREDENTIALS`                 | (none)     | Path to credentials file for authentication.                                                            |
+
+### Programmatic Configuration
+
+You can also configure NATS connections programmatically using the `NATSConnectionConfig` class:
+
+```python
+from naq.settings import NATSConnectionConfig, Config
+
+# Create a custom NATS connection configuration
+nats_config = NATSConnectionConfig(
+    servers=["nats://server1:4222", "nats://server2:4222"],
+    max_reconnect_attempts=10,
+    reconnect_time_wait=5.0,
+    connection_timeout=20.0,
+    user="myuser",
+    password="mypassword"
+)
+
+# Use it with the main Config class
+config = Config(nats_connection=nats_config)
+```
+
+Or load it from a dictionary:
+
+```python
+config_dict = {
+    "nats_connection": {
+        "servers": ["nats://server1:4222", "nats://server2:4222"],
+        "max_reconnect_attempts": 10,
+        "user": "myuser",
+        "password": "mypassword"
+    },
+    "queue_name": "my_queue"
+}
+
+config = Config.from_dict(config_dict)
+```
 
 ## Job Serialization (`pickle` vs. `json`)
 

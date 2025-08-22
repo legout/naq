@@ -51,7 +51,7 @@ def events(
         config = GlobalServiceConfig()
         config.nats_url = nats_url
         config.custom_settings.update({"log_level": log_level})
-        
+
         try:
             # Use the new context manager for NATS connection
             async with nats_connection(config) as nc:
@@ -66,7 +66,9 @@ def events(
                 event_service = await service_manager.register_service(
                     "events",
                     EventService,
-                    config=ServiceConfig(custom_settings={"enable_event_logging": True}),
+                    config=ServiceConfig(
+                        custom_settings={"enable_event_logging": True}
+                    ),
                     initialize=True,
                 )
 
@@ -123,7 +125,7 @@ def event_history(
         config = GlobalServiceConfig()
         config.nats_url = nats_url
         config.custom_settings.update({"log_level": log_level})
-        
+
         try:
             # Use the new context manager for NATS connection
             async with nats_connection(config) as nc:
@@ -138,7 +140,9 @@ def event_history(
                 event_service = await service_manager.register_service(
                     "events",
                     EventService,
-                    config=ServiceConfig(custom_settings={"enable_event_logging": True}),
+                    config=ServiceConfig(
+                        custom_settings={"enable_event_logging": True}
+                    ),
                     initialize=True,
                 )
 
@@ -190,7 +194,7 @@ def event_stats(
         config = GlobalServiceConfig()
         config.nats_url = nats_url
         config.custom_settings.update({"log_level": log_level})
-        
+
         try:
             # Use the new context manager for NATS connection
             async with nats_connection(config) as nc:
@@ -205,7 +209,9 @@ def event_stats(
                 event_service = await service_manager.register_service(
                     "events",
                     EventService,
-                    config=ServiceConfig(custom_settings={"enable_event_logging": True}),
+                    config=ServiceConfig(
+                        custom_settings={"enable_event_logging": True}
+                    ),
                     initialize=True,
                 )
 
@@ -259,7 +265,7 @@ def worker_events(
         config = GlobalServiceConfig()
         config.nats_url = nats_url
         config.custom_settings.update({"log_level": log_level})
-        
+
         try:
             # Use the new context manager for NATS connection
             async with nats_connection(config) as nc:
@@ -274,13 +280,21 @@ def worker_events(
                 event_service = await service_manager.register_service(
                     "events",
                     EventService,
-                    config=ServiceConfig(custom_settings={"enable_event_logging": True}),
+                    config=ServiceConfig(
+                        custom_settings={"enable_event_logging": True}
+                    ),
                     initialize=True,
                 )
 
-                logger.info(f"Monitoring events for worker {worker_id} from NATS at {nats_url}")
-                console.print("[yellow]Worker event monitoring not yet implemented.[/yellow]")
-                console.print(f"This command will display events for worker {worker_id}.")
+                logger.info(
+                    f"Monitoring events for worker {worker_id} from NATS at {nats_url}"
+                )
+                console.print(
+                    "[yellow]Worker event monitoring not yet implemented.[/yellow]"
+                )
+                console.print(
+                    f"This command will display events for worker {worker_id}."
+                )
 
         except Exception as e:
             logger.error(f"Failed to monitor worker events: {e}")

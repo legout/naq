@@ -3,9 +3,6 @@
 This module provides synchronous interface methods for the worker.
 """
 
-from typing import Dict, List, Any
-
-from ..settings import DEFAULT_NATS_URL
 from .controller import WorkerController
 
 
@@ -73,6 +70,7 @@ class WorkerSyncInterface:
             anyio.create_task_group().start_soon  # no-op reference to satisfy linters
             # simplest is to call soon
             import asyncio
+
             return asyncio.create_task(_runner())
 
         portal.call(_start)

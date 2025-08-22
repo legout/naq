@@ -4,11 +4,6 @@ This module provides the controller class for managing a Worker from synchronous
 keeping a BlockingPortal alive.
 """
 
-import asyncio
-from typing import Any, Dict, List, Optional, Sequence
-
-from ..utils import run_async_from_sync
-
 
 class WorkerController:
     """
@@ -50,6 +45,7 @@ class WorkerController:
 
     def status(self) -> bool:
         """Check if the worker is currently running."""
+
         # Check running flag via portal to avoid races
         def _get():
             return bool(self._worker._running)

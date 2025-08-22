@@ -1,0 +1,63 @@
+src/naq/connection/manager.py:async def get_nats_connection(
+src/naq/connection/manager.py:        "get_nats_connection is deprecated. Use the nats_connection context manager instead.",
+src/naq/connection/manager.py:async def get_jetstream_context(
+src/naq/connection/manager.py:        "get_jetstream_context is deprecated. Use the jetstream_context or "
+src/naq/connection/manager.py:        js = await get_jetstream_context()
+src/naq/connection.py:async def get_nats_connection(
+src/naq/connection.py:        "get_nats_connection is deprecated. Use the nats_connection context manager instead.",
+src/naq/connection.py:async def get_jetstream_context(
+src/naq/connection.py:        "get_jetstream_context is deprecated. Use the jetstream_context or "
+src/naq/connection.py:        js = await get_jetstream_context()
+src/naq/connection/context_managers.py:        js = nc.jetstream()
+src/naq/connection/context_managers.py:        conn = await nats.connect(
+src/naq/connection/utils.py:        is_connected = await test_nats_connection()
+src/naq/connection/utils.py:        is_connected = await wait_for_nats_connection()
+src/naq/connection/utils.py:        is_connected = await wait_for_nats_connection(timeout=60.0, retry_delay=2.0)
+src/naq/connection/utils.py:        if await test_nats_connection():
+src/naq/connection/manager.py:                    nc = await nats.connect(url, name="naq_client")
+src/naq/connection/manager.py:            nc = await self.get_connection(url, prefer_thread_local=prefer_thread_local)
+src/naq/connection/manager.py:                js = nc.jetstream()
+src/naq/connection/manager.py:                await self._connections[url].close()
+src/naq/connection/manager.py:    return await _manager.get_connection(url, prefer_thread_local=prefer_thread_local)
+src/naq/connection/manager.py:            return nc.jetstream()
+src/naq/connection/manager.py:    await _manager.close_connection(url, thread_local=thread_local)
+src/naq/connection.py:jetstream_context = context_managers.jetstream_context
+src/naq/connection.py:    return await _manager.get_connection(url, prefer_thread_local=prefer_thread_local)
+src/naq/connection.py:            return nc.jetstream()
+src/naq/connection.py:    await _manager.close_connection(url, thread_local=thread_local)
+src/naq/queue/core.py:                    self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
+src/naq/queue/core.py:                    self._connection_service = await self._service_manager.register_service("connection", ConnectionService)
+src/naq/queue/core.py:                    await self._connection_service.initialize()
+src/naq/queue/scheduled.py:            self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
+src/naq/scheduler.py:            self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
+src/naq/scheduler.py:            await self._connect()
+src/naq/worker/core.py:                self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
+src/naq/worker/core.py:            self._nc = await self._connection_service.get_connection()
+src/naq/worker/core.py:            self._js = await self._connection_service.get_jetstream()
+src/naq/worker/core.py:            await self._connect()
+src/naq/worker/core.py:                await self._connection_service.close_connection()
+src/naq/worker/jobs.py:            self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
+src/naq/worker/failed.py:            self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
+src/naq/worker/failed.py:            self._js = await self._connection_service.get_jetstream()
+src/naq/services/worker.py:                await self._connection_service.initialize()
+src/naq/services/streams.py:                await self._connection_service.initialize()
+src/naq/services/streams.py:            self._jetstream_context = await self._connection_service.get_jetstream()
+src/naq/services/streams.py:                self._jetstream_context = await self._connection_service.get_jetstream()
+src/naq/services/events.py:                await self._connection_service.initialize()
+src/naq/services/jobs.py:                await self._connection_service.initialize()
+src/naq/services/connection.py:            await self.get_connection()
+src/naq/services/connection.py:            await self._connection_manager.close_all()
+src/naq/services/connection.py:            nc = await self._connection_manager.get_connection(
+src/naq/services/connection.py:            js = await self._connection_manager.get_jetstream(
+src/naq/services/connection.py:            nc = await self.get_connection(url)
+src/naq/services/connection.py:                    await self._reconnect(url, nc)
+src/naq/services/connection.py:                await asyncio.sleep(self._connection_config.ping_interval)
+src/naq/services/connection.py:                new_nc = await nats.connect(
+src/naq/services/connection.py:                await self._connection_manager.get_connection(
+src/naq/services/connection.py:                    await asyncio.sleep(self._connection_config.reconnect_time_wait)
+src/naq/services/connection.py:                    await self._reconnect_tasks[url]
+src/naq/services/connection.py:            await self._connection_manager.close_connection(
+src/naq/services/scheduler.py:                await self._connection_service.initialize()
+src/naq/services/scheduler.py:            js = await self._connection_service.get_jetstream()
+src/naq/services/kv_stores.py:                await self._connection_service.initialize()
+src/naq/services/kv_stores.py:                    js = await self._connection_service.get_jetstream()

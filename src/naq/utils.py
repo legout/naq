@@ -1,5 +1,4 @@
 # src/naq/utils.py
-import asyncio
 import sys
 from typing import Any, Callable, Coroutine, TypeVar
 

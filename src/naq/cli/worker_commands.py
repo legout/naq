@@ -90,13 +90,15 @@ def start_worker(
         # Create global config with NATS URL and custom settings
         config = GlobalServiceConfig()
         config.nats_url = nats_url
-        config.custom_settings.update({
-            "log_level": log_level,
-            "concurrency": concurrency,
-            "worker_name": name,
-            "module_paths": module_paths,
-        })
-        
+        config.custom_settings.update(
+            {
+                "log_level": log_level,
+                "concurrency": concurrency,
+                "worker_name": name,
+                "module_paths": module_paths,
+            }
+        )
+
         try:
             # Use the new context manager for NATS connection
             async with nats_connection(config) as nc:
@@ -128,10 +130,10 @@ def start_worker(
                     connection_service=None,  # Not needed with context manager
                     worker_service=worker_service,
                 )
-                
+
                 # Register the worker with the service
                 await worker_service.register_worker(w)
-                
+
                 await w.run()
 
         except KeyboardInterrupt:
@@ -192,7 +194,7 @@ def list_workers(
         config = GlobalServiceConfig()
         config.nats_url = nats_url
         config.custom_settings.update({"log_level": log_level})
-        
+
         try:
             # Use the new context manager for NATS connection
             async with nats_connection(config) as nc:

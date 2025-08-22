@@ -6,16 +6,19 @@ including event logging, storage, and retrieval functionality.
 """
 
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
-import cloudpickle
 import msgspec
-from loguru import logger
 
 from ..exceptions import NaqException
 from ..models.events import JobEvent, WorkerEvent
 from ..models.enums import JobEventType, WorkerEventType
-from .base import BaseService, ServiceConfig, ServiceInitializationError, ServiceRuntimeError
+from .base import (
+    BaseService,
+    ServiceConfig,
+    ServiceInitializationError,
+    ServiceRuntimeError,
+)
 from .connection import ConnectionService
 from .kv_stores import KVStoreService
 
@@ -98,10 +101,14 @@ class EventService(BaseService):
                 event_config.max_events_per_job = custom_settings["max_events_per_job"]
 
             if "event_retention_seconds" in custom_settings:
-                event_config.event_retention_seconds = custom_settings["event_retention_seconds"]
+                event_config.event_retention_seconds = custom_settings[
+                    "event_retention_seconds"
+                ]
 
             if "enable_event_logging" in custom_settings:
-                event_config.enable_event_logging = custom_settings["enable_event_logging"]
+                event_config.enable_event_logging = custom_settings[
+                    "enable_event_logging"
+                ]
 
             if "auto_create_bucket" in custom_settings:
                 event_config.auto_create_bucket = custom_settings["auto_create_bucket"]
@@ -127,22 +134,27 @@ class EventService(BaseService):
 
             # Ensure connection service is available if KV store service is not provided
             if self._kv_store_service is None and self._connection_service is None:
-                raise ServiceInitializationError("ConnectionService or KVStoreService is required")
+                raise ServiceInitializationError(
+                    "ConnectionService or KVStoreService is required"
+                )
 
             # Ensure connection service is initialized if provided
-            if self._connection_service is not None and not self._connection_service.is_initialized:
+            if (
+                self._connection_service is not None
+                and not self._connection_service.is_initialized
+            ):
                 await self._connection_service.initialize()
 
             # Create KV store service if not provided
             if self._kv_store_service is None:
                 from .kv_stores import KVStoreService, KVStoreServiceConfig
-                
+
                 kv_config = KVStoreServiceConfig(
                     auto_create_buckets=self._event_config.auto_create_bucket
                 )
                 self._kv_store_service = KVStoreService(
                     config=ServiceConfig(custom_settings=kv_config.as_dict()),
-                    connection_service=self._connection_service
+                    connection_service=self._connection_service,
                 )
                 await self._kv_store_service.initialize()
 
@@ -164,7 +176,10 @@ class EventService(BaseService):
 
             # Note: We don't clean up externally provided services
             # Only clean up if we created the KV store service
-            if self._kv_store_service is not None and self._connection_service is not None:
+            if (
+                self._kv_store_service is not None
+                and self._connection_service is not None
+            ):
                 await self._kv_store_service.cleanup()
 
             self._logger.info("EventService cleaned up successfully")
@@ -190,13 +205,11 @@ class EventService(BaseService):
         try:
             # Create event key
             event_key = f"job:{event.job_id}:events"
-            
+
             # Get current events for this job
             try:
                 current_events = await self._kv_store_service.get(
-                    self._event_config.events_bucket_name,
-                    event_key,
-                    deserialize=True
+                    self._event_config.events_bucket_name, event_key, deserialize=True
                 )
                 if not isinstance(current_events, list):
                     current_events = []
@@ -209,14 +222,15 @@ class EventService(BaseService):
             # Apply retention policy
             if len(current_events) > self._event_config.max_events_per_job:
                 # Keep only the most recent events
-                current_events = current_events[-self._event_config.max_events_per_job:]
+                current_events = current_events[
+                    -self._event_config.max_events_per_job :
+                ]
 
             # Apply time-based retention if configured
             if self._event_config.event_retention_seconds:
                 cutoff_time = time.time() - self._event_config.event_retention_seconds
                 current_events = [
-                    e for e in current_events 
-                    if e.timestamp >= cutoff_time
+                    e for e in current_events if e.timestamp >= cutoff_time
                 ]
 
             # Store updated events
@@ -224,10 +238,12 @@ class EventService(BaseService):
                 self._event_config.events_bucket_name,
                 event_key,
                 current_events,
-                serialize=True
+                serialize=True,
             )
 
-            self._logger.debug(f"Logged job event {event.event_type.value} for job {event.job_id}")
+            self._logger.debug(
+                f"Logged job event {event.event_type.value} for job {event.job_id}"
+            )
 
         except Exception as e:
             error_msg = f"Failed to log job event for job {event.job_id}: {e}"
@@ -250,13 +266,11 @@ class EventService(BaseService):
         try:
             # Create event key
             event_key = f"worker:{event.worker_id}:events"
-            
+
             # Get current events for this worker
             try:
                 current_events = await self._kv_store_service.get(
-                    self._event_config.events_bucket_name,
-                    event_key,
-                    deserialize=True
+                    self._event_config.events_bucket_name, event_key, deserialize=True
                 )
                 if not isinstance(current_events, list):
                     current_events = []
@@ -269,14 +283,15 @@ class EventService(BaseService):
             # Apply retention policy
             if len(current_events) > self._event_config.max_events_per_job:
                 # Keep only the most recent events
-                current_events = current_events[-self._event_config.max_events_per_job:]
+                current_events = current_events[
+                    -self._event_config.max_events_per_job :
+                ]
 
             # Apply time-based retention if configured
             if self._event_config.event_retention_seconds:
                 cutoff_time = time.time() - self._event_config.event_retention_seconds
                 current_events = [
-                    e for e in current_events 
-                    if e.timestamp >= cutoff_time
+                    e for e in current_events if e.timestamp >= cutoff_time
                 ]
 
             # Store updated events
@@ -284,10 +299,12 @@ class EventService(BaseService):
                 self._event_config.events_bucket_name,
                 event_key,
                 current_events,
-                serialize=True
+                serialize=True,
             )
 
-            self._logger.debug(f"Logged worker event {event.event_type.value} for worker {event.worker_id}")
+            self._logger.debug(
+                f"Logged worker event {event.event_type.value} for worker {event.worker_id}"
+            )
 
         except Exception as e:
             error_msg = f"Failed to log worker event for worker {event.worker_id}: {e}"
@@ -295,10 +312,10 @@ class EventService(BaseService):
             raise NaqException(error_msg) from e
 
     async def get_job_events(
-        self, 
-        job_id: str, 
+        self,
+        job_id: str,
         event_type: Optional[JobEventType] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
     ) -> List[JobEvent]:
         """
         Get events for a specific job.
@@ -316,13 +333,11 @@ class EventService(BaseService):
         """
         try:
             event_key = f"job:{job_id}:events"
-            
+
             # Get events for this job
             try:
                 events = await self._kv_store_service.get(
-                    self._event_config.events_bucket_name,
-                    event_key,
-                    deserialize=True
+                    self._event_config.events_bucket_name, event_key, deserialize=True
                 )
                 if not isinstance(events, list):
                     events = []
@@ -345,10 +360,10 @@ class EventService(BaseService):
             raise NaqException(error_msg) from e
 
     async def get_worker_events(
-        self, 
-        worker_id: str, 
+        self,
+        worker_id: str,
         event_type: Optional[WorkerEventType] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
     ) -> List[WorkerEvent]:
         """
         Get events for a specific worker.
@@ -366,13 +381,11 @@ class EventService(BaseService):
         """
         try:
             event_key = f"worker:{worker_id}:events"
-            
+
             # Get events for this worker
             try:
                 events = await self._kv_store_service.get(
-                    self._event_config.events_bucket_name,
-                    event_key,
-                    deserialize=True
+                    self._event_config.events_bucket_name, event_key, deserialize=True
                 )
                 if not isinstance(events, list):
                     events = []

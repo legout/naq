@@ -54,7 +54,7 @@ async def get_nats_connection(
 ) -> NATSClient:
     """
     Gets a NATS client connection, reusing if possible.
-    
+
     .. deprecated::
         Use the `nats_connection` context manager instead for better resource management.
         This function will be removed in a future version.
@@ -82,7 +82,7 @@ async def get_jetstream_context(
 ) -> JetStreamContext:
     """
     Gets a JetStream context from a NATS connection.
-    
+
     .. deprecated::
         Use the `jetstream_context` or `nats_jetstream` context managers instead
         for better resource management. This function will be removed in a future version.
@@ -103,7 +103,7 @@ async def get_jetstream_context(
         DeprecationWarning,
         stacklevel=2,
     )
-    
+
     if nc is not None:
         # If a connection is provided directly, use it
         try:
@@ -120,7 +120,7 @@ async def close_nats_connection(
 ):
     """
     Closes a specific NATS connection.
-    
+
     .. deprecated::
         Use the `nats_connection` context manager instead for automatic resource cleanup.
         This function will be removed in a future version.
@@ -141,7 +141,7 @@ async def close_nats_connection(
 async def close_all_connections():
     """
     Closes all NATS connections managed by the connection pool.
-    
+
     .. deprecated::
         Use the `nats_connection` context manager instead for automatic resource cleanup.
         This function will be removed in a future version.
@@ -163,7 +163,7 @@ async def ensure_stream(
 ) -> None:
     """
     Ensures a JetStream stream exists.
-    
+
     .. deprecated::
         Use the `nats_jetstream` context manager instead for better resource management.
         This function will be removed in a future version.
@@ -182,7 +182,7 @@ async def ensure_stream(
         DeprecationWarning,
         stacklevel=2,
     )
-    
+
     if js is None:
         js = await get_jetstream_context()
 

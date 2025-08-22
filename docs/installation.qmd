@@ -67,5 +67,6 @@ Refer to the [official NATS documentation](https://docs.nats.io/running-a-nats-s
 
 -   Ensure your NATS server is running and accessible from where you are running your application and workers.
 -   Verify that JetStream is enabled. You can check the server logs for a line confirming "JetStream is enabled."
--   By default, `naq` attempts to connect to `nats://localhost:4222`. If your server is elsewhere, set the `NATS_URL` environment variable.
+-   By default, `naq` attempts to connect to `nats://localhost:4222`. If your server is elsewhere, set the `NAQ_NATS_URL` environment variable.
+-   For advanced connection configuration, see the [Advanced Usage](advanced.qmd#nats-connection-configuration) section.
 :::

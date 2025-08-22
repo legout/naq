@@ -6,7 +6,7 @@ editor: visual
 
 # Connection API
 
-The Connection API provides utilities for managing NATS connections, including connection monitoring and metrics tracking.
+The Connection API provides utilities for managing NATS connections, including connection monitoring, metrics tracking, and context managers for simplified resource management.
 
 ## ConnectionMetrics
 
@@ -223,4 +223,209 @@ else:
     
 # Wait for NATS connection with custom timeout and retry delay
 is_connected = await wait_for_nats_connection(timeout=60.0, retry_delay=2.0)
+```
+
+## Context Managers
+
+The Connection API provides asynchronous context managers for simplified NATS connection and JetStream resource management. These context managers handle the complete lifecycle of connections, including establishment, error handling, and proper cleanup.
+
+### `nats_connection(config: Optional[GlobalServiceConfig] = None)`
+
+Asynchronous context manager for establishing and managing NATS connections.
+
+**Parameters:**
+- `config` (`Optional[GlobalServiceConfig]`): Optional configuration object for the NATS connection. If None, the default global configuration will be used.
+
+**Yields:**
+- `NATSClient`: An established NATS client connection.
+
+**Raises:**
+- `NaqConnectionError`: If connection establishment fails.
+- `ErrNoServers`: If no NATS servers are available.
+- `ErrTimeout`: If connection times out.
+- `ErrConnectionClosed`: If connection is closed unexpectedly.
+
+**Example:**
+
+```python
+from naq.connection import nats_connection
+
+# Using default configuration
+async with nats_connection() as nc:
+    await nc.publish("subject", b"message")
+
+# Using custom configuration
+from naq.services.config import GlobalServiceConfig
+config = GlobalServiceConfig(nats_url="nats://custom:4222")
+async with nats_connection(config) as nc:
+    await nc.publish("subject", b"message")
+```
+
+### `jetstream_context(nc: NATSClient)`
+
+Asynchronous context manager for obtaining a JetStream context from a NATS connection.
+
+**Parameters:**
+- `nc` (`NATSClient`): An established NATS client connection.
+
+**Yields:**
+- `JetStreamContext`: The JetStream context for interacting with JetStream.
+
+**Raises:**
+- `NaqConnectionError`: If JetStream context creation fails.
+
+**Example:**
+
+```python
+from naq.connection import nats_connection, jetstream_context
+
+# Using with an existing NATS connection
+async with nats_connection() as nc:
+    async with jetstream_context(nc) as js:
+        await js.add_stream(name="mystream", subjects=["my.subject"])
+        await js.publish("my.subject", b"message")
+```
+
+### `nats_jetstream(config: Optional[GlobalServiceConfig] = None)`
+
+Asynchronous context manager that combines NATS connection and JetStream context in a single operation.
+
+**Parameters:**
+- `config` (`Optional[GlobalServiceConfig]`): Optional configuration object for the NATS connection. If None, the default global configuration will be used.
+
+**Yields:**
+- A tuple containing (`NATSClient`, `JetStreamContext`) - the established NATS connection and JetStream context.
+
+**Raises:**
+- `NaqConnectionError`: If connection establishment or JetStream context creation fails.
+- `ErrNoServers`: If no NATS servers are available.
+- `ErrTimeout`: If connection times out.
+- `ErrConnectionClosed`: If connection is closed unexpectedly.
+
+**Example:**
+
+```python
+from naq.connection import nats_jetstream
+
+# Using default configuration
+async with nats_jetstream() as (nc, js):
+    await js.add_stream(name="mystream", subjects=["my.subject"])
+    await js.publish("my.subject", b"message")
+
+# Using custom configuration
+from naq.services.config import GlobalServiceConfig
+config = GlobalServiceConfig(nats_url="nats://custom:4222")
+async with nats_jetstream(config) as (nc, js):
+    await js.add_stream(name="mystream", subjects=["my.subject"])
+    await js.publish("my.subject", b"message")
+```
+
+### `nats_kv_store(bucket_name: str, config: Optional[GlobalServiceConfig] = None)`
+
+Asynchronous context manager for NATS Key-Value store operations.
+
+**Parameters:**
+- `bucket_name` (`str`): Name of the KV bucket to access or create.
+- `config` (`Optional[GlobalServiceConfig]`): Optional configuration object for the NATS connection. If None, the default global configuration will be used.
+
+**Yields:**
+- `KeyValue`: An established Key-Value store instance for the specified bucket.
+
+**Raises:**
+- `NaqConnectionError`: If connection establishment, JetStream context creation, or KV store access fails.
+- `ErrNoServers`: If no NATS servers are available.
+- `ErrTimeout`: If connection times out.
+- `ErrConnectionClosed`: If connection is closed unexpectedly.
+- `BucketNotFoundError`: If the KV bucket doesn't exist and auto-creation fails.
+
+**Example:**
+
+```python
+from naq.connection import nats_kv_store
+
+# Using default configuration
+async with nats_kv_store("my_bucket") as kv:
+    await kv.put("key", b"value")
+    value = await kv.get("key")
+
+# Using custom configuration
+from naq.services.config import GlobalServiceConfig
+config = GlobalServiceConfig(nats_url="nats://custom:4222")
+async with nats_kv_store("my_bucket", config) as kv:
+    await kv.put("key", b"value")
+    value = await kv.get("key")
+```
+
+## Usage Patterns
+
+### Basic Connection Management
+
+```python
+from naq.connection import nats_connection
+
+# Simple connection usage
+async with nats_connection() as nc:
+    await nc.publish("my.subject", b"Hello, World!")
+    msg = await nc.request("my.service", b"request data")
+    print(f"Response: {msg.data}")
+# Connection is automatically closed
+```
+
+### JetStream Operations
+
+```python
+from naq.connection import nats_jetstream
+
+# JetStream stream and consumer management
+async with nats_jetstream() as (nc, js):
+    # Create a stream
+    await js.add_stream(name="events", subjects=["events.>"])
+    
+    # Publish messages
+    await js.publish("events.user.created", b"User data")
+    
+    # Create a consumer
+    await js.add_consumer("events", durable_name="event_processor")
+    
+    # Process messages
+    consumer = await js.consumer("events", "event_processor")
+    async for msg in consumer.messages:
+        print(f"Received: {msg.subject} - {msg.data}")
+        await msg.ack()
+```
+
+### Key-Value Store Operations
+
+```python
+from naq.connection import nats_kv_store
+
+# KV store for configuration or state management
+async with nats_kv_store("app_config") as kv:
+    # Store configuration
+    await kv.put("max_workers", b"10")
+    await kv.put("timeout", b"30")
+    
+    # Retrieve configuration
+    max_workers = await kv.get("max_workers")
+    timeout = await kv.get("timeout")
+    print(f"Config: max_workers={max_workers.value}, timeout={timeout.value}")
+```
+
+### Combined Operations
+
+```python
+from naq.connection import nats_connection, jetstream_context, nats_kv_store
+
+# Complex workflow using multiple context managers
+async with nats_connection() as nc:
+    # Use JetStream for messaging
+    async with jetstream_context(nc) as js:
+        await js.add_stream(name="tasks", subjects=["tasks.>"])
+        await js.publish("tasks.process", b"Task data")
+    
+    # Use KV store for state
+    async with nats_kv_store("task_state") as kv:
+        await kv.put("last_task", b"process")
+        last_task = await kv.get("last_task")
+        print(f"Last task: {last_task.value}")
 ```

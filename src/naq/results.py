@@ -48,7 +48,7 @@ class Results:
             # Create config with the specific NATS URL
             config = create_global_config()
             config.nats_url = self.nats_url
-            
+
             # Use the context manager for KV store operations
             async with nats_kv_store(RESULT_KV_NAME, config) as kv:
                 # Serialize the result data
@@ -60,7 +60,9 @@ class Results:
                 )
 
                 # Set TTL (default to settings value if not provided)
-                ttl = result_ttl if result_ttl is not None else DEFAULT_RESULT_TTL_SECONDS
+                ttl = (
+                    result_ttl if result_ttl is not None else DEFAULT_RESULT_TTL_SECONDS
+                )
 
                 # Store the result with TTL
                 await kv.put(job_id, serialized_result, ttl=ttl)
@@ -86,7 +88,7 @@ class Results:
             # Create config with the specific NATS URL
             config = create_global_config()
             config.nats_url = self.nats_url
-            
+
             # Use the context manager for KV store operations
             async with nats_kv_store(RESULT_KV_NAME, config) as kv:
                 try:
@@ -118,7 +120,7 @@ class Results:
             # Create config with the specific NATS URL
             config = create_global_config()
             config.nats_url = self.nats_url
-            
+
             # Use the context manager for KV store operations
             async with nats_kv_store(RESULT_KV_NAME, config) as kv:
                 # Get all keys in the KV store
@@ -139,7 +141,7 @@ class Results:
             # Create config with the specific NATS URL
             config = create_global_config()
             config.nats_url = self.nats_url
-            
+
             # Use the context manager for KV store operations
             async with nats_kv_store(RESULT_KV_NAME, config) as kv:
                 # Get all keys and delete them
@@ -164,7 +166,7 @@ class Results:
             # Create config with the specific NATS URL
             config = create_global_config()
             config.nats_url = self.nats_url
-            
+
             # Use the context manager for KV store operations
             async with nats_kv_store(RESULT_KV_NAME, config) as kv:
                 try:

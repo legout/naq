@@ -5,10 +5,9 @@ This module provides functionality for processing job messages.
 
 import asyncio
 import traceback
-from typing import Any, Optional
+from typing import Any
 
 from loguru import logger
-from nats.aio.msg import Msg
 
 from ..models.jobs import Job
 from ..models.enums import JOB_STATUS, WORKER_STATUS

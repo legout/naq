@@ -5,13 +5,12 @@ This module provides error handling functionality for job execution and unexpect
 
 import time
 import traceback
-from typing import Any, Optional
+from typing import Optional
 
 from loguru import logger
 from nats.aio.msg import Msg
 
 from ..models.jobs import Job
-from ..models.enums import JOB_STATUS
 from ..services import ServiceManager, JobService, EventService
 from ..models.events import JobEvent
 
@@ -21,25 +20,29 @@ class JobErrorHandler:
 
     def __init__(self, service_manager: ServiceManager):
         """Initialize the error handler with a service manager.
-        
+
         Args:
             service_manager: The ServiceManager instance for accessing services.
         """
         self._service_manager = service_manager
         self._job_service: Optional[JobService] = None
         self._event_service: Optional[EventService] = None
-    
+
     async def _get_services(self) -> None:
         """Get service instances from the service manager."""
         if self._job_service is None:
-            self._job_service = await self._service_manager.get_service("job_service", JobService)
+            self._job_service = await self._service_manager.get_service(
+                "job_service", JobService
+            )
         if self._event_service is None:
-            self._event_service = await self._service_manager.get_service("event_service", EventService)
+            self._event_service = await self._service_manager.get_service(
+                "event_service", EventService
+            )
 
     async def handle_job_execution_error(self, job: Optional[Job], msg: Msg) -> None:
         """Handle errors from job execution."""
         await self._get_services()
-        
+
         if job is None:
             logger.error(
                 "Job object is None after JobExecutionError, cannot handle retry/failure."
@@ -73,7 +76,7 @@ class JobErrorHandler:
             logger.error(
                 f"Job {job.job_id} failed after {attempt - 1} retries. Moving to failed queue."
             )
-            
+
             # Use JobService to handle job failure
             if self._job_service:
                 try:
@@ -82,11 +85,14 @@ class JobErrorHandler:
                         job=job,
                         error=error,
                         worker_id="unknown-worker",
-                        start_time=time.time()
+                        start_time=time.time(),
                     )
                 except Exception as e:
-                    logger.error(f"Failed to handle job failure via JobService: {e}", exc_info=True)
-            
+                    logger.error(
+                        f"Failed to handle job failure via JobService: {e}",
+                        exc_info=True,
+                    )
+
             # Log failure event using EventService
             if self._event_service:
                 try:
@@ -96,12 +102,15 @@ class JobErrorHandler:
                         error_type="JobExecutionError",
                         error_message=job.error or "Job execution failed",
                         duration_ms=0,
-                        queue_name=job.queue_name
+                        queue_name=job.queue_name,
                     )
                     await self._event_service.log_job_event(failure_event)
                 except Exception as e:
-                    logger.error(f"Failed to log failure event via EventService: {e}", exc_info=True)
-            
+                    logger.error(
+                        f"Failed to log failure event via EventService: {e}",
+                        exc_info=True,
+                    )
+
             try:
                 await msg.ack()  # Ack original message after handling failure
                 logger.debug(
@@ -118,7 +127,7 @@ class JobErrorHandler:
     ) -> None:
         """Handle unexpected errors during message processing."""
         await self._get_services()
-        
+
         logger.error(
             f"Unhandled error processing message (Sid='{msg.sid}', "
             f"JobId='{job.job_id if job else 'N/A'}'): {error}",
@@ -131,7 +140,7 @@ class JobErrorHandler:
                     f"Worker processing error: {error}"  # Assign error for storage
                 )
                 job.traceback = traceback.format_exc()
-                
+
                 # Use JobService to handle job failure
                 if self._job_service:
                     try:
@@ -139,11 +148,14 @@ class JobErrorHandler:
                             job=job,
                             error=error,
                             worker_id="unknown-worker",
-                            start_time=time.time()
+                            start_time=time.time(),
                         )
                     except Exception as e:
-                        logger.error(f"Failed to handle job failure via JobService: {e}", exc_info=True)
-                
+                        logger.error(
+                            f"Failed to handle job failure via JobService: {e}",
+                            exc_info=True,
+                        )
+
                 # Log failure event using EventService
                 if self._event_service:
                     try:
@@ -153,12 +165,15 @@ class JobErrorHandler:
                             error_type=type(error).__name__,
                             error_message=str(error),
                             duration_ms=0,
-                            queue_name=job.queue_name
+                            queue_name=job.queue_name,
                         )
                         await self._event_service.log_job_event(failure_event)
                     except Exception as e:
-                        logger.error(f"Failed to log failure event via EventService: {e}", exc_info=True)
-            
+                        logger.error(
+                            f"Failed to log failure event via EventService: {e}",
+                            exc_info=True,
+                        )
+
             await msg.term()
             logger.warning(
                 f"Terminated message Sid='{msg.sid}' due to unexpected processing error."

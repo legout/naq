@@ -2,7 +2,7 @@
 title: "KeyValue Store API"
 ---
 
-The `kv_stores` module provides a robust, centralized service for managing NATS KeyValue stores with support for pooling, transactions, and TTL (Time-To-Live).
+The `kv_stores` module provides a robust, centralized service for managing NATS KeyValue stores with support for pooling, transactions, and TTL (Time-To-Live). Additionally, the connection module provides context managers for simplified KeyValue store operations.
 
 ## `KVStoreService` Class
 
@@ -300,3 +300,150 @@ async def main():
         print(f"Error: {e}")
 
 asyncio.run(main())
+```
+
+## Context Manager for KV Stores
+
+The `naq.connection` module provides a convenient context manager `nats_kv_store` for simplified KeyValue store operations. This context manager handles the complete lifecycle of NATS connection, JetStream context, and KV store access with proper error handling and resource cleanup.
+
+### `nats_kv_store(bucket_name: str, config: Optional[GlobalServiceConfig] = None)`
+
+Asynchronous context manager for NATS Key-Value store operations.
+
+**Parameters:**
+- `bucket_name` (`str`): Name of the KV bucket to access or create.
+- `config` (`Optional[GlobalServiceConfig]`): Optional configuration object for the NATS connection. If None, the default global configuration will be used.
+
+**Yields:**
+- `KeyValue`: An established Key-Value store instance for the specified bucket.
+
+**Raises:**
+- `NaqConnectionError`: If connection establishment, JetStream context creation, or KV store access fails.
+- `ErrNoServers`: If no NATS servers are available.
+- `ErrTimeout`: If connection times out.
+- `ErrConnectionClosed`: If connection is closed unexpectedly.
+- `BucketNotFoundError`: If the KV bucket doesn't exist and auto-creation fails.
+
+### Usage Examples
+
+### Basic KV Store Operations
+
+```python
+import asyncio
+from naq.connection import nats_kv_store
+
+async def main():
+    # Using default configuration
+    async with nats_kv_store("my_bucket") as kv:
+        # Store a value
+        await kv.put("key", b"value")
+        
+        # Retrieve a value
+        value = await kv.get("key")
+        print(f"Retrieved: {value.value}")
+        
+        # Delete a key
+        await kv.delete("key")
+        
+        # List all keys
+        keys = await kv.keys()
+        print(f"Keys in bucket: {keys}")
+
+asyncio.run(main())
+```
+
+### Working with Custom Configuration
+
+```python
+import asyncio
+from naq.connection import nats_kv_store
+from naq.services.config import GlobalServiceConfig
+
+async def main():
+    # Using custom configuration
+    config = GlobalServiceConfig(nats_url="nats://custom:4222")
+    async with nats_kv_store("app_config", config) as kv:
+        # Store configuration
+        await kv.put("max_workers", b"10")
+        await kv.put("timeout", b"30")
+        
+        # Retrieve configuration
+        max_workers = await kv.get("max_workers")
+        timeout = await kv.get("timeout")
+        print(f"Config: max_workers={max_workers.value}, timeout={timeout.value}")
+
+asyncio.run(main())
+```
+
+### Complex Data with Serialization
+
+```python
+import asyncio
+import json
+from naq.connection import nats_kv_store
+
+async def main():
+    async with nats_kv_store("user_data") as kv:
+        # Store complex data as JSON
+        user_data = {"name": "Alice", "age": 30, "preferences": {"theme": "dark"}}
+        await kv.put("user:123", json.dumps(user_data).encode())
+        
+        # Retrieve and parse complex data
+        stored_data = await kv.get("user:123")
+        if stored_data:
+            user = json.loads(stored_data.value.decode())
+            print(f"User: {user['name']}, Age: {user['age']}")
+            print(f"Theme: {user['preferences']['theme']}")
+
+asyncio.run(main())
+```
+
+### Error Handling
+
+```python
+import asyncio
+from naq.connection import nats_kv_store
+from naq.exceptions import NaqConnectionError
+
+async def main():
+    try:
+        # This will handle connection errors and bucket creation errors
+        async with nats_kv_store("test_bucket") as kv:
+            await kv.put("key", b"value")
+            value = await kv.get("key")
+            print(f"Value: {value.value}")
+    except NaqConnectionError as e:
+        print(f"Connection error: {e}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+
+asyncio.run(main())
+```
+
+### Comparison with KVStoreService
+
+The `nats_kv_store` context manager provides a simpler, more direct approach to KV store operations compared to the `KVStoreService`:
+
+**Use `nats_kv_store` when:**
+- You need simple, direct KV store operations
+- You want automatic connection and resource management
+- You're working with a single bucket at a time
+- You prefer a context manager approach
+
+**Use `KVStoreService` when:**
+- You need connection pooling for high-throughput applications
+- You require transaction support
+- You're working with multiple buckets simultaneously
+- You need advanced features like TTL or custom serialization
+
+```python
+# Using nats_kv_store (simple, direct)
+async with nats_kv_store("config") as kv:
+    await kv.put("setting", b"value")
+
+# Using KVStoreService (advanced, pooled)
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+
+config = KVStoreServiceConfig(pool_size=10)
+service = KVStoreService(config)
+await service.put("config", "setting", "value")

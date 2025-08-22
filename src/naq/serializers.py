@@ -1,9 +1,10 @@
 # src/naq/serializers.py
 import cloudpickle
-import json
 import importlib
+import json
+import time
 from dataclasses import asdict, is_dataclass
-from typing import Any, Dict, List, Optional, Tuple, Union, Protocol
+from typing import Any, Dict, List, Optional, Tuple, Protocol
 
 from .exceptions import SerializationError
 from .models.enums import JOB_STATUS
@@ -109,7 +110,7 @@ class PickleSerializer:
                 args=args,
                 kwargs=kwargs,
                 job_id=payload.get("job_id"),
-                enqueue_time=payload.get("enqueue_time"), # Added enqueue_time
+                enqueue_time=payload.get("enqueue_time"),  # Added enqueue_time
                 queue_name=payload.get("queue_name"),
                 max_retries=payload.get("max_retries", 0),
                 retry_delay=payload.get("retry_delay", 0),
@@ -366,7 +367,7 @@ class JsonSerializer:
             depends_on=depends_on,
             result_ttl=payload.get("result_ttl"),
             timeout=payload.get("timeout"),
-            enqueue_time=payload.get("enqueue_time", time.time()), # Added enqueue_time
+            enqueue_time=payload.get("enqueue_time", time.time()),  # Added enqueue_time
         )
         return job
 

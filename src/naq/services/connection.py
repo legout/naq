@@ -9,7 +9,6 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Dict, Optional
 
-import msgspec
 import nats
 from nats.aio.client import Client as NATSClient
 from nats.js import JetStreamContext
@@ -35,7 +34,7 @@ class ConnectionServiceConfig(BaseConnectionServiceConfig):
 
     max_reconnect_attempts: int = 5
     reconnect_time_wait: float = 2.0
-    connection_timeout: float = 30.0 # Increased timeout for resilience
+    connection_timeout: float = 30.0  # Increased timeout for resilience
     ping_interval: float = 30.0
     max_outstanding_pings: int = 3
     prefer_thread_local: bool = False
@@ -165,25 +164,31 @@ class ConnectionService(BaseService):
                         self._logger.debug(f"Cancelling reconnection task for {url}")
                         task.cancel()
                         cancel_tasks.append(task)
-                
+
                 # Wait for all tasks to be cancelled with timeout
                 if cancel_tasks:
                     try:
                         await asyncio.wait_for(
                             asyncio.gather(*cancel_tasks, return_exceptions=True),
-                            timeout=5.0
+                            timeout=5.0,
                         )
                         self._logger.debug("Reconnection tasks cancelled successfully.")
                     except asyncio.TimeoutError:
-                        self._logger.warning("Timeout while waiting for reconnection tasks to cancel")
+                        self._logger.warning(
+                            "Timeout while waiting for reconnection tasks to cancel"
+                        )
                     except Exception as e:
-                        self._logger.warning(f"Error while cancelling reconnection tasks: {e}")
+                        self._logger.warning(
+                            f"Error while cancelling reconnection tasks: {e}"
+                        )
 
             self._reconnect_tasks.clear()
             self._logger.debug("Reconnection tasks cleared.")
 
             # Close all connections
-            self._logger.debug("Attempting to close all NATS connections via ConnectionManager...")
+            self._logger.debug(
+                "Attempting to close all NATS connections via ConnectionManager..."
+            )
             await self._connection_manager.close_all()
             self._logger.debug("All NATS connections closed via ConnectionManager.")
 
@@ -343,10 +348,12 @@ class ConnectionService(BaseService):
         """
         try:
             # Check if the connection is still valid before monitoring
-            if not nc or not hasattr(nc, 'is_connected'):
-                self._logger.warning(f"Invalid connection object for {url}, stopping monitor")
+            if not nc or not hasattr(nc, "is_connected"):
+                self._logger.warning(
+                    f"Invalid connection object for {url}, stopping monitor"
+                )
                 return
-                
+
             while True:
                 # Check if connection is still active
                 if not nc.is_connected:

@@ -106,8 +106,8 @@ async def kv_store_service(kv_store_service_config, connection_service):
 async def event_service(event_service_config, kv_store_service):
     """Create and initialize an EventService for testing."""
     config = ServiceConfig(
-        nats_url=event_service_config.nats_url,
-        log_level=event_service_config.log_level,
+        nats_url="nats://localhost:4222",
+        log_level="CRITICAL",
         custom_settings={
             "events_bucket_name": event_service_config.events_bucket_name,
             "max_events_per_job": event_service_config.max_events_per_job,
@@ -126,8 +126,8 @@ async def event_service(event_service_config, kv_store_service):
 async def job_service(job_service_config, connection_service, kv_store_service, event_service):
     """Create and initialize a JobService for testing."""
     config = ServiceConfig(
-        nats_url=job_service_config.nats_url,
-        log_level=job_service_config.log_level,
+        nats_url="nats://localhost:4222",
+        log_level="CRITICAL",
         custom_settings={
             "results_bucket_name": job_service_config.results_bucket_name,
             "default_result_ttl": job_service_config.default_result_ttl,

@@ -37,7 +37,7 @@ async def enqueue(
         name=queue_name,
         nats_url=nats_url,
         prefer_thread_local=prefer_thread_local,
-        config=config or create_global_config()
+        config=config or create_global_config(),
     )
     job = await q.enqueue(
         func,
@@ -69,7 +69,7 @@ async def enqueue_at(
         name=queue_name,
         nats_url=nats_url,
         prefer_thread_local=prefer_thread_local,
-        config=config or create_global_config()
+        config=config or create_global_config(),
     )
     return await q.enqueue_at(
         dt,
@@ -100,7 +100,7 @@ async def enqueue_in(
         name=queue_name,
         nats_url=nats_url,
         prefer_thread_local=prefer_thread_local,
-        config=config or create_global_config()
+        config=config or create_global_config(),
     )
     return await q.enqueue_in(
         delta,
@@ -133,7 +133,7 @@ async def schedule(
         name=queue_name,
         nats_url=nats_url,
         prefer_thread_local=prefer_thread_local,
-        config=config or create_global_config()
+        config=config or create_global_config(),
     )
     return await q.schedule(
         func,
@@ -159,46 +159,52 @@ async def purge_queue(
         name=queue_name,
         nats_url=nats_url,
         prefer_thread_local=prefer_thread_local,
-        config=config or create_global_config()
+        config=config or create_global_config(),
     )
     return await q.purge()
 
 
 async def cancel_scheduled_job(
-    job_id: str, nats_url: str = DEFAULT_NATS_URL, prefer_thread_local: bool = False,
-    config: Optional[GlobalServiceConfig] = None
+    job_id: str,
+    nats_url: str = DEFAULT_NATS_URL,
+    prefer_thread_local: bool = False,
+    config: Optional[GlobalServiceConfig] = None,
 ) -> bool:
     """Helper to cancel a scheduled job (async)."""
     q = Queue(
         nats_url=nats_url,
         prefer_thread_local=prefer_thread_local,
-        config=config or create_global_config()
+        config=config or create_global_config(),
     )  # Queue name doesn't matter here
     return await q.cancel_scheduled_job(job_id)
 
 
 async def pause_scheduled_job(
-    job_id: str, nats_url: str = DEFAULT_NATS_URL, prefer_thread_local: bool = False,
-    config: Optional[GlobalServiceConfig] = None
+    job_id: str,
+    nats_url: str = DEFAULT_NATS_URL,
+    prefer_thread_local: bool = False,
+    config: Optional[GlobalServiceConfig] = None,
 ) -> bool:
     """Helper to pause a scheduled job (async)."""
     q = Queue(
         nats_url=nats_url,
         prefer_thread_local=prefer_thread_local,
-        config=config or create_global_config()
+        config=config or create_global_config(),
     )
     return await q.pause_scheduled_job(job_id)
 
 
 async def resume_scheduled_job(
-    job_id: str, nats_url: str = DEFAULT_NATS_URL, prefer_thread_local: bool = False,
-    config: Optional[GlobalServiceConfig] = None
+    job_id: str,
+    nats_url: str = DEFAULT_NATS_URL,
+    prefer_thread_local: bool = False,
+    config: Optional[GlobalServiceConfig] = None,
 ) -> bool:
     """Helper to resume a scheduled job (async)."""
     q = Queue(
         nats_url=nats_url,
         prefer_thread_local=prefer_thread_local,
-        config=config or create_global_config()
+        config=config or create_global_config(),
     )
     return await q.resume_scheduled_job(job_id)
 
@@ -214,6 +220,6 @@ async def modify_scheduled_job(
     q = Queue(
         nats_url=nats_url,
         prefer_thread_local=prefer_thread_local,
-        config=config or create_global_config()
+        config=config or create_global_config(),
     )
     return await q.modify_scheduled_job(job_id, **updates)

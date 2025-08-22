@@ -9,13 +9,17 @@ import time
 from typing import Any, Dict, List, Optional
 
 import msgspec
-from loguru import logger
 
 from ..exceptions import NaqException
 from ..models.enums import WorkerEventType, WORKER_STATUS
 from ..models.events import WorkerEvent
 from ..worker import Worker
-from .base import BaseService, ServiceConfig, ServiceInitializationError, ServiceRuntimeError
+from .base import (
+    BaseService,
+    ServiceConfig,
+    ServiceInitializationError,
+    ServiceRuntimeError,
+)
 from .connection import ConnectionService
 from .events import EventService
 from .kv_stores import KVStoreService
@@ -99,19 +103,27 @@ class WorkerService(BaseService):
             custom_settings = self._config.custom_settings
 
             if "workers_bucket_name" in custom_settings:
-                worker_config.workers_bucket_name = custom_settings["workers_bucket_name"]
+                worker_config.workers_bucket_name = custom_settings[
+                    "workers_bucket_name"
+                ]
 
             if "default_worker_ttl" in custom_settings:
                 worker_config.default_worker_ttl = custom_settings["default_worker_ttl"]
 
             if "enable_worker_registration" in custom_settings:
-                worker_config.enable_worker_registration = custom_settings["enable_worker_registration"]
+                worker_config.enable_worker_registration = custom_settings[
+                    "enable_worker_registration"
+                ]
 
             if "enable_event_logging" in custom_settings:
-                worker_config.enable_event_logging = custom_settings["enable_event_logging"]
+                worker_config.enable_event_logging = custom_settings[
+                    "enable_event_logging"
+                ]
 
             if "auto_create_buckets" in custom_settings:
-                worker_config.auto_create_buckets = custom_settings["auto_create_buckets"]
+                worker_config.auto_create_buckets = custom_settings[
+                    "auto_create_buckets"
+                ]
 
             if "heartbeat_interval" in custom_settings:
                 worker_config.heartbeat_interval = custom_settings["heartbeat_interval"]
@@ -140,37 +152,42 @@ class WorkerService(BaseService):
 
             # Ensure connection service is available if other services are not provided
             if self._kv_store_service is None and self._connection_service is None:
-                raise ServiceInitializationError("ConnectionService or KVStoreService is required")
+                raise ServiceInitializationError(
+                    "ConnectionService or KVStoreService is required"
+                )
 
             # Ensure connection service is initialized if provided
-            if self._connection_service is not None and not self._connection_service.is_initialized:
+            if (
+                self._connection_service is not None
+                and not self._connection_service.is_initialized
+            ):
                 await self._connection_service.initialize()
 
             # Create KV store service if not provided
             if self._kv_store_service is None:
                 from .kv_stores import KVStoreService, KVStoreServiceConfig
-                
+
                 kv_config = KVStoreServiceConfig(
                     auto_create_buckets=self._worker_config.auto_create_buckets
                 )
                 self._kv_store_service = KVStoreService(
                     config=ServiceConfig(custom_settings=kv_config.as_dict()),
-                    connection_service=self._connection_service
+                    connection_service=self._connection_service,
                 )
                 await self._kv_store_service.initialize()
 
             # Create event service if not provided
             if self._event_service is None and self._worker_config.enable_event_logging:
                 from .events import EventService, EventServiceConfig
-                
+
                 event_config = EventServiceConfig(
                     enable_event_logging=self._worker_config.enable_event_logging,
-                    auto_create_bucket=self._worker_config.auto_create_bucket
+                    auto_create_bucket=self._worker_config.auto_create_bucket,
                 )
                 self._event_service = EventService(
                     config=ServiceConfig(custom_settings=event_config.as_dict()),
                     connection_service=self._connection_service,
-                    kv_store_service=self._kv_store_service
+                    kv_store_service=self._kv_store_service,
                 )
                 await self._event_service.initialize()
 
@@ -195,7 +212,10 @@ class WorkerService(BaseService):
             if self._event_service is not None and self._connection_service is not None:
                 await self._event_service.cleanup()
 
-            if self._kv_store_service is not None and self._connection_service is not None:
+            if (
+                self._kv_store_service is not None
+                and self._connection_service is not None
+            ):
                 await self._kv_store_service.cleanup()
 
             self._logger.info("WorkerService cleaned up successfully")
@@ -236,7 +256,7 @@ class WorkerService(BaseService):
                 worker_key,
                 worker_status,
                 ttl=self._worker_config.default_worker_ttl,
-                serialize=True
+                serialize=True,
             )
 
             # Track worker locally
@@ -245,8 +265,7 @@ class WorkerService(BaseService):
             # Log worker registered event
             if self._event_service and self._worker_config.enable_event_logging:
                 registered_event = WorkerEvent.registered(
-                    worker_id=worker.worker_id,
-                    queue_names=worker.queues
+                    worker_id=worker.worker_id, queue_names=worker.queues
                 )
                 await self._event_service.log_worker_event(registered_event)
 
@@ -270,13 +289,13 @@ class WorkerService(BaseService):
         """
         try:
             worker_key = f"worker:{worker_id}:status"
-            
+
             # Get current worker status
             try:
                 current_status = await self._kv_store_service.get(
                     self._worker_config.workers_bucket_name,
                     worker_key,
-                    deserialize=True
+                    deserialize=True,
                 )
                 if not isinstance(current_status, dict):
                     current_status = {}
@@ -292,18 +311,18 @@ class WorkerService(BaseService):
                 worker_key,
                 current_status,
                 ttl=self._worker_config.default_worker_ttl,
-                serialize=True
+                serialize=True,
             )
 
             # Log worker status change event
             if self._event_service and self._worker_config.enable_event_logging:
                 from ..models.events import WorkerEvent
-                
+
                 status_event = WorkerEvent(
                     worker_id=worker_id,
                     event_type=WorkerEventType.STATUS_CHANGED,
                     queue_names=current_status.get("queues", []),
-                    timestamp=time.time()
+                    timestamp=time.time(),
                 )
                 await self._event_service.log_worker_event(status_event)
 
@@ -326,13 +345,13 @@ class WorkerService(BaseService):
         """
         try:
             worker_key = f"worker:{worker_id}:status"
-            
+
             # Get current worker status
             try:
                 current_status = await self._kv_store_service.get(
                     self._worker_config.workers_bucket_name,
                     worker_key,
-                    deserialize=True
+                    deserialize=True,
                 )
                 if not isinstance(current_status, dict):
                     current_status = {}
@@ -347,7 +366,7 @@ class WorkerService(BaseService):
                 worker_key,
                 current_status,
                 ttl=self._worker_config.default_worker_ttl,
-                serialize=True
+                serialize=True,
             )
 
             self._logger.debug(f"Updated worker {worker_id} heartbeat")
@@ -369,13 +388,19 @@ class WorkerService(BaseService):
         """
         try:
             # Get all worker keys
-            kv = await self._kv_store_service.get_kv_store(self._worker_config.workers_bucket_name)
+            kv = await self._kv_store_service.get_kv_store(
+                self._worker_config.workers_bucket_name
+            )
             keys = await kv.keys()
 
             workers = []
             for key_bytes in keys:
-                key = key_bytes.decode("utf-8") if isinstance(key_bytes, bytes) else key_bytes
-                
+                key = (
+                    key_bytes.decode("utf-8")
+                    if isinstance(key_bytes, bytes)
+                    else key_bytes
+                )
+
                 # Only process worker status keys
                 if key.endswith(":status"):
                     try:
@@ -384,7 +409,9 @@ class WorkerService(BaseService):
                             worker_status = msgspec.json.decode(entry.value)
                             workers.append(worker_status)
                     except Exception as e:
-                        self._logger.warning(f"Error reading worker status for key {key}: {e}")
+                        self._logger.warning(
+                            f"Error reading worker status for key {key}: {e}"
+                        )
                         continue
 
             return workers
@@ -409,14 +436,14 @@ class WorkerService(BaseService):
         """
         try:
             worker_key = f"worker:{worker_id}:status"
-            
+
             try:
                 worker_status = await self._kv_store_service.get(
                     self._worker_config.workers_bucket_name,
                     worker_key,
-                    deserialize=True
+                    deserialize=True,
                 )
-                
+
                 if isinstance(worker_status, dict):
                     return worker_status
                 return None
@@ -445,11 +472,10 @@ class WorkerService(BaseService):
         """
         try:
             worker_key = f"worker:{worker_id}:status"
-            
+
             # Delete worker status
             deleted = await self._kv_store_service.delete(
-                self._worker_config.workers_bucket_name,
-                worker_key
+                self._worker_config.workers_bucket_name, worker_key
             )
 
             if deleted:
@@ -459,7 +485,7 @@ class WorkerService(BaseService):
                 # Log worker unregistered event
                 if self._event_service and self._worker_config.enable_event_logging:
                     from ..models.events import WorkerEvent
-                    
+
                     unregistered_event = WorkerEvent.unregistered(worker_id=worker_id)
                     await self._event_service.log_worker_event(unregistered_event)
 

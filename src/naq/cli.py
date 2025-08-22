@@ -436,7 +436,9 @@ def list_scheduled_jobs(
                         if job.get("interval_seconds"):
                             details.append(f"interval={job.get('interval_seconds')}s")
                         if job.get("schedule_failure_count", 0) > 0:
-                            details.append(f"failures={job.get('schedule_failure_count')}")
+                            details.append(
+                                f"failures={job.get('schedule_failure_count')}"
+                            )
                         if job.get("last_enqueued_utc"):
                             last_run = datetime.datetime.fromtimestamp(
                                 job.get("last_enqueued_utc"), timezone.utc
@@ -463,7 +465,9 @@ def list_scheduled_jobs(
                         )
 
                 console.print(table)
-                console.print(f"\n[bold]Total:[/bold] {len(jobs_data)} scheduled job(s)")
+                console.print(
+                    f"\n[bold]Total:[/bold] {len(jobs_data)} scheduled job(s)"
+                )
         except Exception as e:
             logger.exception(f"Error listing scheduled jobs: {e}")
             console.print(f"[red]Error listing scheduled jobs: {str(e)}[/red]")

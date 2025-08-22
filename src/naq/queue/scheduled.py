@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 import cloudpickle
 from loguru import logger
 from nats.js.errors import KeyNotFoundError, APIError
+from nats.js.kv import KeyValue
 
 from ..connection.context_managers import nats_kv_store
 from ..exceptions import (
@@ -33,7 +34,12 @@ class ScheduledJobManager:
     Handles storing, retrieving, and managing scheduled jobs in the NATS KV store.
     """
 
-    def __init__(self, queue_name: str, nats_url: str, config: Optional[GlobalServiceConfig] = None):
+    def __init__(
+        self,
+        queue_name: str,
+        nats_url: str,
+        config: Optional[GlobalServiceConfig] = None,
+    ):
         self.queue_name = queue_name
         self._nats_url = nats_url
         self._config = config or create_global_config()
@@ -45,14 +51,20 @@ class ScheduledJobManager:
     async def _get_services(self) -> tuple[ConnectionService, KVStoreService]:
         """Get the connection and KV store services from the service manager."""
         if self._service_manager is None:
-            raise NaqException("ServiceManager is required for service-based operations")
-        
+            raise NaqException(
+                "ServiceManager is required for service-based operations"
+            )
+
         if self._connection_service is None:
-            self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
-        
+            self._connection_service = await self._service_manager.get_service(
+                "connection", ConnectionService
+            )
+
         if self._kv_store_service is None:
-            self._kv_store_service = await self._service_manager.get_service("kv_store", KVStoreService)
-        
+            self._kv_store_service = await self._service_manager.get_service(
+                "kv_store", KVStoreService
+            )
+
         return self._connection_service, self._kv_store_service
 
     async def get_kv(self):
@@ -62,7 +74,7 @@ class ScheduledJobManager:
 
         # Get the KV store service
         _, kv_store_service = await self._get_services()
-        
+
         try:
             # Get the KV store
             self._kv = await kv_store_service.get_kv_store(SCHEDULED_JOBS_KV_NAME)
@@ -115,7 +127,7 @@ class ScheduledJobManager:
             # Use the context manager for KV store operations
             config = create_global_config()
             config.nats_url = self._nats_url
-            
+
             async with nats_kv_store(SCHEDULED_JOBS_KV_NAME, config) as kv:
                 await kv.put(job.job_id, schedule_data)
         except Exception as e:
@@ -141,7 +153,7 @@ class ScheduledJobManager:
             # Use the context manager for KV store operations
             config = create_global_config()
             config.nats_url = self._nats_url
-            
+
             async with nats_kv_store(SCHEDULED_JOBS_KV_NAME, config) as kv:
                 # Use delete with purge=True to ensure it's fully removed
                 try:
@@ -149,7 +161,9 @@ class ScheduledJobManager:
                     logger.info(f"Scheduled job '{job_id}' cancelled successfully.")
                     return True
                 except KeyNotFoundError:
-                    logger.warning(f"Scheduled job '{job_id}' not found. Cannot cancel.")
+                    logger.warning(
+                        f"Scheduled job '{job_id}' not found. Cannot cancel."
+                    )
                     return False
         except Exception as e:
             logger.error(f"Error cancelling scheduled job '{job_id}': {e}")
@@ -174,22 +188,24 @@ class ScheduledJobManager:
             # Use the context manager for KV store operations
             config = create_global_config()
             config.nats_url = self._nats_url
-            
+
             async with nats_kv_store(SCHEDULED_JOBS_KV_NAME, config) as kv:
                 # Get the current job data
                 entry = await kv.get(job_id)
                 schedule_data = cloudpickle.loads(entry.value)
-                
+
                 if schedule_data.get("status") == status:
-                    logger.info(f"Scheduled job '{job_id}' already has status '{status}'.")
+                    logger.info(
+                        f"Scheduled job '{job_id}' already has status '{status}'."
+                    )
                     return True  # No change needed
 
                 # Update the status
                 schedule_data["status"] = status
-                
+
                 # Put the updated data
                 await kv.put(job_id, schedule_data)
-            
+
             logger.info(f"Scheduled job '{job_id}' status updated to '{status}'.")
             return True
         except KeyNotFoundError:
@@ -239,7 +255,7 @@ class ScheduledJobManager:
             # Use the context manager for KV store operations
             config = create_global_config()
             config.nats_url = self._nats_url
-            
+
             async with nats_kv_store(SCHEDULED_JOBS_KV_NAME, config) as kv:
                 # Get the current job data
                 entry = await kv.get(job_id)
@@ -276,7 +292,9 @@ class ScheduledJobManager:
                         "scheduled_timestamp_utc"
                     ]
                     schedule_data["next_run_utc"] = updates["scheduled_timestamp_utc"]
-                    needs_next_run_recalc = False  # Explicitly set, no recalc needed now
+                    needs_next_run_recalc = (
+                        False  # Explicitly set, no recalc needed now
+                    )
 
                 # Recalculate next run time if cron/interval changed and not explicitly set
                 if needs_next_run_recalc:
@@ -293,7 +311,7 @@ class ScheduledJobManager:
 
                 # Put the updated data
                 await kv.put(job_id, schedule_data)
-            
+
             logger.info(f"Scheduled job '{job_id}' modified successfully.")
             return True
 

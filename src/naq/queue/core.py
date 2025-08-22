@@ -6,28 +6,20 @@ This module contains the base Queue class and core queue operations.
 import datetime
 import re
 from datetime import timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, List, Optional, Union
 
-import cloudpickle
 from loguru import logger
 
-from ..connection.context_managers import nats_jetstream, nats_kv_store
+from ..connection.context_managers import nats_jetstream
 from ..exceptions import ConfigurationError
-from ..exceptions import NaqConnectionError
-from ..exceptions import JobNotFoundError, NaqException
+from ..exceptions import NaqException
 from ..models.jobs import Job, RetryDelayType
 from .scheduled import ScheduledJobManager
 from ..models.enums import SCHEDULED_JOB_STATUS
 from ..services import ServiceManager, ConnectionService, StreamService
 from ..services.config import create_global_config, GlobalServiceConfig
-from ..settings import (
-    DEFAULT_QUEUE_NAME,
-    DEFAULT_NATS_URL,
-    JOB_SERIALIZER,
-    NAQ_PREFIX,
-    SCHEDULED_JOBS_KV_NAME
-)
-from ..utils import run_async_from_sync, setup_logging
+from ..settings import DEFAULT_QUEUE_NAME, DEFAULT_NATS_URL, NAQ_PREFIX
+from ..utils import setup_logging
 
 
 class Queue:
@@ -90,27 +82,40 @@ class Queue:
             if self._service_manager:
                 # Get services from ServiceManager
                 if self._service_manager.has_service("connection"):
-                    self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
+                    self._connection_service = await self._service_manager.get_service(
+                        "connection", ConnectionService
+                    )
                 else:
                     # Register ConnectionService if not available
-                    self._connection_service = await self._service_manager.register_service("connection", ConnectionService)
-                
+                    self._connection_service = (
+                        await self._service_manager.register_service(
+                            "connection", ConnectionService
+                        )
+                    )
+
                 if self._service_manager.has_service("stream"):
-                    self._stream_service = await self._service_manager.get_service("stream", StreamService)
+                    self._stream_service = await self._service_manager.get_service(
+                        "stream", StreamService
+                    )
                 else:
                     # Register StreamService if not available
-                    self._stream_service = await self._service_manager.register_service("stream", StreamService)
+                    self._stream_service = await self._service_manager.register_service(
+                        "stream", StreamService
+                    )
             else:
                 # Create services directly if no ServiceManager
                 from ..services import ServiceConfig
+
                 config = ServiceConfig(nats_url=self._nats_url)
-                
+
                 if self._connection_service is None:
                     self._connection_service = ConnectionService(config)
                     await self._connection_service.initialize()
-                
+
                 if self._stream_service is None:
-                    self._stream_service = StreamService(config, self._connection_service)
+                    self._stream_service = StreamService(
+                        config, self._connection_service
+                    )
                     await self._stream_service.initialize()
 
     async def __aenter__(self):
@@ -127,11 +132,11 @@ class Queue:
             # Create config with the specific NATS URL
             config = create_global_config()
             config.nats_url = self._nats_url
-            
+
             # Use the context manager to get JetStream context
             async with nats_jetstream(config) as (nc, js):
                 self._js = js
-                
+
                 # Ensure the stream exists when the queue is first used
                 try:
                     await js.stream_info(self.stream_name)
@@ -208,7 +213,7 @@ class Queue:
             # Use the context manager for JetStream operations
             config = create_global_config()
             config.nats_url = self._nats_url
-            
+
             async with nats_jetstream(config) as (nc, js):
                 serialized_job = job.serialize()
 
@@ -435,7 +440,7 @@ class Queue:
             # Use the context manager for JetStream operations
             config = create_global_config()
             config.nats_url = self._nats_url
-            
+
             async with nats_jetstream(config) as (nc, js):
                 # Purge messages for this queue's stream
                 try:
@@ -443,7 +448,9 @@ class Queue:
                     logger.info(f"Purge successful for queue '{self.name}'.")
                     return 1
                 except Exception as purge_error:
-                    logger.error(f"Error purging stream '{self.stream_name}': {purge_error}")
+                    logger.error(
+                        f"Error purging stream '{self.stream_name}': {purge_error}"
+                    )
                     return 0
         except Exception as e:
             logger.error(f"Error purging queue '{self.name}': {e}")

@@ -78,11 +78,11 @@ class WorkerMonitor:
             # Use the new context manager for KV store access
             from ..connection.context_managers import nats_kv_store
             from ..services.config import create_global_config
-            
+
             # Create config with the provided URL
             config = create_global_config()
             config.nats_url = url_to_use
-            
+
             # Use the KV store context manager
             async with nats_kv_store(WORKER_KV_NAME, config) as kv:
                 # Get all keys

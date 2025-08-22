@@ -207,6 +207,60 @@ naq scheduler
 ```
 The scheduler monitors scheduled jobs and enqueues them onto the appropriate queue when they are due.
 
+## Context Managers for Simplified Connection Handling
+
+For simplified connection and resource management, `naq` provides asynchronous context managers that handle the complete lifecycle of NATS connections, JetStream contexts, and KV stores with proper error handling and cleanup.
+
+### Basic Usage with Context Managers
+
+```python
+# context_manager_example.py
+import asyncio
+from naq.connection import nats_jetstream, nats_kv_store
+from naq.models.jobs import Job
+
+async def main():
+    # Use nats_jetstream for simplified connection and JetStream handling
+    async with nats_jetstream() as (nc, js):
+        # Create and enqueue a job
+        job = Job(
+            function=count_words,
+            args=("This is a sample text with several words.",),
+            queue_name="default"
+        )
+        
+        # Enqueue the job using the JetStream context
+        await job.enqueue(nc, js)
+        print(f"Job {job.job_id} enqueued using context manager")
+
+    # Use nats_kv_store for simplified KV store operations
+    async with nats_kv_store("job_results") as kv:
+        # Store job result
+        await kv.put("job:123", b"completed")
+        
+        # Retrieve job result
+        result = await kv.get("job:123")
+        if result:
+            print(f"Job status: {result.value.decode()}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Available Context Managers
+
+1. **`nats_connection`**: Manages NATS connection lifecycle
+2. **`jetstream_context`**: Creates JetStream context from existing connection
+3. **`nats_jetstream`**: Combines NATS connection and JetStream context
+4. **`nats_kv_store`**: Manages NATS Key-Value store operations
+
+### Benefits of Context Managers
+
+- **Automatic Resource Management**: Connections are automatically closed when exiting the context
+- **Error Handling**: Proper exception handling and logging
+- **Simplified Code**: Cleaner, more readable code structure
+- **Composability**: Easy to combine multiple context managers for complex workflows
+
 ## Efficient connection handling and batching
 
 Synchronous producers (CLI tools, scripts, web handlers) often enqueue many jobs in quick succession. Reconnecting to NATS for every call can severely degrade performance. naq provides optimized connection reuse for both async and sync paths.

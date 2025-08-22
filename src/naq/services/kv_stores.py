@@ -7,16 +7,20 @@ including pooling, transaction support, and TTL management for atomic operations
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Dict, Optional, Union
+from typing import Any, AsyncIterator, Dict, Optional
 
 import cloudpickle
 import msgspec
-from loguru import logger
-from nats.js.errors import BucketNotFoundError, KeyNotFoundError
+from nats.js.errors import KeyNotFoundError
 from nats.js.kv import KeyValue
 
 from ..exceptions import NaqException
-from .base import BaseService, ServiceConfig, ServiceInitializationError, ServiceRuntimeError
+from .base import (
+    BaseService,
+    ServiceConfig,
+    ServiceInitializationError,
+    ServiceRuntimeError,
+)
 from .connection import ConnectionService
 
 
@@ -67,7 +71,7 @@ class KVStoreService(BaseService):
         self,
         config: Optional[ServiceConfig] = None,
         connection_service: Optional[ConnectionService] = None,
-        nats_client: Optional[Any] = None
+        nats_client: Optional[Any] = None,
     ) -> None:
         """
         Initialize the KV store service.
@@ -134,10 +138,15 @@ class KVStoreService(BaseService):
 
             # Ensure connection service or NATS client is available
             if self._connection_service is None and self._nats_client is None:
-                raise ServiceInitializationError("ConnectionService or NATS client is required")
+                raise ServiceInitializationError(
+                    "ConnectionService or NATS client is required"
+                )
 
             # Ensure connection service is initialized if provided
-            if self._connection_service is not None and not self._connection_service.is_initialized:
+            if (
+                self._connection_service is not None
+                and not self._connection_service.is_initialized
+            ):
                 await self._connection_service.initialize()
 
             self._logger.info("KVStoreService initialized successfully")
@@ -197,6 +206,7 @@ class KVStoreService(BaseService):
                 else:
                     # Use jetstream_context with direct NATS client
                     from ..connection.context_managers import jetstream_context
+
                     async with jetstream_context(self._nats_client) as js:
                         # Get or create KV store using context manager
                         kv = await self._get_or_create_kv_store(js, bucket_name)
@@ -240,9 +250,7 @@ class KVStoreService(BaseService):
         except Exception:
             # Try to create if not found and auto-create is enabled
             if self._kv_config.auto_create_buckets:
-                self._logger.info(
-                    f"KV store '{bucket_name}' not found, creating..."
-                )
+                self._logger.info(f"KV store '{bucket_name}' not found, creating...")
                 kv = await js.create_key_value(
                     bucket=bucket_name,
                     ttl=self._kv_config.default_bucket_ttl or 0,
@@ -288,19 +296,22 @@ class KVStoreService(BaseService):
             # Use configured TTL if not provided
             key_ttl = ttl if ttl is not None else self._kv_config.default_key_ttl
 
-            # Store the value
-            await kv.put(key, data)
+            # Store the value with TTL if specified
+            if key_ttl is not None:
+                await kv.put(key, data, ttl=key_ttl)
+            else:
+                await kv.put(key, data)
 
-            self._logger.debug(f"Stored value for key '{key}' in bucket '{bucket_name}'")
+            self._logger.debug(
+                f"Stored value for key '{key}' in bucket '{bucket_name}'"
+            )
 
         except Exception as e:
             error_msg = f"Failed to put key '{key}' in bucket '{bucket_name}': {e}"
             self._logger.error(error_msg)
             raise NaqException(error_msg) from e
 
-    async def get(
-        self, bucket_name: str, key: str, deserialize: bool = True
-    ) -> Any:
+    async def get(self, bucket_name: str, key: str, deserialize: bool = True) -> Any:
         """
         Retrieve a value from the specified KV store.
 
@@ -328,7 +339,9 @@ class KVStoreService(BaseService):
                 return entry.value
 
         except KeyNotFoundError:
-            raise NaqException(f"Key '{key}' not found in bucket '{bucket_name}'") from None
+            raise NaqException(
+                f"Key '{key}' not found in bucket '{bucket_name}'"
+            ) from None
         except Exception as e:
             error_msg = f"Failed to get key '{key}' from bucket '{bucket_name}': {e}"
             self._logger.error(error_msg)
@@ -364,7 +377,7 @@ class KVStoreService(BaseService):
                 await kv.delete(key, purge=True)
             else:
                 await kv.delete(key)
-            
+
             self._logger.debug(f"Deleted key '{key}' from bucket '{bucket_name}'")
             return True
 
@@ -458,12 +471,14 @@ class KVTransaction:
         else:
             data = value
 
-        self._operations.append({
-            "type": "put",
-            "key": key,
-            "data": data,
-            "ttl": ttl,
-        })
+        self._operations.append(
+            {
+                "type": "put",
+                "key": key,
+                "data": data,
+                "ttl": ttl,
+            }
+        )
 
     async def get(self, key: str, deserialize: bool = True) -> Any:
         """
@@ -496,11 +511,13 @@ class KVTransaction:
         if self._committed:
             raise NaqException("Transaction already committed")
 
-        self._operations.append({
-            "type": "delete",
-            "key": key,
-            "purge": purge,
-        })
+        self._operations.append(
+            {
+                "type": "delete",
+                "key": key,
+                "purge": purge,
+            }
+        )
 
     async def commit(self) -> None:
         """
@@ -519,9 +536,7 @@ class KVTransaction:
                 if operation["type"] == "put":
                     if operation["ttl"] is not None:
                         await self._kv.put(
-                            operation["key"], 
-                            operation["data"], 
-                            ttl=operation["ttl"]
+                            operation["key"], operation["data"], ttl=operation["ttl"]
                         )
                     else:
                         await self._kv.put(operation["key"], operation["data"])
@@ -532,7 +547,9 @@ class KVTransaction:
                         await self._kv.delete(operation["key"])
 
             self._committed = True
-            self._logger.debug(f"Committed transaction with {len(self._operations)} operations")
+            self._logger.debug(
+                f"Committed transaction with {len(self._operations)} operations"
+            )
 
         except Exception as e:
             error_msg = f"Failed to commit transaction: {e}"

@@ -17,7 +17,7 @@ from ..services import (
     ServiceConfig,
 )
 from ..services.config import GlobalServiceConfig
-from ..connection.context_managers import nats_connection
+from ..connection.context_managers import nats_connection, nats_jetstream
 from ..utils import setup_logging
 
 # Create a Typer instance for job commands
@@ -59,7 +59,7 @@ def purge(
         config = GlobalServiceConfig()
         config.nats_url = nats_url
         config.custom_settings.update({"log_level": log_level})
-        
+
         try:
             # Use the new context manager for NATS JetStream connection
             async with nats_jetstream(config) as (nc, js):
@@ -90,12 +90,15 @@ def purge(
                     try:
                         # Use JetStream context from the context manager
                         stream_name = f"{NAQ_PREFIX}_queue_{queue_name}"
-                        
+
                         # Purge the stream
                         await stream_service.purge_stream(stream_name)
                         purged_count = 0  # NATS doesn't return count for purge
-                        
-                        results[queue_name] = {"status": "success", "count": purged_count}
+
+                        results[queue_name] = {
+                            "status": "success",
+                            "count": purged_count,
+                        }
                         total_purged += purged_count
                     except Exception as e:
                         results[queue_name] = {"status": "error", "error": str(e)}
@@ -233,7 +236,7 @@ def job_control(
         config = GlobalServiceConfig()
         config.nats_url = nats_url
         config.custom_settings.update({"log_level": log_level})
-        
+
         try:
             # Use the new context manager for NATS connection
             async with nats_connection(config) as nc:
@@ -292,9 +295,7 @@ def job_control(
                     # For reschedule, we need to get the current job, cancel it, and reschedule
                     current_job = await scheduler_service.get_scheduled_job(job_id)
                     if current_job is None:
-                        console.print(
-                            f"[yellow]Job {job_id} not found.[/yellow]"
-                        )
+                        console.print(f"[yellow]Job {job_id} not found.[/yellow]")
                         return
 
                     # Cancel the current job
@@ -303,7 +304,7 @@ def job_control(
                     # Create new job with updated parameters
                     from ..job import Job
                     import cloudpickle
-                    
+
                     # Deserialize the original job
                     original_job_data = cloudpickle.loads(current_job._orig_job_payload)
                     new_job = Job.deserialize(original_job_data)

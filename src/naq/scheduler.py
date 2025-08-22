@@ -20,18 +20,13 @@ except ImportError:
     croniter = None  # type: ignore
 
 from .exceptions import NaqConnectionError
-from .exceptions import SerializationError
-from .settings import DEFAULT_NATS_URL
 from .settings import (
-    MAX_SCHEDULE_FAILURES,
-    NAQ_PREFIX,
     SCHEDULED_JOBS_KV_NAME,
     SCHEDULER_LOCK_KEY,
     SCHEDULER_LOCK_KV_NAME,
     SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS,
     SCHEDULER_LOCK_TTL_SECONDS,
 )
-from .models.enums import SCHEDULED_JOB_STATUS
 from .services import ServiceManager
 from .services import ConnectionService
 from .services import KVStoreService
@@ -68,9 +63,7 @@ class LeaderElection:
             logger.error(
                 f"Failed to initialize leader election with KV store '{SCHEDULER_LOCK_KV_NAME}': {e}"
             )
-            raise NaqConnectionError(
-                f"Failed to access lock KV store: {e}"
-            ) from e
+            raise NaqConnectionError(f"Failed to access lock KV store: {e}") from e
 
     async def try_become_leader(self) -> bool:
         """
@@ -145,7 +138,9 @@ class LeaderElection:
                         "hostname": socket.gethostname(),
                     }
                     serialized_lock_data = cloudpickle.dumps(lock_data)
-                    await kv.put(SCHEDULER_LOCK_KEY.encode("utf-8"), serialized_lock_data)
+                    await kv.put(
+                        SCHEDULER_LOCK_KEY.encode("utf-8"), serialized_lock_data
+                    )
                     logger.debug(
                         f"Renewed leader lock. Next renewal in {self.lock_renew_interval}s"
                     )
@@ -207,7 +202,7 @@ class ScheduledJobProcessor:
         self,
         connection_service: Optional[ConnectionService] = None,
         kv_store_service: Optional[KVStoreService] = None,
-        event_service: Optional[EventService] = None
+        event_service: Optional[EventService] = None,
     ):
         # Services are kept for compatibility but not used in context manager approach
         self._connection_service = connection_service
@@ -281,13 +276,10 @@ class ScheduledJobProcessor:
         if not is_leader:
             return 0, 0
 
-        now_ts = time.time()
         processed_count = 0
         error_count = 0
 
         try:
-            # Get all keys from the scheduled jobs bucket
-            kv = await self._kv_store_service.get_kv_store(SCHEDULED_JOBS_KV_NAME)
             # Note: KVStoreService doesn't have a direct keys() method,
             # so we'll need to handle this differently
             # For now, we'll rely on the SchedulerService to handle this
@@ -305,7 +297,7 @@ class ScheduledJobProcessor:
     ) -> tuple[int, int]:
         """
         Process a single scheduled job.
-        
+
         Note: This method is now simplified as most processing is handled by SchedulerService.
 
         Args:
@@ -364,10 +356,18 @@ class Scheduler:
         """Establish service connections and initialize components."""
         try:
             # Get services from service manager
-            self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
-            self._kv_store_service = await self._service_manager.get_service("kv_store", KVStoreService)
-            self._event_service = await self._service_manager.get_service("event", EventService)
-            self._scheduler_service = await self._service_manager.get_service("scheduler", SchedulerService)
+            self._connection_service = await self._service_manager.get_service(
+                "connection", ConnectionService
+            )
+            self._kv_store_service = await self._service_manager.get_service(
+                "kv_store", KVStoreService
+            )
+            self._event_service = await self._service_manager.get_service(
+                "event", EventService
+            )
+            self._scheduler_service = await self._service_manager.get_service(
+                "scheduler", SchedulerService
+            )
 
             logger.info(
                 f"Scheduler connected to services and KV store '{SCHEDULED_JOBS_KV_NAME}'."
@@ -379,9 +379,7 @@ class Scheduler:
 
             # Create job processor
             self._job_processor = ScheduledJobProcessor(
-                self._connection_service,
-                self._kv_store_service,
-                self._event_service
+                self._connection_service, self._kv_store_service, self._event_service
             )
 
         except Exception as e:

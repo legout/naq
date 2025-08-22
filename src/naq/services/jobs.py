@@ -8,17 +8,20 @@ and failure handling.
 
 import time
 import traceback
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
-import cloudpickle
 import msgspec
-from loguru import logger
 
 from ..exceptions import JobExecutionError, NaqException
-from ..models.events import JobEvent, WorkerEvent
-from ..models.enums import JobEventType, WorkerEventType, JOB_STATUS
+from ..models.events import JobEvent
+from ..models.enums import JOB_STATUS
 from ..models.jobs import Job, JobResult
-from .base import BaseService, ServiceConfig, ServiceInitializationError, ServiceRuntimeError
+from .base import (
+    BaseService,
+    ServiceConfig,
+    ServiceInitializationError,
+    ServiceRuntimeError,
+)
 from .connection import ConnectionService
 from .events import EventService
 from .kv_stores import KVStoreService
@@ -110,19 +113,27 @@ class JobService(BaseService):
                 job_config.default_result_ttl = custom_settings["default_result_ttl"]
 
             if "enable_job_execution" in custom_settings:
-                job_config.enable_job_execution = custom_settings["enable_job_execution"]
+                job_config.enable_job_execution = custom_settings[
+                    "enable_job_execution"
+                ]
 
             if "enable_result_storage" in custom_settings:
-                job_config.enable_result_storage = custom_settings["enable_result_storage"]
+                job_config.enable_result_storage = custom_settings[
+                    "enable_result_storage"
+                ]
 
             if "enable_event_logging" in custom_settings:
-                job_config.enable_event_logging = custom_settings["enable_event_logging"]
+                job_config.enable_event_logging = custom_settings[
+                    "enable_event_logging"
+                ]
 
             if "auto_create_buckets" in custom_settings:
                 job_config.auto_create_buckets = custom_settings["auto_create_buckets"]
 
             if "max_job_execution_time" in custom_settings:
-                job_config.max_job_execution_time = custom_settings["max_job_execution_time"]
+                job_config.max_job_execution_time = custom_settings[
+                    "max_job_execution_time"
+                ]
 
         return job_config
 
@@ -140,45 +151,58 @@ class JobService(BaseService):
             self._logger.info("Initializing JobService")
 
             # Validate configuration
-            if self._job_config.default_result_ttl is not None and self._job_config.default_result_ttl <= 0:
+            if (
+                self._job_config.default_result_ttl is not None
+                and self._job_config.default_result_ttl <= 0
+            ):
                 raise ServiceInitializationError("default_result_ttl must be positive")
 
-            if self._job_config.max_job_execution_time is not None and self._job_config.max_job_execution_time <= 0:
-                raise ServiceInitializationError("max_job_execution_time must be positive")
+            if (
+                self._job_config.max_job_execution_time is not None
+                and self._job_config.max_job_execution_time <= 0
+            ):
+                raise ServiceInitializationError(
+                    "max_job_execution_time must be positive"
+                )
 
             # Ensure connection service is available if other services are not provided
             if self._kv_store_service is None and self._connection_service is None:
-                raise ServiceInitializationError("ConnectionService or KVStoreService is required")
+                raise ServiceInitializationError(
+                    "ConnectionService or KVStoreService is required"
+                )
 
             # Ensure connection service is initialized if provided
-            if self._connection_service is not None and not self._connection_service.is_initialized:
+            if (
+                self._connection_service is not None
+                and not self._connection_service.is_initialized
+            ):
                 await self._connection_service.initialize()
 
             # Create KV store service if not provided
             if self._kv_store_service is None:
                 from .kv_stores import KVStoreService, KVStoreServiceConfig
-                
+
                 kv_config = KVStoreServiceConfig(
                     auto_create_buckets=self._job_config.auto_create_buckets
                 )
                 self._kv_store_service = KVStoreService(
                     config=ServiceConfig(custom_settings=kv_config.as_dict()),
-                    connection_service=self._connection_service
+                    connection_service=self._connection_service,
                 )
                 await self._kv_store_service.initialize()
 
             # Create event service if not provided
             if self._event_service is None and self._job_config.enable_event_logging:
                 from .events import EventService, EventServiceConfig
-                
+
                 event_config = EventServiceConfig(
                     enable_event_logging=self._job_config.enable_event_logging,
-                    auto_create_bucket=self._job_config.auto_create_buckets
+                    auto_create_bucket=self._job_config.auto_create_buckets,
                 )
                 self._event_service = EventService(
                     config=ServiceConfig(custom_settings=event_config.as_dict()),
                     connection_service=self._connection_service,
-                    kv_store_service=self._kv_store_service
+                    kv_store_service=self._kv_store_service,
                 )
                 await self._event_service.initialize()
 
@@ -203,7 +227,10 @@ class JobService(BaseService):
             if self._event_service is not None and self._connection_service is not None:
                 await self._event_service.cleanup()
 
-            if self._kv_store_service is not None and self._connection_service is not None:
+            if (
+                self._kv_store_service is not None
+                and self._connection_service is not None
+            ):
                 await self._kv_store_service.cleanup()
 
             self._logger.info("JobService cleaned up successfully")
@@ -237,22 +264,22 @@ class JobService(BaseService):
             # Log job started event
             if self._event_service and self._job_config.enable_event_logging:
                 started_event = JobEvent.started(
-                    job_id=job.job_id,
-                    worker_id=worker_id,
-                    queue_name=job.queue_name
+                    job_id=job.job_id, worker_id=worker_id, queue_name=job.queue_name
                 )
                 await self._event_service.log_job_event(started_event)
 
             # Execute the job with timeout if configured
             if self._job_config.max_job_execution_time:
                 import asyncio
+
                 try:
                     result = await asyncio.wait_for(
-                        job.execute(),
-                        timeout=self._job_config.max_job_execution_time
+                        job.execute(), timeout=self._job_config.max_job_execution_time
                     )
                 except asyncio.TimeoutError:
-                    raise JobExecutionError(f"Job {job.job_id} timed out after {self._job_config.max_job_execution_time} seconds")
+                    raise JobExecutionError(
+                        f"Job {job.job_id} timed out after {self._job_config.max_job_execution_time} seconds"
+                    )
             else:
                 result = await job.execute()
 
@@ -271,7 +298,7 @@ class JobService(BaseService):
                     job_id=job.job_id,
                     worker_id=worker_id,
                     duration_ms=duration_ms,
-                    queue_name=job.queue_name
+                    queue_name=job.queue_name,
                 )
                 await self._event_service.log_job_event(completed_event)
 
@@ -300,14 +327,14 @@ class JobService(BaseService):
         try:
             # Create result key
             result_key = f"job:{job_id}:result"
-            
+
             # Store the result with TTL
             await self._kv_store_service.put(
                 self._job_config.results_bucket_name,
                 result_key,
                 result,
                 ttl=self._job_config.default_result_ttl,
-                serialize=True
+                serialize=True,
             )
 
             self._logger.debug(f"Stored result for job {job_id}")
@@ -333,15 +360,13 @@ class JobService(BaseService):
         try:
             # Create result key
             result_key = f"job:{job_id}:result"
-            
+
             # Get the result
             try:
                 result = await self._kv_store_service.get(
-                    self._job_config.results_bucket_name,
-                    result_key,
-                    deserialize=True
+                    self._job_config.results_bucket_name, result_key, deserialize=True
                 )
-                
+
                 if isinstance(result, JobResult):
                     return result
                 return None
@@ -356,11 +381,7 @@ class JobService(BaseService):
             raise NaqException(error_msg) from e
 
     async def handle_job_failure(
-        self, 
-        job: Job, 
-        error: Exception, 
-        worker_id: str, 
-        start_time: float
+        self, job: Job, error: Exception, worker_id: str, start_time: float
     ) -> None:
         """
         Handle a job failure.
@@ -376,7 +397,7 @@ class JobService(BaseService):
         """
         try:
             duration_ms = (time.time() - start_time) * 1000
-            
+
             # Log job failed event
             if self._event_service and self._job_config.enable_event_logging:
                 failed_event = JobEvent.failed(
@@ -385,7 +406,7 @@ class JobService(BaseService):
                     error_type=type(error).__name__,
                     error_message=str(error),
                     duration_ms=duration_ms,
-                    queue_name=job.queue_name
+                    queue_name=job.queue_name,
                 )
                 await self._event_service.log_job_event(failed_event)
 
@@ -393,14 +414,14 @@ class JobService(BaseService):
             if job.should_retry(error):
                 retry_delay = job.get_next_retry_delay()
                 job.increment_retry_count()
-                
+
                 # Log retry scheduled event
                 if self._event_service and self._job_config.enable_event_logging:
                     retry_event = JobEvent.retry_scheduled(
                         job_id=job.job_id,
                         worker_id=worker_id,
                         delay_seconds=retry_delay,
-                        queue_name=job.queue_name
+                        queue_name=job.queue_name,
                     )
                     await self._event_service.log_job_event(retry_event)
 
@@ -442,11 +463,10 @@ class JobService(BaseService):
         try:
             # Create result key
             result_key = f"job:{job_id}:result"
-            
+
             # Delete the result
             deleted = await self._kv_store_service.delete(
-                self._job_config.results_bucket_name,
-                result_key
+                self._job_config.results_bucket_name, result_key
             )
 
             if deleted:

@@ -230,14 +230,18 @@ def purge_queue_sync(
             queue_name=queue_name,
             nats_url=nats_url,
             prefer_thread_local=True,
-            config=config or create_global_config()
+            config=config or create_global_config(),
         )
         return count
 
     return run_async_from_sync(_main)
 
 
-def cancel_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL, config: Optional[GlobalServiceConfig] = None) -> bool:
+def cancel_scheduled_job_sync(
+    job_id: str,
+    nats_url: str = DEFAULT_NATS_URL,
+    config: Optional[GlobalServiceConfig] = None,
+) -> bool:
     """
     Helper to cancel a scheduled job (sync).
 
@@ -249,14 +253,18 @@ def cancel_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL, con
             job_id,
             nats_url=nats_url,
             prefer_thread_local=True,
-            config=config or create_global_config()
+            config=config or create_global_config(),
         )
         return res
 
     return run_async_from_sync(_main)
 
 
-def pause_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL, config: Optional[GlobalServiceConfig] = None) -> bool:
+def pause_scheduled_job_sync(
+    job_id: str,
+    nats_url: str = DEFAULT_NATS_URL,
+    config: Optional[GlobalServiceConfig] = None,
+) -> bool:
     """
     Helper to pause a scheduled job (sync).
 
@@ -268,14 +276,18 @@ def pause_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL, conf
             job_id,
             nats_url=nats_url,
             prefer_thread_local=True,
-            config=config or create_global_config()
+            config=config or create_global_config(),
         )
         return res
 
     return run_async_from_sync(_main)
 
 
-def resume_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL, config: Optional[GlobalServiceConfig] = None) -> bool:
+def resume_scheduled_job_sync(
+    job_id: str,
+    nats_url: str = DEFAULT_NATS_URL,
+    config: Optional[GlobalServiceConfig] = None,
+) -> bool:
     """
     Helper to resume a scheduled job (sync).
 
@@ -287,7 +299,7 @@ def resume_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL, con
             job_id,
             nats_url=nats_url,
             prefer_thread_local=True,
-            config=config or create_global_config()
+            config=config or create_global_config(),
         )
         return res
 
@@ -295,7 +307,10 @@ def resume_scheduled_job_sync(job_id: str, nats_url: str = DEFAULT_NATS_URL, con
 
 
 def modify_scheduled_job_sync(
-    job_id: str, nats_url: str = DEFAULT_NATS_URL, config: Optional[GlobalServiceConfig] = None, **updates: Any
+    job_id: str,
+    nats_url: str = DEFAULT_NATS_URL,
+    config: Optional[GlobalServiceConfig] = None,
+    **updates: Any,
 ) -> bool:
     """
     Helper to modify a scheduled job (sync).
@@ -309,7 +324,7 @@ def modify_scheduled_job_sync(
             nats_url=nats_url,
             prefer_thread_local=True,
             config=config or create_global_config(),
-            **updates
+            **updates,
         )
         return res
 
@@ -324,7 +339,7 @@ def close_sync_connections(nats_url: str = DEFAULT_NATS_URL) -> None:
     Use this to explicitly end a synchronous batch when you know no further
     enqueue_sync (or other sync helpers) will be called from the current thread.
     This can release the connection resources earlier than process exit.
-    
+
     Note: With context managers, connections are automatically closed when the
     context exits. This function is kept for backward compatibility.
     """

@@ -10,7 +10,7 @@ from typing import Optional
 
 from loguru import logger
 from nats.js import JetStreamContext
-from nats.js.errors import BucketNotFoundError, KeyNotFoundError
+from nats.js.errors import KeyNotFoundError
 from nats.js.kv import KeyValue
 
 from ..models.jobs import Job
@@ -46,13 +46,21 @@ class JobStatusManager:
     async def _get_services(self) -> None:
         """Get service instances from ServiceManager."""
         if self._service_manager is None:
-            logger.warning("ServiceManager not available, using direct worker connections")
+            logger.warning(
+                "ServiceManager not available, using direct worker connections"
+            )
             return
 
         try:
-            self._connection_service = await self._service_manager.get_service("connection", ConnectionService)
-            self._kv_store_service = await self._service_manager.get_service("kv_stores", KVStoreService)
-            self._job_service = await self._service_manager.get_service("jobs", JobService)
+            self._connection_service = await self._service_manager.get_service(
+                "connection", ConnectionService
+            )
+            self._kv_store_service = await self._service_manager.get_service(
+                "kv_stores", KVStoreService
+            )
+            self._job_service = await self._service_manager.get_service(
+                "jobs", JobService
+            )
             logger.debug("Successfully obtained services from ServiceManager")
         except Exception as e:
             logger.error(f"Failed to get services from ServiceManager: {e}")
@@ -64,12 +72,18 @@ class JobStatusManager:
             # Try to use KVStoreService first
             if self._kv_store_service is not None:
                 try:
-                    self._result_kv_store = await self._kv_store_service.get_kv_store(RESULT_KV_NAME)
-                    logger.debug(f"Got result KV store from KVStoreService: '{RESULT_KV_NAME}'")
+                    self._result_kv_store = await self._kv_store_service.get_kv_store(
+                        RESULT_KV_NAME
+                    )
+                    logger.debug(
+                        f"Got result KV store from KVStoreService: '{RESULT_KV_NAME}'"
+                    )
                     return self._result_kv_store
                 except Exception as e:
-                    logger.error(f"Failed to get result KV store from KVStoreService: {e}")
-            
+                    logger.error(
+                        f"Failed to get result KV store from KVStoreService: {e}"
+                    )
+
             # Fall back to direct worker connection
             if not self.worker._js:
                 logger.error("JetStream context not available")
@@ -78,7 +92,7 @@ class JobStatusManager:
                 self._result_kv_store = await self.worker._js.key_value(
                     bucket=RESULT_KV_NAME
                 )
-            except Exception as e:
+            except Exception:
                 try:
                     self._result_kv_store = await self.worker._js.create_key_value(
                         bucket=RESULT_KV_NAME,
@@ -127,17 +141,23 @@ class JobStatusManager:
         # Try to use KVStoreService first
         if self._kv_store_service is not None:
             try:
-                self._status_kv = await self._kv_store_service.get_kv_store(JOB_STATUS_KV_NAME)
-                logger.info(f"Bound to job status KV store from KVStoreService: '{JOB_STATUS_KV_NAME}'")
+                self._status_kv = await self._kv_store_service.get_kv_store(
+                    JOB_STATUS_KV_NAME
+                )
+                logger.info(
+                    f"Bound to job status KV store from KVStoreService: '{JOB_STATUS_KV_NAME}'"
+                )
                 return
             except Exception as e:
-                logger.error(f"Failed to get job status KV store from KVStoreService: {e}")
-        
+                logger.error(
+                    f"Failed to get job status KV store from KVStoreService: {e}"
+                )
+
         # Fall back to direct worker connection
         try:
             self._status_kv = await js.key_value(bucket=JOB_STATUS_KV_NAME)
             logger.info(f"Bound to job status KV store: '{JOB_STATUS_KV_NAME}'")
-        except Exception as e:
+        except Exception:
             try:
                 # Use integer seconds for TTL
                 status_ttl_seconds = (
@@ -165,17 +185,21 @@ class JobStatusManager:
         # Try to use KVStoreService first
         if self._kv_store_service is not None:
             try:
-                self._result_kv_store = await self._kv_store_service.get_kv_store(RESULT_KV_NAME)
-                logger.info(f"Bound to result KV store from KVStoreService: '{RESULT_KV_NAME}'")
+                self._result_kv_store = await self._kv_store_service.get_kv_store(
+                    RESULT_KV_NAME
+                )
+                logger.info(
+                    f"Bound to result KV store from KVStoreService: '{RESULT_KV_NAME}'"
+                )
                 return
             except Exception as e:
                 logger.error(f"Failed to get result KV store from KVStoreService: {e}")
-        
+
         # Fall back to direct worker connection
         try:
             self._result_kv_store = await js.key_value(bucket=RESULT_KV_NAME)
             logger.info(f"Bound to result KV store: '{RESULT_KV_NAME}'")
-        except Exception as e:
+        except Exception:
             try:
                 # Use integer seconds for TTL
                 default_ttl_seconds = (
@@ -214,10 +238,12 @@ class JobStatusManager:
                 )
                 for dep_id in job.dependency_ids:
                     try:
-                        status = await self._kv_store_service.get(JOB_STATUS_KV_NAME, dep_id, deserialize=False)
+                        status = await self._kv_store_service.get(
+                            JOB_STATUS_KV_NAME, dep_id, deserialize=False
+                        )
                         if isinstance(status, bytes):
                             status = status.decode("utf-8")
-                        
+
                         if status == JOB_STATUS.COMPLETED.value:
                             logger.debug(
                                 f"Dependency {dep_id} for job {job.job_id} is completed."
@@ -245,10 +271,11 @@ class JobStatusManager:
                 return True
             except Exception as e:
                 logger.error(
-                    f"Error checking dependencies for job {job.job_id} using KVStoreService: {e}", exc_info=True
+                    f"Error checking dependencies for job {job.job_id} using KVStoreService: {e}",
+                    exc_info=True,
                 )
                 # Fall back to direct KV store access
-        
+
         # Fall back to direct KV store access
         if not self._status_kv:
             logger.warning(
@@ -300,8 +327,12 @@ class JobStatusManager:
         # Try to use KVStoreService first
         if self._kv_store_service is not None:
             try:
-                logger.debug(f"Updating status for job {job_id} to '{status.value}' using KVStoreService")
-                await self._kv_store_service.put(JOB_STATUS_KV_NAME, job_id, status.value, serialize=False)
+                logger.debug(
+                    f"Updating status for job {job_id} to '{status.value}' using KVStoreService"
+                )
+                await self._kv_store_service.put(
+                    JOB_STATUS_KV_NAME, job_id, status.value, serialize=False
+                )
                 return
             except Exception as e:
                 logger.error(
@@ -309,7 +340,7 @@ class JobStatusManager:
                     exc_info=True,
                 )
                 # Fall back to direct KV store access
-        
+
         # Fall back to direct KV store access
         if not self._status_kv:
             logger.warning(
@@ -333,7 +364,7 @@ class JobStatusManager:
             if self._job_service is not None:
                 try:
                     from ..models.jobs import JobResult
-                    
+
                     # Create JobResult from job
                     job_result = JobResult.from_job(job)
                     if job.error:
@@ -343,14 +374,16 @@ class JobStatusManager:
                     else:
                         job_result.status = JOB_STATUS.COMPLETED.value
                         job_result.result = job.result
-                    
+
                     await self._job_service.store_result(job.job_id, job_result)
                     logger.debug(f"Stored result for job {job.job_id} using JobService")
                     return
                 except Exception as e:
-                    logger.error(f"Failed to store result for job {job.job_id} using JobService: {e}")
+                    logger.error(
+                        f"Failed to store result for job {job.job_id} using JobService: {e}"
+                    )
                     # Fall back to KVStoreService or direct connection
-            
+
             # Try to use KVStoreService next
             if self._kv_store_service is not None:
                 try:
@@ -362,23 +395,36 @@ class JobStatusManager:
                             "error": job.error,
                             "traceback": job.traceback,
                         }
-                        logger.debug(f"Storing failure info for job {job.job_id} using KVStoreService")
+                        logger.debug(
+                            f"Storing failure info for job {job.job_id} using KVStoreService"
+                        )
                     else:
                         # Store successful result
                         result_data = {
                             "status": JOB_STATUS.COMPLETED.value,
                             "result": job.result,
                         }
-                        logger.debug(f"Storing result for job {job.job_id} using KVStoreService")
+                        logger.debug(
+                            f"Storing result for job {job.job_id} using KVStoreService"
+                        )
 
                     # Store the result with TTL
-                    await self._kv_store_service.put(RESULT_KV_NAME, job.job_id, result_data, ttl=DEFAULT_RESULT_TTL_SECONDS)
-                    logger.debug(f"Stored result for job {job.job_id} using KVStoreService")
+                    await self._kv_store_service.put(
+                        RESULT_KV_NAME,
+                        job.job_id,
+                        result_data,
+                        ttl=DEFAULT_RESULT_TTL_SECONDS,
+                    )
+                    logger.debug(
+                        f"Stored result for job {job.job_id} using KVStoreService"
+                    )
                     return
                 except Exception as e:
-                    logger.error(f"Failed to store result for job {job.job_id} using KVStoreService: {e}")
+                    logger.error(
+                        f"Failed to store result for job {job.job_id} using KVStoreService: {e}"
+                    )
                     # Fall back to direct connection
-            
+
             # Fall back to direct worker connection
             if not self.worker._js:
                 logger.error("JetStream context not available")
@@ -387,10 +433,10 @@ class JobStatusManager:
             # Use the new context manager for KV store operations
             from ..connection.context_managers import nats_kv_store
             from ..services.config import create_global_config
-            
+
             # Create config
             config = create_global_config()
-            
+
             # Use the KV store context manager
             async with nats_kv_store(RESULT_KV_NAME, config) as kv_store:
                 # Prepare result data
@@ -420,7 +466,9 @@ class JobStatusManager:
 
                 # Store the result with TTL
                 await kv_store.put(job.job_id, serialized_result)
-                logger.debug(f"Stored result for job {job.job_id} using direct connection")
+                logger.debug(
+                    f"Stored result for job {job.job_id} using direct connection"
+                )
 
         except Exception as e:
             # Log error but don't let result storage failure stop job processing

@@ -18,9 +18,16 @@ class TestQueue:
     async def queue(self, mock_nats, mocker):
         """Setup a test queue with mocked NATS."""
         mock_nc, mock_js = mock_nats
-        mocker.patch('naq.connection.get_nats_connection', return_value=mock_nc)
-        mocker.patch('naq.connection.get_jetstream_context', return_value=mock_js)
-        mocker.patch('naq.connection.ensure_stream')
+        
+        # Mock the nats_jetstream context manager
+        mock_nats_jetstream = mocker.AsyncMock()
+        mock_nats_jetstream.__aenter__.return_value = (mock_nc, mock_js)
+        mock_nats_jetstream.__aexit__.return_value = None
+        mocker.patch('naq.connection.context_managers.nats_jetstream', return_value=mock_nats_jetstream)
+        
+        # Mock stream info to simulate existing stream
+        mock_js.stream_info = AsyncMock()
+        
         q = Queue(name="test")
         return q
 
