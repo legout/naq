@@ -97,7 +97,7 @@ async def nats_connection(config: Optional[GlobalServiceConfig] = None):
         config = create_global_config()
 
     # Extract NATS connection parameters from config
-    servers = [config.nats_url] if config.nats_url else [DEFAULT_NATS_URL]
+    servers = config.nats_url if config.nats_url else DEFAULT_NATS_URL
     client_name = config.custom_settings.get("client_name", "naq_client")
     max_reconnect_attempts = config.custom_settings.get("max_reconnect_attempts", 5)
     reconnect_time_wait = config.custom_settings.get("reconnect_time_wait", 2)

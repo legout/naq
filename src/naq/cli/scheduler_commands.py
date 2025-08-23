@@ -10,10 +10,8 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
-
 from ..settings import DEFAULT_NATS_URL
 from ..models.enums import SCHEDULED_JOB_STATUS
-from ..utils import setup_logging
 from ..scheduler import Scheduler
 from ..services import (
     ServiceManager,
@@ -22,6 +20,13 @@ from ..services import (
 )
 from ..services.config import GlobalServiceConfig
 from ..connection.context_managers import nats_connection
+from ..connection.decorators import with_nats_connection
+from ..utils import setup_logging
+from ..utils.decorators import timing, log_errors
+from ..utils.logging import StructuredLogger
+from ..utils.nats_helpers import build_subject, stream_exists
+from ..utils.serialization import SerializationHelper
+from ..utils.validation import ensure_type, validate_parameter
 
 # Create a Typer instance for scheduler commands
 scheduler_app = typer.Typer(
@@ -32,6 +37,8 @@ scheduler_app = typer.Typer(
 
 
 @scheduler_app.command("start")
+@timing()
+@log_errors()
 def start_scheduler(
     nats_url: str = typer.Option(
         DEFAULT_NATS_URL,
@@ -75,32 +82,96 @@ def start_scheduler(
     simultaneously and they will coordinate using leader election to ensure jobs
     are only processed once.
     """
+    # Validate parameters
+    validate_parameter(nats_url, "nats_url", not_none=True)
+    validate_parameter(poll_interval, "poll_interval", min_value=0.1)
+    ensure_type(log_level, (str, type(None)), "log_level", convert=False)
+    ensure_type(instance_id, (str, type(None)), "instance_id", convert=False)
+    
     setup_logging(log_level if log_level else None)
     enable_ha = not disable_ha
 
-    logger.info(
-        f"Starting scheduler{f' instance {instance_id}' if instance_id else ''}"
+    # Use structured logger
+    structured_logger = StructuredLogger("scheduler")
+    structured_logger.info(
+        f"Starting scheduler{f' instance {instance_id}' if instance_id else ''}",
+        nats_url=nats_url,
+        poll_interval=poll_interval,
+        high_availability_enabled=enable_ha,
+        instance_id=instance_id
     )
-    logger.info(f"NATS URL: {nats_url}")
-    logger.info(f"Poll interval: {poll_interval}s")
-    logger.info(f"High availability mode: {'enabled' if enable_ha else 'disabled'}")
 
-    async def _run_scheduler():
-        # Create global config with NATS URL and custom settings
-        config = GlobalServiceConfig()
-        config.nats_url = nats_url
-        config.custom_settings.update(
-            {
+    @with_nats_connection()
+    async def _run_scheduler(nc):
+        with structured_logger.operation_context(
+            "scheduler_run",
+            nats_url=nats_url,
+            poll_interval=poll_interval,
+            instance_id=instance_id,
+            enable_ha=enable_ha
+        ):
+            # Create global config with NATS URL and custom settings
+            config = GlobalServiceConfig()
+            config.nats_url = nats_url
+            
+            # Use serialize_with_metadata for configuration data
+            config_data = {
                 "log_level": log_level,
                 "poll_interval": poll_interval,
                 "instance_id": instance_id,
                 "enable_ha": enable_ha,
             }
-        )
+            
+            try:
+                # Serialize configuration with metadata
+                serialized_config = SerializationHelper.serialize_with_metadata(
+                    config_data,
+                    serializer="json",
+                    metadata={"source": "scheduler_cli", "version": "1.0"}
+                )
+                structured_logger.debug(
+                    "Configuration serialized with metadata",
+                    operation="scheduler_run",
+                    status="config_serialized"
+                )
+            except Exception as e:
+                structured_logger.warning(
+                    f"Failed to serialize configuration with metadata: {e}",
+                    operation="scheduler_run",
+                    status="config_serialization_warning",
+                    error=str(e)
+                )
+                # Fall back to direct assignment
+                config.custom_settings.update(config_data)
+            else:
+                # Update config with the original data (serialization was for demonstration)
+                config.custom_settings.update(config_data)
 
-        try:
-            # Use the new context manager for NATS connection
-            async with nats_connection(config) as nc:
+            try:
+                # Check if the required stream exists using nats_helpers
+                js = nc.jetstream()
+                stream_name = "naq_jobs"
+                if await stream_exists(js=js, stream_name=stream_name):
+                    structured_logger.debug(
+                        f"Stream '{stream_name}' exists",
+                        operation="scheduler_run",
+                        status="stream_check"
+                    )
+                else:
+                    structured_logger.warning(
+                        f"Stream '{stream_name}' does not exist",
+                        operation="scheduler_run",
+                        status="stream_check"
+                    )
+                
+                # Build subject for scheduler operations
+                scheduler_subject = build_subject("naq", "scheduler", instance_id or "default")
+                structured_logger.debug(
+                    f"Using scheduler subject: {scheduler_subject}",
+                    operation="scheduler_run",
+                    status="subject_built"
+                )
+                
                 # Create service manager with configuration
                 service_manager = ServiceManager(
                     config=ServiceConfig(
@@ -130,23 +201,36 @@ def start_scheduler(
                 )
                 await s.run()
 
-        except KeyboardInterrupt:
-            logger.info(
-                "Scheduler interrupted by user (KeyboardInterrupt). Shutting down."
-            )
-        except Exception as e:
-            logger.exception(f"Scheduler failed unexpectedly: {e}")
-            raise typer.Exit(code=1)
-        finally:
-            logger.info("Scheduler process finished.")
-            if "service_manager" in locals():
-                await service_manager.cleanup_all()
+            except KeyboardInterrupt:
+                structured_logger.info(
+                    "Scheduler interrupted by user (KeyboardInterrupt). Shutting down.",
+                    operation="scheduler_run",
+                    status="interrupted"
+                )
+            except Exception as e:
+                structured_logger.error(
+                    f"Scheduler failed unexpectedly: {e}",
+                    operation="scheduler_run",
+                    status="failed",
+                    error=str(e)
+                )
+                raise typer.Exit(code=1)
+            finally:
+                structured_logger.info(
+                    "Scheduler process finished.",
+                    operation="scheduler_run",
+                    status="finished"
+                )
+                if "service_manager" in locals():
+                    await service_manager.cleanup_all()
 
     # Run the async function
     asyncio.run(_run_scheduler())
 
 
 @scheduler_app.command("jobs")
+@timing()
+@log_errors()
 def list_scheduled_jobs(
     nats_url: str = typer.Option(
         DEFAULT_NATS_URL,
@@ -195,19 +279,68 @@ def list_scheduled_jobs(
     """
     Lists all scheduled jobs with their status and next run time.
     """
+    # Validate parameters
+    validate_parameter(nats_url, "nats_url", not_none=True)
+    validate_parameter(queue, "queue", not_none=True)
+    ensure_type(status, (str, type(None)), "status", convert=False)
+    ensure_type(job_id, (str, type(None)), "job_id", convert=False)
+    ensure_type(detailed, bool, "detailed", convert=False)
+    ensure_type(log_level, (str, type(None)), "log_level", convert=False)
+    
     setup_logging(log_level if log_level else None)
-    logger.info(f"Listing scheduled jobs from NATS at {nats_url}")
+    
+    # Use structured logger
+    structured_logger = StructuredLogger("scheduler_jobs")
+    structured_logger.info(
+        f"Listing scheduled jobs from NATS at {nats_url}",
+        nats_url=nats_url,
+        status_filter=status,
+        job_id_filter=job_id,
+        queue_filter=queue,
+        detailed_view=detailed
+    )
     console = Console()
 
-    async def _list_scheduled_jobs_async():
-        # Create global config with NATS URL and custom settings
-        config = GlobalServiceConfig()
-        config.nats_url = nats_url
-        config.custom_settings.update({"log_level": log_level})
+    @with_nats_connection()
+    async def _list_scheduled_jobs_async(nc):
+        with structured_logger.operation_context(
+            "list_scheduled_jobs",
+            nats_url=nats_url,
+            status_filter=status,
+            job_id_filter=job_id,
+            queue_filter=queue,
+            detailed_view=detailed
+        ):
+            # Create global config with NATS URL and custom settings
+            config = GlobalServiceConfig()
+            config.nats_url = nats_url
+            config.custom_settings.update({"log_level": log_level})
 
-        try:
-            # Use the new context manager for NATS connection
-            async with nats_connection(config) as nc:
+            try:
+                # Check if the required stream exists using nats_helpers
+                js = nc.jetstream()
+                stream_name = "naq_jobs"
+                if await stream_exists(js=js, stream_name=stream_name):
+                    structured_logger.debug(
+                        f"Stream '{stream_name}' exists",
+                        operation="list_scheduled_jobs",
+                        status="stream_check"
+                    )
+                else:
+                    structured_logger.warning(
+                        f"Stream '{stream_name}' does not exist",
+                        operation="list_scheduled_jobs",
+                        status="stream_check"
+                    )
+                
+                # Build subject for scheduler operations
+                scheduler_subject = build_subject("naq", "scheduler", "jobs")
+                structured_logger.debug(
+                    f"Using scheduler subject: {scheduler_subject}",
+                    operation="list_scheduled_jobs",
+                    status="subject_built"
+                )
+                
                 # Create service manager with configuration
                 service_manager = ServiceManager(
                     config=ServiceConfig(
@@ -224,9 +357,26 @@ def list_scheduled_jobs(
                 status_filter = None
                 if status:
                     try:
+                        # Validate status parameter
+                        validate_parameter(
+                            status,
+                            "status",
+                            not_none=True,
+                            custom_validator=lambda x: x in [
+                                SCHEDULED_JOB_STATUS.ACTIVE,
+                                SCHEDULED_JOB_STATUS.PAUSED,
+                                SCHEDULED_JOB_STATUS.FAILED
+                            ]
+                        )
                         status_filter = SCHEDULED_JOB_STATUS(status)
-                    except ValueError:
-                        logger.error(f"Invalid status filter: {status}")
+                    except ValueError as e:
+                        structured_logger.error(
+                            f"Invalid status filter: {status}",
+                            operation="list_scheduled_jobs",
+                            status="validation_error",
+                            invalid_status=status,
+                            error=str(e)
+                        )
                         console.print(f"[red]Invalid status: {status}[/red]")
                         return
 
@@ -257,10 +407,38 @@ def list_scheduled_jobs(
                         if queue and schedule.queue_name != queue:
                             continue
 
-                        jobs_data.append(job_data)
+                        # Use SerializationHelper to serialize job data with metadata
+                        try:
+                            serialized_job = SerializationHelper.safe_serialize(
+                                job_data,
+                                serializer="json",
+                                fallback_serializer="pickle"
+                            )
+                            # Deserialize to get the original data back
+                            deserialized_job = SerializationHelper.safe_deserialize(
+                                serialized_job,
+                                serializer="json",
+                                expected_type=dict
+                            )
+                            jobs_data.append(deserialized_job)
+                        except Exception as e:
+                            structured_logger.warning(
+                                f"Failed to serialize/deserialize job data: {e}",
+                                operation="list_scheduled_jobs",
+                                status="serialization_warning",
+                                job_id=schedule.job_id,
+                                error=str(e)
+                            )
+                            # Fall back to using the original job data
+                            jobs_data.append(job_data)
 
                 except Exception as e:
-                    logger.error(f"Failed to list scheduled jobs: {e}")
+                    structured_logger.error(
+                        f"Failed to list scheduled jobs: {e}",
+                        operation="list_scheduled_jobs",
+                        status="error",
+                        error=str(e)
+                    )
                     console.print(
                         "[yellow]No scheduled jobs found or cannot access "
                         "job store.[/yellow]"
@@ -361,7 +539,12 @@ def list_scheduled_jobs(
             console.print(table)
             console.print(f"\n[bold]Total:[/bold] {len(jobs_data)} scheduled job(s)")
         except Exception as e:
-            logger.exception(f"Error listing scheduled jobs: {e}")
+            structured_logger.error(
+                f"Error listing scheduled jobs: {e}",
+                operation="list_scheduled_jobs",
+                status="error",
+                error=str(e)
+            )
             console.print(f"[red]Error listing scheduled jobs: {str(e)}[/red]")
         finally:
             if "service_manager" in locals():

@@ -7,10 +7,11 @@ import asyncio
 import traceback
 from typing import Any
 
-from loguru import logger
-
 from ..models.jobs import Job
 from ..models.enums import JOB_STATUS, WORKER_STATUS
+from ..utils.logging import StructuredLogger
+from ..utils.error_handling import ErrorHandler
+from ..utils.decorators import timing, retry
 from .error_handling import JobErrorHandler
 
 
@@ -21,7 +22,11 @@ class JobProcessor:
         """Initialize the job processor with a reference to the worker."""
         self.worker = worker
         self.error_handler = JobErrorHandler(worker._service_manager)
+        self.logger = StructuredLogger(__name__)
+        self.error_handler = ErrorHandler()
 
+    @timing()
+    @retry(max_attempts=3, delay=1.0, backoff="exponential")
     async def process_message(self, msg: Any) -> None:
         """Process a received job message."""
         job = None
@@ -34,8 +39,9 @@ class JobProcessor:
                 job = msg
 
             if self.worker._shutdown_event.is_set():
-                logger.info(
-                    f"Shutdown in progress. Job {job.job_id if job else 'unknown'} will not be processed."
+                self.logger.info(
+                    "Shutdown in progress. Job {job_id} will not be processed.",
+                    job_id=job.job_id if job else 'unknown'
                 )
                 if hasattr(msg, "nak"):  # NAK the message so it can be re-queued
                     await msg.nak()
@@ -74,9 +80,11 @@ class JobProcessor:
                 await msg.ack()
 
         except Exception as e:
-            logger.error(
-                f"Error processing job {job.job_id if job else 'unknown'}: {e}",
-                exc_info=True,
+            self.error_handler.handle_error(
+                e,
+                "Error processing job {job_id}",
+                job_id=job.job_id if job else 'unknown',
+                exc_info=True
             )
             # If we have a NATS message and it has a term() method, terminate it
             if hasattr(msg, "term"):

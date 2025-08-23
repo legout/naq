@@ -8,10 +8,19 @@ from loguru import logger
 
 from ..settings import DEFAULT_NATS_URL, DEFAULT_QUEUE_NAME
 from ..utils import setup_logging
+from ..utils.decorators import timing, log_errors
+from ..utils.logging import StructuredLogger
+from ..utils.validation import validate_parameter, ensure_type
+from ..utils.nats_helpers import build_subject, stream_exists, test_nats_connection
+from ..utils.serialization import SerializationHelper, serialize_with_metadata
+from ..connection.utils import test_nats_connection as test_nats_connection_util
 from ..worker import Worker
 from ..services import ServiceManager, WorkerService, ServiceConfig
 from ..services.config import GlobalServiceConfig
 from ..connection.context_managers import nats_connection
+
+# Create module-level structured logger for worker commands
+worker_logger = StructuredLogger("naq.worker_commands")
 
 # Create a Typer instance for worker commands
 worker_app = typer.Typer(
@@ -22,6 +31,8 @@ worker_app = typer.Typer(
 
 
 @worker_app.command("start")
+@timing(threshold_ms=1000)
+@log_errors()
 def start_worker(
     queues: List[str] = typer.Argument(
         default=None,
@@ -74,17 +85,49 @@ def start_worker(
     """
     setup_logging(log_level if log_level else None)
 
-    # If no queues are provided, let the Worker class handle the default
-    if queues is None:
-        queues = []
+    # Validate and convert parameters
+    queues = ensure_type(queues, list, "queues", convert=True) or []
+    nats_url = ensure_type(nats_url, str, "nats_url")
+    concurrency = ensure_type(concurrency, int, "concurrency")
+    name = ensure_type(name, str, "name", convert=True) if name is not None else None
+    module_paths = ensure_type(module_paths, list, "module_paths", convert=True) or []
+    log_level = ensure_type(log_level, str, "log_level", convert=True) if log_level is not None else None
+    
+    # Validate parameter constraints
+    validate_parameter(concurrency, "concurrency", not_none=True, min_value=1)
+    validate_parameter(nats_url, "nats_url", not_none=True)
 
-    # Use loguru directly
-    logger.info(
-        f"Starting worker '{name or 'default'}' for queues: "
-        f"{queues if queues else [DEFAULT_QUEUE_NAME]}"
+    # Use structured logging
+    worker_logger.info(
+        "Starting worker",
+        worker_name=name or 'default',
+        queues=queues if queues else [DEFAULT_QUEUE_NAME],
+        nats_url=nats_url,
+        concurrency=concurrency
     )
-    logger.info(f"NATS URL: {nats_url}")
-    logger.info(f"Concurrency: {concurrency}")
+    
+    # Serialize worker configuration with metadata
+    worker_config = {
+        "worker_name": name or 'default',
+        "queues": queues if queues else [DEFAULT_QUEUE_NAME],
+        "nats_url": nats_url,
+        "concurrency": concurrency,
+        "module_paths": module_paths,
+        "log_level": log_level
+    }
+    
+    # Serialize configuration with metadata for potential persistence or transmission
+    serialized_config = serialize_with_metadata(
+        worker_config,
+        serializer="json",
+        metadata={
+            "component": "worker_commands",
+            "action": "start_worker",
+            "timestamp": asyncio.get_event_loop().time()
+        }
+    )
+    
+    worker_logger.debug("Worker configuration serialized", config_size=len(str(serialized_config)))
 
     async def _run_worker():
         # Create global config with NATS URL and custom settings
@@ -100,8 +143,21 @@ def start_worker(
         )
 
         try:
+            # Test NATS connection before proceeding
+            is_connected = await test_nats_connection_util()
+            if not is_connected:
+                worker_logger.error("Failed to establish NATS connection", nats_url=nats_url)
+                raise typer.Exit(code=1)
+                
             # Use the new context manager for NATS connection
             async with nats_connection(config) as nc:
+                # Check if the required stream exists
+                stream_name = "naq_jobs"
+                js = nc.jetstream()
+                stream_available = await stream_exists(js=js, stream_name=stream_name)
+                if not stream_available:
+                    worker_logger.error("Required JetStream stream not found", stream_name=stream_name)
+                    raise typer.Exit(code=1)
                 # Create service manager with configuration
                 service_manager = ServiceManager(
                     config=ServiceConfig(
@@ -137,16 +193,19 @@ def start_worker(
                 await w.run()
 
         except KeyboardInterrupt:
-            logger.info(
-                "Worker interrupted by user (KeyboardInterrupt). Shutting down."
+            worker_logger.info(
+                "Worker interrupted by user. Shutting down.",
+                reason="KeyboardInterrupt"
             )
         except Exception as e:
-            logger.exception(
-                f"Worker failed unexpectedly: {e}"
-            )  # Use logger.exception for stack trace
+            worker_logger.error(
+                "Worker failed unexpectedly",
+                error=str(e),
+                error_type=type(e).__name__
+            )
             raise typer.Exit(code=1)
         finally:
-            logger.info("Worker process finished.")
+            worker_logger.info("Worker process finished.")
             if "service_manager" in locals():
                 await service_manager.cleanup_all()
 
@@ -155,6 +214,8 @@ def start_worker(
 
 
 @worker_app.command("list")
+@timing(threshold_ms=500)
+@log_errors()
 def list_workers(
     nats_url: str = typer.Option(
         DEFAULT_NATS_URL,
@@ -185,7 +246,34 @@ def list_workers(
     from ..settings import DEFAULT_WORKER_TTL_SECONDS, WORKER_STATUS
 
     setup_logging(log_level if log_level else None)
-    logger.info(f"Listing active workers from NATS at {nats_url}")
+    
+    # Validate and convert parameters
+    nats_url = ensure_type(nats_url, str, "nats_url")
+    log_level = ensure_type(log_level, str, "log_level", convert=True) if log_level is not None else None
+    
+    # Validate parameter constraints
+    validate_parameter(nats_url, "nats_url", not_none=True)
+    
+    worker_logger.info("Listing active workers", nats_url=nats_url)
+    
+    # Serialize list request with metadata
+    list_request = {
+        "nats_url": nats_url,
+        "log_level": log_level
+    }
+    
+    # Serialize request with metadata for potential persistence or transmission
+    serialized_request = serialize_with_metadata(
+        list_request,
+        serializer="json",
+        metadata={
+            "component": "worker_commands",
+            "action": "list_workers",
+            "timestamp": asyncio.get_event_loop().time()
+        }
+    )
+    
+    worker_logger.debug("List workers request serialized", request_size=len(str(serialized_request)))
 
     console = Console()
 
@@ -196,8 +284,21 @@ def list_workers(
         config.custom_settings.update({"log_level": log_level})
 
         try:
+            # Test NATS connection before proceeding
+            is_connected = await test_nats_connection_util()
+            if not is_connected:
+                worker_logger.error("Failed to establish NATS connection", nats_url=nats_url)
+                raise typer.Exit(code=1)
+                
             # Use the new context manager for NATS connection
             async with nats_connection(config) as nc:
+                # Check if the required stream exists
+                stream_name = "naq_jobs"
+                js = nc.jetstream()
+                stream_available = await stream_exists(js=js, stream_name=stream_name)
+                if not stream_available:
+                    worker_logger.error("Required JetStream stream not found", stream_name=stream_name)
+                    raise typer.Exit(code=1)
                 # Create service manager with configuration
                 service_manager = ServiceManager(
                     config=ServiceConfig(
@@ -276,7 +377,11 @@ def list_workers(
             console.print(f"\n[bold]Total:[/bold] {len(workers)} active worker(s)")
 
         except Exception as e:
-            logger.exception(f"Error listing workers: {e}")
+            worker_logger.error(
+                "Error listing workers",
+                error=str(e),
+                error_type=type(e).__name__
+            )
             console.print(f"[red]Error listing workers: {str(e)}[/red]")
         finally:
             if "service_manager" in locals():

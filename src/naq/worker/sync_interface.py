@@ -4,6 +4,9 @@ This module provides synchronous interface methods for the worker.
 """
 
 from .controller import WorkerController
+from ..utils.logging import StructuredLogger
+from ..utils.error_handling import ErrorHandler
+from ..utils.decorators import timing
 
 
 class WorkerSyncInterface:
@@ -12,7 +15,10 @@ class WorkerSyncInterface:
     def __init__(self, worker):
         """Initialize the sync interface with a reference to the worker."""
         self.worker = worker
+        self.logger = StructuredLogger(__name__)
+        self.error_handler = ErrorHandler()
 
+    @timing
     def run_sync(self) -> None:
         """
         Start the async worker in a clean AnyIO event loop using a BlockingPortal.
@@ -25,6 +31,10 @@ class WorkerSyncInterface:
             from anyio.from_thread import start_blocking_portal
         except Exception as e:
             # Keep import local to avoid introducing runtime dependency unless used
+            self.error_handler.handle_error(
+                e,
+                {"operation": "import_anyio"}
+            )
             raise RuntimeError(
                 "anyio is required for Worker.run_sync(). Please ensure 'anyio' is installed."
             ) from e
@@ -36,6 +46,7 @@ class WorkerSyncInterface:
         with start_blocking_portal() as portal:
             return portal.call(self.worker.run)
 
+    @timing
     def start_sync(self) -> "WorkerController":
         """
         Start the worker asynchronously and return a synchronous Controller.
@@ -48,6 +59,10 @@ class WorkerSyncInterface:
         try:
             from anyio.from_thread import start_blocking_portal
         except Exception as e:
+            self.error_handler.handle_error(
+                e,
+                {"operation": "import_anyio"}
+            )
             raise RuntimeError(
                 "anyio is required for Worker.start_sync(). Please ensure 'anyio' is installed."
             ) from e
@@ -77,6 +92,7 @@ class WorkerSyncInterface:
 
         return WorkerController(self.worker, portal_cm, portal)
 
+    @timing
     def stop_sync(self) -> None:
         """
         Convenience synchronous stop for a worker that was started via start_sync(),
@@ -85,4 +101,10 @@ class WorkerSyncInterface:
         """
         ctl = getattr(self.worker, "_sync_controller", None)
         if ctl:
-            ctl.stop()
+            try:
+                ctl.stop()
+            except Exception as e:
+                self.error_handler.handle_error(
+                    e,
+                    {"operation": "stop_sync_worker"}
+                )

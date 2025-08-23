@@ -12,6 +12,9 @@ from ..exceptions import NaqException
 from ..settings import DEFAULT_NATS_URL, WORKER_KV_NAME
 from ..services import ServiceManager, KVStoreService, ServiceConfig
 from ..utils import run_async_from_sync
+from ..utils.logging import StructuredLogger
+from ..utils.error_handling import ErrorHandler, wrap_naq_exception
+from ..utils.decorators import timing
 
 
 class WorkerMonitor:
@@ -30,7 +33,10 @@ class WorkerMonitor:
         """
         self._service_manager = service_manager
         self._nats_url = nats_url or DEFAULT_NATS_URL
+        self._logger = StructuredLogger("WorkerMonitor")
+        self._error_handler = ErrorHandler("WorkerMonitor")
 
+    @timing()
     async def _get_kv_store_service(self) -> KVStoreService:
         """Get or create the KVStoreService for worker status operations."""
         if self._service_manager:
@@ -38,9 +44,14 @@ class WorkerMonitor:
             if not self._service_manager.has_service("kv_store"):
                 # Register KVStoreService if not already registered
                 config = ServiceConfig(nats_url=self._nats_url)
-                await self._service_manager.register_service(
-                    "kv_store", KVStoreService, config, initialize=True
-                )
+                try:
+                    await self._service_manager.register_service(
+                        "kv_store", KVStoreService, config, initialize=True
+                    )
+                except Exception as e:
+                    self._error_handler.handle_error(
+                        e, context={"operation": "register_kv_store_service"}
+                    )
             return await self._service_manager.get_service("kv_store", KVStoreService)
         else:
             # Create a temporary KVStoreService for backward compatibility
@@ -50,15 +61,28 @@ class WorkerMonitor:
             service_manager = ServiceManager(config)
 
             # Register and initialize services
-            await service_manager.register_service(
-                "connection", ConnectionService, config, initialize=True
-            )
-            kv_store_service = await service_manager.register_service(
-                "kv_store", KVStoreService, config, initialize=True
-            )
+            try:
+                await service_manager.register_service(
+                    "connection", ConnectionService, config, initialize=True
+                )
+            except Exception as e:
+                self._error_handler.handle_error(
+                    e, context={"operation": "register_connection_service"}
+                )
+            
+            try:
+                kv_store_service = await service_manager.register_service(
+                    "kv_store", KVStoreService, config, initialize=True
+                )
+            except Exception as e:
+                self._error_handler.handle_error(
+                    e, context={"operation": "register_kv_store_service"}
+                )
+                raise
 
             return kv_store_service
 
+    @timing()
     async def list_workers(
         self, nats_url: Optional[str] = None
     ) -> List[Dict[str, Any]]:
@@ -94,8 +118,8 @@ class WorkerMonitor:
                             worker_data = cloudpickle.loads(entry.value)
                             workers.append(worker_data)
                     except Exception as e:
-                        logger.error(
-                            f"Error reading worker data for key '{key_bytes.decode()}': {e}"
+                        self._error_handler.handle_error(
+                            e, context={"operation": "read_worker_data", "key": key_bytes.decode() if isinstance(key_bytes, bytes) else str(key_bytes)}
                         )
 
             return workers
@@ -104,12 +128,16 @@ class WorkerMonitor:
             # Only return empty list for KV store access issues
             # For other errors, raise NaqException
             if "not accessible" in str(e).lower() or "not found" in str(e).lower():
-                logger.warning(
-                    f"Worker status KV store '{WORKER_KV_NAME}' not accessible: {e}"
+                self._logger.warning(
+                    f"Worker status KV store '{WORKER_KV_NAME}' not accessible: {e}",
+                    kv_store_name=WORKER_KV_NAME
                 )
                 return []
             else:
-                raise NaqException(f"Error listing workers: {e}") from e
+                naq_exception = wrap_naq_exception(
+                    e, context="Error listing workers"
+                )
+                raise naq_exception from e
 
     def list_workers_sync(self, nats_url: Optional[str] = None) -> List[Dict[str, Any]]:
         """Synchronous version of list_workers.

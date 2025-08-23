@@ -24,4 +24,6 @@ The API is organized into modules, each providing specific functionality.
 
 ## Services
 
+-   [**`services` Module**](services.qmd): Provides a comprehensive service layer with modular components for connection management, job processing, event logging, and more. Includes the ServiceManager for dependency injection and service lifecycle management.
+
 -   [**`kv_stores` Module**](kv_stores.qmd): Provides a robust, centralized service for managing NATS KeyValue stores with support for pooling, transactions, and TTL.

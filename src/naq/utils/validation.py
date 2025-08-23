@@ -4,7 +4,7 @@ This module contains common validation utilities used throughout the NAQ codebas
 """
 
 import re
-from typing import Any, Optional, Pattern, Type, Union, get_type_hints
+from typing import Any, Optional, Pattern, Type, Union
 
 from ..exceptions import ValidationError, TypeConversionError
 
@@ -16,10 +16,11 @@ def validate_parameter(
     min_value: Optional[Union[int, float]] = None,
     max_value: Optional[Union[int, float]] = None,
     regex_pattern: Optional[Union[str, Pattern[str]]] = None,
+    pattern: Optional[Union[str, Pattern[str]]] = None,  # Alias for regex_pattern for backward compatibility
     custom_validator: Optional[callable] = None,
     error_message: Optional[str] = None,
 ) -> None:
-    """Validate a parameter against specified criteria.
+    r"""Validate a parameter against specified criteria.
     
     This function checks if a parameter meets various validation criteria and raises
     a ValidationError if any validation fails.
@@ -62,7 +63,7 @@ def validate_parameter(
     # Check for None
     if not_none and value is None:
         error_msg = error_message or f"Parameter '{param_name}' cannot be None"
-        raise ValidationError(error_msg)
+        raise ValueError(error_msg)
     
     # If value is None and not_none is False, skip other validations
     if value is None:
@@ -75,27 +76,33 @@ def validate_parameter(
             raise ValidationError(error_msg)
         
         if min_value is not None and value < min_value:
-            error_msg = error_message or f"Parameter '{param_name}' must be greater than or equal to {min_value}"
-            raise ValidationError(error_msg)
-        
+            if min_value == 0:
+                error_msg = error_message or f"{param_name} cannot be negative"
+            else:
+                error_msg = error_message or f"Parameter '{param_name}' must be greater than or equal to {min_value}"
+            raise ValueError(error_msg)
+
         if max_value is not None and value > max_value:
             error_msg = error_message or f"Parameter '{param_name}' must be less than or equal to {max_value}"
-            raise ValidationError(error_msg)
+            raise ValueError(error_msg)
     
     # Check regex pattern for strings
-    if regex_pattern is not None:
+    # Use pattern if provided (for backward compatibility), otherwise use regex_pattern
+    actual_pattern = pattern or regex_pattern
+    
+    if actual_pattern is not None:
         if not isinstance(value, str):
             error_msg = error_message or f"Parameter '{param_name}' must be a string for regex validation"
-            raise ValidationError(error_msg)
+            raise ValueError(error_msg)
         
-        if isinstance(regex_pattern, str):
-            pattern = re.compile(regex_pattern)
+        if isinstance(actual_pattern, str):
+            compiled_pattern = re.compile(actual_pattern)
         else:
-            pattern = regex_pattern
+            compiled_pattern = actual_pattern
         
-        if not pattern.match(value):
+        if not compiled_pattern.match(value):
             error_msg = error_message or f"Parameter '{param_name}' does not match required pattern"
-            raise ValidationError(error_msg)
+            raise ValueError(error_msg)
     
     # Check custom validator
     if custom_validator is not None:

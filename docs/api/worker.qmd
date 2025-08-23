@@ -2,24 +2,34 @@
 title: "Worker API"
 ---
 
-The `worker` module contains the `Worker` class, which is responsible for fetching and executing jobs from one or more queues.
+The `worker` module contains the `Worker` class, which is responsible for fetching and executing jobs from one or more queues. The worker has been refactored to use dependency injection and a service-oriented architecture for improved modularity and testability.
 
 ## `naq.worker.Worker`
 
 You can start a worker from the command line using `naq worker`, but you can also create and run a `Worker` instance programmatically.
 
-### `naq.worker.Worker(queues, nats_url, concurrency, worker_name, ...)`
+### `naq.worker.Worker(queues, worker_name=None, concurrency=10, service_manager=None, ...)`
 
 | Parameter            | Type                               | Description                                                                                             |
 | -------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `queues`             | `list[str]` &#124; `str`            | A list of queue names to listen to. Defaults to the single `naq_default_queue`.                         |
-| `nats_url`           | `str`                              | The URL of the NATS server.                                                                             |
-| `concurrency`        | `int`                              | The maximum number of jobs to process concurrently. Defaults to `10`.                                     |
 | `worker_name`        | `str` &#124; `None`                 | A name for the worker, used for creating durable consumer names. A unique ID is generated if not provided. |
-| `heartbeat_interval` | `int`                              | The interval (in seconds) at which the worker sends a heartbeat. Defaults to `15`.                      |
-| `worker_ttl`         | `int`                              | The time-to-live (in seconds) for the worker's heartbeat. Defaults to `60`.                             |
-| `ack_wait`           | `int` &#124; `dict` &#124; `None`   | The time (in seconds) the worker has to acknowledge a job before it's re-delivered. Can be a global value or a per-queue dictionary. |
-| `module_paths`       | `list[str]` &#124; `str` &#124; `None` | A list of paths to add to `sys.path` to help the worker find your task modules.                       |
+| `concurrency`        | `int`                              | The maximum number of jobs to process concurrently. Defaults to `10`.                                     |
+| `service_manager`    | `ServiceManager` &#124; `None`      | Optional service manager for dependency injection. If not provided, a default one will be created.       |
+| `config`             | `Config` &#124; `None`              | Optional configuration object. If not provided, default configuration will be used.                      |
+
+### Architecture Overview
+
+The `Worker` class uses a service-oriented architecture with the following key components:
+
+- **Service Manager**: Manages all service instances and their dependencies
+- **Connection Service**: Handles NATS connections and JetStream context
+- **Stream Service**: Manages NATS JetStream streams and consumers
+- **KV Store Service**: Handles key-value store operations for job results and worker status
+- **Event Service**: Manages event logging and retrieval
+- **Job Processor**: Handles job execution, retry logic, and result storage
+- **Status Manager**: Manages worker status, heartbeats, and lifecycle
+- **Failed Job Handler**: Handles failed job processing and retry logic
 
 ### Methods
 
@@ -43,6 +53,26 @@ def run_sync(self) -> None
 
 This method will block until the worker is shut down.
 
+#### `start()`
+
+Initializes the worker and establishes connections. This is an `async` method.
+
+```python
+async def start(self) -> None
+```
+
+This method sets up all services and prepares the worker for job processing.
+
+#### `stop()`
+
+Gracefully shuts down the worker. This is an `async` method.
+
+```python
+async def stop(self) -> None
+```
+
+This method ensures all jobs are completed, connections are closed, and resources are cleaned up.
+
 #### `list_workers()`
 
 A static method to list all active workers.
@@ -57,3 +87,125 @@ Returns a list of dictionaries, where each dictionary contains information about
 #### `list_workers_sync()`
 
 A synchronous version of `list_workers()`.
+
+### Service Integration
+
+The worker integrates with various services for different functionalities:
+
+#### Job Processing
+
+The worker uses a `JobProcessor` instance to handle job execution:
+
+```python
+# Process a single job
+await worker.job_processor.process_message(message)
+
+# The job processor handles:
+# - Job deserialization
+# - Function execution
+# - Result storage
+# - Error handling and retries
+# - Event logging
+```
+
+#### Status Management
+
+The worker uses a `WorkerStatusManager` for lifecycle management:
+
+```python
+# Start heartbeat loop
+await worker.status_manager.start_heartbeat_loop()
+
+# Update worker status
+await worker.status_manager.update_status(WORKER_STATUS.BUSY)
+
+# Stop heartbeat loop
+await worker.status_manager.stop_heartbeat_loop()
+```
+
+#### Failed Job Handling
+
+The worker uses a `FailedJobHandler` for processing failed jobs:
+
+```python
+# Handle a failed job
+await worker.failed_job_handler.handle_failed_job(job, error, traceback)
+```
+
+### Configuration
+
+The worker can be configured through the `Config` object or environment variables:
+
+```python
+from naq.worker import Worker
+from naq.settings import Config
+
+# Create custom configuration
+config = Config(
+    nats_connection=NATSConnectionConfig(
+        servers=["nats://localhost:4222"],
+        max_reconnect_attempts=10
+    ),
+    workers=WorkerConfig(
+        concurrency=20,
+        heartbeat_interval=30
+    )
+)
+
+# Create worker with custom configuration
+worker = Worker(queues=["default"], config=config)
+```
+
+### Dependency Injection
+
+The worker supports dependency injection for improved testability:
+
+```python
+import pytest
+from unittest.mock import AsyncMock
+
+# Create mock services
+mock_service_manager = AsyncMock()
+mock_connection_service = AsyncMock()
+mock_status_manager = AsyncMock()
+
+# Create worker with mocked dependencies
+worker = Worker(
+    queues=["test_queue"],
+    service_manager=mock_service_manager
+)
+
+# In tests, you can mock individual services
+worker.status_manager = mock_status_manager
+```
+
+### Error Handling
+
+The worker provides comprehensive error handling:
+
+```python
+# The worker automatically handles:
+# - Connection failures
+# - Job execution failures
+# - Service initialization failures
+# - Graceful shutdown on signals
+
+# Custom error handlers can be registered
+worker.register_error_handler(ConnectionError, custom_connection_handler)
+worker.register_error_handler(JobExecutionError, custom_job_handler)
+```
+
+### Monitoring and Observability
+
+The worker provides built-in monitoring capabilities:
+
+```python
+# Get worker statistics
+stats = await worker.get_statistics()
+print(f"Jobs processed: {stats.jobs_processed}")
+print(f"Jobs failed: {stats.jobs_failed}")
+print(f"Current status: {stats.status}")
+
+# Worker status is automatically updated and can be monitored
+# through the status manager or KV store
+```

@@ -13,43 +13,72 @@ from .logging import setup_logging
 from .nats_helpers import build_subject, parse_subject, stream_exists
 from .types import (
     # Basic type aliases
-    JSONValue,
-    JSONDict,
-    JSONList,
-    
-    # Function-related types
-    SyncCallable,
-    AsyncCallable,
-    AnyCallable,
-    
-    # Time-related types
-    Timestamp,
-    DurationSeconds,
-    DurationMilliseconds,
-    
-    # ID-related types
     JobID,
     WorkerID,
     QueueName,
     StreamName,
     SubjectName,
+    Timestamp,
+    Duration,
+    TTL,
+    RetryDelayType,
+    JobDependency,
+    FunctionArgs,
+    FunctionKwargs,
+    ExceptionTypes,
+    ConfigDict,
+    NatsServers,
+    NatsAuth,
+    NatsTLS,
+    QueueNames,
+    SubjectNames,
+    JobStatusData,
+    EventData,
+    WorkerStatusData,
+    MetricsDict,
+    StatsDict,
+    SerializedData,
+    DeserializedData,
+    JobCallback,
+    EventCallback,
+    ErrorCallback,
+    AsyncJobCallback,
+    AsyncEventCallback,
+    AsyncErrorCallback,
     
-    # Status-related types
-    StatusValue,
-    ErrorMessage,
-    TracebackStr,
+    # TypedDict classes
+    JobInfo,
+    WorkerInfo,
+    QueueInfo,
+    ConnectionInfo,
+    JobFilter,
+    WorkerFilter,
+    QueueFilter,
+    JobMetrics,
+    WorkerMetrics,
+    QueueMetrics,
+    SystemMetrics,
     
-    # Data classes
-    PointInTime,
-    ResourceUsage,
-    RetryConfig,
-    QueueStats,
-    
-    # TypedDict structures
-    JobMetadata,
-    WorkerMetadata,
+    # msgspec.Struct classes
     ConnectionMetrics,
-    EventMetadata,
+    JobTiming,
+    WorkerTiming,
+    QueueTiming,
+    
+    # Collection type aliases
+    JobInfoList,
+    WorkerInfoList,
+    QueueInfoList,
+    ConnectionInfoList,
+    JobMetricsList,
+    WorkerMetricsList,
+    QueueMetricsList,
+    SystemMetricsList,
+    
+    # Timing dict type aliases
+    JobTimingDict,
+    WorkerTimingDict,
+    QueueTimingDict,
 )
 
 __all__ = [
@@ -63,41 +92,70 @@ __all__ = [
     "stream_exists",
     
     # Basic type aliases
-    "JSONValue",
-    "JSONDict",
-    "JSONList",
-    
-    # Function-related types
-    "SyncCallable",
-    "AsyncCallable",
-    "AnyCallable",
-    
-    # Time-related types
-    "Timestamp",
-    "DurationSeconds",
-    "DurationMilliseconds",
-    
-    # ID-related types
     "JobID",
     "WorkerID",
     "QueueName",
     "StreamName",
     "SubjectName",
+    "Timestamp",
+    "Duration",
+    "TTL",
+    "RetryDelayType",
+    "JobDependency",
+    "FunctionArgs",
+    "FunctionKwargs",
+    "ExceptionTypes",
+    "ConfigDict",
+    "NatsServers",
+    "NatsAuth",
+    "NatsTLS",
+    "QueueNames",
+    "SubjectNames",
+    "JobStatusData",
+    "EventData",
+    "WorkerStatusData",
+    "MetricsDict",
+    "StatsDict",
+    "SerializedData",
+    "DeserializedData",
+    "JobCallback",
+    "EventCallback",
+    "ErrorCallback",
+    "AsyncJobCallback",
+    "AsyncEventCallback",
+    "AsyncErrorCallback",
     
-    # Status-related types
-    "StatusValue",
-    "ErrorMessage",
-    "TracebackStr",
+    # TypedDict classes
+    "JobInfo",
+    "WorkerInfo",
+    "QueueInfo",
+    "ConnectionInfo",
+    "JobFilter",
+    "WorkerFilter",
+    "QueueFilter",
+    "JobMetrics",
+    "WorkerMetrics",
+    "QueueMetrics",
+    "SystemMetrics",
     
-    # Data classes
-    "PointInTime",
-    "ResourceUsage",
-    "RetryConfig",
-    "QueueStats",
-    
-    # TypedDict structures
-    "JobMetadata",
-    "WorkerMetadata",
+    # msgspec.Struct classes
     "ConnectionMetrics",
-    "EventMetadata",
+    "JobTiming",
+    "WorkerTiming",
+    "QueueTiming",
+    
+    # Collection type aliases
+    "JobInfoList",
+    "WorkerInfoList",
+    "QueueInfoList",
+    "ConnectionInfoList",
+    "JobMetricsList",
+    "WorkerMetricsList",
+    "QueueMetricsList",
+    "SystemMetricsList",
+    
+    # Timing dict type aliases
+    "JobTimingDict",
+    "WorkerTimingDict",
+    "QueueTimingDict",
 ]

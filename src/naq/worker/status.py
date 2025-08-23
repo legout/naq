@@ -12,7 +12,6 @@ import time
 from typing import Any, Dict, List, Optional
 
 import cloudpickle
-from loguru import logger
 
 from ..exceptions import NaqException
 from ..models.enums import WORKER_STATUS
@@ -21,6 +20,9 @@ from ..settings import (
     DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
     WORKER_KV_NAME,
 )
+from ..utils.logging import StructuredLogger
+from ..utils.error_handling import ErrorHandler
+from ..utils.decorators import timing, retry
 
 
 class WorkerStatusManager:
@@ -45,7 +47,11 @@ class WorkerStatusManager:
         self._current_status = WORKER_STATUS.STARTING
         self._kv_store_service: Optional[KVStoreService] = None
         self._heartbeat_task = None
+        self.logger = StructuredLogger(__name__)
+        self.error_handler = ErrorHandler()
 
+    @timing
+    @retry(max_attempts=3, delay=1.0, backoff="exponential")
     async def _get_kv_store_service(self) -> Optional[KVStoreService]:
         """Initialize and return the KVStoreService for worker statuses."""
         if self._kv_store_service is None:
@@ -73,10 +79,14 @@ class WorkerStatusManager:
                     )
                     await self._kv_store_service.initialize()
             except Exception as e:
-                logger.error(f"Failed to initialize KVStoreService: {e}")
+                self.error_handler.handle_error(
+                    e,
+                    {"operation": "initialize_kv_store"}
+                )
                 self._kv_store_service = None
         return self._kv_store_service
 
+    @timing
     async def update_status(
         self, status: WORKER_STATUS | str, job_id: Optional[str] = None
     ) -> None:
@@ -94,7 +104,10 @@ class WorkerStatusManager:
             except ValueError:
                 # If string conversion fails, default to IDLE
                 self._current_status = WORKER_STATUS.IDLE
-                logger.warning(f"Invalid status string '{status}', defaulting to IDLE")
+                self.logger.warning(
+                    "Invalid status string '{status}', defaulting to IDLE",
+                    status=status
+                )
         else:
             self._current_status = status
 
@@ -115,20 +128,26 @@ class WorkerStatusManager:
         try:
             await kv_store_service.put(WORKER_KV_NAME, self.worker.worker_id, payload)
         except Exception as e:
-            logger.error(f"Failed to update worker status: {e}")
+            self.error_handler.handle_error(
+                e,
+                {"operation": "update_worker_status", "worker_id": self.worker.worker_id}
+            )
 
+    @timing
     async def _heartbeat(self) -> None:
         """Sends periodic heartbeat updates."""
         while True:
             await self.update_status(self._current_status)
             await asyncio.sleep(DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS)
 
+    @timing
     async def start_heartbeat_loop(self) -> None:
         """Start the heartbeat loop."""
         if not self._heartbeat_task:
             self._heartbeat_task = asyncio.create_task(self._heartbeat())
             await self.update_status(WORKER_STATUS.IDLE)
 
+    @timing
     async def stop_heartbeat_loop(self) -> None:
         """Stop the heartbeat loop."""
         if not self._heartbeat_task or self._heartbeat_task.done():
@@ -138,32 +157,47 @@ class WorkerStatusManager:
         try:
             await self.update_status(WORKER_STATUS.STOPPING)
         except Exception as e:
-            logger.error(f"Error updating status during shutdown: {e}")
+            self.error_handler.handle_error(
+                e,
+                {"operation": "update_status_shutdown"}
+            )
 
         # Cancel and wait for task with proper exception handling
         self._heartbeat_task.cancel()
         try:
             await asyncio.gather(self._heartbeat_task, return_exceptions=True)
         except Exception as e:
-            logger.error(f"Error during heartbeat task shutdown: {e}")
+            self.error_handler.handle_error(
+                e,
+                {"operation": "heartbeat_task_shutdown"}
+            )
 
+    @timing
     async def unregister_worker(self) -> None:
         """Delete the worker's status entry from the KV store."""
         kv_store_service = await self._get_kv_store_service()
         if not kv_store_service:
-            logger.warning(
-                f"Worker status KV store not available. Cannot unregister worker "
-                f"{self.worker.worker_id}"
+            self.logger.warning(
+                "Worker status KV store not available. Cannot unregister worker {worker_id}",
+                worker_id=self.worker.worker_id
             )
             return
 
         try:
             await kv_store_service.delete(WORKER_KV_NAME, self.worker.worker_id)
-            logger.info(f"Unregistered worker {self.worker.worker_id}")
+            self.logger.info(
+                "Unregistered worker {worker_id}",
+                worker_id=self.worker.worker_id
+            )
         except Exception as e:
-            logger.error(f"Failed to unregister worker {self.worker.worker_id}: {e}")
+            self.error_handler.handle_error(
+                e,
+                {"operation": "unregister_worker", "worker_id": self.worker.worker_id}
+            )
 
     @staticmethod
+    @timing
+    @retry(max_attempts=3, delay=1.0, backoff="exponential")
     async def list_workers(nats_url: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Lists active workers by querying the worker status KV store.
@@ -178,6 +212,8 @@ class WorkerStatusManager:
             NaqException: For errors.
         """
         workers = []
+        logger = StructuredLogger(__name__)
+        error_handler = ErrorHandler()
 
         try:
             # Use the new context manager for KV store access
@@ -205,8 +241,9 @@ class WorkerStatusManager:
                             if isinstance(key_bytes, bytes)
                             else str(key_bytes)
                         )
-                        logger.error(
-                            f"Error reading worker data for key '{key_str}': {e}"
+                        error_handler.handle_error(
+                            e,
+                            {"operation": "read_worker_data", "key_str": key_str}
                         )
 
             return workers
@@ -216,7 +253,9 @@ class WorkerStatusManager:
             # For other errors, raise NaqException
             if "not accessible" in str(e).lower() or "not found" in str(e).lower():
                 logger.warning(
-                    f"Worker status KV store '{WORKER_KV_NAME}' not accessible: {e}"
+                    "Worker status KV store '{kv_name}' not accessible: {error}",
+                    kv_name=WORKER_KV_NAME,
+                    error=str(e)
                 )
                 return []
             else:

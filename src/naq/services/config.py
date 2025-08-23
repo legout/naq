@@ -9,7 +9,6 @@ structure for consistency and maintainability.
 from typing import Optional, Any, Dict
 
 from ..config import get_config, NAQConfig
-from .base import ServiceConfig
 
 
 class GlobalServiceConfig:
@@ -21,12 +20,16 @@ class GlobalServiceConfig:
     that can be overridden by service-specific configurations.
     """
 
-    def __init__(self, nats_url: Optional[str] = None, queue_name: Optional[str] = None, log_level: Optional[str] = None):
+    def __init__(self, nats_url: Optional[str] = None, queue_name: Optional[str] = None, log_level: Optional[str] = None, **kwargs):
         """Initialize global service configuration."""
         self.nats_url = nats_url
         self.queue_name = queue_name
         self.log_level = log_level
         self.custom_settings: Dict[str, Any] = {}
+        
+        # Add any additional kwargs to custom_settings
+        for key, value in kwargs.items():
+            self.custom_settings[key] = value
 
         # Get the global NAQConfig
         config = get_config()
