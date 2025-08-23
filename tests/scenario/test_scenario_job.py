@@ -2,9 +2,7 @@
 from freezegun import freeze_time
 
 from naq.job import Job
-from naq.settings import (
-    RETRY_STRATEGY
-)
+from naq.models.enums import RETRY_STRATEGY
 from naq.models.enums import JOB_STATUS
 
 

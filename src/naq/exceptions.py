@@ -38,3 +38,15 @@ class NaqConnectionError(NaqException):
     """Raised when there is a connection-related error with NATS."""
 
     pass
+
+
+class ValidationError(NaqException):
+    """Raised when validation of a parameter or value fails."""
+
+    pass
+
+
+class TypeConversionError(NaqException):
+    """Raised when type conversion fails in ensure_type."""
+
+    pass

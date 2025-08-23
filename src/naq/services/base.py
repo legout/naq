@@ -87,7 +87,7 @@ class BaseService(ABC):
 
         Args:
             config: Optional configuration for the service. If not provided,
-                   default configuration will be used.
+                    default configuration will be used.
         """
         self._config = config or ServiceConfig()
         self._is_initialized = False
@@ -97,6 +97,11 @@ class BaseService(ABC):
     def config(self) -> ServiceConfig:
         """Get the service configuration."""
         return self._config
+
+    @config.setter
+    def config(self, value: ServiceConfig) -> None:
+        """Set the service configuration."""
+        self._config = value
 
     @property
     def is_initialized(self) -> bool:

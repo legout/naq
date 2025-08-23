@@ -87,6 +87,7 @@ class KVStoreService(BaseService):
         self._nats_client = nats_client
         self._kv_stores: Dict[str, KeyValue] = {}
         self._lock = asyncio.Lock()
+        self._cleanup_in_progress = False
 
     def _extract_kv_config(self) -> KVStoreServiceConfig:
         """
@@ -165,8 +166,19 @@ class KVStoreService(BaseService):
         try:
             self._logger.info("Cleaning up KVStoreService")
 
-            # Clear the KV store pool
-            async with self._lock:
+            # Set cleanup flag to prevent new operations
+            self._cleanup_in_progress = True
+
+            # Try to acquire the lock, but don't wait indefinitely
+            try:
+                # Use asyncio.wait_for to add a timeout to lock acquisition
+                await asyncio.wait_for(self._lock.acquire(), timeout=1.0)
+                self._kv_stores.clear()
+                self._lock.release()
+            except asyncio.TimeoutError:
+                self._logger.warning("Timeout acquiring lock during cleanup, clearing without lock")
+                # If we can't get the lock, just clear the dictionary directly
+                # This is safe because we're in cleanup and no new operations should start
                 self._kv_stores.clear()
 
             self._logger.info("KVStoreService cleaned up successfully")
@@ -192,6 +204,10 @@ class KVStoreService(BaseService):
         Raises:
             NaqException: If getting the KV store fails.
         """
+        # Check if cleanup is in progress
+        if self._cleanup_in_progress:
+            raise NaqException("KVStoreService is in cleanup state")
+
         async with self._lock:
             # Check if we already have a cached KV store
             if bucket_name in self._kv_stores:

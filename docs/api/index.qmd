@@ -20,6 +20,8 @@ The API is organized into modules, each providing specific functionality.
 
 -   [**`exceptions` Module**](exceptions.qmd): Defines custom exceptions raised by `naq`.
 
+-   [**`utils` Module**](utils.qmd): Provides utility functions and classes for common functionality used throughout the NAQ codebase, including validation, error handling, serialization, and more.
+
 ## Services
 
 -   [**`kv_stores` Module**](kv_stores.qmd): Provides a robust, centralized service for managing NATS KeyValue stores with support for pooling, transactions, and TTL.

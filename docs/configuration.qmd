@@ -1,0 +1,261 @@
+---
+title: "Configuration"
+---
+
+NAQ offers a flexible configuration system that allows you to manage settings using YAML files, environment variables, or a combination of both. This document provides a comprehensive guide to configuring NAQ for various environments.
+
+## Configuration Loading
+
+NAQ loads configuration from multiple sources with a clear priority order:
+
+1.  **Explicit Config File**: A configuration file path provided directly to the `ConfigLoader`.
+2.  **Default Config Files**: The first file found in a series of default locations (e.g., `./naq.yaml`, `~/.naq.yaml`).
+3.  **Environment Variables**: `NAQ_*` variables override file settings.
+4.  **Default Values**: Built-in defaults are used as a final fallback.
+## YAML Schema Reference
+
+The following table details all the available configuration options in the `naq.yaml` file.
+
+| Key | Type | Description | Default | Required |
+| --- | --- | --- | :--- | :---: |
+| **nats** | `object` | NATS connection settings. | | Yes |
+| &nbsp;&nbsp;`servers` | `array` | List of NATS server URLs. Must contain at least one URL. | `["nats://localhost:4222"]` | Yes |
+| &nbsp;&nbsp;`client_name` | `string` | Name to identify this client connection. | `naq_client` | Yes |
+| &nbsp;&nbsp;`max_reconnect_attempts` | `integer` | Maximum number of reconnection attempts (`-1` for infinite). | `60` | Yes |
+| &nbsp;&nbsp;`reconnect_time_wait` | `number` | Time to wait between reconnection attempts (in seconds). | `2` | Yes |
+| &nbsp;&nbsp;`connection_timeout` | `number` | Timeout for establishing a connection (in seconds). | `5` | Yes |
+| &nbsp;&nbsp;`drain_timeout` | `number` | Timeout for draining connections (in seconds). | `30` | Yes |
+| &nbsp;&nbsp;`auth` | `object` | Authentication configuration (e.g., token, user/pass). | `null` | No |
+| &nbsp;&nbsp;`tls` | `object` | TLS configuration for secure connections. | `null` | No |
+| **workers** | `object` | Worker settings. | | Yes |
+| &nbsp;&nbsp;`concurrency` | `integer` | Maximum number of concurrent jobs to process (must be >= 1). | `10` | Yes |
+| &nbsp;&nbsp;`heartbeat_interval` | `number` | Interval for sending heartbeat messages (in seconds). | `5` | Yes |
+| &nbsp;&nbsp;`ttl` | `number` | Time-to-live for worker entries (in seconds). | `15` | Yes |
+| &nbsp;&nbsp;`max_job_duration` | `number` | Maximum duration for a single job (in seconds). | `300` | Yes |
+| &nbsp;&nbsp;`shutdown_timeout` | `number` | Timeout for graceful shutdown (in seconds). | `30` | Yes |
+| &nbsp;&nbsp;`pools` | `object` | Worker pool configuration. | `null` | No |
+| **events** | `object` | Event processing settings. | | Yes |
+| &nbsp;&nbsp;`enabled` | `boolean` | Whether event processing is enabled. | `true` | Yes |
+| &nbsp;&nbsp;`batch_size` | `integer` | Number of events to batch together (must be >= 1). | `100` | Yes |
+| &nbsp;&nbsp;`flush_interval` | `number` | Interval for flushing events (in seconds). | `0.5` | Yes |
+| &nbsp;&nbsp;`max_buffer_size` | `integer` | Maximum size of the event buffer (must be >= 1). | `1000` | Yes |
+| &nbsp;&nbsp;`stream` | `string` | Name of the event stream. | `naq_events` | Yes |
+| &nbsp;&nbsp;`filters` | `array` | List of event filters to apply (e.g., `job.completed`). | `null` | No |
+| **queues** | `object` | Queue configuration. | | No |
+| &nbsp;&nbsp;`default_name` | `string` | Default queue name. | `naq_default_queue` | No |
+| &nbsp;&nbsp;`ack_wait` | `integer` | Default ack wait time (in seconds). | `30` | No |
+| **scheduler** | `object` | Scheduler configuration. | | No |
+| &nbsp;&nbsp;`lock_ttl` | `integer` | Scheduler lock TTL (in seconds). | `10` | No |
+| &nbsp;&nbsp;`lock_renew_interval` | `integer` | Lock renew interval (in seconds). | `5` | No |
+| &nbsp;&nbsp;`job_status_ttl` | `integer` | Job status TTL (in seconds). | `3600` | No |
+| &nbsp;&nbsp;`max_failures` | `integer` | Max schedule failures before a job is disabled. | `3` | No |
+| **results** | `object` | Results configuration. | | No |
+| &nbsp;&nbsp;`ttl` | `integer` | Result TTL (in seconds). | `3600` | No |
+| **serialization** | `object` | Serialization configuration. | | No |
+| &nbsp;&nbsp;`method` | `string` | Serialization method (`cloudpickle` or `json`). | `cloudpickle` | No |
+| &nbsp;&nbsp;`json_encoder` | `string` | Dotted import path to a custom JSON encoder class. | `null` | No |
+| &nbsp;&nbsp;`json_decoder` | `string` | Dotted import path to a custom JSON decoder class. | `null` | No |
+| **logging** | `object` | Logging configuration. | | No |
+| &nbsp;&nbsp;`level` | `string` | Log level (e.g., `DEBUG`, `INFO`, `WARNING`). | `INFO` | No |
+| &nbsp;&nbsp;`to_file_enabled` | `boolean` | Enable file logging. | `false` | No |
+| &nbsp;&nbsp;`file_path` | `string` | Log file path. | `null` | No |
+| **database** | `object` | Database configuration (reserved for future use). | `null` | No |
+## Configuration Examples
+
+Here are some example `naq.yaml` files for different environments.
+
+### Development
+
+This example is suitable for local development. It uses a local NATS server, a low worker concurrency, and detailed logging.
+
+```yaml
+nats:
+  servers:
+    - nats://localhost:4222
+  client_name: naq-dev-client
+  max_reconnect_attempts: 10
+  reconnect_time_wait: 2
+  connection_timeout: 5
+  drain_timeout: 10
+workers:
+  concurrency: 5
+  heartbeat_interval: 30
+  ttl: 300
+  max_job_duration: 600
+  shutdown_timeout: 10
+events:
+  enabled: true
+  batch_size: 100
+  flush_interval: 1
+  max_buffer_size: 1000
+  stream: naq-events-dev
+  filters:
+    - "*"
+queues:
+  default_name: naq.default.dev
+  some_other_queue: naq.test.dev
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+```
+
+### Production
+
+This example is optimized for production use. It connects to a production NATS cluster, has a higher worker concurrency, and more conservative logging.
+
+```yaml
+nats:
+  servers:
+    - nats://nats.production.internal:4222
+  client_name: naq-prod-client
+  max_reconnect_attempts: -1 # Infinite reconnects
+  reconnect_time_wait: 5
+  connection_timeout: 10
+  drain_timeout: 30
+workers:
+  concurrency: 20
+  heartbeat_interval: 60
+  ttl: 600
+  max_job_duration: 1800 # 30 minutes
+  shutdown_timeout: 30
+events:
+  enabled: true
+  batch_size: 500
+  flush_interval: 5
+  max_buffer_size: 5000
+  stream: naq-events-prod
+  filters:
+    - "job.completed"
+    - "job.failed"
+queues:
+  default_name: naq.default.prod
+logging:
+  level: WARNING
+  format: "[PRODUCTION] %(levelname)s: %(message)s"
+```
+
+### Testing
+
+This example is configured for running automated tests. It uses a local NATS server, disables events for speed, and sets a `DEBUG` log level.
+
+```yaml
+nats:
+  servers:
+    - nats://localhost:4222
+  client_name: naq-test-client
+  max_reconnect_attempts: 3
+  reconnect_time_wait: 1
+  connection_timeout: 2
+  drain_timeout: 5
+workers:
+  concurrency: 2
+  heartbeat_interval: 10
+  ttl: 120
+  max_job_duration: 120
+  shutdown_timeout: 5
+events:
+  enabled: false # Disable events for faster tests
+  batch_size: 10
+  flush_interval: 0.1
+  max_buffer_size: 100
+  stream: naq-events-test
+  filters:
+    - "job.*"
+queues:
+  default_name: naq.default.test
+  test_specific_queue: naq.test.queue
+logging:
+  level: DEBUG
+  format: "[TEST] %(levelname)s: %(message)s"
+```
+## Migrating from Environment Variables
+
+If you were previously using environment variables to configure NAQ, you can easily migrate to a `naq.yaml` file. The new configuration system still supports environment variables, but a YAML file is recommended for better organization and clarity.
+
+### Environment Variable Mapping
+
+The following table maps the old (legacy) environment variables to their corresponding paths in the `naq.yaml` file.
+
+| Old Environment Variable | New YAML Path |
+| --- | --- |
+| `NAQ_NATS_URL` | `nats.servers` (becomes a list with the single URL) |
+| `NAQ_DEFAULT_QUEUE` | `queues.default_name` |
+| `NAQ_LOG_LEVEL` | `logging.level` |
+| `NAQ_WORKER_CONCURRENCY` | `workers.concurrency` |
+| `NAQ_WORKER_HEARTBEAT_INTERVAL` | `workers.heartbeat_interval` |
+| `NAQ_DEFAULT_ACK_WAIT` | `queues.ack_wait` |
+| `NAQ_SCHEDULER_LOCK_TTL` | `scheduler.lock_ttl` |
+| `NAQ_SCHEDULER_LOCK_RENEW_INTERVAL` | `scheduler.lock_renew_interval` |
+| `NAQ_MAX_SCHEDULE_FAILURES` | `scheduler.max_failures` |
+| `NAQ_JOB_STATUS_TTL` | `scheduler.job_status_ttl` |
+| `NAQ_DEFAULT_RESULT_TTL` | `results.ttl` |
+| `NAQ_WORKER_TTL` | `workers.ttl` |
+
+### New Environment Variable Format
+
+In addition to the legacy variables, NAQ now supports a new, structured environment variable format that directly maps to the YAML structure. Use a double underscore (`__`) to separate nested keys.
+
+For example, to set the worker concurrency, you can use:
+
+```bash
+export NAQ_WORKERS__CONCURRENCY=20
+```
+
+This corresponds to the following YAML structure:
+
+```yaml
+workers:
+  concurrency: 20
+```
+## CLI Commands
+
+NAQ provides several CLI commands to help you manage your configuration.
+
+### `naq config show`
+
+This command displays the fully resolved configuration, including values from all sources (defaults, YAML files, and environment variables).
+
+**Usage:**
+
+```bash
+naq config show
+```
+
+**Example Output:**
+
+```json
+{
+  "nats": {
+    "servers": [
+      "nats://localhost:4222"
+    ],
+    "client_name": "naq-dev-client",
+    ...
+  },
+  ...
+}
+```
+
+### `naq config validate`
+
+This command validates the current configuration against the JSON schema.
+
+**Usage:**
+
+```bash
+naq config validate
+```
+
+If the configuration is valid, the command will exit with a success message. If it's invalid, it will print an error and exit with a non-zero status code.
+
+### `naq generate_config`
+
+This command generates a `naq.yaml` file with the default configuration.
+
+**Usage:**
+
+```bash
+naq generate_config
+```
+
+This will create a `naq.yaml` file in the current directory. You can then customize this file to fit your needs.

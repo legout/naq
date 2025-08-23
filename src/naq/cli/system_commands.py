@@ -1,7 +1,10 @@
 """System utility commands for the naq CLI."""
 
+import json
 import uvicorn
-from typing import Optional
+import yaml
+from pathlib import Path
+from typing import Any, Dict, Optional
 from loguru import logger
 from rich.console import Console
 
@@ -12,6 +15,8 @@ from naq.utils import setup_logging
 from naq.services.config import GlobalServiceConfig
 from naq.connection.context_managers import nats_connection
 from naq.settings import DEFAULT_NATS_URL
+from naq.config import load_config, get_config
+from naq.config.types import NAQConfig
 
 # Create a Typer app for system commands
 system_app = typer.Typer(
@@ -19,6 +24,10 @@ system_app = typer.Typer(
     help="System utility commands for naq.",
     no_args_is_help=True,
 )
+
+# Create a Typer app for config commands
+config_app = typer.Typer(name="config", help="Manage NAQ configuration.")
+system_app.add_typer(config_app)
 
 # Create a shared console instance for Rich output
 console = Console()
@@ -150,4 +159,99 @@ def health(
     except Exception as e:
         logger.exception(f"Health check failed: {e}")
         console.print(f"[red]✗[/red] [bold]System Health:[/bold] Error: {str(e)}")
+        raise typer.Exit(code=1)
+
+
+@config_app.command("show")
+def config_show(
+    ctx: typer.Context,
+    config_path: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to a specific configuration file to load.",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+    ),
+) -> None:
+    """
+    Displays the current effective NAQ configuration.
+    """
+    try:
+        cfg = load_config(config_path=str(config_path) if config_path else None, validate=False)
+        console.print_json(json.dumps(cfg.to_dict()))
+    except Exception as e:
+        console.print(f"[bold red]Error loading configuration:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
+@config_app.command("validate")
+def config_validate(
+    ctx: typer.Context,
+    config_path: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to a specific configuration file to validate.",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+    ),
+) -> None:
+    """
+    Validates the NAQ configuration against its schema.
+    """
+    try:
+        load_config(config_path=str(config_path) if config_path else None, validate=True)
+        console.print("[bold green]Configuration is valid![/bold green]")
+    except Exception as e:
+        console.print(f"[bold red]Configuration validation failed:[/bold red] {e}")
+        raise typer.Exit(code=1)
+
+
+@system_app.command("generate-config")
+def generate_config_cmd(
+    ctx: typer.Context,
+    output: Path = typer.Option(
+        "naq-config.yaml",
+        "--output",
+        "-o",
+        help="Output path for the generated configuration file.",
+        file_okay=True,
+        dir_okay=False,
+        writable=True,
+        resolve_path=True,
+    ),
+    environment: str = typer.Option(
+        "default",
+        "--environment",
+        "-e",
+        help="Environment template to generate (e.g., 'default', 'development', 'production').",
+    ),
+) -> None:
+    """
+    Generates an example NAQ configuration file.
+    """
+    try:
+        # Get a default-filled NAQConfig and convert it to dict
+        default_config_obj = get_config()
+        config_dict = default_config_obj.to_dict()
+
+        # Basic cleanup: remove keys with None values for cleaner YAML
+        def clean_dict(d: Dict[str, Any]) -> Dict[str, Any]:
+            return {k: v for k, v in d.items() if v is not None}
+
+        cleaned_config = clean_dict(config_dict)
+
+        with open(output, "w") as f:
+            yaml.dump(cleaned_config, f, sort_keys=False, indent=2)
+
+        console.print(f"[bold green]Example configuration generated at:[/bold green] {output}")
+    except Exception as e:
+        console.print(f"[bold red]Error generating configuration:[/bold red] {e}")
         raise typer.Exit(code=1)

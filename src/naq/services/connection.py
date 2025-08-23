@@ -13,9 +13,10 @@ import nats
 from nats.aio.client import Client as NATSClient
 from nats.js import JetStreamContext
 
+from ..config import get_config
+from ..config.types import NAQConfig
 from ..connection.manager import ConnectionManager
 from ..exceptions import NaqConnectionError
-from ..settings import DEFAULT_NATS_URL
 from .base import (
     BaseService,
     ServiceConfig,
@@ -48,15 +49,22 @@ class ConnectionService(BaseService):
     and connection lifecycle management with error recovery and reconnection logic.
     """
 
-    def __init__(self, config: Optional[ServiceConfig] = None) -> None:
+    def __init__(self, config: Optional[ServiceConfig] = None, *, naq_config: Optional[NAQConfig] = None) -> None:
         """
         Initialize the connection service.
 
         Args:
             config: Optional configuration for the service.
+            naq_config: Optional NAQ configuration instance. If not provided, uses global config.
         """
         super().__init__(config)
-        self._connection_config = self._extract_connection_config()
+        # Store the NAQConfig instance
+        self.config = naq_config if naq_config is not None else get_config()
+        # If a ConnectionServiceConfig is passed directly, use it
+        if isinstance(config, ConnectionServiceConfig):
+            self._connection_config = config
+        else:
+            self._connection_config = self._extract_connection_config()
         self._connection_manager = ConnectionManager()
         self._connections: Dict[str, NATSClient] = {}
         self._jetstream_contexts: Dict[str, JetStreamContext] = {}
@@ -124,7 +132,11 @@ class ConnectionService(BaseService):
 
             # Validate configuration
             if not self._connection_config.nats_url:
-                self._connection_config.nats_url = DEFAULT_NATS_URL
+                # Use the first server from the config, or fallback to default
+                if self.config.nats.servers:
+                    self._connection_config.nats_url = self.config.nats.servers[0]
+                else:
+                    self._connection_config.nats_url = "nats://localhost:4222"
 
             self._logger.info(f"NATS URL: {self._connection_config.nats_url}")
             self._logger.info(
@@ -221,7 +233,7 @@ class ConnectionService(BaseService):
             NaqConnectionError: If connection fails.
         """
         if url is None:
-            url = self._connection_config.nats_url or DEFAULT_NATS_URL
+            url = self._connection_config.nats_url or (self.config.nats.servers[0] if self.config.nats.servers else "nats://localhost:4222")
 
         # Check if we already have a cached connection
         if url in self._connections and self._connections[url].is_connected:
@@ -264,7 +276,7 @@ class ConnectionService(BaseService):
             NaqConnectionError: If getting JetStream context fails.
         """
         if url is None:
-            url = self._connection_config.nats_url or DEFAULT_NATS_URL
+            url = self._connection_config.nats_url or (self.config.nats.servers[0] if self.config.nats.servers else "nats://localhost:4222")
 
         # Check if we already have a cached JetStream context
         if url in self._jetstream_contexts:
@@ -308,7 +320,7 @@ class ConnectionService(BaseService):
             NaqConnectionError: If connection fails.
         """
         if url is None:
-            url = self._connection_config.nats_url or DEFAULT_NATS_URL
+            url = self._connection_config.nats_url or (self.config.nats.servers[0] if self.config.nats.servers else "nats://localhost:4222")
 
         nc = None
         try:
@@ -446,7 +458,7 @@ class ConnectionService(BaseService):
             url: Optional NATS server URL. If not provided, uses the configured URL.
         """
         if url is None:
-            url = self._connection_config.nats_url or DEFAULT_NATS_URL
+            url = self._connection_config.nats_url or (self.config.nats.servers[0] if self.config.nats.servers else "nats://localhost:4222")
 
         try:
             # Cancel any reconnection task for this URL

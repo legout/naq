@@ -1,0 +1,444 @@
+---
+title: "`utils` Module"
+---
+
+The `naq.utils` module contains utility functions and classes that provide common functionality used throughout the NAQ codebase. These utilities are designed to be reusable and help maintain consistency across the library.
+
+## Overview
+
+The utils module is organized into several submodules, each focusing on a specific area of functionality:
+
+-   `validation`: Common validation patterns for parameters and types
+-   `error_handling`: Error handling utilities and context management
+-   `serialization`: Serialization and deserialization utilities
+-   `timing`: Time-related utilities and helpers
+-   `async_helpers`: Asynchronous programming utilities
+-   `context_managers`: Context managers for common patterns
+-   `decorators`: Decorators for common functionality
+-   `logging`: Logging utilities and formatters
+-   `nats_helpers`: NATS-specific utilities and helpers
+-   `types`: Common type definitions and aliases
+
+## `validation` Submodule
+
+The `validation` submodule provides utilities for validating parameters and ensuring type safety.
+
+### `validate_parameter`
+
+Validates a parameter against specified criteria.
+
+```python
+def validate_parameter(
+    value: Any,
+    param_name: str,
+    not_none: bool = False,
+    min_value: Optional[Union[int, float]] = None,
+    max_value: Optional[Union[int, float]] = None,
+    regex_pattern: Optional[Union[str, Pattern[str]]] = None,
+    custom_validator: Optional[callable] = None,
+    error_message: Optional[str] = None,
+) -> None
+```
+
+#### Parameters
+
+-   `value`: The value to validate
+-   `param_name`: The name of the parameter being validated (used in error messages)
+-   `not_none`: If True, raises ValidationError if value is None
+-   `min_value`: Minimum allowed value (for numeric types)
+-   `max_value`: Maximum allowed value (for numeric types)
+-   `regex_pattern`: Regular expression pattern that the value must match (for strings)
+-   `custom_validator`: Optional custom validation function
+-   `error_message`: Custom error message to use if validation fails
+
+#### Examples
+
+```python
+from naq.utils.validation import validate_parameter
+
+# Basic validation
+validate_parameter("test", "param")
+
+# Check for None
+validate_parameter("test", "param", not_none=True)
+
+# Validate numeric range
+validate_parameter(5, "number", min_value=0, max_value=10)
+
+# Validate string pattern
+validate_parameter("abc123", "id", regex_pattern=r'^[a-z]+\d+$')
+
+# Custom validation
+def is_even(value):
+    return value % 2 == 0
+
+validate_parameter(4, "number", custom_validator=is_even)
+```
+
+### `ensure_type`
+
+Ensures a value is of the expected type, optionally converting it.
+
+```python
+def ensure_type(
+    value: Any,
+    expected_type: Union[Type, tuple[Type, ...]],
+    param_name: str = "value",
+    convert: bool = True,
+    strict: bool = False,
+) -> Any
+```
+
+#### Parameters
+
+-   `value`: The value to check and potentially convert
+-   `expected_type`: The expected type or tuple of allowed types
+-   `param_name`: The name of the parameter being validated (used in error messages)
+-   `convert`: If True, attempt to convert the value to the expected type
+-   `strict`: If True, raise an error if the value is not already of the expected type
+
+#### Returns
+
+The original value if it matches the expected type, or the converted value if conversion was successful.
+
+#### Examples
+
+```python
+from naq.utils.validation import ensure_type
+
+# Type conversion
+result = ensure_type("5", int, "number")
+assert result == 5
+assert isinstance(result, int)
+
+# Multiple allowed types
+result = ensure_type("5", (int, str), "value")
+assert result == "5"
+assert isinstance(result, str)
+
+# Strict mode (no conversion)
+ensure_type(5, int, "number", strict=True)  # OK
+ensure_type("5", int, "number", strict=True)  # Raises ValidationError
+
+# Validation without conversion
+ensure_type("5", int, "number", convert=False)  # Raises ValidationError
+```
+
+## `error_handling` Submodule
+
+The `error_handling` submodule provides utilities for managing errors and creating error contexts.
+
+### `ErrorHandler`
+
+A class for managing error handlers and processing exceptions.
+
+```python
+class ErrorHandler:
+    def __init__(self, logger=None):
+        """Initialize the ErrorHandler with an optional logger."""
+        
+    def register_handler(self, exception_type, handler):
+        """Register a handler for a specific exception type."""
+        
+    def handle_error(self, error, context=None, reraise=False):
+        """Handle an error using registered handlers."""
+```
+
+### `create_error_context`
+
+Creates a context dictionary with error information.
+
+```python
+def create_error_context(operation_name: str) -> dict:
+    """Create a context dictionary with error information."""
+```
+
+### `wrap_naq_exception`
+
+Wraps standard Python exceptions with appropriate NAQ exceptions.
+
+```python
+def wrap_naq_exception(
+    original_exception: Exception,
+    context: Optional[str] = None,
+    original_traceback: bool = True,
+) -> NaqException:
+    """Wrap a standard Python exception with an appropriate NAQ exception."""
+```
+
+## `serialization` Submodule
+
+The `serialization` submodule provides utilities for serializing and deserializing data.
+
+### `serialize`
+
+Serializes data using the specified serializer.
+
+```python
+def serialize(data: Any, serializer: str = "pickle") -> bytes:
+    """Serialize data using the specified serializer."""
+```
+
+### `deserialize`
+
+Deserializes data using the specified serializer.
+
+```python
+def deserialize(data: bytes, serializer: str = "pickle") -> Any:
+    """Deserialize data using the specified serializer."""
+```
+
+## `timing` Submodule
+
+The `timing` submodule provides time-related utilities and helpers.
+
+### `Stopwatch`
+
+A simple stopwatch class for measuring elapsed time.
+
+```python
+class Stopwatch:
+    def __init__(self) -> None:
+        """Initialize a new stopwatch."""
+        
+    def start(self) -> None:
+        """Start the stopwatch."""
+        
+    def stop(self) -> None:
+        """Stop the stopwatch."""
+        
+    def elapsed(self) -> float:
+        """Get the elapsed time in seconds."""
+        
+    def reset(self) -> None:
+        """Reset the stopwatch."""
+```
+
+#### Parameters
+
+None
+
+#### Examples
+
+```python
+from naq.utils.timing import Stopwatch
+
+# Basic usage
+stopwatch = Stopwatch()
+stopwatch.start()
+# Do some work
+time.sleep(0.5)
+stopwatch.stop()
+print(f"Elapsed time: {stopwatch.elapsed()} seconds")
+
+# Using as a context manager
+with Stopwatch() as sw:
+    time.sleep(0.3)
+print(f"Elapsed time: {sw.elapsed()} seconds")
+```
+
+### `measure_execution_time`
+
+A decorator to measure the execution time of a function.
+
+```python
+def measure_execution_time(
+    func: Optional[Callable[..., T]] = None,
+    *,
+    logger: Optional[Callable[[str], None]] = None
+) -> Callable[..., T]:
+    """Decorator to measure the execution time of a function."""
+```
+
+#### Parameters
+
+-   `func`: The function to be decorated. When used with parentheses, this will be None and the decorator will return a new decorator.
+-   `logger`: Optional logger function to log the execution time. If provided, the execution time will be logged using this function.
+
+#### Examples
+
+```python
+from naq.utils.timing import measure_execution_time
+
+# Basic usage without logger
+@measure_execution_time
+def slow_function():
+    time.sleep(0.5)
+    return "done"
+
+# Usage with logger
+@measure_execution_time(logger=print)
+def another_slow_function():
+    time.sleep(0.3)
+    return "also done"
+
+# Usage with parentheses but no logger
+@measure_execution_time()
+def yet_another_slow_function():
+    time.sleep(0.2)
+    return "done too"
+```
+
+### `measure_execution_time_cm`
+
+A context manager to measure execution time of a code block.
+
+```python
+@contextmanager
+def measure_execution_time_cm(
+    name: Optional[str] = None,
+    logger: Optional[Callable[[str], None]] = None
+) -> Generator[None, None, None]:
+    """Context manager to measure execution time of a code block."""
+```
+
+#### Parameters
+
+-   `name`: Optional name for the code block being measured. If provided, this name will be included in any log messages.
+-   `logger`: Optional logger function to log the execution time. If provided, the execution time will be logged using this function.
+
+#### Examples
+
+```python
+from naq.utils.timing import measure_execution_time_cm
+
+# Basic usage without name or logger
+with measure_execution_time_cm():
+    # Do some work
+    time.sleep(0.3)
+
+# Usage with name and logger
+with measure_execution_time_cm("data processing", logger=print):
+    # Process some data
+    time.sleep(0.5)
+
+# Usage with name only
+with measure_execution_time_cm("initialization"):
+    # Initialize something
+    time.sleep(0.2)
+```
+
+### `get_current_timestamp`
+
+Gets the current timestamp in the specified format.
+
+```python
+def get_current_timestamp(format: str = "unix") -> Union[int, float, str]:
+    """Get the current timestamp in the specified format."""
+```
+
+### `format_duration`
+
+Formats a duration in seconds to a human-readable string.
+
+```python
+def format_duration(seconds: float) -> str:
+    """Format a duration in seconds to a human-readable string."""
+```
+
+## `async_helpers` Submodule
+
+The `async_helpers` submodule provides utilities for asynchronous programming.
+
+### `run_sync`
+
+Runs a synchronous function in an async context.
+
+```python
+async def run_sync(func, *args, **kwargs):
+    """Run a synchronous function in an async context."""
+```
+
+### `run_async`
+
+Runs an async function in a synchronous context.
+
+```python
+def run_async(coro):
+    """Run an async function in a synchronous context."""
+```
+
+## `context_managers` Submodule
+
+The `context_managers` submodule provides context managers for common patterns.
+
+### `timer`
+
+A context manager for timing code execution.
+
+```python
+@contextmanager
+def timer(name: str = "Operation"):
+    """Context manager for timing code execution."""
+```
+
+## `decorators` Submodule
+
+The `decorators` submodule provides decorators for common functionality.
+
+### `retry`
+
+A decorator for retrying a function on failure.
+
+```python
+def retry(
+    max_attempts: int = 3,
+    delay: float = 1.0,
+    backoff: float = 2.0,
+    exceptions: Tuple[Type[Exception], ...] = (Exception,),
+):
+    """Decorator for retrying a function on failure."""
+```
+
+## `logging` Submodule
+
+The `logging` submodule provides logging utilities and formatters.
+
+### `get_logger`
+
+Gets a logger with the specified name.
+
+```python
+def get_logger(name: str) -> Logger:
+    """Get a logger with the specified name."""
+```
+
+## `nats_helpers` Submodule
+
+The `nats_helpers` submodule provides NATS-specific utilities and helpers.
+
+### `create_connection_string`
+
+Creates a NATS connection string from connection parameters.
+
+```python
+def create_connection_string(
+    host: str,
+    port: int,
+    user: Optional[str] = None,
+    password: Optional[str] = None,
+    protocol: str = "nats",
+) -> str:
+    """Create a NATS connection string from connection parameters."""
+```
+
+## `types` Submodule
+
+The `types` submodule provides common type definitions and aliases.
+
+### Common Types
+
+```python
+# Numeric types
+Numeric = Union[int, float]
+
+# JSON-serializable types
+JSONValue = Union[str, int, float, bool, None, List['JSONValue'], Dict[str, 'JSONValue']]
+```
+
+## Exceptions
+
+The utils module uses the following exceptions from `naq.exceptions`:
+
+-   `ValidationError`: Raised when validation of a parameter or value fails
+-   `TypeConversionError`: Raised when type conversion fails in ensure_type

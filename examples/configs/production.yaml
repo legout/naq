@@ -1,0 +1,28 @@
+nats:
+  servers:
+    - nats://nats.production.internal:4222
+  client_name: naq-prod-client
+  max_reconnect_attempts: -1 # Infinite reconnects
+  reconnect_time_wait: 5
+  connection_timeout: 10
+  drain_timeout: 30
+workers:
+  concurrency: 20
+  heartbeat_interval: 60
+  ttl: 600
+  max_job_duration: 1800 # 30 minutes
+  shutdown_timeout: 30
+events:
+  enabled: true
+  batch_size: 500
+  flush_interval: 5
+  max_buffer_size: 5000
+  stream: naq-events-prod
+  filters:
+    - "job.completed"
+    - "job.failed"
+queues:
+  default_name: naq.default.prod
+logging:
+  level: WARNING
+  format: "[PRODUCTION] %(levelname)s: %(message)s"

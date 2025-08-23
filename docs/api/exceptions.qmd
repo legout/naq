@@ -1,8 +1,8 @@
 ---
-title: "Exceptions"
+title: "Exceptions and Error Handling"
 ---
 
-The `naq` library uses a set of custom exceptions to indicate specific error conditions. All custom exceptions inherit from the base `NaqException`.
+The `naq` library uses a set of custom exceptions to indicate specific error conditions. All custom exceptions inherit from the base `NaqException`. Additionally, `naq` provides utilities for error handling and context creation.
 
 ### `NaqException`
 
@@ -27,3 +27,41 @@ Raised by `Job.fetch_result()` if the job failed during execution on the worker.
 ### `JobNotFoundError`
 
 Raised by `Job.fetch_result()` if the result for the specified `job_id` cannot be found. This could be because the job has not completed yet, the result has expired and been cleaned up, or the job never existed.
+
+## Error Handling Utilities
+
+### `create_error_context(operation_name: str) -> Dict[str, Any]`
+
+Creates a dictionary with contextual information about an error. This function captures essential contextual information when an error occurs, including the operation name, timestamp, current traceback, and thread ID.
+
+**Parameters:**
+- `operation_name`: The name of the operation that failed or where the error occurred.
+
+**Returns:**
+A dictionary containing the following keys:
+- `operation_name`: The name of the operation that failed.
+- `timestamp`: The current Unix timestamp when the error context was created.
+- `traceback`: The current exception traceback as a string, formatted using `traceback.format_exc()`.
+- `thread_id`: The identifier of the current thread where the error occurred.
+
+**Example:**
+
+```python
+from naq.utils.error_handling import create_error_context
+
+try:
+    # Code that might raise an exception
+    result = 1 / 0
+except Exception:
+    error_context = create_error_context("division_operation")
+    # error_context will contain:
+    # {
+    #     "operation_name": "division_operation",
+    #     "timestamp": 1625097600.0,
+    #     "traceback": "Traceback (most recent call last):\n...",
+    #     "thread_id": 12345
+    # }
+```
+
+**Note:**
+This function should be called within an exception handler (except block) to capture the most relevant traceback information. If called outside of an exception context, the traceback value will indicate that no exception is currently being handled.

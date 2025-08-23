@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 from naq.job import Job
 from naq.exceptions import SerializationError
-from naq.settings import RETRY_STRATEGY
+from naq.models.enums import RETRY_STRATEGY
 
 
 # Test Utilities

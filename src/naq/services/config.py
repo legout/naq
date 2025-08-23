@@ -1,312 +1,143 @@
 """
 Configuration Integration for NAQ Services
 
-This module provides centralized configuration management for all NAQ services,
-integrating with the global settings and providing service-specific configuration
-classes that inherit from the base ServiceConfig.
+This module provides centralized configuration management for all NAQ services
+using the unified NAQConfig system. All services now use the same configuration
+structure for consistency and maintainability.
 """
 
-import os
-from typing import Optional
+from typing import Optional, Any, Dict
 
-
-from ..settings import (
-    DEFAULT_NATS_URL,
-    DEFAULT_QUEUE_NAME,
-    LOG_LEVEL,
-    DEFAULT_ACK_WAIT_SECONDS,
-    ACK_WAIT_PER_QUEUE,
-    DEFAULT_WORKER_TTL_SECONDS,
-    DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
-    DEFAULT_RESULT_TTL_SECONDS,
-    JOB_STATUS_TTL_SECONDS,
-    SCHEDULER_LOCK_TTL_SECONDS,
-    SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS,
-    MAX_SCHEDULE_FAILURES,
-    JOB_SERIALIZER,
-    JSON_ENCODER,
-    JSON_DECODER,
-    SCHEDULED_JOBS_KV_NAME,
-    SCHEDULER_LOCK_KV_NAME,
-    SCHEDULER_LOCK_KEY,
-    JOB_STATUS_KV_NAME,
-    FAILED_JOB_SUBJECT_PREFIX,
-    FAILED_JOB_STREAM_NAME,
-    RESULT_KV_NAME,
-    WORKER_KV_NAME,
-    NAQ_PREFIX,
-    DEPENDENCY_CHECK_DELAY_SECONDS,
-)
+from ..config import get_config, NAQConfig
 from .base import ServiceConfig
 
 
-class GlobalServiceConfig(ServiceConfig):
+class GlobalServiceConfig:
     """
     Global configuration for all NAQ services.
 
-    This configuration class integrates with the global settings and provides
-    default values for all services. It serves as the base configuration
+    This class provides access to the global NAQConfig and converts it
+    to service-compatible format. It serves as the base configuration
     that can be overridden by service-specific configurations.
     """
 
-    def __post_init__(self) -> None:
-        """
-        Post-initialization hook to set up global settings.
-        """
-        # Set defaults from global settings if not provided
-        if self.nats_url is None:
-            self.nats_url = DEFAULT_NATS_URL
-        if self.queue_name is None:
-            self.queue_name = DEFAULT_QUEUE_NAME
-        if self.log_level is None:
-            self.log_level = LOG_LEVEL
+    def __init__(self, nats_url: Optional[str] = None, queue_name: Optional[str] = None, log_level: Optional[str] = None):
+        """Initialize global service configuration."""
+        self.nats_url = nats_url
+        self.queue_name = queue_name
+        self.log_level = log_level
+        self.custom_settings: Dict[str, Any] = {}
 
-        # Add global settings to custom_settings for easy access
-        self.custom_settings.update(
-            {
-                "default_ack_wait_seconds": DEFAULT_ACK_WAIT_SECONDS,
-                "ack_wait_per_queue": ACK_WAIT_PER_QUEUE,
-                "default_worker_ttl_seconds": DEFAULT_WORKER_TTL_SECONDS,
-                "default_worker_heartbeat_interval_seconds": DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
-                "default_result_ttl_seconds": DEFAULT_RESULT_TTL_SECONDS,
-                "job_status_ttl_seconds": JOB_STATUS_TTL_SECONDS,
-                "scheduler_lock_ttl_seconds": SCHEDULER_LOCK_TTL_SECONDS,
-                "scheduler_lock_renew_interval_seconds": SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS,
-                "max_schedule_failures": MAX_SCHEDULE_FAILURES,
-                "job_serializer": JOB_SERIALIZER,
-                "json_encoder": JSON_ENCODER,
-                "json_decoder": JSON_DECODER,
-                "scheduled_jobs_kv_name": SCHEDULED_JOBS_KV_NAME,
-                "scheduler_lock_kv_name": SCHEDULER_LOCK_KV_NAME,
-                "scheduler_lock_key": SCHEDULER_LOCK_KEY,
-                "job_status_kv_name": JOB_STATUS_KV_NAME,
-                "failed_job_subject_prefix": FAILED_JOB_SUBJECT_PREFIX,
-                "failed_job_stream_name": FAILED_JOB_STREAM_NAME,
-                "result_kv_name": RESULT_KV_NAME,
-                "worker_kv_name": WORKER_KV_NAME,
-                "naq_prefix": NAQ_PREFIX,
-                "dependency_check_delay_seconds": DEPENDENCY_CHECK_DELAY_SECONDS,
-            }
-        )
+        # Get the global NAQConfig
+        config = get_config()
 
+        # Set defaults from NAQConfig if not provided
+        if self.nats_url is None and config.nats.servers:
+            self.nats_url = config.nats.servers[0]
+        if self.queue_name is None and config.queues and 'default_name' in config.queues:
+            self.queue_name = config.queues['default_name']
+        if self.log_level is None and config.logging and 'level' in config.logging:
+            self.log_level = config.logging['level']
 
-class ConnectionServiceConfig(ServiceConfig):
-    """
-    Configuration for the ConnectionService.
+        # Add settings from NAQConfig to custom_settings
+        self._populate_custom_settings(config)
 
-    Extends the base ServiceConfig with connection-specific settings.
-    """
+    def _populate_custom_settings(self, config: NAQConfig) -> None:
+        """Populate custom settings from NAQConfig."""
+        # NATS settings
+        if config.nats.servers:
+            self.custom_settings['nats_servers'] = config.nats.servers
+        self.custom_settings['nats_client_name'] = config.nats.client_name
 
-    def __post_init__(self) -> None:
-        """
-        Post-initialization hook to set up connection-specific settings.
-        """
-        # Set defaults from global settings if not provided
-        if self.nats_url is None:
-            self.nats_url = DEFAULT_NATS_URL
-        if self.log_level is None:
-            self.log_level = LOG_LEVEL
+        # Worker settings
+        self.custom_settings['worker_concurrency'] = config.workers.concurrency
+        self.custom_settings['worker_heartbeat_interval'] = config.workers.heartbeat_interval
+        self.custom_settings['worker_ttl'] = config.workers.ttl
 
+        # Queue settings
+        if config.queues:
+            if 'ack_wait' in config.queues:
+                self.custom_settings['default_ack_wait_seconds'] = config.queues['ack_wait']
+            if 'default_name' in config.queues:
+                self.custom_settings['default_queue_name'] = config.queues['default_name']
 
-class JobServiceConfig(ServiceConfig):
-    """
-    Configuration for the JobService.
+        # Scheduler settings
+        if config.scheduler:
+            if 'lock_ttl' in config.scheduler:
+                self.custom_settings['scheduler_lock_ttl_seconds'] = config.scheduler['lock_ttl']
+            if 'lock_renew_interval' in config.scheduler:
+                self.custom_settings['scheduler_lock_renew_interval_seconds'] = config.scheduler['lock_renew_interval']
+            if 'max_failures' in config.scheduler:
+                self.custom_settings['max_schedule_failures'] = config.scheduler['max_failures']
+            if 'job_status_ttl' in config.scheduler:
+                self.custom_settings['job_status_ttl_seconds'] = config.scheduler['job_status_ttl']
 
-    Extends the base ServiceConfig with job-specific settings.
-    """
+        # Results settings
+        if config.results and 'ttl' in config.results:
+            self.custom_settings['default_result_ttl_seconds'] = config.results['ttl']
 
-    def __post_init__(self) -> None:
-        """
-        Post-initialization hook to set up job-specific settings.
-        """
-        # Set defaults from global settings if not provided
-        if self.nats_url is None:
-            self.nats_url = DEFAULT_NATS_URL
-        if self.queue_name is None:
-            self.queue_name = DEFAULT_QUEUE_NAME
-        if self.log_level is None:
-            self.log_level = LOG_LEVEL
+        # Serialization settings
+        if config.serialization:
+            if 'method' in config.serialization:
+                self.custom_settings['job_serializer'] = config.serialization['method']
+            if 'json_encoder' in config.serialization:
+                self.custom_settings['json_encoder'] = config.serialization['json_encoder']
+            if 'json_decoder' in config.serialization:
+                self.custom_settings['json_decoder'] = config.serialization['json_decoder']
 
-        # Add job-specific settings
-        self.custom_settings.update(
-            {
-                "job_serializer": JOB_SERIALIZER,
-                "json_encoder": JSON_ENCODER,
-                "json_decoder": JSON_DECODER,
-                "default_ack_wait_seconds": DEFAULT_ACK_WAIT_SECONDS,
-                "ack_wait_per_queue": ACK_WAIT_PER_QUEUE,
-                "result_ttl_seconds": DEFAULT_RESULT_TTL_SECONDS,
-                "job_status_ttl_seconds": JOB_STATUS_TTL_SECONDS,
-                "failed_job_subject_prefix": FAILED_JOB_SUBJECT_PREFIX,
-                "failed_job_stream_name": FAILED_JOB_STREAM_NAME,
-                "result_kv_name": RESULT_KV_NAME,
-                "job_status_kv_name": JOB_STATUS_KV_NAME,
-                "naq_prefix": NAQ_PREFIX,
-            }
-        )
+        # Logging settings
+        if config.logging:
+            if 'level' in config.logging:
+                self.custom_settings['log_level'] = config.logging['level']
+            if 'to_file_enabled' in config.logging:
+                self.custom_settings['log_to_file_enabled'] = config.logging['to_file_enabled']
+            if 'file_path' in config.logging:
+                self.custom_settings['log_file_path'] = config.logging['file_path']
+
+        # Event settings
+        self.custom_settings['events_enabled'] = config.events.enabled
+        self.custom_settings['events_batch_size'] = config.events.batch_size
+        self.custom_settings['events_flush_interval'] = config.events.flush_interval
+
+        # Add default values for missing settings
+        self.custom_settings.setdefault('naq_prefix', 'naq')
+        self.custom_settings.setdefault('dependency_check_delay_seconds', 5)
 
 
-class WorkerServiceConfig(ServiceConfig):
-    """
-    Configuration for the WorkerService.
-
-    Extends the base ServiceConfig with worker-specific settings.
-    """
-
-    def __post_init__(self) -> None:
-        """
-        Post-initialization hook to set up worker-specific settings.
-        """
-        # Set defaults from global settings if not provided
-        if self.nats_url is None:
-            self.nats_url = DEFAULT_NATS_URL
-        if self.queue_name is None:
-            self.queue_name = DEFAULT_QUEUE_NAME
-        if self.log_level is None:
-            self.log_level = LOG_LEVEL
-
-        # Add worker-specific settings
-        self.custom_settings.update(
-            {
-                "default_ack_wait_seconds": DEFAULT_ACK_WAIT_SECONDS,
-                "ack_wait_per_queue": ACK_WAIT_PER_QUEUE,
-                "worker_ttl_seconds": DEFAULT_WORKER_TTL_SECONDS,
-                "worker_heartbeat_interval_seconds": DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
-                "worker_kv_name": WORKER_KV_NAME,
-                "job_serializer": JOB_SERIALIZER,
-                "json_encoder": JSON_ENCODER,
-                "json_decoder": JSON_DECODER,
-                "naq_prefix": NAQ_PREFIX,
-            }
-        )
+# Service-specific configurations that extend GlobalServiceConfig
+class ConnectionServiceConfig(GlobalServiceConfig):
+    """Configuration for ConnectionService."""
+    pass
 
 
-class SchedulerServiceConfig(ServiceConfig):
-    """
-    Configuration for the SchedulerService.
-
-    Extends the base ServiceConfig with scheduler-specific settings.
-    """
-
-    def __post_init__(self) -> None:
-        """
-        Post-initialization hook to set up scheduler-specific settings.
-        """
-        # Set defaults from global settings if not provided
-        if self.nats_url is None:
-            self.nats_url = DEFAULT_NATS_URL
-        if self.queue_name is None:
-            self.queue_name = DEFAULT_QUEUE_NAME
-        if self.log_level is None:
-            self.log_level = LOG_LEVEL
-
-        # Add scheduler-specific settings
-        self.custom_settings.update(
-            {
-                "scheduled_jobs_kv_name": SCHEDULED_JOBS_KV_NAME,
-                "scheduler_lock_kv_name": SCHEDULER_LOCK_KV_NAME,
-                "scheduler_lock_key": SCHEDULER_LOCK_KEY,
-                "scheduler_lock_ttl_seconds": SCHEDULER_LOCK_TTL_SECONDS,
-                "scheduler_lock_renew_interval_seconds": SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS,
-                "max_schedule_failures": MAX_SCHEDULE_FAILURES,
-                "job_status_kv_name": JOB_STATUS_KV_NAME,
-                "job_status_ttl_seconds": JOB_STATUS_TTL_SECONDS,
-                "dependency_check_delay_seconds": DEPENDENCY_CHECK_DELAY_SECONDS,
-                "job_serializer": JOB_SERIALIZER,
-                "json_encoder": JSON_ENCODER,
-                "json_decoder": JSON_DECODER,
-                "naq_prefix": NAQ_PREFIX,
-            }
-        )
+class JobServiceConfig(GlobalServiceConfig):
+    """Configuration for JobService."""
+    pass
 
 
-class StreamServiceConfig(ServiceConfig):
-    """
-    Configuration for the StreamService.
-
-    Extends the base ServiceConfig with stream-specific settings.
-    """
-
-    def __post_init__(self) -> None:
-        """
-        Post-initialization hook to set up stream-specific settings.
-        """
-        # Set defaults from global settings if not provided
-        if self.nats_url is None:
-            self.nats_url = DEFAULT_NATS_URL
-        if self.log_level is None:
-            self.log_level = LOG_LEVEL
-
-        # Add stream-specific settings
-        self.custom_settings.update(
-            {
-                "naq_prefix": NAQ_PREFIX,
-                "failed_job_subject_prefix": FAILED_JOB_SUBJECT_PREFIX,
-                "failed_job_stream_name": FAILED_JOB_STREAM_NAME,
-            }
-        )
+class WorkerServiceConfig(GlobalServiceConfig):
+    """Configuration for WorkerService."""
+    pass
 
 
-class KVStoreServiceConfig(ServiceConfig):
-    """
-    Configuration for the KVStoreService.
-
-    Extends the base ServiceConfig with KV store-specific settings.
-    """
-
-    def __post_init__(self) -> None:
-        """
-        Post-initialization hook to set up KV store-specific settings.
-        """
-        # Set defaults from global settings if not provided
-        if self.nats_url is None:
-            self.nats_url = DEFAULT_NATS_URL
-        if self.log_level is None:
-            self.log_level = LOG_LEVEL
-
-        # Add KV store-specific settings
-        self.custom_settings.update(
-            {
-                "scheduled_jobs_kv_name": SCHEDULED_JOBS_KV_NAME,
-                "scheduler_lock_kv_name": SCHEDULER_LOCK_KV_NAME,
-                "job_status_kv_name": JOB_STATUS_KV_NAME,
-                "result_kv_name": RESULT_KV_NAME,
-                "worker_kv_name": WORKER_KV_NAME,
-                "job_status_ttl_seconds": JOB_STATUS_TTL_SECONDS,
-                "result_ttl_seconds": DEFAULT_RESULT_TTL_SECONDS,
-                "worker_ttl_seconds": DEFAULT_WORKER_TTL_SECONDS,
-                "naq_prefix": NAQ_PREFIX,
-            }
-        )
+class SchedulerServiceConfig(GlobalServiceConfig):
+    """Configuration for SchedulerService."""
+    pass
 
 
-class EventServiceConfig(ServiceConfig):
-    """
-    Configuration for the EventService.
+class StreamServiceConfig(GlobalServiceConfig):
+    """Configuration for StreamService."""
+    pass
 
-    Extends the base ServiceConfig with event-specific settings.
-    """
 
-    def __post_init__(self) -> None:
-        """
-        Post-initialization hook to set up event-specific settings.
-        """
-        # Set defaults from global settings if not provided
-        if self.nats_url is None:
-            self.nats_url = DEFAULT_NATS_URL
-        if self.log_level is None:
-            self.log_level = LOG_LEVEL
+class KVStoreServiceConfig(GlobalServiceConfig):
+    """Configuration for KVStoreService."""
+    pass
 
-        # Add event-specific settings
-        self.custom_settings.update(
-            {
-                "naq_prefix": NAQ_PREFIX,
-                "enable_event_logging": os.getenv(
-                    "NAQ_ENABLE_EVENT_LOGGING", "false"
-                ).lower()
-                == "true",
-            }
-        )
+
+class EventServiceConfig(GlobalServiceConfig):
+    """Configuration for EventService."""
+    pass
 
 
 def create_global_config() -> GlobalServiceConfig:
@@ -314,77 +145,28 @@ def create_global_config() -> GlobalServiceConfig:
     Create a global service configuration with default values.
 
     Returns:
-        A GlobalServiceConfig instance with default values from settings.
+        A GlobalServiceConfig instance with default values from NAQConfig.
     """
     return GlobalServiceConfig()
 
 
-def create_config_from_env(service_type: str) -> ServiceConfig:
+def create_config_from_env(service_type: str) -> GlobalServiceConfig:
     """
     Create a service configuration from environment variables.
 
     Args:
         service_type: The type of service to create configuration for.
-                     Should be one of: 'connection', 'job', 'worker',
-                     'scheduler', 'stream', 'kv', 'event'.
+                      (Currently ignored - all services use same config structure)
 
     Returns:
-        A ServiceConfig instance appropriate for the service type.
-
-    Raises:
-        ValueError: If the service_type is not recognized.
+        A GlobalServiceConfig instance.
     """
-    # Get common settings from environment
-    nats_url = os.getenv("NAQ_NATS_URL", DEFAULT_NATS_URL)
-    queue_name = os.getenv("NAQ_DEFAULT_QUEUE", DEFAULT_QUEUE_NAME)
-    log_level = os.getenv("NAQ_LOG_LEVEL", LOG_LEVEL)
-
-    # Create service-specific configuration
-    if service_type == "connection":
-        return ConnectionServiceConfig(
-            nats_url=nats_url,
-            log_level=log_level,
-        )
-    elif service_type == "job":
-        return JobServiceConfig(
-            nats_url=nats_url,
-            queue_name=queue_name,
-            log_level=log_level,
-        )
-    elif service_type == "worker":
-        return WorkerServiceConfig(
-            nats_url=nats_url,
-            queue_name=queue_name,
-            log_level=log_level,
-        )
-    elif service_type == "scheduler":
-        return SchedulerServiceConfig(
-            nats_url=nats_url,
-            queue_name=queue_name,
-            log_level=log_level,
-        )
-    elif service_type == "stream":
-        return StreamServiceConfig(
-            nats_url=nats_url,
-            log_level=log_level,
-        )
-    elif service_type == "kv":
-        return KVStoreServiceConfig(
-            nats_url=nats_url,
-            log_level=log_level,
-        )
-    elif service_type == "event":
-        return EventServiceConfig(
-            nats_url=nats_url,
-            log_level=log_level,
-        )
-    else:
-        raise ValueError(f"Unknown service type: {service_type}")
+    return GlobalServiceConfig()
 
 
 def merge_configs(
-    base_config: ServiceConfig, override_config: Optional[ServiceConfig] = None
-) -> ServiceConfig:
+    base_config: GlobalServiceConfig, override_config: Optional[GlobalServiceConfig] = None
+) -> GlobalServiceConfig:
     """
     Merge two service configurations.
 
@@ -395,13 +177,13 @@ def merge_configs(
         override_config: The configuration to override with.
 
     Returns:
-        A new ServiceConfig instance with merged values.
+        A new GlobalServiceConfig instance with merged values.
     """
     if override_config is None:
         return base_config
 
-    # Create new config with base values
-    merged_config = ServiceConfig(
+    # Create new config with merged values
+    merged_config = GlobalServiceConfig(
         nats_url=override_config.nats_url or base_config.nats_url,
         queue_name=override_config.queue_name or base_config.queue_name,
         log_level=override_config.log_level or base_config.log_level,
