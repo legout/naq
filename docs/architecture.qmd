@@ -153,3 +153,113 @@ Using NATS and JetStream as the foundation provides several key advantages:
 -   **Resilience**: If a worker crashes, JetStream ensures that the job it was processing will be re-delivered to another worker after a timeout. If the entire `naq` system goes down, the jobs are safe in the NATS stream, ready to be processed when the system comes back online.
 -   **Simplicity**: By offloading the complexities of persistence, delivery guarantees, and storage to NATS, the `naq` codebase can remain focused on the core logic of job execution and scheduling.
 -   **Service Flexibility**: The service layer architecture allows each component to leverage NATS features independently while maintaining a consistent interface.
+
+## Migration Validation
+
+When migrating to the service layer architecture, it's important to follow a structured validation process to ensure a successful transition. The following checklists provide comprehensive validation steps for both pre-integration and post-integration phases.
+
+### Pre-Integration Checklist
+
+Complete these checks before integrating with the service layer:
+
+- [ ] **Verify all services are implemented and tested**
+  - [ ] ConnectionService is implemented and passes tests
+  - [ ] ConfigService is implemented and passes tests
+  - [ ] JobService is implemented and passes tests
+  - [ ] KVStoreService is implemented and passes tests
+  - [ ] StreamService is implemented and passes tests
+  - [ ] EventService is implemented and passes tests
+  - [ ] WorkerService is implemented and passes tests
+  - [ ] SchedulerService is implemented and passes tests
+
+- [ ] **Confirm configuration system is working**
+  - [ ] Configuration can be set and retrieved correctly
+  - [ ] Environment variable overrides work as expected
+  - [ ] Service-specific configuration is properly isolated
+  - [ ] Configuration validation is working
+
+- [ ] **Ensure common patterns are extracted**
+  - [ ] Connection pooling is implemented in ConnectionService
+  - [ ] Error handling patterns are consistent across services
+  - [ ] Logging is standardized using loguru
+  - [ ] Performance monitoring is integrated into services
+  - [ ] Resource cleanup is implemented consistently
+
+- [ ] **Record performance benchmarks**
+  - [ ] Service initialization times are measured
+  - [ ] Connection acquisition times are recorded
+  - [ ] Memory usage patterns are documented
+  - [ ] Throughput metrics are established
+  - [ ] Resource utilization benchmarks are captured
+
+### Post-Integration Checklist
+
+Complete these checks after integrating with the service layer:
+
+- [ ] **Verify all components use the service layer**
+  - [ ] Client applications use JobService for job operations
+  - [ ] Worker processes use JobService for job execution
+  - [ ] Scheduler uses SchedulerService for time-based events
+  - [ ] No direct NATS operations in application code
+  - [ ] All components properly initialize services
+
+- [ ] **Confirm no direct NATS operations outside services**
+  - [ ] All NATS connections go through ConnectionService
+  - [ ] All JetStream operations use appropriate services
+  - [ ] No direct subject subscriptions in application code
+  - [ ] All message publishing uses service layer
+  - [ ] All KV operations use KVStoreService
+
+- [ ] **Validate configuration is passed correctly**
+  - [ ] Services receive correct configuration parameters
+  - [ ] Configuration overrides work as expected
+  - [ ] Service-specific configuration is properly applied
+  - [ ] Configuration changes are propagated correctly
+  - [ ] Default configuration values are appropriate
+
+- [ ] **Ensure all tests pass**
+  - [ ] Unit tests for all services pass
+  - [ ] Integration tests pass
+  - [ ] End-to-end tests pass
+  - [ ] Performance tests meet requirements
+  - [ ] Load tests pass under expected conditions
+
+- [ ] **Verify performance meets or exceeds benchmarks**
+  - [ ] Service initialization times are within acceptable limits
+  - [ ] Connection acquisition times are improved or maintained
+  - [ ] Memory usage is within expected bounds
+  - [ ] Throughput meets or exceeds previous benchmarks
+  - [ ] Resource utilization is optimized
+
+- [ ] **Confirm resource cleanup is working**
+  - [ ] Services properly clean up resources on shutdown
+  - [ ] Connection pools are properly managed
+  - [ ] Memory is properly released
+  - [ ] File handles are properly closed
+  - [ ] No resource leaks detected
+
+### Automated Migration Validation
+
+The `src/naq/migration_validation.py` module provides automated validation of these checklists. To run a complete migration validation:
+
+```python
+from naq.services.base import ServiceManager
+from naq.migration_validation import validate_migration
+
+# Create and configure service manager
+service_manager = ServiceManager()
+
+# Run complete migration validation
+report = await validate_migration(service_manager)
+
+# Check results
+if report.overall_passed:
+    print("Migration validation passed successfully!")
+else:
+    print("Migration validation failed:")
+    for result in report.pre_integration_results + report.post_integration_results:
+        if result.status != ValidationStatus.PASS:
+            print(f"  - {result.name}: {result.message}")
+```
+
+The validation report provides detailed information about each check, including performance metrics and any issues found. This automated approach ensures consistent validation and provides a comprehensive audit trail for the migration process.
