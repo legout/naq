@@ -108,6 +108,7 @@ def enqueue_sync(
                     timeout=timeout,
                     prefer_thread_local=True,
                     config=config or create_global_config(),
+                    service_manager=(config.service_manager if config else None),
                     **kwargs,
                 )
                 # Do not close thread-local connection here; allow reuse across sync calls.
@@ -179,6 +180,7 @@ def enqueue_at_sync(
                     timeout=timeout,
                     prefer_thread_local=True,
                     config=config or create_global_config(),
+                    service_manager=(config.service_manager if config else None),
                     **kwargs,
                 )
                 _sync_logger.info("enqueue_at_sync_success", {
@@ -250,6 +252,7 @@ def enqueue_in_sync(
                     timeout=timeout,
                     prefer_thread_local=True,
                     config=config or create_global_config(),
+                    service_manager=(config.service_manager if config else None),
                     **kwargs,
                 )
                 _sync_logger.info("enqueue_in_sync_success", {
@@ -329,6 +332,7 @@ def schedule_sync(
                     timeout=timeout,
                     prefer_thread_local=True,
                     config=config or create_global_config(),
+                    service_manager=(config.service_manager if config else None),
                     **kwargs,
                 )
                 _sync_logger.info("schedule_sync_success", {
@@ -382,6 +386,7 @@ def purge_queue_sync(
                     nats_url=nats_url,
                     prefer_thread_local=True,
                     config=config or create_global_config(),
+                    service_manager=(config.service_manager if config else None),
                 )
                 _sync_logger.info("purge_queue_sync_success", {
                     "queue_name": queue_name,
@@ -426,6 +431,7 @@ def cancel_scheduled_job_sync(
                     nats_url=nats_url,
                     prefer_thread_local=True,
                     config=config or create_global_config(),
+                    service_manager=(config.service_manager if config else None),
                 )
                 _sync_logger.info("cancel_scheduled_job_sync_success", {
                     "job_id": job_id,
@@ -470,6 +476,7 @@ def pause_scheduled_job_sync(
                     nats_url=nats_url,
                     prefer_thread_local=True,
                     config=config or create_global_config(),
+                    service_manager=(config.service_manager if config else None),
                 )
                 _sync_logger.info("pause_scheduled_job_sync_success", {
                     "job_id": job_id,
@@ -514,6 +521,7 @@ def resume_scheduled_job_sync(
                     nats_url=nats_url,
                     prefer_thread_local=True,
                     config=config or create_global_config(),
+                    service_manager=(config.service_manager if config else None),
                 )
                 _sync_logger.info("resume_scheduled_job_sync_success", {
                     "job_id": job_id,
@@ -561,6 +569,7 @@ def modify_scheduled_job_sync(
                     nats_url=nats_url,
                     prefer_thread_local=True,
                     config=config or create_global_config(),
+                    service_manager=(config.service_manager if config else None),
                     **updates,
                 )
                 _sync_logger.info("modify_scheduled_job_sync_success", {

@@ -10,12 +10,11 @@ from typing import Any, Callable, List, Optional, Union
 
 from loguru import logger
 
-from ..connection.context_managers import nats_jetstream
 from ..exceptions import ConfigurationError
 from ..models.jobs import Job, RetryDelayType
 from .scheduled import ScheduledJobManager
 from ..models.enums import SCHEDULED_JOB_STATUS
-from ..services import ServiceManager, ConnectionService, StreamService
+from ..services import ServiceManager, ConnectionService, StreamService, JobService, EventService, KVStoreService
 from ..services.config import create_global_config, GlobalServiceConfig
 from ..settings import DEFAULT_QUEUE_NAME, DEFAULT_NATS_URL, NAQ_PREFIX
 from ..utils import setup_logging
@@ -75,14 +74,16 @@ class Queue:
         self.subject = f"{NAQ_PREFIX}.queue.{self.name}"
         self.stream_name = f"{NAQ_PREFIX}_jobs"
         self._nats_url = nats_url
-        self._js: Optional[object] = None  # Will be JetStreamContext
         self._default_timeout = default_timeout
-        self._scheduled_job_manager = ScheduledJobManager(name, nats_url, config=config)
         self._prefer_thread_local = prefer_thread_local
         self._service_manager = service_manager
         self._connection_service: Optional[ConnectionService] = None
         self._stream_service: Optional[StreamService] = None
+        self._job_service: Optional[JobService] = None
+        self._event_service: Optional[EventService] = None
+        self._kv_store_service: Optional[KVStoreService] = None
         self._config = config or create_global_config()
+        self._scheduled_job_manager = ScheduledJobManager(name, nats_url, service_manager=self._service_manager, config=self._config)
 
         setup_logging()  # Ensure logging is set up
 
@@ -92,7 +93,7 @@ class Queue:
         exceptions=(ConnectionError, TimeoutError)
     )
     async def _ensure_services(self) -> None:
-        """Ensure that ConnectionService and StreamService are available."""
+        """Ensure that all required services are available."""
         structured_logger = StructuredLogger("naq.queue.core")
         
         with structured_logger.operation_context(
@@ -101,45 +102,29 @@ class Queue:
             has_service_manager=self._service_manager is not None
         ):
             try:
-                if self._connection_service is None or self._stream_service is None:
-                    if self._service_manager:
-                        # Get services from ServiceManager
-                        if self._service_manager.has_service("connection"):
-                            self._connection_service = await self._service_manager.get_service(
-                                "connection", ConnectionService
-                            )
-                        else:
-                            # Register ConnectionService if not available
-                            self._connection_service = (
-                                await self._service_manager.register_service(
-                                    "connection", ConnectionService
-                                )
-                            )
+                if not self._service_manager:
+                    raise RuntimeError("ServiceManager is required for Queue operations.")
 
-                        if self._service_manager.has_service("stream"):
-                            self._stream_service = await self._service_manager.get_service(
-                                "stream", StreamService
-                            )
-                        else:
-                            # Register StreamService if not available
-                            self._stream_service = await self._service_manager.register_service(
-                                "stream", StreamService
-                            )
-                    else:
-                        # Create services directly if no ServiceManager
-                        from ..services import ServiceConfig
-
-                        config = ServiceConfig(nats_url=self._nats_url)
-
-                        if self._connection_service is None:
-                            self._connection_service = ConnectionService(config)
-                            await self._connection_service.initialize()
-
-                        if self._stream_service is None:
-                            self._stream_service = StreamService(
-                                config, self._connection_service
-                            )
-                            await self._stream_service.initialize()
+                if self._connection_service is None:
+                    self._connection_service = await self._service_manager.get_service(
+                        "connection", ConnectionService
+                    )
+                if self._stream_service is None:
+                    self._stream_service = await self._service_manager.get_service(
+                        "stream", StreamService
+                    )
+                if self._job_service is None:
+                    self._job_service = await self._service_manager.get_service(
+                        "job", JobService
+                    )
+                if self._event_service is None:
+                    self._event_service = await self._service_manager.get_service(
+                        "event", EventService
+                    )
+                if self._kv_store_service is None:
+                    self._kv_store_service = await self._service_manager.get_service(
+                        "kv_store", KVStoreService
+                    )
             except Exception as e:
                 error_handler = ErrorHandler()
                 wrapped_error = wrap_naq_exception(e, context="ensure_services operation")
@@ -154,47 +139,6 @@ class Queue:
         """Async context manager exit."""
         await self.close()
 
-    @retry(
-        max_attempts=3,
-        delay=1.0,
-        exceptions=(ConnectionError, TimeoutError)
-    )
-    async def _get_js(self):
-        """Gets the JetStream context, initializing if needed."""
-        structured_logger = StructuredLogger("naq.queue.core")
-        
-        with structured_logger.operation_context(
-            "get_jetstream_context",
-            queue_name=self.name,
-            stream_name=self.stream_name
-        ):
-            try:
-                if self._js is None:
-                    # Create config with the specific NATS URL
-                    config = create_global_config()
-                    config.nats_url = self._nats_url
-
-                    # Use the context manager to get JetStream context
-                    async with nats_jetstream(config) as (nc, js):
-                        self._js = js
-
-                        # Ensure the stream exists when the queue is first used
-                        try:
-                            await js.stream_info(self.stream_name)
-                            logger.debug(f"Stream '{self.stream_name}' already exists")
-                        except Exception:
-                            # Stream doesn't exist, create it
-                            await js.add_stream(
-                                name=self.stream_name,
-                                subjects=[f"{NAQ_PREFIX}.queue.*"],
-                            )
-                            logger.info(f"Stream '{self.stream_name}' created")
-                return self._js
-            except Exception as e:
-                error_handler = ErrorHandler()
-                wrapped_error = wrap_naq_exception(e, context="get_jetstream_context operation")
-                error_handler.handle_error(wrapped_error, context={"queue_name": self.name, "stream_name": self.stream_name})
-                raise
 
     @retry(
         max_attempts=3,
@@ -251,6 +195,7 @@ class Queue:
             job_id=None  # Will be set after job creation
         ):
             try:
+                await self._ensure_services()
                 # Create the job object
                 job = Job(
                     function=func,
@@ -273,22 +218,11 @@ class Queue:
                 if job.dependency_ids:
                     logger.info(f"Job {job.job_id} depends on: {job.dependency_ids}")
 
-                # Use the context manager for JetStream operations
-                config = create_global_config()
-                config.nats_url = self._nats_url
-
-                async with nats_jetstream(config) as (nc, js):
-                    serialized_job = job.serialize()
-
-                    # Publish the job to the specific subject for this queue
-                    ack = await js.publish(
-                        subject=self.subject,
-                        payload=serialized_job,
-                    )
-                    logger.info(
-                        f"Job {job.job_id} published successfully. Stream: {ack.stream}, Seq: {ack.seq}"
-                    )
-                    return job
+                await self._job_service.enqueue(job, self.subject)
+                logger.info(
+                    f"Job {job.job_id} published successfully."
+                )
+                return job
             except Exception as e:
                 error_handler = ErrorHandler()
                 wrapped_error = wrap_naq_exception(e, context="enqueue operation")
@@ -576,24 +510,20 @@ class Queue:
             stream_name=self.stream_name
         ):
             try:
+                await self._ensure_services()
                 logger.info(
                     f"Purging queue '{self.name}' (subject: {self.subject} in stream: {self.stream_name})"
                 )
-                # Use the context manager for JetStream operations
-                config = create_global_config()
-                config.nats_url = self._nats_url
-
-                async with nats_jetstream(config) as (nc, js):
-                    # Purge messages for this queue's stream
-                    try:
-                        await js.purge_stream(self.stream_name)
-                        logger.info(f"Purge successful for queue '{self.name}'.")
-                        return 1
-                    except Exception as purge_error:
-                        logger.error(
-                            f"Error purging stream '{self.stream_name}': {purge_error}"
-                        )
-                        return 0
+                # Purge messages for this queue's stream
+                try:
+                    await self._stream_service.purge_stream(self.stream_name, self.subject)
+                    logger.info(f"Purge successful for queue '{self.name}'.")
+                    return 1
+                except Exception as purge_error:
+                    logger.error(
+                        f"Error purging stream '{self.stream_name}': {purge_error}"
+                    )
+                    return 0
             except Exception as e:
                 error_handler = ErrorHandler()
                 wrapped_error = wrap_naq_exception(e, context="purge operation")
@@ -758,9 +688,13 @@ class Queue:
 
     async def close(self) -> None:
         """Closes NATS connection and cleans up resources."""
-        # With context managers, connections are automatically closed
-        # Just reset our reference
-        self._js = None
+        # With service managers, connections are automatically closed
+        # Just reset our service references
+        self._connection_service = None
+        self._stream_service = None
+        self._job_service = None
+        self._event_service = None
+        self._kv_store_service = None
 
     def __repr__(self) -> str:
         return f"Queue('{self.name}')"

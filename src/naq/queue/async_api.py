@@ -59,6 +59,7 @@ async def enqueue(
                 nats_url=nats_url,
                 prefer_thread_local=prefer_thread_local,
                 config=config or create_global_config(),
+                service_manager=config.service_manager if config else None,
             )
             job = await q.enqueue(
                 func,
@@ -115,6 +116,7 @@ async def enqueue_at(
                 nats_url=nats_url,
                 prefer_thread_local=prefer_thread_local,
                 config=config or create_global_config(),
+                service_manager=config.service_manager if config else None,
             )
             return await q.enqueue_at(
                 dt,
@@ -170,6 +172,7 @@ async def enqueue_in(
                 nats_url=nats_url,
                 prefer_thread_local=prefer_thread_local,
                 config=config or create_global_config(),
+                service_manager=config.service_manager if config else None,
             )
             return await q.enqueue_in(
                 delta,
@@ -228,6 +231,7 @@ async def schedule(
                 nats_url=nats_url,
                 prefer_thread_local=prefer_thread_local,
                 config=config or create_global_config(),
+                service_manager=config.service_manager if config else None,
             )
             return await q.schedule(
                 func,
@@ -275,6 +279,7 @@ async def purge_queue(
                 nats_url=nats_url,
                 prefer_thread_local=prefer_thread_local,
                 config=config or create_global_config(),
+                service_manager=config.service_manager if config else None,
             )
             return await q.purge()
         except Exception as e:
@@ -311,6 +316,7 @@ async def cancel_scheduled_job(
                 nats_url=nats_url,
                 prefer_thread_local=prefer_thread_local,
                 config=config or create_global_config(),
+                service_manager=config.service_manager if config else None,
             )  # Queue name doesn't matter here
             return await q.cancel_scheduled_job(job_id)
         except Exception as e:
@@ -347,6 +353,7 @@ async def pause_scheduled_job(
                 nats_url=nats_url,
                 prefer_thread_local=prefer_thread_local,
                 config=config or create_global_config(),
+                service_manager=config.service_manager if config else None,
             )
             return await q.pause_scheduled_job(job_id)
         except Exception as e:
@@ -383,6 +390,7 @@ async def resume_scheduled_job(
                 nats_url=nats_url,
                 prefer_thread_local=prefer_thread_local,
                 config=config or create_global_config(),
+                service_manager=config.service_manager if config else None,
             )
             return await q.resume_scheduled_job(job_id)
         except Exception as e:
@@ -421,6 +429,7 @@ async def modify_scheduled_job(
                 nats_url=nats_url,
                 prefer_thread_local=prefer_thread_local,
                 config=config or create_global_config(),
+                service_manager=config.service_manager if config else None,
             )
             return await q.modify_scheduled_job(job_id, **updates)
         except Exception as e:
