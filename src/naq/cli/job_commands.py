@@ -13,10 +13,10 @@ from ..services import (
     JobService,
     SchedulerService,
     StreamService,
+    ConnectionService,
     ServiceConfig,
 )
 from ..services.config import GlobalServiceConfig
-from ..connection.context_managers import nats_connection, nats_jetstream
 from ..utils import setup_logging
 from ..utils.decorators import log_errors, timing
 from ..utils.logging import StructuredLogger
@@ -69,88 +69,92 @@ def purge(
         config.custom_settings.update({"log_level": log_level})
 
         try:
-            # Use the new context manager for NATS JetStream connection
-            async with nats_jetstream(config) as (nc, js):
-                # Create service manager with configuration
-                service_manager = ServiceManager(
-                    config=ServiceConfig(
-                        nats_url=nats_url, custom_settings={"log_level": log_level}
+            # Create service manager with configuration
+            service_manager = ServiceManager(
+                config=ServiceConfig(
+                    nats_url=nats_url, custom_settings={"log_level": log_level}
+                )
+            )
+
+            # Register required services
+            job_service = await service_manager.register_service(
+                "job", JobService, initialize=True
+            )
+            stream_service = await service_manager.register_service(
+                "stream", StreamService, initialize=True
+            )
+            
+            # Get connection service for JetStream operations
+            connection_service = await service_manager.register_service(
+                "connection", ConnectionService, initialize=True
+            )
+
+            structured_logger.info(
+                f"Attempting to purge queues: {queues}",
+                operation="purge_queues",
+                queues=queues,
+                nats_url=nats_url,
+            )
+
+            # Use services to purge queues
+            from ..settings import NAQ_PREFIX
+
+            results = {}
+            total_purged = 0
+            for queue_name in queues:
+                try:
+                    # Validate queue name
+                    validate_parameter(
+                        queue_name,
+                        "queue_name",
+                        not_none=True,
+                        regex_pattern=r"^[a-zA-Z0-9_-]+$",
                     )
-                )
 
-                # Register required services
-                job_service = await service_manager.register_service(
-                    "job", JobService, initialize=True
-                )
-                stream_service = await service_manager.register_service(
-                    "stream", StreamService, initialize=True
-                )
+                    # Use JetStream context from the context manager
+                    stream_name = build_subject(NAQ_PREFIX, "queue", queue_name)
 
-                structured_logger.info(
-                    f"Attempting to purge queues: {queues}",
-                    operation="purge_queues",
-                    queues=queues,
-                    nats_url=nats_url,
-                )
+                    # Check if stream exists before purging
+                    js = await connection_service.get_jetstream()
+                    if await stream_exists(js, stream_name=stream_name):
+                        # Purge the stream
+                        await stream_service.purge_stream(stream_name)
+                        purged_count = 0  # NATS doesn't return count for purge
 
-                # Use services to purge queues
-                from ..settings import NAQ_PREFIX
+                        results[queue_name] = {
+                            "status": "success",
+                            "count": purged_count,
+                        }
+                        total_purged += purged_count
 
-                results = {}
-                total_purged = 0
-                for queue_name in queues:
-                    try:
-                        # Validate queue name
-                        validate_parameter(
-                            queue_name,
-                            "queue_name",
-                            not_none=True,
-                            regex_pattern=r"^[a-zA-Z0-9_-]+$",
-                        )
-
-                        # Use JetStream context from the context manager
-                        stream_name = build_subject(NAQ_PREFIX, "queue", queue_name)
-
-                        # Check if stream exists before purging
-                        if await stream_exists(js, stream_name=stream_name):
-                            # Purge the stream
-                            await stream_service.purge_stream(stream_name)
-                            purged_count = 0  # NATS doesn't return count for purge
-
-                            results[queue_name] = {
-                                "status": "success",
-                                "count": purged_count,
-                            }
-                            total_purged += purged_count
-
-                            structured_logger.info(
-                                f"Successfully purged queue: {queue_name}",
-                                operation="purge_queue",
-                                queue_name=queue_name,
-                                stream_name=stream_name,
-                                status="success",
-                            )
-                        else:
-                            results[queue_name] = {
-                                "status": "error",
-                                "error": f"Stream '{stream_name}' does not exist",
-                            }
-                            structured_logger.warning(
-                                f"Stream does not exist for queue: {queue_name}",
-                                operation="purge_queue",
-                                queue_name=queue_name,
-                                stream_name=stream_name,
-                                status="stream_not_found",
-                            )
-                    except Exception as e:
-                        results[queue_name] = {"status": "error", "error": str(e)}
-                        structured_logger.error(
-                            f"Failed to purge queue '{queue_name}': {e}",
+                        structured_logger.info(
+                            f"Successfully purged queue: {queue_name}",
                             operation="purge_queue",
                             queue_name=queue_name,
-                            error=str(e),
-                            error_type=type(e).__name__,
+                            stream_name=stream_name,
+                            status="success",
                         )
+                    else:
+                        results[queue_name] = {
+                            "status": "error",
+                            "error": f"Stream '{stream_name}' does not exist",
+                        }
+                        structured_logger.warning(
+                            f"Stream does not exist for queue: {queue_name}",
+                            operation="purge_queue",
+                            queue_name=queue_name,
+                            stream_name=stream_name,
+                            status="stream_not_found",
+                        )
+                except Exception as e:
+                    results[queue_name] = {"status": "error", "error": str(e)}
+                    structured_logger.error(
+                        f"Failed to purge queue '{queue_name}': {e}",
+                        operation="purge_queue",
+                        queue_name=queue_name,
+                        error=str(e),
+                        error_type=type(e).__name__,
+                    )
 
             # --- Report Results using Rich ---
             success_count = sum(1 for r in results.values() if r["status"] == "success")
@@ -303,31 +307,29 @@ def job_control(
         config.custom_settings.update({"log_level": log_level})
 
         try:
-            # Use the new context manager for NATS connection
-            async with nats_connection(config) as nc:
-                # Create service manager with configuration
-                service_manager = ServiceManager(
-                    config=ServiceConfig(
-                        nats_url=nats_url, custom_settings={"log_level": log_level}
-                    )
+            # Create service manager with configuration
+            service_manager = ServiceManager(
+                config=ServiceConfig(
+                    nats_url=nats_url, custom_settings={"log_level": log_level}
                 )
+            )
 
-                # Register required services
-                scheduler_service = await service_manager.register_service(
-                    "scheduler", SchedulerService, initialize=True
-                )
+            # Register required services
+            scheduler_service = await service_manager.register_service(
+                "scheduler", SchedulerService, initialize=True
+            )
 
-                # Validate job_id
-                validate_parameter(
-                    job_id, "job_id", not_none=True, regex_pattern=r"^[a-zA-Z0-9_-]+$"
-                )
+            # Validate job_id
+            validate_parameter(
+                job_id, "job_id", not_none=True, regex_pattern=r"^[a-zA-Z0-9_-]+$"
+            )
 
-                structured_logger.info(
-                    f"Performing {action} on job {job_id}",
-                    operation="job_control",
-                    action=action,
-                    job_id=job_id,
-                )
+            structured_logger.info(
+                f"Performing {action} on job {job_id}",
+                operation="job_control",
+                action=action,
+                job_id=job_id,
+            )
 
             try:
                 if action == "cancel":

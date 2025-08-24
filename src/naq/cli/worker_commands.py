@@ -4,20 +4,17 @@ import asyncio
 from typing import List, Optional
 
 import typer
-from loguru import logger
 
 from ..settings import DEFAULT_NATS_URL, DEFAULT_QUEUE_NAME
 from ..utils import setup_logging
 from ..utils.decorators import timing, log_errors
 from ..utils.logging import StructuredLogger
 from ..utils.validation import validate_parameter, ensure_type
-from ..utils.nats_helpers import build_subject, stream_exists, test_nats_connection
-from ..utils.serialization import SerializationHelper, serialize_with_metadata
-from ..connection.utils import test_nats_connection as test_nats_connection_util
+from ..utils.nats_helpers import stream_exists
+from ..utils.serialization import serialize_with_metadata
 from ..worker import Worker
-from ..services import ServiceManager, WorkerService, ServiceConfig
+from ..services import ServiceManager, WorkerService, ConnectionService, ServiceConfig
 from ..services.config import GlobalServiceConfig
-from ..connection.context_managers import nats_connection
 
 # Create module-level structured logger for worker commands
 worker_logger = StructuredLogger("naq.worker_commands")
@@ -143,38 +140,42 @@ def start_worker(
         )
 
         try:
+            # Create service manager with configuration
+            service_manager = ServiceManager(
+                config=ServiceConfig(
+                    nats_url=nats_url,
+                    custom_settings={
+                        "log_level": log_level,
+                        "concurrency": concurrency,
+                        "worker_name": name,
+                        "module_paths": module_paths,
+                    },
+                )
+            )
+
+            # Register required services
+            worker_service = await service_manager.register_service(
+                "worker", WorkerService, initialize=True
+            )
+            
+            # Get connection service for NATS operations
+            connection_service = await service_manager.register_service(
+                "connection", ConnectionService, initialize=True
+            )
+            
             # Test NATS connection before proceeding
-            is_connected = await test_nats_connection_util()
+            is_connected = await connection_service.test_connection()
             if not is_connected:
                 worker_logger.error("Failed to establish NATS connection", nats_url=nats_url)
                 raise typer.Exit(code=1)
                 
-            # Use the new context manager for NATS connection
-            async with nats_connection(config) as nc:
-                # Check if the required stream exists
-                stream_name = "naq_jobs"
-                js = nc.jetstream()
-                stream_available = await stream_exists(js=js, stream_name=stream_name)
-                if not stream_available:
-                    worker_logger.error("Required JetStream stream not found", stream_name=stream_name)
-                    raise typer.Exit(code=1)
-                # Create service manager with configuration
-                service_manager = ServiceManager(
-                    config=ServiceConfig(
-                        nats_url=nats_url,
-                        custom_settings={
-                            "log_level": log_level,
-                            "concurrency": concurrency,
-                            "worker_name": name,
-                            "module_paths": module_paths,
-                        },
-                    )
-                )
-
-                # Register required services
-                worker_service = await service_manager.register_service(
-                    "worker", WorkerService, initialize=True
-                )
+            # Check if the required stream exists
+            stream_name = "naq_jobs"
+            js = await connection_service.get_jetstream()
+            stream_available = await stream_exists(js=js, stream_name=stream_name)
+            if not stream_available:
+                worker_logger.error("Required JetStream stream not found", stream_name=stream_name)
+                raise typer.Exit(code=1)
 
                 # Create and run worker
                 w = Worker(
@@ -284,35 +285,39 @@ def list_workers(
         config.custom_settings.update({"log_level": log_level})
 
         try:
+            # Create service manager with configuration
+            service_manager = ServiceManager(
+                config=ServiceConfig(
+                    nats_url=nats_url, custom_settings={"log_level": log_level}
+                )
+            )
+
+            # Register required services
+            worker_service = await service_manager.register_service(
+                "worker", WorkerService, initialize=True
+            )
+            
+            # Get connection service for NATS operations
+            connection_service = await service_manager.register_service(
+                "connection", ConnectionService, initialize=True
+            )
+            
             # Test NATS connection before proceeding
-            is_connected = await test_nats_connection_util()
+            is_connected = await connection_service.test_connection()
             if not is_connected:
                 worker_logger.error("Failed to establish NATS connection", nats_url=nats_url)
                 raise typer.Exit(code=1)
                 
-            # Use the new context manager for NATS connection
-            async with nats_connection(config) as nc:
-                # Check if the required stream exists
-                stream_name = "naq_jobs"
-                js = nc.jetstream()
-                stream_available = await stream_exists(js=js, stream_name=stream_name)
-                if not stream_available:
-                    worker_logger.error("Required JetStream stream not found", stream_name=stream_name)
-                    raise typer.Exit(code=1)
-                # Create service manager with configuration
-                service_manager = ServiceManager(
-                    config=ServiceConfig(
-                        nats_url=nats_url, custom_settings={"log_level": log_level}
-                    )
-                )
+            # Check if the required stream exists
+            stream_name = "naq_jobs"
+            js = await connection_service.get_jetstream()
+            stream_available = await stream_exists(js=js, stream_name=stream_name)
+            if not stream_available:
+                worker_logger.error("Required JetStream stream not found", stream_name=stream_name)
+                raise typer.Exit(code=1)
 
-                # Register required services
-                worker_service = await service_manager.register_service(
-                    "worker", WorkerService, initialize=True
-                )
-
-                # Use worker service to list workers
-                workers = await worker_service.list_workers()
+            # Use worker service to list workers
+            workers = await worker_service.list_workers()
             if not workers:
                 console.print("[yellow]No active workers found.[/yellow]")
                 return

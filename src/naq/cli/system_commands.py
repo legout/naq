@@ -13,8 +13,7 @@ from naq.utils import setup_logging
 from naq.utils.decorators import timing, log_errors
 from naq.utils.logging import StructuredLogger
 from naq.utils.serialization import SerializationHelper
-from naq.utils.nats_helpers import test_nats_connection
-from naq.services.config import GlobalServiceConfig
+from naq.services import ServiceManager, ConnectionService, ServiceConfig
 from naq.settings import DEFAULT_NATS_URL
 from naq.config import load_config, get_config, ConfigValidator
 
@@ -154,20 +153,29 @@ def health(
         import asyncio
 
         async def check_health():
-            # Create global config with NATS URL and custom settings
-            config = GlobalServiceConfig()
-            config.nats_url = nats_url
-            config.custom_settings.update({"log_level": log_level})
+            # Create service manager with configuration
+            service_manager = ServiceManager(
+                config=ServiceConfig(
+                    nats_url=nats_url, custom_settings={"log_level": log_level}
+                )
+            )
 
             try:
-                # Use the nats_helpers utility to test connection
-                is_connected = await test_nats_connection()
+                # Register required services
+                connection_service = await service_manager.register_service(
+                    "connection", ConnectionService, initialize=True
+                )
+                
+                # Use the connection service to test connection
+                is_connected = await connection_service.test_connection()
                 if is_connected:
                     return True, "NATS connection successful"
                 else:
                     return False, "NATS connection not established"
             except Exception as e:
                 return False, f"NATS connection failed: {str(e)}"
+            finally:
+                await service_manager.cleanup_all()
 
         is_healthy, message = asyncio.run(check_health())
 

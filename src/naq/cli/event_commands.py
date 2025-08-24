@@ -4,20 +4,18 @@ import asyncio
 from typing import Optional, Dict, Any
 
 import typer
-from loguru import logger
 from rich.console import Console
 
 from ..settings import DEFAULT_NATS_URL
-from ..services import ServiceManager, EventService, ServiceConfig
+from ..services import ServiceManager, EventService, ConnectionService, ServiceConfig
 from ..services.config import GlobalServiceConfig
-from ..connection.context_managers import nats_connection
 from ..utils import setup_logging
 from ..utils.validation import validate_parameter, ensure_type
 from ..utils.nats_helpers import build_subject, stream_exists
 from ..utils.decorators import timing, log_errors
 from ..utils.logging import StructuredLogger
 from ..utils.serialization import SerializationHelper
-from ..exceptions import ValidationError, NaqConnectionError
+from ..exceptions import NaqConnectionError
 
 class EventCommandHandler:
     """Base class for event command handlers with common functionality."""
@@ -129,68 +127,71 @@ class EventCommandHandler:
                 monitoring_subject=monitoring_subject
             )
             
-            # Use the new context manager for NATS connection
-            async with nats_connection(config) as nc:
-                # Check if required streams exist using the helper
-                events_stream_exists = await stream_exists(
-                    nc=nc,
+            # Create service manager with configuration
+            service_config = ServiceConfig(
+                nats_url=nats_url,
+                custom_settings=settings
+            )
+            
+            # Serialize service configuration
+            serialized_service_config = SerializationHelper.safe_serialize(
+                service_config.__dict__,
+                serializer="json"
+            )
+            
+            self.structured_logger.debug(
+                "Service configuration serialized",
+                config_size=len(str(serialized_service_config))
+            )
+            
+            self.service_manager = ServiceManager(config=service_config)
+            
+            # Register required services
+            connection_service = await self.service_manager.register_service(
+                "connection", ConnectionService, initialize=True
+            )
+            
+            event_service_config = ServiceConfig(
+                custom_settings={"enable_event_logging": True}
+            )
+            
+            # Serialize event service configuration
+            serialized_event_config = SerializationHelper.safe_serialize(
+                event_service_config.__dict__,
+                serializer="json"
+            )
+            
+            self.structured_logger.debug(
+                "Event service configuration serialized",
+                config_size=len(str(serialized_event_config))
+            )
+            
+            self.event_service = await self.service_manager.register_service(
+                "events",
+                EventService,
+                config=event_service_config,
+                initialize=True,
+            )
+            
+            # Check if required streams exist using the helper
+            nc = await connection_service.get_connection()
+            events_stream_exists = await stream_exists(
+                nc=nc,
+                stream_name="naq_events"
+            )
+            
+            if not events_stream_exists:
+                self.structured_logger.warning(
+                    "Events stream does not exist",
                     stream_name="naq_events"
                 )
-                
-                if not events_stream_exists:
-                    self.structured_logger.warning(
-                        "Events stream does not exist",
-                        stream_name="naq_events"
-                    )
-                
-                # Create service manager with configuration
-                service_config = ServiceConfig(
-                    nats_url=nats_url,
-                    custom_settings=settings
-                )
-                
-                # Serialize service configuration
-                serialized_service_config = SerializationHelper.safe_serialize(
-                    service_config.__dict__,
-                    serializer="json"
-                )
-                
-                self.structured_logger.debug(
-                    "Service configuration serialized",
-                    config_size=len(str(serialized_service_config))
-                )
-                
-                self.service_manager = ServiceManager(config=service_config)
-                
-                # Register required services
-                event_service_config = ServiceConfig(
-                    custom_settings={"enable_event_logging": True}
-                )
-                
-                # Serialize event service configuration
-                serialized_event_config = SerializationHelper.safe_serialize(
-                    event_service_config.__dict__,
-                    serializer="json"
-                )
-                
-                self.structured_logger.debug(
-                    "Event service configuration serialized",
-                    config_size=len(str(serialized_event_config))
-                )
-                
-                self.event_service = await self.service_manager.register_service(
-                    "events",
-                    EventService,
-                    config=event_service_config,
-                    initialize=True,
-                )
-                
-                self.structured_logger.info(
-                    "Event services initialized",
-                    nats_url=nats_url,
-                    log_level=log_level,
-                    events_stream_exists=events_stream_exists
-                )
+            
+            self.structured_logger.info(
+                "Event services initialized",
+                nats_url=nats_url,
+                log_level=log_level,
+                events_stream_exists=events_stream_exists
+            )
                 
         except Exception as e:
             error_msg = f"Failed to set up services: {str(e)}"

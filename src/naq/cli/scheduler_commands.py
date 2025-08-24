@@ -6,7 +6,6 @@ from datetime import timezone
 from typing import Optional
 
 import typer
-from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
@@ -16,11 +15,10 @@ from ..scheduler import Scheduler
 from ..services import (
     ServiceManager,
     SchedulerService,
+    ConnectionService,
     ServiceConfig,
 )
 from ..services.config import GlobalServiceConfig
-from ..connection.context_managers import nats_connection
-from ..connection.decorators import with_nats_connection
 from ..utils import setup_logging
 from ..utils.decorators import timing, log_errors
 from ..utils.logging import StructuredLogger
@@ -101,8 +99,7 @@ def start_scheduler(
         instance_id=instance_id
     )
 
-    @with_nats_connection()
-    async def _run_scheduler(nc):
+    async def _run_scheduler():
         with structured_logger.operation_context(
             "scheduler_run",
             nats_url=nats_url,
@@ -148,8 +145,31 @@ def start_scheduler(
                 config.custom_settings.update(config_data)
 
             try:
+                # Create service manager with configuration
+                service_manager = ServiceManager(
+                    config=ServiceConfig(
+                        nats_url=nats_url,
+                        custom_settings={
+                            "log_level": log_level,
+                            "poll_interval": poll_interval,
+                            "instance_id": instance_id,
+                            "enable_ha": enable_ha,
+                        },
+                    )
+                )
+
+                # Register required services
+                scheduler_service = await service_manager.register_service(
+                    "scheduler", SchedulerService, initialize=True
+                )
+                
+                # Get connection service for NATS operations
+                connection_service = await service_manager.register_service(
+                    "connection", ConnectionService, initialize=True
+                )
+
                 # Check if the required stream exists using nats_helpers
-                js = nc.jetstream()
+                js = await connection_service.get_jetstream()
                 stream_name = "naq_jobs"
                 if await stream_exists(js=js, stream_name=stream_name):
                     structured_logger.debug(
@@ -171,24 +191,6 @@ def start_scheduler(
                     operation="scheduler_run",
                     status="subject_built"
                 )
-                
-                # Create service manager with configuration
-                service_manager = ServiceManager(
-                    config=ServiceConfig(
-                        nats_url=nats_url,
-                        custom_settings={
-                            "log_level": log_level,
-                            "poll_interval": poll_interval,
-                            "instance_id": instance_id,
-                            "enable_ha": enable_ha,
-                        },
-                    )
-                )
-
-                # Register required services
-                scheduler_service = await service_manager.register_service(
-                    "scheduler", SchedulerService, initialize=True
-                )
 
                 # Create and run scheduler with services
                 s = Scheduler(
@@ -196,7 +198,7 @@ def start_scheduler(
                     poll_interval=poll_interval,
                     instance_id=instance_id,
                     enable_ha=enable_ha,
-                    connection_service=None,  # Not needed with context manager
+                    connection_service=connection_service,
                     scheduler_service=scheduler_service,
                 )
                 await s.run()
@@ -301,8 +303,7 @@ def list_scheduled_jobs(
     )
     console = Console()
 
-    @with_nats_connection()
-    async def _list_scheduled_jobs_async(nc):
+    async def _list_scheduled_jobs_async():
         with structured_logger.operation_context(
             "list_scheduled_jobs",
             nats_url=nats_url,
@@ -317,8 +318,25 @@ def list_scheduled_jobs(
             config.custom_settings.update({"log_level": log_level})
 
             try:
+                # Create service manager with configuration
+                service_manager = ServiceManager(
+                    config=ServiceConfig(
+                        nats_url=nats_url, custom_settings={"log_level": log_level}
+                    )
+                )
+
+                # Register required services
+                scheduler_service = await service_manager.register_service(
+                    "scheduler", SchedulerService, initialize=True
+                )
+                
+                # Get connection service for NATS operations
+                connection_service = await service_manager.register_service(
+                    "connection", ConnectionService, initialize=True
+                )
+
                 # Check if the required stream exists using nats_helpers
-                js = nc.jetstream()
+                js = await connection_service.get_jetstream()
                 stream_name = "naq_jobs"
                 if await stream_exists(js=js, stream_name=stream_name):
                     structured_logger.debug(
@@ -339,18 +357,6 @@ def list_scheduled_jobs(
                     f"Using scheduler subject: {scheduler_subject}",
                     operation="list_scheduled_jobs",
                     status="subject_built"
-                )
-                
-                # Create service manager with configuration
-                service_manager = ServiceManager(
-                    config=ServiceConfig(
-                        nats_url=nats_url, custom_settings={"log_level": log_level}
-                    )
-                )
-
-                # Register required services
-                scheduler_service = await service_manager.register_service(
-                    "scheduler", SchedulerService, initialize=True
                 )
 
                 # Parse status filter
@@ -445,110 +451,110 @@ def list_scheduled_jobs(
                     )
                     return
 
-            jobs_data.sort(key=lambda j: j.get("scheduled_timestamp_utc", 0))
-
-            if detailed:
-                table = Table(
-                    title="NAQ Scheduled Jobs",
-                    show_header=True,
-                    header_style="bold cyan",
-                )
-                table.add_column("JOB ID", style="dim", width=36)
-                table.add_column("QUEUE", width=15)
-                table.add_column("STATUS", width=10)
-                table.add_column("NEXT RUN", width=25)
-                table.add_column("SCHEDULE TYPE", width=15)
-                table.add_column("REPEATS LEFT", width=12)
-                table.add_column("DETAILS")
-            else:
-                table = Table(
-                    title="NAQ Scheduled Jobs",
-                    show_header=True,
-                    header_style="bold cyan",
-                )
-                table.add_column("JOB ID", style="dim", width=36)
-                table.add_column("QUEUE", width=15)
-                table.add_column("STATUS", width=10)
-                table.add_column("NEXT RUN", width=25)
-                table.add_column("SCHEDULE TYPE", width=15)
-
-            for job in jobs_data:
-                job_id_local = job.get("job_id", "unknown")
-                queue_name = job.get("queue_name", "unknown")
-                current_job_status = job.get("status", SCHEDULED_JOB_STATUS.ACTIVE)
-
-                status_style = "green"
-                if current_job_status == SCHEDULED_JOB_STATUS.PAUSED:
-                    status_style = "yellow"
-                elif current_job_status == SCHEDULED_JOB_STATUS.FAILED:
-                    status_style = "red"
-
-                next_run_ts = job.get("scheduled_timestamp_utc")
-                if next_run_ts:
-                    next_run = datetime.datetime.fromtimestamp(
-                        next_run_ts, timezone.utc
-                    ).strftime("%Y-%m-%d %H:%M:%S UTC")
-                else:
-                    next_run = "unknown"
-
-                if job.get("cron"):
-                    schedule_type = "cron"
-                elif job.get("interval_seconds"):
-                    schedule_type = "interval"
-                else:
-                    schedule_type = "one-time"
+                jobs_data.sort(key=lambda j: j.get("scheduled_timestamp_utc", 0))
 
                 if detailed:
-                    repeats = (
-                        "infinite"
-                        if job.get("repeat") is None
-                        else str(job.get("repeat", 0))
+                    table = Table(
+                        title="NAQ Scheduled Jobs",
+                        show_header=True,
+                        header_style="bold cyan",
                     )
-                    details = []
-                    if job.get("cron"):
-                        details.append(f"cron='{job.get('cron')}'")
-                    if job.get("interval_seconds"):
-                        details.append(f"interval={job.get('interval_seconds')}s")
-                    if job.get("schedule_failure_count", 0) > 0:
-                        details.append(f"failures={job.get('schedule_failure_count')}")
-                    if job.get("last_enqueued_utc"):
-                        last_run = datetime.datetime.fromtimestamp(
-                            job.get("last_enqueued_utc"), timezone.utc
-                        ).strftime("%Y-%m-%d %H:%M:%S UTC")
-                        details.append(f"last_run={last_run}")
-
-                    details_str = ", ".join(details)
-                    table.add_row(
-                        job_id_local,
-                        queue_name,
-                        f"[{status_style}]{current_job_status}[/{status_style}]",
-                        next_run,
-                        schedule_type,
-                        repeats,
-                        details_str,
-                    )
+                    table.add_column("JOB ID", style="dim", width=36)
+                    table.add_column("QUEUE", width=15)
+                    table.add_column("STATUS", width=10)
+                    table.add_column("NEXT RUN", width=25)
+                    table.add_column("SCHEDULE TYPE", width=15)
+                    table.add_column("REPEATS LEFT", width=12)
+                    table.add_column("DETAILS")
                 else:
-                    table.add_row(
-                        job_id_local,
-                        queue_name,
-                        f"[{status_style}]{current_job_status}[/{status_style}]",
-                        next_run,
-                        schedule_type,
+                    table = Table(
+                        title="NAQ Scheduled Jobs",
+                        show_header=True,
+                        header_style="bold cyan",
                     )
+                    table.add_column("JOB ID", style="dim", width=36)
+                    table.add_column("QUEUE", width=15)
+                    table.add_column("STATUS", width=10)
+                    table.add_column("NEXT RUN", width=25)
+                    table.add_column("SCHEDULE TYPE", width=15)
 
-            console.print(table)
-            console.print(f"\n[bold]Total:[/bold] {len(jobs_data)} scheduled job(s)")
-        except Exception as e:
-            structured_logger.error(
-                f"Error listing scheduled jobs: {e}",
-                operation="list_scheduled_jobs",
-                status="error",
-                error=str(e)
-            )
-            console.print(f"[red]Error listing scheduled jobs: {str(e)}[/red]")
-        finally:
-            if "service_manager" in locals():
-                await service_manager.cleanup_all()
+                for job in jobs_data:
+                    job_id_local = job.get("job_id", "unknown")
+                    queue_name = job.get("queue_name", "unknown")
+                    current_job_status = job.get("status", SCHEDULED_JOB_STATUS.ACTIVE)
+
+                    status_style = "green"
+                    if current_job_status == SCHEDULED_JOB_STATUS.PAUSED:
+                        status_style = "yellow"
+                    elif current_job_status == SCHEDULED_JOB_STATUS.FAILED:
+                        status_style = "red"
+
+                    next_run_ts = job.get("scheduled_timestamp_utc")
+                    if next_run_ts:
+                        next_run = datetime.datetime.fromtimestamp(
+                            next_run_ts, timezone.utc
+                        ).strftime("%Y-%m-%d %H:%M:%S UTC")
+                    else:
+                        next_run = "unknown"
+
+                    if job.get("cron"):
+                        schedule_type = "cron"
+                    elif job.get("interval_seconds"):
+                        schedule_type = "interval"
+                    else:
+                        schedule_type = "one-time"
+
+                    if detailed:
+                        repeats = (
+                            "infinite"
+                            if job.get("repeat") is None
+                            else str(job.get("repeat", 0))
+                        )
+                        details = []
+                        if job.get("cron"):
+                            details.append(f"cron='{job.get('cron')}'")
+                        if job.get("interval_seconds"):
+                            details.append(f"interval={job.get('interval_seconds')}s")
+                        if job.get("schedule_failure_count", 0) > 0:
+                            details.append(f"failures={job.get('schedule_failure_count')}")
+                        if job.get("last_enqueued_utc"):
+                            last_run = datetime.datetime.fromtimestamp(
+                                job.get("last_enqueued_utc"), timezone.utc
+                            ).strftime("%Y-%m-%d %H:%M:%S UTC")
+                            details.append(f"last_run={last_run}")
+
+                        details_str = ", ".join(details)
+                        table.add_row(
+                            job_id_local,
+                            queue_name,
+                            f"[{status_style}]{current_job_status}[/{status_style}]",
+                            next_run,
+                            schedule_type,
+                            repeats,
+                            details_str,
+                        )
+                    else:
+                        table.add_row(
+                            job_id_local,
+                            queue_name,
+                            f"[{status_style}]{current_job_status}[/{status_style}]",
+                            next_run,
+                            schedule_type,
+                        )
+
+                console.print(table)
+                console.print(f"\n[bold]Total:[/bold] {len(jobs_data)} scheduled job(s)")
+            except Exception as e:
+                structured_logger.error(
+                    f"Error listing scheduled jobs: {e}",
+                    operation="list_scheduled_jobs",
+                    status="error",
+                    error=str(e)
+                )
+                console.print(f"[red]Error listing scheduled jobs: {str(e)}[/red]")
+            finally:
+                if "service_manager" in locals():
+                    await service_manager.cleanup_all()
 
     # Run the async routine
     asyncio.run(_list_scheduled_jobs_async())
