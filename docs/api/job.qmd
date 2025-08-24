@@ -58,3 +58,65 @@ A synchronous version of `fetch_result()`.
 ::: {.callout-note}
 `fetch_result_sync` is deprecated and will be removed in a future version. Please use `fetch_result` in an async context.
 :::
+## Service Layer Integration
+
+The Job class integrates with the new service layer architecture to provide enhanced functionality:
+
+### Job Processing with Services
+
+When using the ServiceManager, job processing is handled by the JobService, which provides:
+
+- Integrated job execution and result storage
+- Automatic event logging for job lifecycle events
+- Enhanced error handling and retry logic
+- Performance monitoring and statistics
+
+```python
+from naq.services.manager import ServiceManager
+from naq.services.base import ServiceConfig
+from naq.services.jobs import JobService
+
+# Create service manager
+service_manager = ServiceManager(config=ServiceConfig())
+await service_manager.initialize_all()
+
+# Get job service
+job_service = service_manager.get_service("jobs", JobService)
+
+# Execute a job through the service
+job = Job(function=my_function, args=(1, 2), kwargs={"key": "value"})
+result = await job_service.execute_job(job, worker_id="worker_1")
+
+# Get job result
+job_result = await job_service.get_result(job.job_id)
+print(f"Job result: {job_result.result}")
+
+# Clean up
+await service_manager.cleanup_all()
+```
+
+### Job Events and Monitoring
+
+The service layer provides comprehensive event logging for job processing:
+
+```python
+from naq.services.events import EventService
+from naq.services.manager import ServiceManager
+
+# Get event service
+service_manager = ServiceManager(config=ServiceConfig())
+await service_manager.initialize_all()
+event_service = service_manager.get_service("events", EventService)
+
+# Get events for a specific job
+job_events = await event_service.get_job_events("job_id_123")
+for event in job_events:
+    print(f"Event: {event.event_type} at {event.timestamp}")
+    print(f"Details: {event.details}")
+
+# Get events by type
+failed_events = await event_service.get_events_by_type("job_failed")
+for event in failed_events:
+    print(f"Failed job: {event.details['job_id']}")
+    print(f"Error: {event.details['error']}")
+```

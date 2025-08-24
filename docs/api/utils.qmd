@@ -442,3 +442,112 @@ The utils module uses the following exceptions from `naq.exceptions`:
 
 -   `ValidationError`: Raised when validation of a parameter or value fails
 -   `TypeConversionError`: Raised when type conversion fails in ensure_type
+## Service Layer Integration
+
+The utils module has been enhanced with the new service layer architecture to provide better integration with the ServiceManager and improved utility functions.
+
+### Using Utils with ServiceManager
+
+For applications using the service layer architecture, many utility functions can be accessed through services:
+
+```python
+from naq.services.manager import ServiceManager
+from naq.services.base import ServiceConfig
+
+# Create service manager
+service_manager = ServiceManager(config=ServiceConfig())
+await service_manager.initialize_all()
+
+# Access utility functions through services
+# For example, timing utilities through a monitoring service
+monitoring_service = service_manager.get_service("monitoring", MonitoringService)
+
+# Use utility functions
+with monitoring_service.measure_execution_time("operation_name"):
+    # Your code here
+    pass
+
+# Clean up
+await service_manager.cleanup_all()
+```
+
+### Enhanced Error Handling with Service Layer
+
+The service layer provides enhanced error handling utilities:
+
+```python
+from naq.utils.error_handling import create_error_context, ErrorHandler
+from naq.exceptions import ServiceInitializationError
+
+# Create error handler with service context
+error_handler = ErrorHandler()
+
+# Register service-specific error handlers
+error_handler.register_handler(ServiceInitializationError, handle_service_init_error)
+error_handler.register_handler(ConnectionError, handle_connection_error)
+
+# Handle errors with service context
+try:
+    # Service operation that might fail
+    await some_service_operation()
+except Exception as e:
+    # Create error context with service information
+    error_context = create_error_context("service_operation")
+    error_context["service_name"] = "connection_service"
+    error_context["operation"] = "initialize"
+    
+    # Handle the error
+    error_handler.handle_error(e, context=error_context)
+```
+
+### Service-Aware Validation
+
+The validation utilities have been enhanced for service configuration:
+
+```python
+from naq.utils.validation import validate_parameter, ensure_type
+from naq.services.base import ServiceConfig
+
+# Validate service configuration
+def validate_service_config(config: ServiceConfig) -> None:
+    # Validate required parameters
+    validate_parameter(config.custom_settings, "custom_settings", not_none=True)
+    
+    # Validate service-specific settings
+    if "connection" in config.custom_settings:
+        connection_config = config.custom_settings["connection"]
+        validate_parameter(connection_config.get("servers"), "servers", not_none=True)
+        
+        # Ensure correct types
+        servers = ensure_type(connection_config.get("servers", []), list, "servers")
+        for i, server in enumerate(servers):
+            servers[i] = ensure_type(server, str, f"servers[{i}]")
+
+# Usage
+config = ServiceConfig(custom_settings={"connection": {"servers": ["nats://localhost:4222"]}})
+validate_service_config(config)
+```
+
+### Service Performance Monitoring
+
+The timing utilities have been enhanced for service performance monitoring:
+
+```python
+from naq.utils.timing import measure_execution_time, measure_execution_time_cm
+from naq.services.manager import ServiceManager
+
+# Monitor service initialization
+@measure_execution_time(logger=lambda msg: print(f"Service init: {msg}"))
+async def initialize_services(service_manager: ServiceManager) -> None:
+    await service_manager.initialize_all()
+
+# Monitor specific service operations
+async def process_with_monitoring(service_manager: ServiceManager) -> None:
+    # Get service
+    job_service = service_manager.get_service("jobs", JobService)
+    
+    # Monitor operation with context manager
+    with measure_execution_time_cm("job_processing", logger=print):
+        # Process jobs
+        await job_service.process_pending_jobs()
+```

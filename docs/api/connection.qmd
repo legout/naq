@@ -429,3 +429,66 @@ async with nats_connection() as nc:
         last_task = await kv.get("last_task")
         print(f"Last task: {last_task.value}")
 ```
+## Service Layer Integration
+
+The Connection API has been enhanced with the new service layer architecture to provide better integration with the ServiceManager and improved connection pooling capabilities.
+
+### Using ServiceManager for Connection Management
+
+For applications using the new service layer architecture, it's recommended to use the ServiceManager for connection management:
+
+```python
+from naq.services.manager import ServiceManager
+from naq.services.base import ServiceConfig
+from naq.services.connection import ConnectionServiceConfig
+
+# Create service configuration
+connection_config = ConnectionServiceConfig(
+    servers=["nats://localhost:4222"],
+    pool_size=10,
+    connection_timeout=5.0
+)
+
+# Create service manager
+service_manager = ServiceManager(config=ServiceConfig(custom_settings=connection_config.as_dict()))
+
+# Initialize all services
+await service_manager.initialize_all()
+
+# Get connection service
+connection_service = service_manager.get_service("connection", ConnectionService)
+
+# Use the connection service
+nc = await connection_service.get_connection()
+await nc.publish("my.subject", b"Hello, World!")
+
+# Clean up all services
+await service_manager.cleanup_all()
+```
+
+### Performance Optimizations
+
+The ConnectionService provides several performance optimizations:
+
+```python
+from naq.services.connection import ConnectionService, ConnectionServiceConfig
+
+# Configure connection service with performance optimizations
+config = ConnectionServiceConfig(
+    servers=["nats://localhost:4222"],
+    pool_size=20,  # Larger pool for high-throughput applications
+    connection_timeout=2.0,
+    max_reconnect_attempts=5,
+    enable_connection_pooling=True,
+    enable_connection_caching=True,
+    idle_connection_cleanup_interval=60.0  # Clean up idle connections every minute
+)
+
+connection_service = ConnectionService(config=config)
+
+# Get connection statistics
+stats = await connection_service.get_connection_statistics()
+print(f"Active connections: {stats.active_connections}")
+print(f"Connection pool size: {stats.pool_size}")
+print(f"Average connection time: {stats.average_connection_time}")
+```

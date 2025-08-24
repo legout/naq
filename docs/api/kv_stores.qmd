@@ -447,3 +447,68 @@ from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
 config = KVStoreServiceConfig(pool_size=10)
 service = KVStoreService(config)
 await service.put("config", "setting", "value")
+## Service Layer Integration with KVStoreService
+
+The KVStoreService has been enhanced as part of the service layer architecture to provide better integration with the ServiceManager and improved performance.
+
+### Using KVStoreService with ServiceManager
+
+For applications using the service layer architecture, it's recommended to use the ServiceManager for KV store operations:
+
+```python
+from naq.services.manager import ServiceManager
+from naq.services.base import ServiceConfig
+from naq.services.kv_stores import KVStoreServiceConfig
+
+# Create service configuration
+kv_config = KVStoreServiceConfig(
+    bucket_name="app_data",
+    pool_size=10,
+    enable_transactions=True
+)
+
+# Create service manager
+service_manager = ServiceManager(config=ServiceConfig(custom_settings=kv_config.as_dict()))
+await service_manager.initialize_all()
+
+# Get KV store service
+kv_service = service_manager.get_service("kv_stores", KVStoreService)
+
+# Use the service
+await kv_service.put("config", "setting", "value")
+value = await kv_service.get("config", "setting")
+print(f"Retrieved value: {value}")
+
+# Use transactions
+async with kv_service.kv_transaction("inventory") as tx:
+    stock = await tx.get("item:widget", 0)
+    await tx.put("item:widget", stock + 10)
+
+# Clean up
+await service_manager.cleanup_all()
+```
+
+### Performance Considerations
+
+The KVStoreService provides several performance optimizations:
+
+```python
+from naq.services.kv_stores import KVStoreServiceConfig
+
+# Configure for performance
+config = KVStoreServiceConfig(
+    bucket_name="high_performance_store",
+    pool_size=20,  # Larger pool for high-throughput applications
+    connection_timeout=2.0,
+    max_retries=3,
+    enable_connection_caching=True,
+    enable_transactions=True
+)
+
+# Monitor performance
+kv_service = KVStoreService(config)
+stats = await kv_service.get_performance_statistics()
+print(f"Operations per second: {stats.ops_per_second}")
+print(f"Average operation time: {stats.average_operation_time}")
+print(f"Cache hit rate: {stats.cache_hit_rate}")
+```

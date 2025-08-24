@@ -209,3 +209,140 @@ print(f"Current status: {stats.status}")
 # Worker status is automatically updated and can be monitored
 # through the status manager or KV store
 ```
+## Service Layer Integration
+
+The Worker has been enhanced with the new service layer architecture to provide better integration with the ServiceManager, improved modularity, and enhanced monitoring capabilities.
+
+### Using Worker with ServiceManager
+
+For applications using the service layer architecture, it's recommended to use the ServiceManager for worker operations:
+
+```python
+from naq.services.manager import ServiceManager
+from naq.services.base import ServiceConfig
+from naq.services.worker import WorkerService
+
+# Create service configuration
+services_config = {
+    "worker": {
+        "queues": ["default", "high_priority"],
+        "concurrency": 20,
+        "heartbeat_interval": 30
+    },
+    "connection": {
+        "servers": ["nats://localhost:4222"],
+        "pool_size": 10
+    }
+}
+
+# Create service manager
+service_manager = ServiceManager(config=ServiceConfig(custom_settings=services_config))
+await service_manager.initialize_all()
+
+# Get worker service
+worker_service = service_manager.get_service("worker", WorkerService)
+
+# Start the worker
+await worker_service.start()
+
+# Monitor worker status
+status = await worker_service.get_status()
+print(f"Worker status: {status.status}")
+print(f"Jobs processed: {status.jobs_processed}")
+print(f"Active connections: {status.active_connections}")
+
+# Stop the worker
+await worker_service.stop()
+
+# Clean up
+await service_manager.cleanup_all()
+```
+
+### Advanced Worker Configuration
+
+The service layer provides advanced worker configuration options:
+
+```python
+from naq.services.worker import WorkerServiceConfig
+
+# Configure worker with advanced options
+config = WorkerServiceConfig(
+    queues=["default", "high_priority", "background"],
+    concurrency=20,
+    heartbeat_interval=30,
+    enable_job_batching=True,
+    batch_size=50,
+    batch_timeout=1.0,
+    enable_result_caching=True,
+    cache_ttl=300,
+    enable_performance_monitoring=True,
+    max_job_retries=3,
+    retry_delay_strategy="exponential"
+)
+
+worker_service = WorkerService(config=config)
+
+# Monitor performance
+stats = await worker_service.get_performance_statistics()
+print(f"Jobs processed: {stats.jobs_processed}")
+print(f"Jobs failed: {stats.jobs_failed}")
+print(f"Average processing time: {stats.average_processing_time}")
+print(f"Throughput: {stats.throughput} jobs/second")
+```
+
+### Worker Service Dependencies
+
+The worker service integrates with other services for enhanced functionality:
+
+```python
+from naq.services.manager import ServiceManager
+from naq.services.base import ServiceConfig
+
+# Create service manager with all dependencies
+service_manager = ServiceManager(config=ServiceConfig())
+await service_manager.initialize_all()
+
+# Get all services
+worker_service = service_manager.get_service("worker", WorkerService)
+job_service = service_manager.get_service("jobs", JobService)
+event_service = service_manager.get_service("events", EventService)
+connection_service = service_manager.get_service("connection", ConnectionService)
+
+# Services are automatically injected and configured
+# The worker service uses:
+# - ConnectionService for NATS connections
+# - JobService for job processing
+# - EventService for event logging
+# - KVStoreService for state management
+
+# Start worker with all dependencies
+await worker_service.start()
+
+# Clean up all services
+await service_manager.cleanup_all()
+```
+
+### Worker Health Monitoring
+
+The service layer provides comprehensive health monitoring for workers:
+
+```python
+from naq.services.worker import WorkerService
+
+worker_service = WorkerService(config=config)
+
+# Get detailed health status
+health = await worker_service.get_health_status()
+print(f"Overall health: {health.overall_status}")
+print(f"Connection health: {health.connection_health}")
+print(f"Job processing health: {health.job_processing_health}")
+print(f"Memory usage: {health.memory_usage}%")
+print(f"CPU usage: {health.cpu_usage}%")
+
+# Get worker metrics
+metrics = await worker_service.get_metrics()
+print(f"Active jobs: {metrics.active_jobs}")
+print(f"Completed jobs: {metrics.completed_jobs}")
+print(f"Failed jobs: {metrics.failed_jobs}")
+print(f"Queue backlog: {metrics.queue_backlog}")
+```

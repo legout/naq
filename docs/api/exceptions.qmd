@@ -65,3 +65,54 @@ except Exception:
 
 **Note:**
 This function should be called within an exception handler (except block) to capture the most relevant traceback information. If called outside of an exception context, the traceback value will indicate that no exception is currently being handled.
+## Service Layer Exceptions
+
+The following exceptions have been added as part of the service layer architecture:
+
+### `ServiceInitializationError`
+
+Raised when a service fails to initialize properly. This can occur due to configuration issues, dependency problems, or resource allocation failures.
+
+### `ServiceConfigurationError`
+
+Raised when there is an issue with service configuration, such as invalid parameters or missing required settings.
+
+### `ServiceDependencyError`
+
+Raised when there is an issue with service dependencies, such as circular dependencies or missing required services.
+
+### `ServiceRuntimeError`
+
+Raised when a service encounters an error during operation, such as connection failures or resource exhaustion.
+
+### Example: Service Layer Error Handling
+
+```python
+from naq.exceptions import ServiceInitializationError, ServiceConfigurationError
+from naq.services.manager import ServiceManager
+from naq.services.base import ServiceConfig
+
+try:
+    # Create and initialize service manager
+    service_manager = ServiceManager(config=ServiceConfig())
+    await service_manager.initialize_all()
+    
+    # Use services
+    connection_service = service_manager.get_service("connection", ConnectionService)
+    
+except ServiceInitializationError as e:
+    print(f"Failed to initialize services: {e}")
+    # Handle initialization failure
+    
+except ServiceConfigurationError as e:
+    print(f"Invalid service configuration: {e}")
+    # Handle configuration error
+    
+except ServiceDependencyError as e:
+    print(f"Service dependency issue: {e}")
+    # Handle dependency problem
+    
+except ServiceRuntimeError as e:
+    print(f"Service runtime error: {e}")
+    # Handle runtime error
+```

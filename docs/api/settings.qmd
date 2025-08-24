@@ -177,3 +177,98 @@ print(f"Updated global NATS name: {updated_config.nats_connection.name}")
 reset_global_config()
 reset_config = get_global_config() # Will be recreated from env vars or defaults
 print(f"Reset global queue: {reset_config.queue_name}")
+## Service Layer Integration
+
+The Settings API has been enhanced with the new service layer architecture to provide better integration with the ServiceManager and improved configuration management.
+
+### Using Settings with ServiceManager
+
+For applications using the service layer architecture, it's recommended to use the ServiceManager for configuration management:
+
+```python
+from naq.services.manager import ServiceManager
+from naq.services.base import ServiceConfig
+from naq.services.config import ConfigService
+
+# Create service configuration with settings
+services_config = {
+    "connection": {
+        "servers": ["nats://localhost:4222"],
+        "max_reconnect_attempts": 10
+    },
+    "kv_store": {
+        "bucket_name": "app_data",
+        "pool_size": 5
+    }
+}
+
+# Create service manager
+service_manager = ServiceManager(config=ServiceConfig(custom_settings=services_config))
+await service_manager.initialize_all()
+
+# Get config service
+config_service = service_manager.get_service("config", ConfigService)
+
+# Use configuration
+nats_url = config_service.get("nats_url", "nats://localhost:4222")
+pool_size = config_service.get("pool_size", 10)
+
+# Set configuration values
+config_service.set("max_workers", 20)
+
+# Validate configuration
+validation_errors = config_service.validate()
+if validation_errors:
+    print(f"Configuration errors: {validation_errors}")
+
+# Clean up
+await service_manager.cleanup_all()
+```
+
+### Configuration Validation
+
+The service layer provides enhanced configuration validation:
+
+```python
+from naq.services.config import ConfigService, ConfigServiceConfig
+
+# Configure with validation rules
+config = ConfigServiceConfig(
+    validation_rules={
+        "nats_url": {"required": True, "type": str},
+        "pool_size": {"required": False, "type": int, "min": 1, "max": 100},
+        "timeout": {"required": False, "type": int, "min": 1, "max": 300}
+    }
+)
+
+config_service = ConfigService(config=config)
+
+# Load and validate configuration
+await config_service.load_config()
+validation_errors = config_service.validate()
+if validation_errors:
+    for error in validation_errors:
+        print(f"Validation error: {error}")
+else:
+    print("Configuration is valid")
+```
+
+### Environment Variable Integration
+
+The service layer enhances environment variable support:
+
+```python
+from naq.services.config import ConfigService
+
+# Environment variables are automatically loaded
+# NAQ_NATS_URL, NAQ_POOL_SIZE, etc.
+
+config_service = ConfigService()
+
+# Get configuration with environment variable fallback
+nats_url = config_service.get("nats_url")  # From NAQ_NATS_URL or default
+pool_size = config_service.get("pool_size")  # From NAQ_POOL_SIZE or default
+
+# Set configuration that will be persisted
+config_service.set("app_version", "1.0.0")
+```
