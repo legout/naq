@@ -1,0 +1,134 @@
+---
+title: "Events API Reference"
+---
+
+The `naq` event system provides a comprehensive mechanism for tracking the lifecycle and status of jobs, workers, and the overall system. Events are crucial for monitoring, debugging, and building custom analytics or reactive systems.
+
+All events are strongly typed using `msgspec.Struct` for efficient serialization and clear, consistent data fields.
+
+## Event Categories
+
+`naq` categorizes events into the following main types:
+
+-   **Job Events**: Relate to the lifecycle of individual jobs.
+-   **Worker Events**: Relate to the status and activity of worker processes.
+-   **Scheduler Events**: Relate to actions performed by the `naq` scheduler.
+-   **System Events**: General system-level occurrences.
+
+## Job Events
+
+Job events provide detailed insights into the journey of a job through the `naq` system, from enqueueing to completion or failure.
+
+### JobEvent Structure
+
+The `JobEvent` is defined by the following fields:
+
+```python
+class JobEvent(msgspec.Struct):
+    job_id: str
+    event_type: JobEventType
+    timestamp: float = msgspec.field(default_factory=time.time)
+    worker_id: Optional[str] = None
+    queue_name: Optional[str] = None
+    message: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
+    error_type: Optional[str] = None
+    error_message: Optional[str] = None
+    duration_ms: Optional[float] = None
+    nats_subject: Optional[str] = None
+    nats_sequence: Optional[int] = None
+```
+
+-   `job_id` (`str`): Unique identifier for the job.
+-   `event_type` ([`JobEventType`](#jobeventtype)): The specific type of job event.
+-   `timestamp` (`float`): Unix timestamp (in seconds) when the event occurred.
+-   `worker_id` (`Optional[str]`): ID of the worker associated with the event, if applicable.
+-   `queue_name` (`Optional[str]`): Name of the queue the job belongs to.
+-   `message` (`Optional[str]`): A human-readable message describing the event.
+-   `details` (`Optional[Dict[str, Any]]`): A dictionary for additional event-specific data.
+-   `error_type` (`Optional[str]`): The type of error (e.g., `ValueError`, `ConnectionError`) if the event is an error.
+-   `error_message` (`Optional[str]`): The error message if the event is an error.
+-   `duration_ms` (`Optional[float]`): Duration of an operation in milliseconds, if applicable (e.g., job execution time).
+-   `nats_subject` (`Optional[str]`): The NATS subject where the event was published.
+-   `nats_sequence` (`Optional[int]`): The NATS sequence number of the message in the stream.
+
+### JobEventType
+
+The `JobEventType` enum defines the possible types of job-related events:
+
+-   `ENQUEUED`: Job has been added to a queue.
+-   `STARTED`: Job processing has started by a worker.
+-   `COMPLETED`: Job finished successfully.
+-   `FAILED`: Job failed to complete.
+-   `RETRY_SCHEDULED`: Job failed and has been scheduled for a retry.
+-   `SCHEDULED`: Job has been scheduled for future execution (one-time or recurring).
+-   `SCHEDULE_TRIGGERED`: A scheduled job has been triggered for execution by the scheduler.
+-   `CANCELLED`: Job was explicitly cancelled.
+-   `STATUS_CHANGED`: A job's internal status has changed.
+
+## Worker Events
+
+Worker events provide information about the state and health of individual worker processes.
+
+### WorkerEvent Structure
+
+The `WorkerEvent` is defined by the following fields:
+
+```python
+class WorkerEvent(msgspec.Struct):
+    worker_id: str
+    event_type: WorkerEventType
+    timestamp: float = msgspec.field(default_factory=time.time)
+    queue_names: Optional[list[str]] = None
+    message: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
+    job_id: Optional[str] = None
+    duration_ms: Optional[float] = None
+    cpu_usage: Optional[float] = None
+    memory_usage: Optional[float] = None
+```
+
+-   `worker_id` (`str`): Unique identifier for the worker.
+-   `event_type` ([`WorkerEventType`](#workereventtype)): The specific type of worker event.
+-   `timestamp` (`float`): Unix timestamp (in seconds) when the event occurred.
+-   `queue_names` (`Optional[list[str]]`): List of queue names the worker is currently processing or configured to process.
+-   `message` (`Optional[str]`): A human-readable message describing the event.
+-   `details` (`Optional[Dict[str, Any]]`): A dictionary for additional event-specific data.
+-   `job_id` (`Optional[str]`): ID of the job currently being processed by the worker, if applicable.
+-   `duration_ms` (`Optional[float]`): Duration of an operation in milliseconds, if applicable.
+-   `cpu_usage` (`Optional[float]`): Current CPU usage percentage of the worker process.
+-   `memory_usage` (`Optional[float]`): Current memory usage (e.g., in MB or percentage) of the worker process.
+
+### WorkerEventType
+
+The `WorkerEventType` enum defines the possible types of worker-related events:
+
+-   `STARTED`: Worker process has started.
+-   `STOPPED`: Worker process has stopped.
+-   `HEARTBEAT`: Worker sends a periodic signal indicating it's alive and healthy.
+-   `JOB_STARTED`: Worker has started processing a specific job.
+-   `JOB_COMPLETED`: Worker successfully completed a specific job.
+-   `JOB_FAILED`: Worker failed to complete a specific job.
+-   `PAUSED`: Worker has been paused.
+-   `RESUMED`: Worker has resumed from a paused state.
+
+## Scheduler Events
+
+Scheduler events provide visibility into the scheduler's operations, particularly around managing scheduled jobs. These events are often logged by the `SchedulerService` and can be observed through the event system.
+
+While there isn't a dedicated `SchedulerEvent` class in `naq/models/events.py` at the moment, scheduler activities (like triggering scheduled jobs) are often reflected as `JobEvent`s (e.g., `SCHEDULE_TRIGGERED`). Future versions might introduce a dedicated `SchedulerEvent` for more granular tracking.
+
+## System Events
+
+System events encompass broader occurrences within the `naq` ecosystem that are not directly tied to a specific job or worker, such as service startup/shutdown, configuration changes, or critical errors within the core services. These events are typically logged by the respective services and provide an overview of the system's health and operational state.
+
+Similar to Scheduler Events, System Events are currently integrated into the general event logging mechanism, often utilizing existing `JobEvent` or `WorkerEvent` types with appropriate `message` and `details` fields, or logged directly to the system's logging infrastructure. A dedicated `SystemEvent` class might be introduced in future iterations for more explicit typing.
+
+## Event Storage and Retrieval
+
+All events are stored in a dedicated NATS Key-Value (KV) store, managed by the `EventService`. This allows for:
+
+-   **Real-time Streaming**: Events can be streamed live for immediate monitoring.
+-   **Historical Lookup**: Events can be queried by `job_id`, `worker_id`, `event_type`, or time range for post-mortem analysis and auditing.
+
+The `EventService` provides methods for logging and retrieving these events. For examples on how to interact with the EventService and query events, refer to the [Usage Examples - Event Logging, Streaming, and Querying](examples.qmd#event-logging-streaming-and-querying) section.

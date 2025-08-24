@@ -986,3 +986,151 @@ async def context_way():
 The service layer approach provides better connection management, error handling, monitoring capabilities, and automatic resource cleanup.
 
 By following these service layer patterns and best practices, you can build robust, maintainable, and performant applications with NAQ.
+## Event System Advanced Configuration and Customization
+
+The `naq` event system is highly configurable and extensible, allowing you to tailor its behavior to your specific monitoring and processing needs.
+
+### Configuration Parameters
+
+The `EventService` and its underlying components can be configured via the centralized `naq` configuration system or directly through `EventServiceConfig`.
+
+| Parameter | Type | Default | Description |
+| :------------------------ | :------ | :------------- | :------------------------------------------------------------------------ |
+| `events_bucket_name` | `str` | `naq_events` | Name of the NATS KV bucket used to store events. |
+| `event_ttl` | `int` | `604800` (7d) | Time-to-live (in seconds) for events in the KV store. Events older than this will be purged. |
+| `enable_event_logging` | `bool` | `true` | Whether event logging is enabled globally for the EventService. |
+| `auto_create_buckets` | `bool` | `true` | Whether the event KV bucket should be automatically created if it doesn't exist. |
+
+You can override these settings via environment variables (e.g., `NAQ_EVENTS_BUCKET_NAME`), `naq.yaml` configuration files, or programmatically:
+
+```python
+# custom_event_config.py
+import asyncio
+from naq.services.manager import ServiceManager
+from naq.services.events import EventService, EventServiceConfig
+from naq.config import get_config
+
+async def main():
+    # Load base configuration
+    config = get_config()
+    
+    # Create custom EventService configuration
+    custom_event_config = EventServiceConfig(
+        events_bucket_name="my_custom_naq_events",
+        event_ttl=86400,  # Store events for 24 hours
+        enable_event_logging=False # Disable event logging for this instance
+    )
+    
+    # Initialize ServiceManager with custom config
+    service_manager = ServiceManager(config=config)
+    
+    # Register EventService with custom configuration
+    event_service = await service_manager.register_service(
+        "events", EventService, custom_settings=custom_event_config
+    )
+    
+    print(f"Event bucket name: {event_service.event_config.events_bucket_name}")
+    print(f"Event TTL: {event_service.event_config.event_ttl} seconds")
+    print(f"Event logging enabled: {event_service.event_config.enable_event_logging}")
+    
+    await service_manager.cleanup_all()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Custom Event Processors
+
+You can implement custom event processors to react to specific events in real-time. This is useful for:
+
+-   Sending notifications (email, Slack, PagerDuty) on job failures or completions.
+-   Updating external monitoring dashboards.
+-   Triggering downstream workflows based on event types.
+-   Performing custom analytics on event streams.
+
+To implement a custom event processor, you typically subscribe to the NATS event stream and process the incoming `JobEvent` or `WorkerEvent` messages.
+
+```python
+# custom_event_processor.py
+import asyncio
+import json
+from naq.services.manager import ServiceManager
+from naq.services.connection import ConnectionService
+from naq.models.events import JobEvent, WorkerEvent
+from naq.models.enums import JobEventType, WorkerEventType
+from naq.config import get_config
+from naq.utils.serialization import SerializationHelper
+
+async def process_event(event_data: bytes):
+    """
+    Processes an incoming event from the NATS stream.
+    """
+    try:
+        # Deserialize the event data
+        event_dict = SerializationHelper.deserialize(event_data)
+        
+        # Determine event type and create appropriate object
+        if event_dict.get("event_type") in [e.value for e in JobEventType]:
+            event = JobEvent(**event_dict)
+            print(f"Job Event received: {event.event_type.value} for Job ID: {event.job_id}")
+            if event.event_type == JobEventType.FAILED:
+                print(f"  ALERT: Job {event.job_id} failed! Error: {event.error_message}")
+                # Here you would add logic to send a notification
+        elif event_dict.get("event_type") in [e.value for e in WorkerEventType]:
+            event = WorkerEvent(**event_dict)
+            print(f"Worker Event received: {event.event_type.value} for Worker ID: {event.worker_id}")
+            if event.event_type == WorkerEventType.HEARTBEAT:
+                print(f"  Worker {event.worker_id} heartbeat. CPU: {event.cpu_usage}%, Mem: {event.memory_usage}MB")
+        else:
+            print(f"Unknown event type: {event_dict.get('event_type')}")
+            
+    except Exception as e:
+        print(f"Error processing event: {e}")
+        print(f"Raw event data: {event_data.decode(errors='ignore')}")
+
+async def main():
+    config = get_config()
+    service_manager = ServiceManager(config=config)
+    await service_manager.initialize_all()
+    
+    connection_service = service_manager.get_service("connection")
+    
+    # Subscribe to the NATS events stream for all events
+    # The subject for events is typically "naq.events.>"
+    print("Starting custom event processor. Listening for events...")
+    await connection_service.subscribe("naq.events.>", process_event)
+    
+    # Keep the processor running
+    try:
+        while True:
+            await asyncio.sleep(1)
+    except asyncio.CancelledError:
+        print("Event processor stopped.")
+    finally:
+        await service_manager.cleanup_all()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+::: {.callout-note}
+**Running the Custom Processor**
+
+To run this custom event processor, save the code as `custom_event_processor.py` and execute it:
+
+```bash
+python custom_event_processor.py
+```
+
+Ensure a NATS server with JetStream enabled is running and that `naq` components (workers, scheduler) are generating events.
+:::
+
+### Event Data Retention and Purging
+
+The `event_ttl` configuration parameter for the `EventService` controls how long events are retained in the NATS KV store. Setting an appropriate TTL is crucial for managing storage consumption and ensuring compliance with data retention policies.
+
+-   **Short TTLs (e.g., hours/days)**: Suitable for high-volume, real-time monitoring data where long-term historical analysis is not required or is handled by an external system.
+-   **Long TTLs (e.g., weeks/months)**: Appropriate for auditing, compliance, or infrequent historical analysis.
+-   **Zero TTL**: Events are stored indefinitely (not recommended for most production systems without careful consideration of storage).
+
+`naq` leverages JetStream's built-in TTL capabilities for automatic purging of old events, minimizing maintenance overhead.

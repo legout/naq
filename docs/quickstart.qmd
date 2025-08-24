@@ -352,3 +352,111 @@ Using the service layer provides several advantages:
 -   Learn about the [architecture](architecture.qmd) of `naq`.
 -   Check out more complex [examples](examples.qmd).
 -   Discover how to use individual [services](examples.qmd#service-layer-examples).
+
+## Event Monitoring CLI
+
+`naq` provides powerful command-line tools to monitor events in real-time, inspect historical event data, and view statistics about job and worker activities. These commands interact directly with the `EventService` and the underlying NATS JetStream Key-Value store where events are persisted.
+
+### Stream Events
+
+The `naq events stream` command allows you to view a live stream of all events occurring in your `naq` system. You can apply various filters to focus on specific events.
+
+```bash
+# Stream all events
+naq events stream
+
+# Stream events for a specific job ID
+naq events stream --job-id <YOUR_JOB_ID>
+
+# Stream only 'COMPLETED' job events
+naq events stream --event-type COMPLETED
+
+# Stream worker heartbeats from a specific worker
+naq events stream --event-type HEARTBEAT --worker <YOUR_WORKER_ID>
+
+# Show the last 10 historical events, then follow new events
+naq events stream --tail 10
+
+# Output events in JSON format
+naq events stream --format json
+```
+
+**Options:**
+
+-   `--job-id`, `-j`: Filter events by a specific job ID.
+-   `--event-type`, `-e`: Filter events by event type (e.g., `started`, `completed`, `failed`, `heartbeat`).
+-   `--queue`, `-q`: Filter events by the queue name.
+-   `--worker`, `-w`: Filter events by a specific worker ID.
+-   `--format`, `-f`: Output format: `table` (default), `json`, or `raw`.
+-   `--follow`: Continue streaming live events after showing historical data (default: `true`). Use `--no-follow` to only show historical events.
+-   `--tail`, `-t`: Number of historical events to display before starting to follow live events.
+-   `--nats-url`, `-u`: URL of the NATS server.
+-   `--log-level`, `-l`: Set logging level for the CLI command.
+
+### View Event History
+
+To retrieve the complete event history for a specific job, use the `naq events history` command:
+
+```bash
+# Get all events for a job with ID 'my-job-123'
+naq events history my-job-123
+
+# Output history in JSON format
+naq events history my-job-123 --format json
+```
+
+### Get Event Statistics
+
+The `naq events stats` command provides aggregated statistics about events, which can be filtered by job ID, queue, worker, or time range.
+
+```bash
+# Get overall event statistics
+naq events stats
+
+# Get statistics for events in the last 24 hours
+naq events stats --time-range 24h
+
+# Get job event statistics for a specific queue over the last 7 days
+naq events stats --queue my_queue --time-range 7d
+
+# Output statistics in JSON format
+naq events stats --format json
+```
+
+**Options:**
+
+-   `--job-id`, `-j`: Filter statistics by a specific job ID.
+-   `--queue`, `-q`: Filter statistics by queue name.
+-   `--worker`, `-w`: Filter statistics by worker ID.
+-   `--time-range`, `-t`: Time range for statistics (e.g., `1h`, `24h`, `7d`, `30d`).
+-   `--format`, `-f`: Output format: `table` (default), `json`, or `raw`.
+-   `--nats-url`, `-u`: URL of the NATS server.
+-   `--log-level`, `-l`: Set logging level for the CLI command.
+
+### Monitor Workers
+
+The `naq events workers` command allows you to view the status and activity of all registered workers in your `naq` system.
+
+```bash
+# List all workers
+naq events workers
+
+# List workers on a specific queue
+naq events workers --queue my_queue
+
+# Follow live worker status updates
+naq events workers --follow
+
+# Output worker data in JSON format
+naq events workers --format json
+```
+
+**Options:**
+
+-   `--worker-id`, `-w`: Filter by specific worker ID.
+-   `--queue`, `-q`: Filter by queue name.
+-   `--status`, `-s`: Filter by worker status (e.g., `idle`, `busy`, `starting`, `stopping`).
+-   `--format`, `-f`: Output format: `table` (default), `json`, or `raw`.
+-   `--follow`: Continue streaming live worker status updates (default: `false`).
+-   `--nats-url`, `-u`: URL of the NATS server.
+-   `--log-level`, `-l`: Set logging level for the CLI command.

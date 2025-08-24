@@ -79,38 +79,93 @@ graph TD
         ResultStore[Result KV Store]
         ScheduledJobs[Scheduled Jobs KV]
         WorkerStatus[Worker Status KV]
+        EventsKV[Events KV Store]
     end
 
     Client -- "1. Enqueue Job" --> JobService
     JobService -- "2. Publish to NATS" --> QueueStream
+    JobService -- "3. Logs Job Events" --> EventService
     
-    Scheduler -- "3. Check for Due Jobs" --> SchedulerService
-    SchedulerService -- "4. Trigger Due Jobs" --> QueueStream
+    Scheduler -- "4. Check for Due Jobs" --> SchedulerService
+    SchedulerService -- "5. Trigger Due Jobs" --> QueueStream
+    SchedulerService -- "6. Logs Scheduler Events" --> EventService
     
-    Worker -- "5. Fetch Job" --> QueueStream
-    Worker -- "6. Execute via JobService" --> JobService
-    JobService -- "7. Store Result" --> ResultStore
-    JobService -- "8. Log Events" --> EventService
+    Worker -- "7. Fetch Job" --> QueueStream
+    Worker -- "8. Executes via JobService" --> JobService
+    Worker -- "9. Logs Worker Events" --> EventService
+    JobService -- "10. Store Result" --> ResultStore
+    JobService -- "11. Logs Job Events" --> EventService
     
-    Worker -- "9. Register/Update Status" --> WorkerService
-    WorkerService -- "10. Store Status" --> WorkerStatus
+    EventService -- "12. Stores Events" --> EventsKV
+    
+    Worker -- "13. Register/Update Status" --> WorkerService
+    WorkerService -- "14. Store Status" --> WorkerStatus
 ```
 
 1.  **Enqueueing**: The client calls an `enqueue` function or directly uses the JobService. The function, its arguments, and metadata are serialized into a job payload and published to a NATS subject.
 
-2.  **Service Processing**: The JobService handles the publishing to NATS and can optionally log the job event through the EventService.
+2.  **Job Service Processing**: The JobService handles the publishing to NATS and logs job events through the EventService.
 
-3.  **Persistence**: NATS JetStream receives the message and persists it in a **Stream**. Each queue maps directly to a JetStream Stream.
+3.  **Scheduler Triggering**: The SchedulerService periodically checks for due jobs and triggers them by publishing to the appropriate queue, also logging scheduler events.
 
-4.  **Fetching**: A worker process fetches jobs from the queue's Stream. The WorkerService tracks worker registration and status.
+4.  **Persistence**: NATS JetStream receives the message and persists it in a **Stream**. Each queue maps directly to a JetStream Stream.
 
-5.  **Execution**: The worker uses the JobService to execute the job, which handles the actual function execution, result storage, and event logging.
+5.  **Fetching**: A worker process fetches jobs from the queue's Stream. The WorkerService tracks worker registration and status, and the Worker also logs its own events.
 
-6.  **Result Handling**: The JobService stores results in a NATS **Key-Value (KV) Store** with configurable TTL and logs completion events.
+6.  **Execution**: The worker uses the JobService to execute the job, which handles the actual function execution, result storage, and event logging.
 
-7.  **Scheduled Jobs**: The SchedulerService periodically checks for due jobs and triggers them by publishing to the appropriate queue.
+7.  **Result Handling**: The JobService stores results in a NATS **Key-Value (KV) Store** with configurable TTL and logs completion events.
 
-8.  **Worker Management**: The WorkerService tracks worker registration, status updates, and heartbeats in a dedicated KV store.
+8.  **Event Storage**: The EventService stores all logged events (Job, Worker, Scheduler, System) in a dedicated NATS Key-Value store, allowing for historical lookup and auditing.
+
+9.  **Worker Management**: The WorkerService tracks worker registration, status updates, and heartbeats in a dedicated KV store.
+
+## Event System Architecture
+
+The `naq` event system is designed to provide comprehensive observability into the job queue's operation. It captures various events related to jobs, workers, and the scheduler, storing them for real-time monitoring and historical analysis.
+
+**Key Principles:**
+-   **Centralized Logging**: All events are funneled through the `EventService` and stored in a dedicated NATS Key-Value (KV) store.
+-   **Structured Events**: Events are strongly typed using `msgspec.Struct` for efficient serialization and clear data fields.
+-   **Extensibility**: Custom event processors can be implemented and registered to react to specific events (e.g., send notifications, update dashboards).
+-   **CLI Integration**: Event data is exposed via CLI commands for easy inspection and monitoring.
+
+**Event Flow:**
+
+```{mermaid}
+graph TD
+    subgraph "NAQ Components"
+        JobService[JobService]
+        Worker[Worker]
+        Scheduler[Scheduler]
+    end
+
+    subgraph "Event System"
+        EventService[EventService]
+        EventsKV[Events KV Store]
+        EventProcessors[Custom Event Processors]
+    end
+
+    JobService -- "Logs Job Events" --> EventService
+    Worker -- "Logs Worker Events" --> EventService
+    Scheduler -- "Logs Scheduler Events" --> EventService
+    
+    EventService -- "Stores Events" --> EventsKV
+    EventsKV -- "Real-time Stream" --> CLI[CLI Monitoring Commands]
+    EventsKV -- "Historical Query" --> CLI
+    EventsKV -- "Processed by" --> EventProcessors
+```
+
+**Event Types:**
+
+`naq` defines several categories of events to cover different aspects of the system:
+
+-   **Job Events**: Track the lifecycle of individual jobs (e.g., `ENQUEUED`, `STARTED`, `COMPLETED`, `FAILED`, `RETRY_SCHEDULED`, `SCHEDULED`, `SCHEDULE_TRIGGERED`, `CANCELLED`, `STATUS_CHANGED`).
+-   **Worker Events**: Monitor the status and activity of workers (e.g., `STARTED`, `STOPPED`, `HEARTBEAT`, `JOB_STARTED`, `JOB_COMPLETED`, `JOB_FAILED`, `PAUSED`, `RESUMED`).
+-   **Scheduler Events**: Log actions performed by the scheduler (e.g., job scheduling, triggering).
+-   **System Events**: General system-level events (e.g., service startup/shutdown, configuration changes).
+
+For a detailed description of each event type and their data fields, refer to the [Events API Reference](api/events.qmd).
 
 ## Service Dependencies and Relationships
 
@@ -137,6 +192,7 @@ graph TD
     WorkerService -- "manages" --> WorkerStatus
     SchedulerService -- "manages" --> ScheduledJobs
     JobService -- "stores" --> JobResults
+    EventService -- "stores" --> EventsKV
 ```
 
 - **ConnectionService** is the foundation service that provides NATS connectivity to all other services.

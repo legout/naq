@@ -204,6 +204,29 @@ LOG_FILE_PATH = _get_env_or_config(
 )
 
 
+# --- Event System Configuration ---
+
+# Default event system configuration
+EVENTS_ENABLED = _get_env_or_config(
+    "NAQ_EVENTS_ENABLED", ["events", "enabled"], "False"
+).lower() == "true"
+
+EVENTS_BATCH_SIZE = int(
+    _get_env_or_config("NAQ_EVENTS_BATCH_SIZE", ["events", "batch_size"], "100")
+)
+
+EVENTS_FLUSH_INTERVAL = float(
+    _get_env_or_config("NAQ_EVENTS_FLUSH_INTERVAL", ["events", "flush_interval"], "5.0")
+)
+
+EVENTS_MAX_BUFFER_SIZE = int(
+    _get_env_or_config("NAQ_EVENTS_MAX_BUFFER_SIZE", ["events", "max_buffer_size"], "1000")
+)
+
+EVENTS_STREAM_NAME = _get_env_or_config(
+    "NAQ_EVENTS_STREAM_NAME", ["events", "stream"], "naq_events"
+)
+
 # --- NATS Connection Configuration ---
 
 
@@ -353,6 +376,11 @@ class Config:
         log_level: Logging level
         log_to_file_enabled: Whether to enable file logging
         log_file_path: Path for the log file
+        events_enabled: Whether event processing is enabled
+        events_batch_size: Number of events to batch before flushing
+        events_flush_interval: Maximum time to wait before flushing batched events (in seconds)
+        events_max_buffer_size: Maximum number of events to hold in the in-memory buffer
+        events_stream_name: Name of the event stream
     """
 
     def __init__(
@@ -375,6 +403,11 @@ class Config:
         log_level: Optional[str] = None,
         log_to_file_enabled: Optional[bool] = None,
         log_file_path: Optional[str] = None,
+        events_enabled: Optional[bool] = None,
+        events_batch_size: Optional[int] = None,
+        events_flush_interval: Optional[float] = None,
+        events_max_buffer_size: Optional[int] = None,
+        events_stream_name: Optional[str] = None,
     ) -> None:
         """Initialize the configuration with optional overrides."""
         # NATS connection configuration
@@ -419,6 +452,13 @@ class Config:
         self.log_to_file_enabled = log_to_file_enabled or LOG_TO_FILE_ENABLED
         self.log_file_path = log_file_path or LOG_FILE_PATH
 
+        # Event system configuration
+        self.events_enabled = events_enabled or EVENTS_ENABLED
+        self.events_batch_size = events_batch_size or EVENTS_BATCH_SIZE
+        self.events_flush_interval = events_flush_interval or EVENTS_FLUSH_INTERVAL
+        self.events_max_buffer_size = events_max_buffer_size or EVENTS_MAX_BUFFER_SIZE
+        self.events_stream_name = events_stream_name or EVENTS_STREAM_NAME
+
         # Validate configuration
         self._validate_config()
 
@@ -441,6 +481,14 @@ class Config:
             raise ValueError("default_ack_wait_seconds must be positive")
         if self.dependency_check_delay_seconds < 0:
             raise ValueError("dependency_check_delay_seconds must be non-negative")
+
+        # Validate event system configuration
+        if self.events_batch_size <= 0:
+            raise ValueError("events_batch_size must be positive")
+        if self.events_flush_interval < 0:
+            raise ValueError("events_flush_interval must be non-negative")
+        if self.events_max_buffer_size <= 0:
+            raise ValueError("events_max_buffer_size must be positive")
 
         # Validate ack wait per queue
         for queue, ack_wait in self.ack_wait_per_queue.items():
@@ -543,6 +591,36 @@ class Config:
             log_file_path=_get_env_or_config(
                 "NAQ_LOG_FILE_PATH", ["logging", "file_path"], LOG_FILE_PATH
             ),
+            events_enabled=_get_env_or_config(
+                "NAQ_EVENTS_ENABLED", ["events", "enabled"], "False"
+            ).lower()
+            == "true",
+            events_batch_size=int(
+                _get_env_or_config(
+                    "NAQ_EVENTS_BATCH_SIZE",
+                    ["events", "batch_size"],
+                    EVENTS_BATCH_SIZE,
+                )
+            ),
+            events_flush_interval=float(
+                _get_env_or_config(
+                    "NAQ_EVENTS_FLUSH_INTERVAL",
+                    ["events", "flush_interval"],
+                    EVENTS_FLUSH_INTERVAL,
+                )
+            ),
+            events_max_buffer_size=int(
+                _get_env_or_config(
+                    "NAQ_EVENTS_MAX_BUFFER_SIZE",
+                    ["events", "max_buffer_size"],
+                    EVENTS_MAX_BUFFER_SIZE,
+                )
+            ),
+            events_stream_name=_get_env_or_config(
+                "NAQ_EVENTS_STREAM_NAME",
+                ["events", "stream"],
+                EVENTS_STREAM_NAME,
+            ),
         )
 
     @classmethod
@@ -592,6 +670,11 @@ class Config:
             "log_level": self.log_level,
             "log_to_file_enabled": self.log_to_file_enabled,
             "log_file_path": self.log_file_path,
+            "events_enabled": self.events_enabled,
+            "events_batch_size": self.events_batch_size,
+            "events_flush_interval": self.events_flush_interval,
+            "events_max_buffer_size": self.events_max_buffer_size,
+            "events_stream_name": self.events_stream_name,
         }
 
 

@@ -6,7 +6,7 @@ including event logging, storage, and retrieval functionality.
 """
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 
 import msgspec
 
@@ -87,6 +87,8 @@ class EventService(BaseService):
         self._event_config = self._extract_event_config()
         self._connection_service = connection_service
         self._kv_store_service = kv_store_service
+        # Initialize list for custom event processors
+        self._custom_processors: List[Callable[[Union[JobEvent, WorkerEvent]], Awaitable[None]]] = []
 
     def _extract_event_config(self) -> EventServiceConfig:
         """
@@ -137,6 +139,58 @@ class EventService(BaseService):
                 event_config.auto_create_bucket = custom_settings["auto_create_bucket"]
 
         return event_config
+
+    def register_event_processor(
+        self, processor: Callable[[Union[JobEvent, WorkerEvent]], Awaitable[None]]
+    ) -> None:
+        """
+        Register a custom event processor.
+
+        This method allows external modules to register their own event processing
+        logic that will be called whenever an event is logged.
+
+        Args:
+            processor: An async callable that takes a JobEvent or WorkerEvent
+                      and returns None.
+
+        Example:
+            ```python
+            async def my_event_processor(event: Union[JobEvent, WorkerEvent]) -> None:
+                # Custom event processing logic
+                print(f"Processing event: {event.event_type.value}")
+                
+            event_service.register_event_processor(my_event_processor)
+            ```
+        """
+        if not callable(processor):
+            raise ValueError("Event processor must be callable")
+        
+        self._custom_processors.append(processor)
+        self._logger.debug(f"Registered custom event processor: {processor.__name__}")
+
+    async def _safe_process_event(
+        self, event: Union[JobEvent, WorkerEvent], processor: Callable[[Union[JobEvent, WorkerEvent]], Awaitable[None]]
+    ) -> None:
+        """
+        Safely execute a custom event processor.
+
+        This method wraps the execution of custom processors to catch and log
+        any exceptions, preventing them from disrupting other processors or
+        the main event flow.
+
+        Args:
+            event: The JobEvent or WorkerEvent to process
+            processor: The custom event processor to execute
+        """
+        try:
+            await processor(event)
+        except Exception as e:
+            # Log the error but don't re-raise to prevent disrupting other processors
+            self._logger.error(
+                f"Custom event processor {processor.__name__} failed for event "
+                f"{event.event_type.value}: {e}",
+                exc_info=True
+            )
 
     async def _do_initialize(self) -> None:
         """
@@ -268,6 +322,10 @@ class EventService(BaseService):
                 f"Logged job event {event.event_type.value} for job {event.job_id}"
             )
 
+            # Invoke custom event processors
+            for processor in self._custom_processors:
+                await self._safe_process_event(event, processor)
+
         except Exception as e:
             error_msg = f"Failed to log job event for job {event.job_id}: {e}"
             self._logger.error(error_msg)
@@ -328,6 +386,10 @@ class EventService(BaseService):
             self._logger.debug(
                 f"Logged worker event {event.event_type.value} for worker {event.worker_id}"
             )
+
+            # Invoke custom event processors
+            for processor in self._custom_processors:
+                await self._safe_process_event(event, processor)
 
         except Exception as e:
             error_msg = f"Failed to log worker event for worker {event.worker_id}: {e}"

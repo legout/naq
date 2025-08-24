@@ -1780,3 +1780,134 @@ if __name__ == "__main__":
 
 Services can depend on other services. For example, `EventService` requires a `KVStoreService`, and `JobService` requires `ConnectionService`, `KVStoreService`, and `EventService`. The `ServiceManager` automatically handles these dependencies.
 :::
+
+## Example 6: Event Logging, Streaming, and Querying
+
+The `naq` event system provides powerful capabilities for observing and analyzing system behavior. Events are automatically logged by various `naq` components (JobService, WorkerService, SchedulerService) and stored in a persistent KV store.
+
+### Event Logging
+
+While events are typically logged automatically by services, you can also manually log events using the `EventService` for custom scenarios.
+
+```python
+# log_custom_event.py
+import asyncio
+from datetime import datetime
+from naq.services.manager import ServiceManager
+from naq.models.events import JobEvent, WorkerEvent
+from naq.models.enums import JobEventType, WorkerEventType
+from naq.config import get_config
+
+async def main():
+    config = get_config()
+    service_manager = ServiceManager(config=config)
+    await service_manager.initialize_all()
+    
+    event_service = service_manager.get_service("events")
+    
+    # Log a custom JobEvent
+    await event_service.log_event(
+        JobEvent(
+            job_id="custom-job-1",
+            event_type=JobEventType.STATUS_CHANGED,
+            message="Custom processing step started",
+            details={"step": "data_validation", "progress": 10}
+        )
+    )
+    print("Logged custom JobEvent.")
+    
+    # Log a custom WorkerEvent
+    await event_service.log_event(
+        WorkerEvent(
+            worker_id="custom-worker-A",
+            event_type=WorkerEventType.HEARTBEAT,
+            cpu_usage=25.5,
+            memory_usage=1024.0,
+            message="Custom worker health update"
+        )
+    )
+    print("Logged custom WorkerEvent.")
+    
+    await service_manager.cleanup_all()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Event Streaming (CLI)
+
+You can stream real-time events from the `naq` system using the CLI:
+
+```bash
+# Stream all events
+naq events stream
+
+# Stream events for a specific job
+naq events stream --job-id custom-job-1
+
+# Stream only 'COMPLETED' job events
+naq events stream --event-type COMPLETED
+
+# Stream worker heartbeats
+naq events stream --event-type HEARTBEAT --worker custom-worker-A
+
+# Show last 5 events and then follow
+naq events stream --tail 5
+```
+
+For more details on CLI event commands, refer to the [Quickstart Guide - Event Monitoring CLI](quickstart.qmd#event-monitoring-cli) section.
+
+### Event History and Querying (CLI)
+
+Retrieve historical events for a specific job or general statistics using the CLI:
+
+```bash
+# Get full event history for a job
+naq events history custom-job-1
+
+# Get event statistics for the last 24 hours
+naq events stats --time-range 24h
+
+# Get job event statistics for a specific queue
+naq events stats --queue my_queue --time-range 7d
+```
+
+### Programmatic Event Querying
+
+You can also query historical events programmatically using the `EventService`:
+
+```python
+# query_events.py
+import asyncio
+from naq.services.manager import ServiceManager
+from naq.models.enums import JobEventType, WorkerEventType
+from datetime import datetime, timedelta
+from naq.config import get_config
+
+async def main():
+    config = get_config()
+    service_manager = ServiceManager(config=config)
+    await service_manager.initialize_all()
+    
+    event_service = service_manager.get_service("events")
+    
+    # Get all events for a specific job
+    job_events = await event_service.get_job_events("custom-job-1")
+    print(f"Found {len(job_events)} events for custom-job-1:")
+    for event in job_events:
+        print(f"- {event.event_type.value}: {event.message} (Worker: {event.worker_id or 'N/A'})")
+        
+    # Get all 'HEARTBEAT' worker events
+    heartbeats = await event_service.get_events_by_type(WorkerEventType.HEARTBEAT)
+    print(f"\nFound {len(heartbeats)} worker heartbeats.")
+    
+    # Get all events within the last hour
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    recent_events = await event_service.get_events_in_range(one_hour_ago, datetime.utcnow())
+    print(f"\nFound {len(recent_events)} events in the last hour.")
+    
+    await service_manager.cleanup_all()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
