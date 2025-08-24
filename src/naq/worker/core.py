@@ -163,7 +163,7 @@ class Worker:
         self.status_manager = WorkerStatusManager(
             self, service_manager=self._service_manager
         )
-        self.job_manager = JobStatusManager(self)
+        self.job_manager = JobStatusManager(self, service_manager=self._service_manager)
         self.failed_handler = FailedJobHandler(self._service_manager)
         self.job_processor = JobProcessor(self)
         self.sync_interface = WorkerSyncInterface(self)

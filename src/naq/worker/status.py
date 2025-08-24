@@ -15,8 +15,9 @@ import cloudpickle
 
 from ..exceptions import NaqException
 from ..models.enums import WORKER_STATUS
-from ..services import KVStoreService, ServiceConfig, ServiceManager
+from ..services import KVStoreService, ServiceConfig, ServiceManager, ConnectionService
 from ..settings import (
+    DEFAULT_NATS_URL,
     DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
     WORKER_KV_NAME,
 )
@@ -53,31 +54,17 @@ class WorkerStatusManager:
     @timing
     @retry(max_attempts=3, delay=1.0, backoff="exponential")
     async def _get_kv_store_service(self) -> Optional[KVStoreService]:
-        """Initialize and return the KVStoreService for worker statuses."""
+        """Initialize and return the KVStoreService for worker statuses using the service layer."""
         if self._kv_store_service is None:
             try:
                 if self._service_manager:
                     # Get KVStoreService from ServiceManager
                     self._kv_store_service = await self._service_manager.get_service(
-                        "kv_store", KVStoreService
+                        "kv_stores", KVStoreService
                     )
                 else:
-                    # Fallback to direct service creation for backward compatibility
-                    # Get ConnectionService from worker if available
-                    connection_service = None
-                    if (
-                        hasattr(self.worker, "_connection_service")
-                        and self.worker._connection_service
-                    ):
-                        connection_service = self.worker._connection_service
-
-                    config = ServiceConfig(
-                        nats_url=getattr(self.worker, "_nats_url", None)
-                    )
-                    self._kv_store_service = KVStoreService(
-                        config=config, connection_service=connection_service
-                    )
-                    await self._kv_store_service.initialize()
+                    self.logger.error("ServiceManager not available, cannot get KVStoreService")
+                    return None
             except Exception as e:
                 self.error_handler.handle_error(
                     e,
@@ -200,7 +187,7 @@ class WorkerStatusManager:
     @retry(max_attempts=3, delay=1.0, backoff="exponential")
     async def list_workers(nats_url: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Lists active workers by querying the worker status KV store.
+        Lists active workers by querying the worker status KV store using the service layer.
 
         Args:
             nats_url: NATS server URL (if not using default).
@@ -214,37 +201,59 @@ class WorkerStatusManager:
         workers = []
         logger = StructuredLogger(__name__)
         error_handler = ErrorHandler()
+        service_manager = None
 
         try:
-            # Use the new context manager for KV store access
-            from ..connection import nats_kv_store
-            from ..services.config import create_global_config
-
+            # Use ServiceManager and KVStoreService
+            from ..services import ServiceManager, ServiceConfig, KVStoreService
+            
             # Create config with the provided URL
-            config = create_global_config()
-            if nats_url:
-                config.nats_url = nats_url
+            config = ServiceConfig(nats_url=nats_url or DEFAULT_NATS_URL)
+            service_manager = ServiceManager(config)
+            
+            # Register and initialize services
+            try:
+                await service_manager.register_service(
+                    "connection", ConnectionService, config, initialize=True
+                )
+                kv_store_service = await service_manager.register_service(
+                    "kv_stores", KVStoreService, config, initialize=True
+                )
+            except Exception as e:
+                error_handler.handle_error(
+                    e, context={"operation": "register_services"}
+                )
+                raise NaqException(f"Error initializing services: {e}") from e
 
-            # Use the KV store context manager
-            async with nats_kv_store(WORKER_KV_NAME, config) as kv:
-                # Get all keys
+            # Get all keys from the KV store
+            try:
+                # Get all keys from the KV store
+                # Note: KVStoreService doesn't have a direct keys method, so we need to use the underlying KeyValue store
+                kv = await kv_store_service.get_kv_store(WORKER_KV_NAME)
                 keys = await kv.keys()
-                for key_bytes in keys:
+                for key in keys:
                     try:
-                        entry = await kv.get(key_bytes)
-                        if entry and entry.value is not None:
-                            worker_data = cloudpickle.loads(entry.value)
-                            workers.append(worker_data)
+                        entry = await kv_store_service.get(WORKER_KV_NAME, key, deserialize=True)
+                        if entry:
+                            workers.append(entry)
                     except Exception as e:
-                        key_str = (
-                            key_bytes.decode()
-                            if isinstance(key_bytes, bytes)
-                            else str(key_bytes)
-                        )
+                        key_str = key.decode() if isinstance(key, bytes) else str(key)
                         error_handler.handle_error(
                             e,
                             {"operation": "read_worker_data", "key_str": key_str}
                         )
+            except Exception as e:
+                # Only return empty list for KV store access issues
+                # For other errors, raise NaqException
+                if "not accessible" in str(e).lower() or "not found" in str(e).lower():
+                    logger.warning(
+                        "Worker status KV store '{kv_name}' not accessible: {error}",
+                        kv_name=WORKER_KV_NAME,
+                        error=str(e)
+                    )
+                    return []
+                else:
+                    raise NaqException(f"Error accessing worker status KV store: {e}") from e
 
             return workers
 
@@ -260,3 +269,10 @@ class WorkerStatusManager:
                 return []
             else:
                 raise NaqException(f"Error listing workers: {e}") from e
+        finally:
+            # Clean up the service manager
+            try:
+                if service_manager is not None:
+                    await service_manager.cleanup_all()
+            except Exception as e:
+                logger.warning("Error cleaning up service manager: {error}", error=str(e))
