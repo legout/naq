@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
-naq = "naq.cli.main:app"
+naq = "naq.cli:main"
 
 [project.optional-dependencies]
 test = [

@@ -1,6 +1,5 @@
 """System utility commands for the naq CLI."""
 
-import uvicorn
 import yaml
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -13,7 +12,8 @@ from naq.utils import setup_logging
 from naq.utils.decorators import timing, log_errors
 from naq.utils.logging import StructuredLogger
 from naq.utils.serialization import SerializationHelper
-from naq.services import ServiceManager, ConnectionService, ServiceConfig
+from naq.services.base import ServiceManager, ServiceConfig
+from naq.services.connection import ConnectionService
 from naq.settings import DEFAULT_NATS_URL
 from naq.config import load_config, get_config, ConfigValidator
 
@@ -70,6 +70,13 @@ def dashboard(
     """
     Starts the NAQ web dashboard (requires 'dashboard' extras).
     """
+    try:
+        import uvicorn  # Use uvicorn to run Sanic
+    except ImportError:
+        console.print("[red]Error:[/red] Dashboard dependencies not installed.")
+        console.print("Please run: [bold cyan]pip install naq[dashboard][/bold cyan]")
+        raise typer.Exit(code=1)
+
     # Create structured logger
     structured_logger = StructuredLogger("naq.cli.system_commands")
 

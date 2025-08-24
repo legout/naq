@@ -8,7 +8,8 @@ structure for consistency and maintainability.
 
 from typing import Optional, Any, Dict
 
-from ..config import get_config, NAQConfig
+from ..config import get_config
+from ..config.types import NAQConfig
 from .base import ServiceManager
 
 

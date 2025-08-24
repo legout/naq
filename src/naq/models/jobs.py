@@ -11,7 +11,7 @@ import asyncio
 import time
 import traceback
 import uuid
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union, TYPE_CHECKING
 
 import msgspec
 
@@ -19,6 +19,12 @@ from .enums import JOB_STATUS
 from ..settings import (
     DEFAULT_QUEUE_NAME,
 )
+
+if TYPE_CHECKING:
+    # Import here to avoid circular imports
+    from .events import JobEvent
+    from ..queue.core import Queue
+    from ..worker.core import Worker
 
 
 # Define retry strategies

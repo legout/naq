@@ -26,11 +26,11 @@ from .settings import (
     SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS,
     SCHEDULER_LOCK_TTL_SECONDS,
 )
-from .services import ServiceManager
-from .services import ConnectionService
-from .services import KVStoreService
-from .services import EventService
-from .services import SchedulerService
+from .services.base import ServiceManager
+from .services.connection import ConnectionService
+from .services.kv_stores import KVStoreService
+from .services.events import EventService
+from .services.scheduler import SchedulerService
 from .service_context import long_lived_service_context
 
 

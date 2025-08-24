@@ -8,12 +8,10 @@ from rich.console import Console
 from rich.panel import Panel
 
 from ..settings import DEFAULT_NATS_URL
-from ..services import (
-    JobService,
-    SchedulerService,
-    StreamService,
-    ConnectionService,
-)
+from ..services.job import JobService
+from ..services.scheduler import SchedulerService
+from ..services.stream import StreamService
+from ..services.connection import ConnectionService
 from ..services.config import GlobalServiceConfig
 from ..service_context import service_context
 from ..utils import setup_logging

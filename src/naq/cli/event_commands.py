@@ -14,7 +14,10 @@ from rich.live import Live
 from rich.layout import Layout
 
 from ..settings import DEFAULT_NATS_URL
-from ..services import ServiceManager, EventService, ConnectionService, ServiceConfig, WorkerService
+from ..services.base import ServiceManager, ServiceConfig
+from ..services.events import EventService
+from ..services.connection import ConnectionService
+from ..services.worker import WorkerService
 from ..services.config import GlobalServiceConfig
 from ..service_context import service_context
 from ..utils import setup_logging

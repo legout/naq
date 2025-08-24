@@ -6,7 +6,7 @@ This module contains the base Queue class and core queue operations.
 import datetime
 import re
 from datetime import timedelta, timezone
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, List, Optional, Union, TYPE_CHECKING
 
 from loguru import logger
 
@@ -19,11 +19,13 @@ from ..services.config import create_global_config, GlobalServiceConfig
 from ..settings import DEFAULT_QUEUE_NAME, DEFAULT_NATS_URL, NAQ_PREFIX
 from ..utils import setup_logging
 from ..service_context import long_lived_service_context
-from ..services.base import ServiceManager
 from ..utils.decorators import retry
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception
 from ..utils.logging import StructuredLogger
 from ..utils.validation import validate_parameter, ensure_type
+
+if TYPE_CHECKING:
+    from ..services.base import ServiceManager
 
 
 class Queue:

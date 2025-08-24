@@ -12,7 +12,7 @@ import signal
 import socket
 import sys
 import uuid
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, TYPE_CHECKING
 
 import nats
 from nats.js import JetStreamContext
@@ -40,6 +40,12 @@ from .monitoring import WorkerMonitor
 from .processing import JobProcessor
 from .status import WorkerStatusManager
 from .sync_interface import WorkerSyncInterface
+
+if TYPE_CHECKING:
+    # Import here to avoid circular imports
+    from ..models.events import JobEvent, WorkerEvent
+    from ..models.jobs import Job
+    from ..queue.core import Queue
 
 
 class Worker:

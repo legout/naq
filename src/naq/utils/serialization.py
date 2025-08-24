@@ -8,7 +8,7 @@ import json
 import pickle
 from typing import Any, Dict, Optional, Type, Union
 
-from naq.exceptions import SerializationError
+from ..exceptions import SerializationError
 
 
 class SerializationHelper:

@@ -8,11 +8,15 @@ debugging purposes.
 """
 
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, TYPE_CHECKING
 
 import msgspec
 
 from .enums import JobEventType, WorkerEventType
+
+if TYPE_CHECKING:
+    # Import here to avoid circular imports
+    from .jobs import Job
 
 
 class JobEvent(msgspec.Struct):

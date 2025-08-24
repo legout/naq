@@ -155,7 +155,7 @@ def purge(
     logger.info(f"Using NATS URL: {nats_url}")
 
     # Use synchronous helper for purge (reuses thread-local NATS connection)
-    from .queue import purge_queue_sync
+    from .queue.sync_api import purge_queue_sync
 
     results = {}
     total_purged = 0
@@ -546,7 +546,7 @@ def job_control(
     logger.info(f"Performing {action} on job {job_id}")
 
     # Use synchronous helpers provided by Queue sync wrappers
-    from .queue import (
+    from .queue.sync_api import (
         cancel_scheduled_job_sync,
         pause_scheduled_job_sync,
         resume_scheduled_job_sync,
@@ -756,7 +756,12 @@ def dashboard(
     """
     Starts the NAQ web dashboard (requires 'dashboard' extras).
     """
-    import uvicorn  # Use uvicorn to run Sanic
+    try:
+        import uvicorn  # Use uvicorn to run Sanic
+    except ImportError:
+        console.print("[red]Error:[/red] Dashboard dependencies not installed.")
+        console.print("Please run: [bold cyan]pip install naq[dashboard][/bold cyan]")
+        raise typer.Exit(code=1)
 
     setup_logging(log_level if log_level else None)  # Setup naq logging if needed
     logger.info(f"Starting NAQ Dashboard server on http://{host}:{port}")

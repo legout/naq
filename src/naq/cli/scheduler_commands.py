@@ -12,12 +12,9 @@ from rich.table import Table
 from ..settings import DEFAULT_NATS_URL
 from ..models.enums import SCHEDULED_JOB_STATUS
 from ..scheduler import Scheduler
-from ..services import (
-    ServiceManager,
-    SchedulerService,
-    ConnectionService,
-    ServiceConfig,
-)
+from ..services.base import ServiceManager, ServiceConfig
+from ..services.scheduler import SchedulerService
+from ..services.connection import ConnectionService
 from ..services.config import GlobalServiceConfig
 from ..utils import setup_logging
 from ..utils.decorators import timing, log_errors

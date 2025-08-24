@@ -71,7 +71,7 @@ def _register_subcommands() -> None:
         ("worker_commands", "worker", "Worker-related commands"),
         ("job_commands", "job", "Job and queue management commands"),
         ("scheduler_commands", "scheduler", "Scheduler-related commands"),
-        ("event_commands", "events", "Event monitoring commands"),
+        ("event_commands", "event", "Event monitoring commands"),
         ("system_commands", "system", "System and utility commands"),
     ]
 

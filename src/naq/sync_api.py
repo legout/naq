@@ -404,7 +404,7 @@ def list_workers_sync(
         validate_parameter(nats_url, "nats_url", str)
         
         async def _list_with_services(service_manager) -> List[dict]:
-            from .worker import Worker
+            from .worker.base import Worker
             
             try:
                 workers = await Worker.list_workers(nats_url=nats_url)

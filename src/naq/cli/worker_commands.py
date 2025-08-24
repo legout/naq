@@ -13,7 +13,8 @@ from ..utils.validation import validate_parameter, ensure_type
 from ..utils.nats_helpers import stream_exists
 from ..utils.serialization import serialize_with_metadata
 from ..worker import Worker
-from ..services import WorkerService, ConnectionService
+from ..services.worker import WorkerService
+from ..services.connection import ConnectionService
 from ..services.config import GlobalServiceConfig
 from ..service_context import service_context
 

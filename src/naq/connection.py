@@ -12,37 +12,33 @@ from typing import Optional
 import nats
 from nats.aio.client import Client as NATSClient
 from nats.js import JetStreamContext
+import nats.js.errors
+import nats.js.api
 from loguru import logger
 
 from .exceptions import NaqConnectionError
 from .settings import DEFAULT_NATS_URL
-from .connection import (
-    context_managers,
-    decorators,
-    manager,
-    utils,
+from .connection.context_managers import (
+    nats_connection,
+    jetstream_context,
+    nats_jetstream,
+    nats_kv_store,
+)
+from .connection.decorators import (
+    with_nats_connection,
+    with_jetstream_context,
+)
+from .connection.manager import ConnectionManager
+from .connection.utils import (
+    ConnectionMetrics,
+    ConnectionMonitor,
+    connection_monitor,
+    test_nats_connection,
+    wait_for_nats_connection,
 )
 from .services.config import GlobalServiceConfig
 
-# Import the new connection management components
-ConnectionManager = manager.ConnectionManager
-ConnectionMetrics = utils.ConnectionMetrics
-ConnectionMonitor = utils.ConnectionMonitor
-connection_monitor = utils.connection_monitor
-
-# Import context managers
-nats_connection = context_managers.nats_connection
-jetstream_context = context_managers.jetstream_context
-nats_jetstream = context_managers.nats_jetstream
-nats_kv_store = context_managers.nats_kv_store
-
-# Import decorators
-with_nats_connection = decorators.with_nats_connection
-with_jetstream_context = decorators.with_jetstream_context
-
-# Import utilities
-test_nats_connection = utils.test_nats_connection
-wait_for_nats_connection = utils.wait_for_nats_connection
+# All components are now imported directly above
 
 # Create a singleton instance of the connection manager
 _manager = ConnectionManager()

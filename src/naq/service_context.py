@@ -9,7 +9,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional, Dict, Any
 
-from .services import ServiceManager, ServiceConfig
+from .services.base import ServiceManager, ServiceConfig
 from .services.config import create_global_config, GlobalServiceConfig
 from .utils.logging import StructuredLogger
 
