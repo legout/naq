@@ -4,7 +4,7 @@ import os
 import pytest
 from typing import Optional
 
-from naq.config.types import NatsConfig, WorkerConfig, EventsConfig, NAQConfig
+from naq.config.types import NatsConfig, WorkerConfig, EventsConfig, NAQConfig, SchedulerServiceConfig
 
 
 class TestNatsConfig:
@@ -201,7 +201,7 @@ class TestNAQConfig:
         assert config.workers == worker_config
         assert config.events == events_config
         assert config.queues is None
-        assert config.scheduler is None
+        assert config.scheduler_service is None
         assert config.results is None
         assert config.serialization is None
         assert config.logging is None
@@ -234,7 +234,7 @@ class TestNAQConfig:
         )
         
         queues_config = {"default": {"max_size": 1000}}
-        scheduler_config = {"enabled": True}
+        scheduler_service_config = SchedulerServiceConfig(scheduler_name="test_scheduler")
         results_config = {"ttl": 86400}
         serialization_config = {"default": "pickle"}
         logging_config = {"level": "INFO"}
@@ -244,14 +244,14 @@ class TestNAQConfig:
             workers=worker_config,
             events=events_config,
             queues=queues_config,
-            scheduler=scheduler_config,
+            scheduler_service=scheduler_service_config,
             results=results_config,
             serialization=serialization_config,
             logging=logging_config,
         )
         
         assert config.queues == queues_config
-        assert config.scheduler == scheduler_config
+        assert config.scheduler_service == scheduler_service_config
         assert config.results == results_config
         assert config.serialization == serialization_config
         assert config.logging == logging_config

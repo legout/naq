@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Optional
 
 import msgspec
 
+from ..config import get_config
+from ..config.types import NAQConfig
 from ..exceptions import NaqException
 from ..models.enums import WorkerEventType, WORKER_STATUS
 from ..models.events import WorkerEvent
@@ -68,6 +70,8 @@ class WorkerService(BaseService):
     def __init__(
         self,
         config: Optional[ServiceConfig] = None,
+        *,
+        naq_config: Optional[NAQConfig] = None,
         connection_service: Optional[ConnectionService] = None,
         kv_store_service: Optional[KVStoreService] = None,
         event_service: Optional[EventService] = None,
@@ -77,11 +81,15 @@ class WorkerService(BaseService):
 
         Args:
             config: Optional configuration for the service.
+            naq_config: Optional NAQ configuration instance. If not provided, uses global config.
             connection_service: Optional ConnectionService dependency.
             kv_store_service: Optional KVStoreService dependency.
             event_service: Optional EventService dependency.
         """
         super().__init__(config)
+        # Store the NAQConfig instance
+        self._naq_config = naq_config if naq_config is not None else get_config()
+        # Extract worker-specific configuration
         self._worker_config = self._extract_worker_config()
         self._connection_service = connection_service
         self._kv_store_service = kv_store_service
@@ -90,7 +98,7 @@ class WorkerService(BaseService):
 
     def _extract_worker_config(self) -> WorkerServiceConfig:
         """
-        Extract worker-specific configuration from the service config.
+        Extract worker-specific configuration from the NAQ config.
 
         Returns:
             WorkerServiceConfig instance with worker parameters.
@@ -98,8 +106,27 @@ class WorkerService(BaseService):
         # Start with default config
         worker_config = WorkerServiceConfig()
 
-        # Override with service config if provided
-        if self._config and self._config.custom_settings:
+        # Override with NAQ config if available
+        if self._naq_config and self._naq_config.worker_service:
+            worker_service_config = self._naq_config.worker_service
+            
+            # Map fields from NAQ config to worker config
+            if worker_service_config.status_bucket_name is not None:
+                worker_config.workers_bucket_name = worker_service_config.status_bucket_name
+                
+            if worker_service_config.ttl is not None:
+                worker_config.default_worker_ttl = int(worker_service_config.ttl)
+                
+            # Note: worker_service doesn't have enable_worker_registration field
+            
+            if worker_service_config.auto_create_buckets is not None:
+                worker_config.auto_create_buckets = worker_service_config.auto_create_buckets
+                
+            if worker_service_config.heartbeat_interval is not None:
+                worker_config.heartbeat_interval = worker_service_config.heartbeat_interval
+
+        # Override with service config if provided (for backward compatibility)
+        if self._config and hasattr(self._config, 'custom_settings') and self._config.custom_settings:
             custom_settings = self._config.custom_settings
 
             if "workers_bucket_name" in custom_settings:
@@ -182,7 +209,7 @@ class WorkerService(BaseService):
 
                 event_config = EventServiceConfig(
                     enable_event_logging=self._worker_config.enable_event_logging,
-                    auto_create_bucket=self._worker_config.auto_create_bucket,
+                    auto_create_bucket=self._worker_config.auto_create_buckets,
                 )
                 self._event_service = EventService(
                     config=ServiceConfig(custom_settings=event_config.as_dict()),

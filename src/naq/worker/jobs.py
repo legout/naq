@@ -43,7 +43,7 @@ class JobStatusManager:
         self._job_service: Optional[JobService] = None
         self._result_kv_store = None
         self._logger = StructuredLogger("JobStatusManager")
-        self._error_handler = ErrorHandler("JobStatusManager")
+        self._error_handler = ErrorHandler(self._logger)
 
     @timing()
     async def _get_services(self) -> None:
@@ -59,7 +59,7 @@ class JobStatusManager:
                 "connection", ConnectionService
             )
             self._kv_store_service = await self._service_manager.get_service(
-                "kv_stores", KVStoreService
+                "kv_store", KVStoreService
             )
             self._job_service = await self._service_manager.get_service(
                 "jobs", JobService

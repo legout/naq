@@ -31,6 +31,7 @@ from ..settings import (
 )
 from ..services import ServiceManager, ConnectionService, StreamService, KVStoreService
 from ..utils import setup_logging
+from ..service_context import long_lived_service_context
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception
 from ..utils.logging import StructuredLogger
 from ..utils.decorators import retry, timing
@@ -184,37 +185,31 @@ class Worker:
                         config = ServiceConfig(nats_url=self._nats_url)
                         self._service_manager = ServiceManager(config)
 
-                        # Register and initialize services
-                        self._connection_service = await self._service_manager.register_service(
-                            "connection", ConnectionService, config, initialize=True
-                        )
-                        self._stream_service = await self._service_manager.register_service(
-                            "stream", StreamService, config, initialize=True
-                        )
-                        self._kv_store_service = await self._service_manager.register_service(
-                            "kv_store", KVStoreService, config, initialize=True
-                        )
-                    else:
-                        # Get services from the provided service manager
-                        self._connection_service = await self._service_manager.get_service(
+                    # Use long-lived service context for worker lifecycle
+                    async with long_lived_service_context(
+                        self._service_manager,
+                        logger_name=f"naq.worker.core.{self.worker_id}"
+                    ) as service_manager:
+                        # Get services from the service manager
+                        self._connection_service = await service_manager.get_service(
                             "connection", ConnectionService
                         )
-                        self._stream_service = await self._service_manager.get_service(
+                        self._stream_service = await service_manager.get_service(
                             "stream", StreamService
                         )
-                        self._kv_store_service = await self._service_manager.get_service(
+                        self._kv_store_service = await service_manager.get_service(
                             "kv_store", KVStoreService
                         )
 
-                    # Get connection and JetStream context
-                    self._nc = await self._connection_service.get_connection()
-                    self._js = await self._connection_service.get_jetstream()
-                    self._logger.info("Connected to NATS and JetStream", worker_id=self.worker_id)
+                        # Get connection and JetStream context
+                        self._nc = await self._connection_service.get_connection()
+                        self._js = await self._connection_service.get_jetstream()
+                        self._logger.info("Connected to NATS and JetStream", worker_id=self.worker_id)
 
-                    # Initialize component managers
-                    await self.status_manager.start_heartbeat_loop()
-                    await self.job_manager.initialize(self._js)
-                    await self.failed_handler.initialize()
+                        # Initialize component managers
+                        await self.status_manager.start_heartbeat_loop()
+                        await self.job_manager.initialize(self._js)
+                        await self.failed_handler.initialize()
             except Exception as e:
                 wrapped_error = wrap_naq_exception(e, "Failed to connect worker")
                 self._error_handler.handle_error(wrapped_error, {"worker_id": self.worker_id})

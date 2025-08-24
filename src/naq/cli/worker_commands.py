@@ -13,8 +13,9 @@ from ..utils.validation import validate_parameter, ensure_type
 from ..utils.nats_helpers import stream_exists
 from ..utils.serialization import serialize_with_metadata
 from ..worker import Worker
-from ..services import ServiceManager, WorkerService, ConnectionService, ServiceConfig
+from ..services import WorkerService, ConnectionService
 from ..services.config import GlobalServiceConfig
+from ..service_context import service_context
 
 # Create module-level structured logger for worker commands
 worker_logger = StructuredLogger("naq.worker_commands")
@@ -140,28 +141,20 @@ def start_worker(
         )
 
         try:
-            # Create service manager with configuration
-            service_manager = ServiceManager(
-                config=ServiceConfig(
-                    nats_url=nats_url,
-                    custom_settings={
-                        "log_level": log_level,
-                        "concurrency": concurrency,
-                        "worker_name": name,
-                        "module_paths": module_paths,
-                    },
-                )
-            )
-
-            # Register required services
-            worker_service = await service_manager.register_service(
-                "worker", WorkerService, initialize=True
-            )
-            
-            # Get connection service for NATS operations
-            connection_service = await service_manager.register_service(
-                "connection", ConnectionService, initialize=True
-            )
+            # Use service context for short-lived operation
+            async with service_context(
+                nats_url=nats_url,
+                custom_settings={
+                    "log_level": log_level,
+                    "concurrency": concurrency,
+                    "worker_name": name,
+                    "module_paths": module_paths,
+                },
+                logger_name="naq.cli.worker_commands.start"
+            ) as service_manager:
+                # Get required services
+                worker_service = await service_manager.get_service("worker", WorkerService)
+                connection_service = await service_manager.get_service("connection", ConnectionService)
             
             # Test NATS connection before proceeding
             is_connected = await connection_service.test_connection()
@@ -207,8 +200,7 @@ def start_worker(
             raise typer.Exit(code=1)
         finally:
             worker_logger.info("Worker process finished.")
-            if "service_manager" in locals():
-                await service_manager.cleanup_all()
+            # Service context automatically handles cleanup
 
     # Run the async function
     asyncio.run(_run_worker())
@@ -285,22 +277,15 @@ def list_workers(
         config.custom_settings.update({"log_level": log_level})
 
         try:
-            # Create service manager with configuration
-            service_manager = ServiceManager(
-                config=ServiceConfig(
-                    nats_url=nats_url, custom_settings={"log_level": log_level}
-                )
-            )
-
-            # Register required services
-            worker_service = await service_manager.register_service(
-                "worker", WorkerService, initialize=True
-            )
-            
-            # Get connection service for NATS operations
-            connection_service = await service_manager.register_service(
-                "connection", ConnectionService, initialize=True
-            )
+            # Use service context for short-lived operation
+            async with service_context(
+                nats_url=nats_url,
+                custom_settings={"log_level": log_level},
+                logger_name="naq.cli.worker_commands.list"
+            ) as service_manager:
+                # Get required services
+                worker_service = await service_manager.get_service("worker", WorkerService)
+                connection_service = await service_manager.get_service("connection", ConnectionService)
             
             # Test NATS connection before proceeding
             is_connected = await connection_service.test_connection()
@@ -388,9 +373,7 @@ def list_workers(
                 error_type=type(e).__name__
             )
             console.print(f"[red]Error listing workers: {str(e)}[/red]")
-        finally:
-            if "service_manager" in locals():
-                await service_manager.cleanup_all()
+        # Service context automatically handles cleanup
 
     # Run the async function
     asyncio.run(_list_workers())

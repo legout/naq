@@ -458,4 +458,11 @@ def timing(
         else:
             return sync_wrapper
 
+    # Handle the case where the decorator is called without parentheses
+    if callable(logger_instance):
+        # logger_instance is actually the function being decorated
+        func = logger_instance
+        logger_instance = None
+        return decorator(func)
+    
     return decorator

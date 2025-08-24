@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional, Type, TypeVar
 import msgspec
 from loguru import logger
 
+from ..config.types import NAQConfig
 from ..exceptions import NaqException
 
 # Type variable for generic service types
@@ -267,15 +268,19 @@ class ServiceManager:
         ```
     """
 
-    def __init__(self, config: Optional[ServiceConfig] = None) -> None:
+    def __init__(self, config: Optional[ServiceConfig] = None, *, naq_config: Optional[NAQConfig] = None) -> None:
         """
         Initialize the service manager.
 
         Args:
             config: Default configuration to use for services that don't
                    specify their own configuration.
+            naq_config: Optional NAQ configuration instance. If not provided, uses global config.
         """
+        from ..config import get_config
+        
         self._default_config = config or ServiceConfig()
+        self._naq_config = naq_config if naq_config is not None else get_config()
         self._services: Dict[str, BaseService] = {}
         self._service_configs: Dict[str, ServiceConfig] = {}
         self._logger = logger.bind(service="ServiceManager")
@@ -317,8 +322,18 @@ class ServiceManager:
             # Use provided config or default config
             service_config = config or self._default_config
 
-            # Create service instance
-            service = service_class(config=service_config)
+            # Create service instance with NAQ config if the service supports it
+            try:
+                # Check if the service constructor accepts naq_config parameter
+                import inspect
+                sig = inspect.signature(service_class.__init__)
+                if 'naq_config' in sig.parameters:
+                    service = service_class(config=service_config, naq_config=self._naq_config)
+                else:
+                    service = service_class(config=service_config)
+            except Exception:
+                # Fallback to regular initialization
+                service = service_class(config=service_config)
 
             # Store service and its config
             self._services[name] = service
@@ -499,3 +514,8 @@ class ServiceManager:
             A string representation including the number of registered services.
         """
         return f"<ServiceManager services={len(self._services)}>"
+    
+    @property
+    def config(self) -> NAQConfig:
+        """Get the NAQ configuration instance."""
+        return self._naq_config

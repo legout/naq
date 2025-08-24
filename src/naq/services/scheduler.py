@@ -13,6 +13,8 @@ import msgspec
 from nats.js.errors import KeyNotFoundError
 from nats.js.kv import KeyValue
 
+from ..config import get_config
+from ..config.types import NAQConfig
 from ..exceptions import NaqException
 from ..models.enums import SCHEDULED_JOB_STATUS, JobEventType
 from ..models.jobs import Job
@@ -74,6 +76,8 @@ class SchedulerService(BaseService):
     def __init__(
         self,
         config: Optional[ServiceConfig] = None,
+        *,
+        naq_config: Optional[NAQConfig] = None,
         connection_service: Optional[ConnectionService] = None,
         kv_store_service: Optional[KVStoreService] = None,
         event_service: Optional[EventService] = None,
@@ -83,11 +87,15 @@ class SchedulerService(BaseService):
 
         Args:
             config: Optional configuration for the service.
+            naq_config: Optional NAQ configuration instance. If not provided, uses global config.
             connection_service: Optional ConnectionService dependency.
             kv_store_service: Optional KVStoreService dependency.
             event_service: Optional EventService dependency.
         """
         super().__init__(config)
+        # Store the NAQConfig instance
+        self._naq_config = naq_config if naq_config is not None else get_config()
+        # Extract scheduler-specific configuration
         self._scheduler_config = self._extract_scheduler_config()
         self._connection_service = connection_service
         self._kv_store_service = kv_store_service
@@ -96,7 +104,7 @@ class SchedulerService(BaseService):
 
     def _extract_scheduler_config(self) -> SchedulerServiceConfig:
         """
-        Extract scheduler-specific configuration from the service config.
+        Extract scheduler-specific configuration from the NAQ config.
 
         Returns:
             SchedulerServiceConfig instance with scheduler parameters.
@@ -104,7 +112,21 @@ class SchedulerService(BaseService):
         # Start with default config
         scheduler_config = SchedulerServiceConfig()
 
-        # Override with service config if provided
+        # Override with NAQ config scheduler_service settings if provided
+        if self._naq_config and self._naq_config.scheduler_service:
+            naq_scheduler_config = self._naq_config.scheduler_service
+            
+            # Map NAQ config to scheduler service config
+            if naq_scheduler_config.schedules_bucket_name:
+                scheduler_config.scheduled_jobs_bucket_name = naq_scheduler_config.schedules_bucket_name
+            
+            if naq_scheduler_config.check_interval is not None:
+                scheduler_config.default_poll_interval = float(naq_scheduler_config.check_interval)
+            
+            if naq_scheduler_config.auto_create_buckets is not None:
+                scheduler_config.auto_create_bucket = naq_scheduler_config.auto_create_buckets
+
+        # Override with service config if provided (for backward compatibility)
         if self._config and self._config.custom_settings:
             custom_settings = self._config.custom_settings
 

@@ -59,12 +59,9 @@ class ConnectionService(BaseService):
         """
         super().__init__(config)
         # Store the NAQConfig instance
-        self.config = naq_config if naq_config is not None else get_config()
-        # If a ConnectionServiceConfig is passed directly, use it
-        if isinstance(config, ConnectionServiceConfig):
-            self._connection_config = config
-        else:
-            self._connection_config = self._extract_connection_config()
+        self._naq_config = naq_config if naq_config is not None else get_config()
+        # Extract connection-specific configuration
+        self._connection_config = self._extract_connection_config()
         self._connection_manager = ConnectionManager()
         self._connections: Dict[str, NATSClient] = {}
         self._jetstream_contexts: Dict[str, JetStreamContext] = {}
@@ -72,7 +69,7 @@ class ConnectionService(BaseService):
 
     def _extract_connection_config(self) -> ConnectionServiceConfig:
         """
-        Extract connection-specific configuration from the service config.
+        Extract connection-specific configuration from the NAQ config.
 
         Returns:
             ConnectionServiceConfig instance with connection parameters.
@@ -83,8 +80,29 @@ class ConnectionService(BaseService):
             log_level=self._config.log_level if self._config else None,
         )
 
-        # Override with service config custom settings if provided
-        if self._config and self._config.custom_settings:
+        # Override with NAQ config connection settings if provided
+        if self._naq_config and self._naq_config.connection:
+            naq_conn_config = self._naq_config.connection
+            
+            # Map NAQ config to connection service config
+            if naq_conn_config.servers:
+                connection_config.nats_url = naq_conn_config.servers[0]
+            
+            if naq_conn_config.max_reconnect_attempts is not None:
+                connection_config.max_reconnect_attempts = naq_conn_config.max_reconnect_attempts
+            
+            if naq_conn_config.reconnect_time_wait is not None:
+                connection_config.reconnect_time_wait = naq_conn_config.reconnect_time_wait
+            
+            if naq_conn_config.connection_timeout is not None:
+                connection_config.connection_timeout = naq_conn_config.connection_timeout
+            
+            if naq_conn_config.drain_timeout is not None:
+                # Use drain_timeout as ping_interval if not explicitly set
+                connection_config.ping_interval = naq_conn_config.drain_timeout
+
+        # Override with service config custom settings if provided (for backward compatibility)
+        if self._config and hasattr(self._config, 'custom_settings') and self._config.custom_settings:
             custom_settings = self._config.custom_settings
 
             if "max_reconnect_attempts" in custom_settings:
@@ -133,8 +151,8 @@ class ConnectionService(BaseService):
             # Validate configuration
             if not self._connection_config.nats_url:
                 # Use the first server from the config, or fallback to default
-                if self.config.nats.servers:
-                    self._connection_config.nats_url = self.config.nats.servers[0]
+                if self._naq_config.nats.servers:
+                    self._connection_config.nats_url = self._naq_config.nats.servers[0]
                 else:
                     self._connection_config.nats_url = "nats://localhost:4222"
 
@@ -233,7 +251,7 @@ class ConnectionService(BaseService):
             NaqConnectionError: If connection fails.
         """
         if url is None:
-            url = self._connection_config.nats_url or (self.config.nats.servers[0] if self.config.nats.servers else "nats://localhost:4222")
+            url = self._connection_config.nats_url or (self._naq_config.nats.servers[0] if self._naq_config.nats.servers else "nats://localhost:4222")
 
         # Check if we already have a cached connection
         if url in self._connections and self._connections[url].is_connected:
@@ -276,7 +294,7 @@ class ConnectionService(BaseService):
             NaqConnectionError: If getting JetStream context fails.
         """
         if url is None:
-            url = self._connection_config.nats_url or (self.config.nats.servers[0] if self.config.nats.servers else "nats://localhost:4222")
+            url = self._connection_config.nats_url or (self._naq_config.nats.servers[0] if self._naq_config.nats.servers else "nats://localhost:4222")
 
         # Check if we already have a cached JetStream context
         if url in self._jetstream_contexts:
@@ -320,7 +338,7 @@ class ConnectionService(BaseService):
             NaqConnectionError: If connection fails.
         """
         if url is None:
-            url = self._connection_config.nats_url or (self.config.nats.servers[0] if self.config.nats.servers else "nats://localhost:4222")
+            url = self._connection_config.nats_url or (self._naq_config.nats.servers[0] if self._naq_config.nats.servers else "nats://localhost:4222")
 
         nc = None
         try:
@@ -458,7 +476,7 @@ class ConnectionService(BaseService):
             url: Optional NATS server URL. If not provided, uses the configured URL.
         """
         if url is None:
-            url = self._connection_config.nats_url or (self.config.nats.servers[0] if self.config.nats.servers else "nats://localhost:4222")
+            url = self._connection_config.nats_url or (self._naq_config.nats.servers[0] if self._naq_config.nats.servers else "nats://localhost:4222")
 
         try:
             # Cancel any reconnection task for this URL

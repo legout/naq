@@ -162,9 +162,9 @@ CONFIG_SCHEMA = {
             "type": ["object", "null"],
             "description": "Scheduler configuration",
             "properties": {
-                "lock_ttl": {"type": "integer", "description": "Scheduler lock TTL"},
-                "lock_renew_interval": {"type": "integer", "description": "Lock renew interval"},
-                "job_status_ttl": {"type": "integer", "description": "Job status TTL"},
+                "lock_ttl": {"type": "number", "description": "Scheduler lock TTL"},
+                "lock_renew_interval": {"type": "number", "description": "Lock renew interval"},
+                "job_status_ttl": {"type": "number", "description": "Job status TTL"},
                 "max_failures": {"type": "integer", "description": "Max schedule failures"}
             }
         },
@@ -201,6 +201,326 @@ CONFIG_SCHEMA = {
     "required": ["nats", "workers", "events"],
     "additionalProperties": False,
 }
+
+# Schema for service configurations
+SERVICE_CONFIG_SCHEMAS = {
+    "connection": {
+        "type": "object",
+        "properties": {
+            "servers": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "description": "List of NATS server URLs",
+            },
+            "client_name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name to identify this client connection",
+            },
+            "max_reconnect_attempts": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Maximum number of reconnection attempts",
+            },
+            "reconnect_time_wait": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Time to wait between reconnection attempts (seconds)",
+            },
+            "connection_timeout": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Timeout for establishing a connection (in seconds)",
+            },
+            "drain_timeout": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Timeout for draining connections (in seconds)",
+            },
+            "auth": {
+                "type": ["object", "null"],
+                "description": "Authentication configuration",
+            },
+            "tls": {
+                "type": ["object", "null"],
+                "description": "TLS configuration for secure connections",
+            },
+        },
+        "required": [
+            "servers",
+            "client_name",
+            "max_reconnect_attempts",
+            "reconnect_time_wait",
+            "connection_timeout",
+            "drain_timeout",
+        ],
+        "additionalProperties": False,
+    },
+    "kv_store": {
+        "type": "object",
+        "properties": {
+            "bucket_name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name of the KV bucket",
+            },
+            "history": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Number of historical values to keep",
+            },
+            "stream_name": {
+                "type": ["string", "null"],
+                "description": "Name of the underlying stream",
+            },
+            "ttl": {
+                "type": ["number", "null"],
+                "minimum": 0,
+                "description": "Time-to-live for keys in seconds",
+            },
+            "replicas": {
+                "type": ["integer", "null"],
+                "minimum": 1,
+                "description": "Number of replicas for the bucket",
+            },
+        },
+        "required": ["bucket_name"],
+        "additionalProperties": False,
+    },
+    "streams": {
+        "type": "object",
+        "properties": {
+            "stream_name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name of the stream",
+            },
+            "subjects": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "description": "List of subjects for the stream",
+            },
+            "retention_limit": {
+                "type": ["integer", "null"],
+                "minimum": 1,
+                "description": "Maximum number of messages to retain",
+            },
+            "max_age": {
+                "type": ["number", "null"],
+                "minimum": 0,
+                "description": "Maximum age of messages in seconds",
+            },
+            "max_msgs": {
+                "type": ["integer", "null"],
+                "minimum": 1,
+                "description": "Maximum number of messages",
+            },
+            "max_bytes": {
+                "type": ["integer", "null"],
+                "minimum": 1,
+                "description": "Maximum size of messages in bytes",
+            },
+            "replicas": {
+                "type": ["integer", "null"],
+                "minimum": 1,
+                "description": "Number of replicas for the stream",
+            },
+            "storage": {
+                "type": ["string", "null"],
+                "description": "Storage type for the stream",
+            },
+        },
+        "required": ["stream_name", "subjects"],
+        "additionalProperties": False,
+    },
+    "job_service": {
+        "type": "object",
+        "properties": {
+            "enable_job_execution": {
+                "type": "boolean",
+                "description": "Whether job execution is enabled",
+            },
+            "enable_result_storage": {
+                "type": "boolean",
+                "description": "Whether result storage is enabled",
+            },
+            "enable_event_logging": {
+                "type": "boolean",
+                "description": "Whether event logging is enabled",
+            },
+            "max_job_execution_time": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Maximum time for job execution in seconds",
+            },
+            "default_result_ttl": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Default TTL for job results in seconds",
+            },
+            "results_bucket_name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name of the results bucket",
+            },
+            "auto_create_buckets": {
+                "type": "boolean",
+                "description": "Whether to automatically create buckets",
+            },
+            "default_queue": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Default queue name",
+            },
+            "default_max_retries": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Default maximum number of retries",
+            },
+            "default_retry_delay": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Default retry delay in seconds",
+            },
+        },
+        "required": [
+            "enable_job_execution",
+            "enable_result_storage",
+            "enable_event_logging",
+            "max_job_execution_time",
+            "default_result_ttl",
+            "results_bucket_name",
+            "auto_create_buckets",
+            "default_queue",
+            "default_max_retries",
+            "default_retry_delay",
+        ],
+        "additionalProperties": False,
+    },
+    "worker_service": {
+        "type": "object",
+        "properties": {
+            "worker_name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name of the worker",
+            },
+            "queues": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "description": "List of queues the worker processes",
+            },
+            "max_concurrent_jobs": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Maximum number of concurrent jobs",
+            },
+            "heartbeat_interval": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Heartbeat interval in seconds",
+            },
+            "ttl": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Time-to-live for worker status in seconds",
+            },
+            "max_job_duration": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Maximum job duration in seconds",
+            },
+            "shutdown_timeout": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Shutdown timeout in seconds",
+            },
+            "status_bucket_name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name of the status bucket",
+            },
+            "auto_create_buckets": {
+                "type": "boolean",
+                "description": "Whether to automatically create buckets",
+            },
+        },
+        "required": [
+            "worker_name",
+            "queues",
+            "max_concurrent_jobs",
+            "heartbeat_interval",
+            "ttl",
+            "max_job_duration",
+            "shutdown_timeout",
+            "status_bucket_name",
+            "auto_create_buckets",
+        ],
+        "additionalProperties": False,
+    },
+    "scheduler_service": {
+        "type": "object",
+        "properties": {
+            "scheduler_name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name of the scheduler",
+            },
+            "check_interval": {
+                "type": "number",
+                "minimum": 0.1,
+                "description": "Interval for checking scheduled jobs in seconds",
+            },
+            "max_concurrent_schedules": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Maximum number of concurrent schedules",
+            },
+            "schedules_bucket_name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name of the schedules bucket",
+            },
+            "lock_bucket_name": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Name of the locks bucket",
+            },
+            "lock_ttl": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Time-to-live for locks in seconds",
+            },
+            "lock_renew_interval": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Interval for renewing locks in seconds",
+            },
+            "auto_create_buckets": {
+                "type": "boolean",
+                "description": "Whether to automatically create buckets",
+            },
+        },
+        "required": [
+            "scheduler_name",
+            "check_interval",
+            "max_concurrent_schedules",
+            "schedules_bucket_name",
+            "lock_bucket_name",
+            "lock_ttl",
+            "lock_renew_interval",
+            "auto_create_buckets",
+        ],
+        "additionalProperties": False,
+    },
+}
+
+# Update the main schema to include service configurations
+for service_name, service_schema in SERVICE_CONFIG_SCHEMAS.items():
+    CONFIG_SCHEMA["properties"][service_name] = service_schema
 
 
 class ConfigValidator:

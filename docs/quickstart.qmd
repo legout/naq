@@ -77,22 +77,27 @@ Found 25 words.
 
 Congratulations! You've successfully enqueued and processed your first background job with `naq`.
 
-## Using Context Managers
+## Using Service Context Patterns
 
-For a simpler approach to working with NATS connections and JetStream, you can use `naq`'s context managers. These handle connection lifecycle, error handling, and resource cleanup automatically.
+For a more structured approach to working with services, `naq` provides service context patterns that handle service lifecycle, dependency management, and resource cleanup automatically. These patterns are designed for different use cases: short-lived operations, long-lived components, and synchronous API compatibility.
 
-Here's how to set up the same task using context managers:
+### Short-Lived Operations
+
+For operations that need services for a brief period, use the `short_lived_service_context` context manager:
 
 ```python
-# context_manager_example.py
+# short_lived_example.py
 import asyncio
-from naq.connection import nats_jetstream
+from naq.service_context import short_lived_service_context
 from naq.models.jobs import Job
 from tasks import count_words
 
 async def main():
-    # Use the nats_jetstream context manager for simplified connection handling
-    async with nats_jetstream() as (nc, js):
+    # Use the short-lived service context for brief operations
+    async with short_lived_service_context() as service_manager:
+        # Get the job service
+        job_service = service_manager.get_job_service()
+        
         # Create a job
         long_text = (
             "A journey of a thousand miles begins with a single step. "
@@ -106,56 +111,111 @@ async def main():
             queue_name="default"
         )
         
-        # Execute the job using the JetStream context
-        print("Executing job using context managers...")
-        result = await job.execute(nc, js)
-        print(f"Job completed with result: {result}")
+        # Execute the job
+        print("Executing job using short-lived service context...")
+        result = await job_service.execute_job(job, "worker-1")
+        print(f"Job completed with result: {result.result}")
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-### Using KV Store Context Manager
+### Long-Lived Components
 
-For storing and retrieving job results or configuration, you can use the `nats_kv_store` context manager:
+For components that need services for an extended period, use the `long_lived_service_context` context manager:
 
 ```python
-# kv_store_example.py
+# long_lived_example.py
 import asyncio
-import json
-from naq.connection import nats_kv_store
+from naq.service_context import long_lived_service_context
+from naq.queue import Queue
+from naq.worker import Worker
+from naq.scheduler import Scheduler
 
 async def main():
-    # Use the nats_kv_store context manager for simplified KV operations
-    async with nats_kv_store("job_results") as kv:
-        # Store a job result
-        job_result = {
-            "job_id": "123",
-            "status": "completed",
-            "result": 42,
-            "timestamp": "2023-01-01T12:00:00Z"
-        }
+    # Use the long-lived service context for extended operations
+    async with long_lived_service_context() as service_manager:
+        # Create a queue
+        queue = Queue(service_manager=service_manager, queue_name="default")
         
-        await kv.put("job:123", json.dumps(job_result).encode())
+        # Create a worker
+        worker = Worker(service_manager=service_manager, queue_name="default")
         
-        # Retrieve the job result
-        stored_data = await kv.get("job:123")
-        if stored_data:
-            result = json.loads(stored_data.value.decode())
-            print(f"Retrieved job result: {result}")
+        # Create a scheduler
+        scheduler = Scheduler(service_manager=service_manager)
+        
+        # Start the worker and scheduler
+        await worker.start()
+        await scheduler.start()
+        
+        # Enqueue a job
+        from tasks import count_words
+        long_text = (
+            "A journey of a thousand miles begins with a single step. "
+            "The best time to plant a tree was 20 years ago. "
+            "The second best time is now."
+        )
+        
+        job = await queue.enqueue(count_words, long_text)
+        print(f"Enqueued job {job.job_id}")
+        
+        # Let the worker process the job
+        await asyncio.sleep(5)
+        
+        # Stop the worker and scheduler
+        await worker.stop()
+        await scheduler.stop()
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-### Context Manager Benefits
+### Synchronous API Compatibility
 
-Using context managers provides several advantages:
+For synchronous code that needs to use services, use the `run_with_service_context` function:
 
-- **Simplicity**: Automatic connection and resource management
-- **Safety**: Proper cleanup even if exceptions occur
-- **Readability**: Clear, concise code structure
-- **Flexibility**: Easy to combine with other async operations
+```python
+# sync_example.py
+from naq.service_context import run_with_service_context
+from naq import enqueue_sync, get_job_result_sync
+from tasks import count_words
+
+def main():
+    # Use the synchronous service context for sync operations
+    def enqueue_and_get_result():
+        # Enqueue a job
+        long_text = (
+            "A journey of a thousand miles begins with a single step. "
+            "The best time to plant a tree was 20 years ago. "
+            "The second best time is now."
+        )
+        
+        job = enqueue_sync(count_words, long_text)
+        print(f"Enqueued job {job.job_id}")
+        
+        # Get the job result
+        result = get_job_result_sync(job.job_id)
+        print(f"Job result: {result}")
+        return result
+    
+    # Run the synchronous function with service context
+    result = run_with_service_context(enqueue_and_get_result)
+    print(f"Final result: {result}")
+
+if __name__ == "__main__":
+    main()
+```
+
+### Service Context Benefits
+
+Using service context patterns provides several advantages:
+
+- **Structured Service Management**: Automatic service initialization and cleanup
+- **Dependency Injection**: Services are automatically wired together
+- **Resource Efficiency**: Services are shared appropriately based on usage patterns
+- **Error Handling**: Proper cleanup even if exceptions occur
+- **Flexibility**: Different patterns for different use cases
+- **Synchronous Compatibility**: Easy to use in both async and sync code
 
 ## Using the Service Layer
 

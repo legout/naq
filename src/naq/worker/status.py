@@ -48,7 +48,7 @@ class WorkerStatusManager:
         self._kv_store_service: Optional[KVStoreService] = None
         self._heartbeat_task = None
         self.logger = StructuredLogger(__name__)
-        self.error_handler = ErrorHandler()
+        self.error_handler = ErrorHandler(self.logger)
 
     @timing
     @retry(max_attempts=3, delay=1.0, backoff="exponential")
@@ -59,7 +59,7 @@ class WorkerStatusManager:
                 if self._service_manager:
                     # Get KVStoreService from ServiceManager
                     self._kv_store_service = await self._service_manager.get_service(
-                        "kv_stores", KVStoreService
+                        "kv_store", KVStoreService
                     )
                 else:
                     self.logger.error("ServiceManager not available, cannot get KVStoreService")
@@ -199,7 +199,7 @@ class WorkerStatusManager:
         """
         workers = []
         logger = StructuredLogger(__name__)
-        error_handler = ErrorHandler()
+        error_handler = ErrorHandler(logger)
         service_manager = None
 
         try:
@@ -216,7 +216,7 @@ class WorkerStatusManager:
                     "connection", ConnectionService, config, initialize=True
                 )
                 kv_store_service = await service_manager.register_service(
-                    "kv_stores", KVStoreService, config, initialize=True
+                    "kv_store", KVStoreService, config, initialize=True
                 )
             except Exception as e:
                 error_handler.handle_error(

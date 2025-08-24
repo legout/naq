@@ -9,14 +9,13 @@ from rich.panel import Panel
 
 from ..settings import DEFAULT_NATS_URL
 from ..services import (
-    ServiceManager,
     JobService,
     SchedulerService,
     StreamService,
     ConnectionService,
-    ServiceConfig,
 )
 from ..services.config import GlobalServiceConfig
+from ..service_context import service_context
 from ..utils import setup_logging
 from ..utils.decorators import log_errors, timing
 from ..utils.logging import StructuredLogger
@@ -69,25 +68,16 @@ def purge(
         config.custom_settings.update({"log_level": log_level})
 
         try:
-            # Create service manager with configuration
-            service_manager = ServiceManager(
-                config=ServiceConfig(
-                    nats_url=nats_url, custom_settings={"log_level": log_level}
-                )
-            )
-
-            # Register required services
-            job_service = await service_manager.register_service(
-                "job", JobService, initialize=True
-            )
-            stream_service = await service_manager.register_service(
-                "stream", StreamService, initialize=True
-            )
-            
-            # Get connection service for JetStream operations
-            connection_service = await service_manager.register_service(
-                "connection", ConnectionService, initialize=True
-            )
+            # Use service context for short-lived operation
+            async with service_context(
+                nats_url=nats_url,
+                custom_settings={"log_level": log_level},
+                logger_name="naq.cli.job_commands.purge"
+            ) as service_manager:
+                # Get required services
+                await service_manager.get_service("job", JobService)
+                stream_service = await service_manager.get_service("stream", StreamService)
+                connection_service = await service_manager.get_service("connection", ConnectionService)
 
             structured_logger.info(
                 f"Attempting to purge queues: {queues}",
@@ -202,9 +192,7 @@ def purge(
                 error_type=type(e).__name__,
             )
             console.print(f"[red]Error: {str(e)}[/red]")
-        finally:
-            if "service_manager" in locals():
-                await service_manager.cleanup_all()
+        # Service context automatically handles cleanup
 
     # Run the async function
     asyncio.run(_purge_queues())
@@ -307,17 +295,14 @@ def job_control(
         config.custom_settings.update({"log_level": log_level})
 
         try:
-            # Create service manager with configuration
-            service_manager = ServiceManager(
-                config=ServiceConfig(
-                    nats_url=nats_url, custom_settings={"log_level": log_level}
-                )
-            )
-
-            # Register required services
-            scheduler_service = await service_manager.register_service(
-                "scheduler", SchedulerService, initialize=True
-            )
+            # Use service context for short-lived operation
+            async with service_context(
+                nats_url=nats_url,
+                custom_settings={"log_level": log_level},
+                logger_name="naq.cli.job_commands.control"
+            ) as service_manager:
+                # Get required services
+                scheduler_service = await service_manager.get_service("scheduler", SchedulerService)
 
             # Validate job_id
             validate_parameter(
@@ -541,9 +526,7 @@ def job_control(
                 error_type=type(e).__name__,
             )
             console.print(f"[red]Error: {str(e)}[/red]")
-        finally:
-            if "service_manager" in locals():
-                await service_manager.cleanup_all()
+        # Service context automatically handles cleanup
 
     # Run the async function
     asyncio.run(_control_job())

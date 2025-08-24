@@ -45,6 +45,9 @@ async def mock_worker(mock_nats, mocker):
     # Create a mock event service
     mock_event_service = AsyncMock()
     
+    # Create a mock job service
+    mock_job_service = AsyncMock()
+    
     # Create a mock service manager and register services
     mock_service_manager = AsyncMock()
     mock_service_manager.get_service = AsyncMock(side_effect=lambda name, service_class: {
@@ -52,12 +55,14 @@ async def mock_worker(mock_nats, mocker):
         "stream": mock_stream_service,
         "kv_store": mock_kv_store_service,
         "event": mock_event_service,
+        "jobs": mock_job_service,
     }[name])
     mock_service_manager.register_service = AsyncMock(side_effect=lambda name, service_class, config, initialize=False: {
         "connection": mock_connection_service,
         "stream": mock_stream_service,
         "kv_store": mock_kv_store_service,
         "event": mock_event_service,
+        "jobs": mock_job_service,
     }[name])
 
     with (

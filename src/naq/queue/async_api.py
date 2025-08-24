@@ -16,6 +16,7 @@ from ..settings import (
     DEFAULT_QUEUE_NAME,
     DEFAULT_NATS_URL,
 )
+from ..service_context import service_context
 from ..utils.decorators import retry
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception
 from ..utils.logging import StructuredLogger
@@ -54,23 +55,30 @@ async def enqueue(
         job_id=None  # Will be set after job creation
     ):
         try:
-            q = Queue(
-                name=queue_name,
+            # Use service context for short-lived operation
+            async with service_context(
                 nats_url=nats_url,
-                prefer_thread_local=prefer_thread_local,
-                config=config or create_global_config(),
-                service_manager=config.service_manager if config else None,
-            )
-            job = await q.enqueue(
-                func,
-                *args,
-                max_retries=max_retries,
-                retry_delay=retry_delay,
-                depends_on=depends_on,
-                timeout=timeout,
-                **kwargs,
-            )
-            return job
+                config=config.service_config if config else None,
+                global_config=config,
+                logger_name="naq.queue.async_api.enqueue"
+            ) as service_manager:
+                q = Queue(
+                    name=queue_name,
+                    nats_url=nats_url,
+                    prefer_thread_local=prefer_thread_local,
+                    config=config or create_global_config(),
+                    service_manager=service_manager,
+                )
+                job = await q.enqueue(
+                    func,
+                    *args,
+                    max_retries=max_retries,
+                    retry_delay=retry_delay,
+                    depends_on=depends_on,
+                    timeout=timeout,
+                    **kwargs,
+                )
+                return job
         except Exception as e:
             error_handler = ErrorHandler()
             wrapped_error = wrap_naq_exception(e, context="enqueue operation")
@@ -111,22 +119,29 @@ async def enqueue_at(
         scheduled_time=dt.isoformat()
     ):
         try:
-            q = Queue(
-                name=queue_name,
+            # Use service context for short-lived operation
+            async with service_context(
                 nats_url=nats_url,
-                prefer_thread_local=prefer_thread_local,
-                config=config or create_global_config(),
-                service_manager=config.service_manager if config else None,
-            )
-            return await q.enqueue_at(
-                dt,
-                func,
-                *args,
-                max_retries=max_retries,
-                retry_delay=retry_delay,
-                timeout=timeout,
-                **kwargs,
-            )
+                config=config.service_config if config else None,
+                global_config=config,
+                logger_name="naq.queue.async_api.enqueue_at"
+            ) as service_manager:
+                q = Queue(
+                    name=queue_name,
+                    nats_url=nats_url,
+                    prefer_thread_local=prefer_thread_local,
+                    config=config or create_global_config(),
+                    service_manager=service_manager,
+                )
+                return await q.enqueue_at(
+                    dt,
+                    func,
+                    *args,
+                    max_retries=max_retries,
+                    retry_delay=retry_delay,
+                    timeout=timeout,
+                    **kwargs,
+                )
         except Exception as e:
             error_handler = ErrorHandler()
             wrapped_error = wrap_naq_exception(e, context="enqueue_at operation")
@@ -167,22 +182,29 @@ async def enqueue_in(
         delay_seconds=delta.total_seconds()
     ):
         try:
-            q = Queue(
-                name=queue_name,
+            # Use service context for short-lived operation
+            async with service_context(
                 nats_url=nats_url,
-                prefer_thread_local=prefer_thread_local,
-                config=config or create_global_config(),
-                service_manager=config.service_manager if config else None,
-            )
-            return await q.enqueue_in(
-                delta,
-                func,
-                *args,
-                max_retries=max_retries,
-                retry_delay=retry_delay,
-                timeout=timeout,
-                **kwargs,
-            )
+                config=config.service_config if config else None,
+                global_config=config,
+                logger_name="naq.queue.async_api.enqueue_in"
+            ) as service_manager:
+                q = Queue(
+                    name=queue_name,
+                    nats_url=nats_url,
+                    prefer_thread_local=prefer_thread_local,
+                    config=config or create_global_config(),
+                    service_manager=service_manager,
+                )
+                return await q.enqueue_in(
+                    delta,
+                    func,
+                    *args,
+                    max_retries=max_retries,
+                    retry_delay=retry_delay,
+                    timeout=timeout,
+                    **kwargs,
+                )
         except Exception as e:
             error_handler = ErrorHandler()
             wrapped_error = wrap_naq_exception(e, context="enqueue_in operation")
@@ -226,24 +248,31 @@ async def schedule(
         repeat=repeat
     ):
         try:
-            q = Queue(
-                name=queue_name,
+            # Use service context for short-lived operation
+            async with service_context(
                 nats_url=nats_url,
-                prefer_thread_local=prefer_thread_local,
-                config=config or create_global_config(),
-                service_manager=config.service_manager if config else None,
-            )
-            return await q.schedule(
-                func,
-                *args,
-                cron=cron,
-                interval=interval,
-                repeat=repeat,
-                max_retries=max_retries,
-                retry_delay=retry_delay,
-                timeout=timeout,
-                **kwargs,
-            )
+                config=config.service_config if config else None,
+                global_config=config,
+                logger_name="naq.queue.async_api.schedule"
+            ) as service_manager:
+                q = Queue(
+                    name=queue_name,
+                    nats_url=nats_url,
+                    prefer_thread_local=prefer_thread_local,
+                    config=config or create_global_config(),
+                    service_manager=service_manager,
+                )
+                return await q.schedule(
+                    func,
+                    *args,
+                    cron=cron,
+                    interval=interval,
+                    repeat=repeat,
+                    max_retries=max_retries,
+                    retry_delay=retry_delay,
+                    timeout=timeout,
+                    **kwargs,
+                )
         except Exception as e:
             error_handler = ErrorHandler()
             wrapped_error = wrap_naq_exception(e, context="schedule operation")
@@ -274,14 +303,21 @@ async def purge_queue(
         queue_name=queue_name
     ):
         try:
-            q = Queue(
-                name=queue_name,
+            # Use service context for short-lived operation
+            async with service_context(
                 nats_url=nats_url,
-                prefer_thread_local=prefer_thread_local,
-                config=config or create_global_config(),
-                service_manager=config.service_manager if config else None,
-            )
-            return await q.purge()
+                config=config.service_config if config else None,
+                global_config=config,
+                logger_name="naq.queue.async_api.purge_queue"
+            ) as service_manager:
+                q = Queue(
+                    name=queue_name,
+                    nats_url=nats_url,
+                    prefer_thread_local=prefer_thread_local,
+                    config=config or create_global_config(),
+                    service_manager=service_manager,
+                )
+                return await q.purge()
         except Exception as e:
             error_handler = ErrorHandler()
             wrapped_error = wrap_naq_exception(e, context="purge_queue operation")
@@ -312,13 +348,20 @@ async def cancel_scheduled_job(
         job_id=job_id
     ):
         try:
-            q = Queue(
+            # Use service context for short-lived operation
+            async with service_context(
                 nats_url=nats_url,
-                prefer_thread_local=prefer_thread_local,
-                config=config or create_global_config(),
-                service_manager=config.service_manager if config else None,
-            )  # Queue name doesn't matter here
-            return await q.cancel_scheduled_job(job_id)
+                config=config.service_config if config else None,
+                global_config=config,
+                logger_name="naq.queue.async_api.cancel_scheduled_job"
+            ) as service_manager:
+                q = Queue(
+                    nats_url=nats_url,
+                    prefer_thread_local=prefer_thread_local,
+                    config=config or create_global_config(),
+                    service_manager=service_manager,
+                )  # Queue name doesn't matter here
+                return await q.cancel_scheduled_job(job_id)
         except Exception as e:
             error_handler = ErrorHandler()
             wrapped_error = wrap_naq_exception(e, context="cancel_scheduled_job operation")
@@ -349,13 +392,20 @@ async def pause_scheduled_job(
         job_id=job_id
     ):
         try:
-            q = Queue(
+            # Use service context for short-lived operation
+            async with service_context(
                 nats_url=nats_url,
-                prefer_thread_local=prefer_thread_local,
-                config=config or create_global_config(),
-                service_manager=config.service_manager if config else None,
-            )
-            return await q.pause_scheduled_job(job_id)
+                config=config.service_config if config else None,
+                global_config=config,
+                logger_name="naq.queue.async_api.pause_scheduled_job"
+            ) as service_manager:
+                q = Queue(
+                    nats_url=nats_url,
+                    prefer_thread_local=prefer_thread_local,
+                    config=config or create_global_config(),
+                    service_manager=service_manager,
+                )
+                return await q.pause_scheduled_job(job_id)
         except Exception as e:
             error_handler = ErrorHandler()
             wrapped_error = wrap_naq_exception(e, context="pause_scheduled_job operation")

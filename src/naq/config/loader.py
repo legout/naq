@@ -9,6 +9,7 @@ import yaml
 from ..exceptions import ConfigurationError
 from .defaults import DEFAULT_CONFIG
 from .merger import merge_config
+from .validation import validate_naq_config
 
 
 class ConfigLoader:
@@ -75,6 +76,12 @@ class ConfigLoader:
 
         # Apply environment variable overrides
         config = self._apply_environment_overrides(config)
+
+        # Validate the final configuration
+        try:
+            validate_naq_config(config)
+        except Exception as e:
+            raise ConfigurationError(f"Configuration validation failed: {e}")
 
         return config
 
@@ -198,7 +205,7 @@ class ConfigLoader:
             "WORKER_CONCURRENCY": ("workers", "concurrency", int),
             "WORKER_HEARTBEAT_INTERVAL": ("workers", "heartbeat_interval", float),
             "DEFAULT_ACK_WAIT": ("queues", "ack_wait", int),
-            "SCHEDULER_LOCK_TTL": ("scheduler", "lock_ttl", int),
+            "SCHEDULER_LOCK_TTL": ("scheduler", "lock_ttl", float),
             "SCHEDULER_LOCK_RENEW_INTERVAL": ("scheduler", "lock_renew_interval", int),
             "MAX_SCHEDULE_FAILURES": ("scheduler", "max_failures", int),
             "JOB_STATUS_TTL": ("scheduler", "job_status_ttl", int),

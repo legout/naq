@@ -12,6 +12,8 @@ from typing import Any, Dict, Optional
 
 import msgspec
 
+from ..config import get_config
+from ..config.types import NAQConfig
 from ..exceptions import JobExecutionError, NaqException
 from ..models.events import JobEvent
 from ..models.enums import JOB_STATUS
@@ -73,6 +75,8 @@ class JobService(BaseService):
     def __init__(
         self,
         config: Optional[ServiceConfig] = None,
+        *,
+        naq_config: Optional[NAQConfig] = None,
         connection_service: Optional[ConnectionService] = None,
         kv_store_service: Optional[KVStoreService] = None,
         event_service: Optional[EventService] = None,
@@ -82,11 +86,15 @@ class JobService(BaseService):
 
         Args:
             config: Optional configuration for the service.
+            naq_config: Optional NAQ configuration instance. If not provided, uses global config.
             connection_service: Optional ConnectionService dependency.
             kv_store_service: Optional KVStoreService dependency.
             event_service: Optional EventService dependency.
         """
         super().__init__(config)
+        # Store the NAQConfig instance
+        self._naq_config = naq_config if naq_config is not None else get_config()
+        # Extract job-specific configuration
         self._job_config = self._extract_job_config()
         self._connection_service = connection_service
         self._kv_store_service = kv_store_service
@@ -94,7 +102,7 @@ class JobService(BaseService):
 
     def _extract_job_config(self) -> JobServiceConfig:
         """
-        Extract job-specific configuration from the service config.
+        Extract job-specific configuration from the NAQ config.
 
         Returns:
             JobServiceConfig instance with job parameters.
@@ -102,7 +110,33 @@ class JobService(BaseService):
         # Start with default config
         job_config = JobServiceConfig()
 
-        # Override with service config if provided
+        # Override with NAQ config job_service settings if provided
+        if self._naq_config and self._naq_config.job_service:
+            naq_job_config = self._naq_config.job_service
+            
+            # Map NAQ config to job service config
+            if naq_job_config.enable_job_execution is not None:
+                job_config.enable_job_execution = naq_job_config.enable_job_execution
+            
+            if naq_job_config.enable_result_storage is not None:
+                job_config.enable_result_storage = naq_job_config.enable_result_storage
+            
+            if naq_job_config.enable_event_logging is not None:
+                job_config.enable_event_logging = naq_job_config.enable_event_logging
+            
+            if naq_job_config.max_job_execution_time is not None:
+                job_config.max_job_execution_time = int(naq_job_config.max_job_execution_time)
+            
+            if naq_job_config.default_result_ttl is not None:
+                job_config.default_result_ttl = int(naq_job_config.default_result_ttl)
+            
+            if naq_job_config.results_bucket_name:
+                job_config.results_bucket_name = naq_job_config.results_bucket_name
+            
+            if naq_job_config.auto_create_buckets is not None:
+                job_config.auto_create_buckets = naq_job_config.auto_create_buckets
+
+        # Override with service config if provided (for backward compatibility)
         if self._config and self._config.custom_settings:
             custom_settings = self._config.custom_settings
 
@@ -182,6 +216,7 @@ class JobService(BaseService):
             if self._kv_store_service is None:
                 from .kv_stores import KVStoreService, KVStoreServiceConfig
 
+                # Fall back to job config for backward compatibility
                 kv_config = KVStoreServiceConfig(
                     auto_create_buckets=self._job_config.auto_create_buckets
                 )
@@ -189,21 +224,32 @@ class JobService(BaseService):
                     config=ServiceConfig(custom_settings=kv_config.as_dict()),
                     connection_service=self._connection_service,
                 )
+                
                 await self._kv_store_service.initialize()
 
             # Create event service if not provided
             if self._event_service is None and self._job_config.enable_event_logging:
                 from .events import EventService, EventServiceConfig
 
-                event_config = EventServiceConfig(
-                    enable_event_logging=self._job_config.enable_event_logging,
-                    auto_create_bucket=self._job_config.auto_create_buckets,
-                )
-                self._event_service = EventService(
-                    config=ServiceConfig(custom_settings=event_config.as_dict()),
-                    connection_service=self._connection_service,
-                    kv_store_service=self._kv_store_service,
-                )
+                # Use NAQ config if available, otherwise use job config
+                if self._naq_config and self._naq_config.job_service:
+                    # Initialize event service from NAQ config
+                    self._event_service = EventService(
+                        connection_service=self._connection_service,
+                        kv_store_service=self._kv_store_service,
+                    )
+                else:
+                    # Fall back to job config for backward compatibility
+                    event_config = EventServiceConfig(
+                        enable_event_logging=self._job_config.enable_event_logging,
+                        auto_create_bucket=self._job_config.auto_create_buckets,
+                    )
+                    self._event_service = EventService(
+                        config=ServiceConfig(custom_settings=event_config.as_dict()),
+                        connection_service=self._connection_service,
+                        kv_store_service=self._kv_store_service,
+                    )
+                
                 await self._event_service.initialize()
 
             self._logger.info("JobService initialized successfully")
@@ -329,6 +375,9 @@ class JobService(BaseService):
             result_key = f"job:{job_id}:result"
 
             # Store the result with TTL
+            if self._kv_store_service is None:
+                raise NaqException("KVStoreService is not available")
+            
             await self._kv_store_service.put(
                 self._job_config.results_bucket_name,
                 result_key,
@@ -362,6 +411,9 @@ class JobService(BaseService):
             result_key = f"job:{job_id}:result"
 
             # Get the result
+            if self._kv_store_service is None:
+                raise NaqException("KVStoreService is not available")
+                
             try:
                 result = await self._kv_store_service.get(
                     self._job_config.results_bucket_name, result_key, deserialize=True
@@ -464,6 +516,9 @@ class JobService(BaseService):
             # Create result key
             result_key = f"job:{job_id}:result"
 
+            if self._kv_store_service is None:
+                raise NaqException("KVStoreService is not available")
+                
             # Delete the result
             deleted = await self._kv_store_service.delete(
                 self._job_config.results_bucket_name, result_key

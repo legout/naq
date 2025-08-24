@@ -10,6 +10,16 @@ from .loader import ConfigLoader
 from .merger import merge_config
 from .schema import ConfigValidator
 from .types import EventsConfig, NAQConfig, NatsConfig, WorkerConfig
+from .validation import (
+    validate_naq_config,
+    validate_connection_config,
+    validate_job_service_config,
+    validate_worker_service_config,
+    validate_scheduler_service_config,
+    validate_stream_service_config,
+    validate_kv_store_config,
+    validate_event_service_config,
+)
 
 # Global configuration instance
 _config_instance: Optional[NAQConfig] = None
@@ -26,6 +36,14 @@ __all__ = [
     "reload_config",
     "temp_config",
     "merge_config",
+    "validate_naq_config",
+    "validate_connection_config",
+    "validate_job_service_config",
+    "validate_worker_service_config",
+    "validate_scheduler_service_config",
+    "validate_stream_service_config",
+    "validate_kv_store_config",
+    "validate_event_service_config",
 ]
 
 

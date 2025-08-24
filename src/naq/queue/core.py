@@ -14,10 +14,12 @@ from ..exceptions import ConfigurationError
 from ..models.jobs import Job, RetryDelayType
 from .scheduled import ScheduledJobManager
 from ..models.enums import SCHEDULED_JOB_STATUS
-from ..services import ServiceManager, ConnectionService, StreamService, JobService, EventService, KVStoreService
+from ..services import ConnectionService, StreamService, JobService, EventService, KVStoreService
 from ..services.config import create_global_config, GlobalServiceConfig
 from ..settings import DEFAULT_QUEUE_NAME, DEFAULT_NATS_URL, NAQ_PREFIX
 from ..utils import setup_logging
+from ..service_context import long_lived_service_context
+from ..services.base import ServiceManager
 from ..utils.decorators import retry
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception
 from ..utils.logging import StructuredLogger
@@ -36,7 +38,7 @@ class Queue:
         nats_url: str = DEFAULT_NATS_URL,
         default_timeout: Optional[int] = None,
         prefer_thread_local: bool = False,
-        service_manager: Optional[ServiceManager] = None,
+        service_manager: Optional["ServiceManager"] = None,
         config: Optional[GlobalServiceConfig] = None,
     ):
         """
@@ -133,10 +135,19 @@ class Queue:
 
     async def __aenter__(self):
         """Async context manager entry."""
+        # Use long-lived service context for queue lifecycle
+        if self._service_manager:
+            self._service_context = long_lived_service_context(
+                self._service_manager,
+                logger_name=f"naq.queue.core.{self.name}"
+            )
+            await self._service_context.__aenter__()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
+        if hasattr(self, '_service_context'):
+            await self._service_context.__aexit__(exc_type, exc_val, exc_tb)
         await self.close()
 
 

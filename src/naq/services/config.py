@@ -9,6 +9,7 @@ structure for consistency and maintainability.
 from typing import Optional, Any, Dict
 
 from ..config import get_config, NAQConfig
+from .base import ServiceManager
 
 
 class GlobalServiceConfig:
@@ -20,11 +21,12 @@ class GlobalServiceConfig:
     that can be overridden by service-specific configurations.
     """
 
-    def __init__(self, nats_url: Optional[str] = None, queue_name: Optional[str] = None, log_level: Optional[str] = None, **kwargs):
+    def __init__(self, nats_url: Optional[str] = None, queue_name: Optional[str] = None, log_level: Optional[str] = None, service_manager: Optional[ServiceManager] = None, **kwargs):
         """Initialize global service configuration."""
         self.nats_url = nats_url
         self.queue_name = queue_name
         self.log_level = log_level
+        self.service_manager = service_manager
         self.custom_settings: Dict[str, Any] = {}
         
         # Add any additional kwargs to custom_settings
@@ -65,15 +67,13 @@ class GlobalServiceConfig:
                 self.custom_settings['default_queue_name'] = config.queues['default_name']
 
         # Scheduler settings
-        if config.scheduler:
-            if 'lock_ttl' in config.scheduler:
-                self.custom_settings['scheduler_lock_ttl_seconds'] = config.scheduler['lock_ttl']
-            if 'lock_renew_interval' in config.scheduler:
-                self.custom_settings['scheduler_lock_renew_interval_seconds'] = config.scheduler['lock_renew_interval']
-            if 'max_failures' in config.scheduler:
-                self.custom_settings['max_schedule_failures'] = config.scheduler['max_failures']
-            if 'job_status_ttl' in config.scheduler:
-                self.custom_settings['job_status_ttl_seconds'] = config.scheduler['job_status_ttl']
+        if config.scheduler_service:
+            self.custom_settings['scheduler_lock_ttl_seconds'] = config.scheduler_service.lock_ttl
+            self.custom_settings['scheduler_lock_renew_interval_seconds'] = config.scheduler_service.lock_renew_interval
+            # Note: max_failures and job_status_ttl are not in the new SchedulerServiceConfig
+            # We'll set default values if needed
+            self.custom_settings.setdefault('max_schedule_failures', 3)
+            self.custom_settings.setdefault('job_status_ttl_seconds', 86400)
 
         # Results settings
         if config.results and 'ttl' in config.results:
@@ -190,6 +190,7 @@ def merge_configs(
         nats_url=override_config.nats_url or base_config.nats_url,
         queue_name=override_config.queue_name or base_config.queue_name,
         log_level=override_config.log_level or base_config.log_level,
+        service_manager=override_config.service_manager or base_config.service_manager,
     )
 
     # Merge custom settings

@@ -14,6 +14,8 @@ import msgspec
 from nats.js.errors import KeyNotFoundError
 from nats.js.kv import KeyValue
 
+from ..config import get_config
+from ..config.types import NAQConfig
 from ..exceptions import NaqException
 from .base import (
     BaseService,
@@ -70,6 +72,8 @@ class KVStoreService(BaseService):
     def __init__(
         self,
         config: Optional[ServiceConfig] = None,
+        *,
+        naq_config: Optional[NAQConfig] = None,
         connection_service: Optional[ConnectionService] = None,
         nats_client: Optional[Any] = None,
     ) -> None:
@@ -78,10 +82,14 @@ class KVStoreService(BaseService):
 
         Args:
             config: Optional configuration for the service.
+            naq_config: Optional NAQ configuration instance. If not provided, uses global config.
             connection_service: Optional ConnectionService dependency.
             nats_client: Optional direct NATS client for testing.
         """
         super().__init__(config)
+        # Store the NAQConfig instance
+        self._naq_config = naq_config if naq_config is not None else get_config()
+        # Extract KV-specific configuration
         self._kv_config = self._extract_kv_config()
         self._connection_service = connection_service
         self._nats_client = nats_client
@@ -91,7 +99,7 @@ class KVStoreService(BaseService):
 
     def _extract_kv_config(self) -> KVStoreServiceConfig:
         """
-        Extract KV-specific configuration from the service config.
+        Extract KV-specific configuration from the NAQ config.
 
         Returns:
             KVStoreServiceConfig instance with KV parameters.
@@ -99,7 +107,27 @@ class KVStoreService(BaseService):
         # Start with default config
         kv_config = KVStoreServiceConfig()
 
-        # Override with service config if provided
+        # Override with NAQ config kv_store settings if provided
+        if self._naq_config and self._naq_config.kv_store:
+            naq_kv_config = self._naq_config.kv_store
+            
+            # Map NAQ config to KV store service config
+            if naq_kv_config.bucket_name:
+                # Use bucket_name as default for operations
+                kv_config.nats_url = naq_kv_config.bucket_name
+            
+            if naq_kv_config.ttl is not None:
+                kv_config.default_bucket_ttl = int(naq_kv_config.ttl)
+            
+            if naq_kv_config.history is not None:
+                # Use history as max_pool_size if not explicitly set
+                kv_config.max_pool_size = naq_kv_config.history
+            
+            if naq_kv_config.replicas is not None:
+                # Use replicas as a factor for pool size
+                kv_config.max_pool_size = max(kv_config.max_pool_size, naq_kv_config.replicas * 2)
+
+        # Override with service config if provided (for backward compatibility)
         if self._config and self._config.custom_settings:
             custom_settings = self._config.custom_settings
 

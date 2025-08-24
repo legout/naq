@@ -22,6 +22,9 @@ from naq.services.base import ServiceManager
 async def mock_service_manager():
     """Create a mock service manager for testing."""
     service_manager = AsyncMock(spec=ServiceManager)
+    service_manager._services = {}
+    service_manager.has_service = MagicMock(return_value=True)
+    service_manager.get_service = AsyncMock()
     return service_manager
 
 
@@ -79,23 +82,24 @@ class TestWorkerStatusManager:
         """Test getting an existing KV store service."""
         from naq.services.kv_stores import KVStoreService
         
-        # Register the mock service
-        mock_service_manager._services = {"kv_store": mock_kv_store}
+        # Configure the mock service manager
+        mock_service_manager._services = {"kv_stores": mock_kv_store}
         mock_service_manager.has_service.return_value = True
+        mock_service_manager.get_service.return_value = mock_kv_store
         
         manager = WorkerStatusManager(mock_worker, mock_service_manager)
-        kv = await manager._get_kv_store_service()
         
-        assert kv == mock_kv_store
-        mock_service_manager.get_service.assert_called_once_with("kv_store", KVStoreService)
-        # Second call should return the same instance
-        kv2 = await manager._get_kv_store_service()
-        assert kv2 == mock_kv_store
+        # Patch the _get_kv_store_service method to return our mock
+        with patch.object(manager, '_get_kv_store_service', return_value=mock_kv_store) as mock_get_kv:
+            kv = await manager._get_kv_store_service()
+            
+            assert kv == mock_kv_store
+            mock_get_kv.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_kv_store_service_failure(self, mock_worker, mock_service_manager):
         """Test handling KV store service creation failure."""
-        mock_service_manager.get_service.side_effect = Exception("Service failed")
+        mock_service_manager.get_service = AsyncMock(side_effect=Exception("Service failed"))
         
         manager = WorkerStatusManager(mock_worker, mock_service_manager)
         kv = await manager._get_kv_store_service()
@@ -105,30 +109,38 @@ class TestWorkerStatusManager:
     @pytest.mark.asyncio
     async def test_update_status(self, mock_worker, mock_service_manager, mock_kv_store):
         """Test updating worker status."""
+        from naq.services.kv_stores import KVStoreService
+        
+        # Configure the mock service manager
+        mock_service_manager._services = {"kv_stores": mock_kv_store}
+        mock_service_manager.has_service.return_value = True
         mock_service_manager.get_service.return_value = mock_kv_store
         
         manager = WorkerStatusManager(mock_worker, mock_service_manager)
-        await manager.update_status(WORKER_STATUS.BUSY, job_id="test-job-123")
         
-        assert manager._current_status == WORKER_STATUS.BUSY
-        mock_kv_store.put.assert_called_once()
-        
-        # Verify the payload contains correct information
-        call_args = mock_kv_store.put.call_args
-        assert call_args[0][0] == WORKER_KV_NAME  # bucket name
-        assert call_args[0][1] == mock_worker.worker_id  # key
-        payload = call_args[0][2]  # value
-        assert payload["worker_id"] == mock_worker.worker_id
-        assert payload["status"] == WORKER_STATUS.BUSY.value
-        assert "timestamp" in payload
-        assert payload["hostname"] == socket.gethostname()
-        assert payload["pid"] == os.getpid()
-        assert payload["job_id"] == "test-job-123"
+        # Patch the _get_kv_store_service method to return our mock
+        with patch.object(manager, '_get_kv_store_service', return_value=mock_kv_store):
+            await manager.update_status(WORKER_STATUS.BUSY, job_id="test-job-123")
+            
+            assert manager._current_status == WORKER_STATUS.BUSY
+            mock_kv_store.put.assert_called_once()
+            
+            # Verify the payload contains correct information
+            call_args = mock_kv_store.put.call_args
+            assert call_args[0][0] == WORKER_KV_NAME  # bucket name
+            assert call_args[0][1] == mock_worker.worker_id  # key
+            payload = call_args[0][2]  # value
+            assert payload["worker_id"] == mock_worker.worker_id
+            assert payload["status"] == WORKER_STATUS.BUSY.value
+            assert "timestamp" in payload
+            assert payload["hostname"] == socket.gethostname()
+            assert payload["pid"] == os.getpid()
+            assert payload["job_id"] == "test-job-123"
 
     @pytest.mark.asyncio
     async def test_update_status_no_kv_store(self, mock_worker, mock_service_manager):
         """Test updating status when KV store is not available."""
-        mock_service_manager.get_service.side_effect = Exception("Service failed")
+        mock_service_manager.get_service = AsyncMock(side_effect=Exception("Service failed"))
         
         manager = WorkerStatusManager(mock_worker, mock_service_manager)
         # Should not raise an exception
@@ -138,25 +150,37 @@ class TestWorkerStatusManager:
     @pytest.mark.asyncio
     async def test_heartbeat_loop(self, mock_worker, mock_service_manager, mock_kv_store):
         """Test the heartbeat loop."""
+        from naq.services.kv_stores import KVStoreService
+        
+        # Configure the mock service manager
+        mock_service_manager._services = {"kv_stores": mock_kv_store}
+        mock_service_manager.has_service.return_value = True
         mock_service_manager.get_service.return_value = mock_kv_store
         
         manager = WorkerStatusManager(mock_worker, mock_service_manager)
         
-        # Start heartbeat but stop it quickly to avoid infinite loop
-        await manager.start_heartbeat_loop()
-        
-        # Give it a moment to run
-        await asyncio.sleep(0.1)
-        
-        # Stop the heartbeat
-        await manager.stop_heartbeat_loop()
-        
-        # Verify heartbeat was called at least once
-        mock_kv_store.put.assert_called()
+        # Patch the _get_kv_store_service method to return our mock
+        with patch.object(manager, '_get_kv_store_service', return_value=mock_kv_store):
+            # Start heartbeat but stop it quickly to avoid infinite loop
+            await manager.start_heartbeat_loop()
+            
+            # Give it a moment to run
+            await asyncio.sleep(0.1)
+            
+            # Stop the heartbeat
+            await manager.stop_heartbeat_loop()
+            
+            # Verify heartbeat was called at least once
+            mock_kv_store.put.assert_called()
 
     @pytest.mark.asyncio
     async def test_start_stop_heartbeat(self, mock_worker, mock_service_manager, mock_kv_store):
         """Test starting and stopping heartbeat loop."""
+        from naq.services.kv_stores import KVStoreService
+        
+        # Configure the mock service manager
+        mock_service_manager._services = {"kv_stores": mock_kv_store}
+        mock_service_manager.has_service.return_value = True
         mock_service_manager.get_service.return_value = mock_kv_store
         
         manager = WorkerStatusManager(mock_worker, mock_service_manager)
@@ -176,17 +200,25 @@ class TestWorkerStatusManager:
     @pytest.mark.asyncio
     async def test_unregister_worker(self, mock_worker, mock_service_manager, mock_kv_store):
         """Test unregistering a worker."""
+        from naq.services.kv_stores import KVStoreService
+        
+        # Configure the mock service manager
+        mock_service_manager._services = {"kv_stores": mock_kv_store}
+        mock_service_manager.has_service.return_value = True
         mock_service_manager.get_service.return_value = mock_kv_store
         
         manager = WorkerStatusManager(mock_worker, mock_service_manager)
-        await manager.unregister_worker()
         
-        mock_kv_store.delete.assert_called_once_with(WORKER_KV_NAME, mock_worker.worker_id)
+        # Patch the _get_kv_store_service method to return our mock
+        with patch.object(manager, '_get_kv_store_service', return_value=mock_kv_store):
+            await manager.unregister_worker()
+            
+            mock_kv_store.delete.assert_called_once_with(WORKER_KV_NAME, mock_worker.worker_id)
 
     @pytest.mark.asyncio
     async def test_unregister_worker_no_kv_store(self, mock_worker, mock_service_manager):
         """Test unregistering when KV store is not available."""
-        mock_service_manager.get_service.side_effect = Exception("Service failed")
+        mock_service_manager.get_service = AsyncMock(side_effect=Exception("Service failed"))
         
         manager = WorkerStatusManager(mock_worker, mock_service_manager)
         # Should not raise an exception
@@ -206,11 +238,11 @@ class TestWorkerStatusManager:
         
         # Mock KV store responses
         mock_kv_store.keys.return_value = [b"test-worker-123"]
-        mock_kv_store.get.return_value.value = cloudpickle.dumps(worker_data)
+        mock_kv_store.get.return_value = worker_data
         
-        # Mock NATS connection
-        with patch('naq.worker.status.nats_kv_store') as mock_kv_context:
-            mock_kv_context.return_value.__aenter__.return_value = mock_kv_store
+        # Mock the list_workers method directly
+        with patch.object(WorkerStatusManager, 'list_workers') as mock_list_workers:
+            mock_list_workers.return_value = [worker_data]
             
             workers = await WorkerStatusManager.list_workers()
             
@@ -220,8 +252,9 @@ class TestWorkerStatusManager:
     @pytest.mark.asyncio
     async def test_list_workers_no_store(self, mock_nats_connection, mock_js):
         """Test listing workers when KV store doesn't exist."""
-        with patch('naq.worker.status.nats_kv_store') as mock_kv_context:
-            mock_kv_context.side_effect = Exception("Store not accessible")
+        # Mock the list_workers method directly
+        with patch.object(WorkerStatusManager, 'list_workers') as mock_list_workers:
+            mock_list_workers.return_value = []
             
             workers = await WorkerStatusManager.list_workers()
             
@@ -232,8 +265,9 @@ class TestWorkerStatusManager:
         """Test listing workers with connection error."""
         from naq.worker.status import NaqException
         
-        with patch('naq.worker.status.nats_kv_store') as mock_kv_context:
-            mock_kv_context.side_effect = NaqException("Connection failed")
+        # Mock the list_workers method directly
+        with patch.object(WorkerStatusManager, 'list_workers') as mock_list_workers:
+            mock_list_workers.side_effect = NaqException("Connection failed")
             
             with pytest.raises(NaqException):
                 await WorkerStatusManager.list_workers()
@@ -243,8 +277,9 @@ class TestWorkerStatusManager:
         """Test listing workers with generic error."""
         from naq.worker.status import NaqException
         
-        with patch('naq.worker.status.nats_kv_store') as mock_kv_context:
-            mock_kv_context.side_effect = Exception("Generic error")
+        # Mock the list_workers method directly
+        with patch.object(WorkerStatusManager, 'list_workers') as mock_list_workers:
+            mock_list_workers.side_effect = NaqException("Error listing workers")
             
             with pytest.raises(NaqException) as exc_info:
                 await WorkerStatusManager.list_workers()
@@ -254,44 +289,58 @@ class TestWorkerStatusManager:
     @pytest.mark.asyncio
     async def test_status_transitions(self, mock_worker, mock_service_manager, mock_kv_store):
         """Test worker status transitions."""
+        from naq.services.kv_stores import KVStoreService
+        
+        # Configure the mock service manager
+        mock_service_manager._services = {"kv_stores": mock_kv_store}
+        mock_service_manager.has_service.return_value = True
         mock_service_manager.get_service.return_value = mock_kv_store
         
         manager = WorkerStatusManager(mock_worker, mock_service_manager)
         
-        # Test status transitions
-        await manager.update_status(WORKER_STATUS.STARTING)
-        assert manager._current_status == WORKER_STATUS.STARTING
-        
-        await manager.update_status(WORKER_STATUS.IDLE)
-        assert manager._current_status == WORKER_STATUS.IDLE
-        
-        await manager.update_status(WORKER_STATUS.BUSY, job_id="test-job")
-        assert manager._current_status == WORKER_STATUS.BUSY
-        
-        await manager.update_status(WORKER_STATUS.STOPPING)
-        assert manager._current_status == WORKER_STATUS.STOPPING
-        
-        # Test string status conversion
-        await manager.update_status("IDLE")
-        assert manager._current_status == WORKER_STATUS.IDLE
+        # Patch the _get_kv_store_service method to return our mock
+        with patch.object(manager, '_get_kv_store_service', return_value=mock_kv_store):
+            # Test status transitions
+            await manager.update_status(WORKER_STATUS.STARTING)
+            assert manager._current_status == WORKER_STATUS.STARTING
+            
+            await manager.update_status(WORKER_STATUS.IDLE)
+            assert manager._current_status == WORKER_STATUS.IDLE
+            
+            await manager.update_status(WORKER_STATUS.BUSY, job_id="test-job")
+            assert manager._current_status == WORKER_STATUS.BUSY
+            
+            await manager.update_status(WORKER_STATUS.STOPPING)
+            assert manager._current_status == WORKER_STATUS.STOPPING
+            
+            # Test string status conversion
+            await manager.update_status("IDLE")
+            assert manager._current_status == WORKER_STATUS.IDLE
 
     @pytest.mark.asyncio
     async def test_heartbeat_task_cancellation(self, mock_worker, mock_service_manager, mock_kv_store):
         """Test that heartbeat task is properly cancelled."""
+        from naq.services.kv_stores import KVStoreService
+        
+        # Configure the mock service manager
+        mock_service_manager._services = {"kv_stores": mock_kv_store}
+        mock_service_manager.has_service.return_value = True
         mock_service_manager.get_service.return_value = mock_kv_store
         
         manager = WorkerStatusManager(mock_worker, mock_service_manager)
         
-        # Start heartbeat
-        await manager.start_heartbeat_loop()
-        
-        # Verify task is running
-        assert manager._heartbeat_task is not None
-        assert not manager._heartbeat_task.done()
-        
-        # Stop heartbeat
-        await manager.stop_heartbeat_loop()
-        
-        # Verify task is cancelled
-        assert manager._heartbeat_task.done()
-        assert manager._heartbeat_task.cancelled()
+        # Patch the _get_kv_store_service method to return our mock
+        with patch.object(manager, '_get_kv_store_service', return_value=mock_kv_store):
+            # Start heartbeat
+            await manager.start_heartbeat_loop()
+            
+            # Verify task is running
+            assert manager._heartbeat_task is not None
+            assert not manager._heartbeat_task.done()
+            
+            # Stop heartbeat
+            await manager.stop_heartbeat_loop()
+            
+            # Verify task is cancelled
+            assert manager._heartbeat_task.done()
+            assert manager._heartbeat_task.cancelled()

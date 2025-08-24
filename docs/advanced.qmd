@@ -41,6 +41,121 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+### Using Service Context Patterns
+
+For more advanced service management, `naq` provides service context patterns that handle service lifecycle, dependency management, and resource cleanup automatically. These patterns are designed for different use cases: short-lived operations, long-lived components, and synchronous API compatibility.
+
+#### Short-Lived Operations for High-Throughput Scenarios
+
+For high-throughput scenarios where you need to enqueue many jobs efficiently, use the `short_lived_service_context` context manager:
+
+```python
+# high_throughput_enqueue.py
+import asyncio
+from naq.service_context import short_lived_service_context
+from naq.models.jobs import Job
+
+async def my_task(i):
+    return f"Processed item {i}"
+
+async def main():
+    # Use the short-lived service context for high-throughput operations
+    async with short_lived_service_context() as service_manager:
+        # Get the job service
+        job_service = service_manager.get_job_service()
+        
+        print("Enqueuing 1,000 jobs using service context...")
+        tasks = []
+        for i in range(1000):
+            # Create a job
+            job = Job(
+                function=my_task,
+                args=(i,),
+                queue_name="high_volume"
+            )
+            # Enqueue the job
+            task = job_service.enqueue_job(job)
+            tasks.append(task)
+
+        await asyncio.gather(*tasks)
+        print("All jobs enqueued.")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+#### Long-Lived Components for Continuous Processing
+
+For continuous processing scenarios where you need to maintain services for an extended period, use the `long_lived_service_context` context manager:
+
+```python
+# continuous_processing.py
+import asyncio
+from naq.service_context import long_lived_service_context
+from naq.queue import Queue
+from naq.worker import Worker
+
+async def my_task(i):
+    return f"Processed item {i}"
+
+async def main():
+    # Use the long-lived service context for continuous processing
+    async with long_lived_service_context() as service_manager:
+        # Create a queue and worker
+        queue = Queue(service_manager=service_manager, queue_name="continuous")
+        worker = Worker(service_manager=service_manager, queue_name="continuous")
+        
+        # Start the worker
+        await worker.start()
+        
+        # Continuously enqueue jobs
+        for batch in range(10):
+            print(f"Enqueuing batch {batch + 1}...")
+            tasks = []
+            for i in range(100):
+                task = queue.enqueue(my_task, batch * 100 + i)
+                tasks.append(task)
+            
+            await asyncio.gather(*tasks)
+            print(f"Batch {batch + 1} enqueued.")
+            
+            # Wait a bit before the next batch
+            await asyncio.sleep(1)
+        
+        # Stop the worker
+        await worker.stop()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+#### Synchronous API Compatibility
+
+For synchronous code that needs to use services efficiently, use the `run_with_service_context` function:
+
+```python
+# sync_high_throughput.py
+from naq.service_context import run_with_service_context
+from naq import enqueue_sync
+
+def my_task(i):
+    return f"Processed item {i}"
+
+def main():
+    # Use the synchronous service context for high-throughput operations
+    def enqueue_batch():
+        print("Enqueuing 1,000 jobs using synchronous service context...")
+        for i in range(1000):
+            enqueue_sync(my_task, i)
+        print("All jobs enqueued.")
+    
+    # Run the synchronous function with service context
+    run_with_service_context(enqueue_batch)
+
+if __name__ == "__main__":
+    main()
+```
+
 ### Thread-Local Connections (Sync)
 
 The synchronous helper functions (`enqueue_sync`, `enqueue_at_sync`, etc.) are optimized for batching out of the box. They automatically use a **thread-local NATS connection**. This means that all calls to these functions from the same thread will reuse the same connection, avoiding the overhead of reconnecting each time.

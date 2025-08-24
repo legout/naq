@@ -31,6 +31,7 @@ from .services import ConnectionService
 from .services import KVStoreService
 from .services import EventService
 from .services import SchedulerService
+from .service_context import long_lived_service_context
 
 
 class LeaderElection:
@@ -377,35 +378,40 @@ class Scheduler:
     async def _connect(self) -> None:
         """Establish service connections and initialize components."""
         try:
-            # Get services from service manager
-            self._connection_service = await self._service_manager.get_service(
-                "connection", ConnectionService
-            )
-            self._kv_store_service = await self._service_manager.get_service(
-                "kv_store", KVStoreService
-            )
-            self._event_service = await self._service_manager.get_service(
-                "event", EventService
-            )
-            self._scheduler_service = await self._service_manager.get_service(
-                "scheduler", SchedulerService
-            )
+            # Use long-lived service context for scheduler lifecycle
+            async with long_lived_service_context(
+                self._service_manager,
+                logger_name=f"naq.scheduler.{self._instance_id}"
+            ) as service_manager:
+                # Get services from service manager
+                self._connection_service = await service_manager.get_service(
+                    "connection", ConnectionService
+                )
+                self._kv_store_service = await service_manager.get_service(
+                    "kv_store", KVStoreService
+                )
+                self._event_service = await service_manager.get_service(
+                    "event", EventService
+                )
+                self._scheduler_service = await service_manager.get_service(
+                    "scheduler", SchedulerService
+                )
 
-            logger.info(
-                f"Scheduler connected to services and KV store "
-                f"'{SCHEDULED_JOBS_KV_NAME}'."
-            )
+                logger.info(
+                    f"Scheduler connected to services and KV store "
+                    f"'{SCHEDULED_JOBS_KV_NAME}'."
+                )
 
-            # Initialize components
-            if self._enable_ha:
-                # Set the KV store service for leader election
-                self._leader_election._kv_store_service = self._kv_store_service
-                await self._leader_election.initialize()
+                # Initialize components
+                if self._enable_ha:
+                    # Set the KV store service for leader election
+                    self._leader_election._kv_store_service = self._kv_store_service
+                    await self._leader_election.initialize()
 
-            # Create job processor
-            self._job_processor = ScheduledJobProcessor(
-                self._connection_service, self._kv_store_service, self._event_service
-            )
+                # Create job processor
+                self._job_processor = ScheduledJobProcessor(
+                    self._connection_service, self._kv_store_service, self._event_service
+                )
 
         except Exception as e:
             logger.error(f"Failed to connect to services: {e}")

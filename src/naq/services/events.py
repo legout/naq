@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 import msgspec
 
+from ..config.types import NAQConfig
 from ..exceptions import NaqException
 from ..models.events import JobEvent, WorkerEvent
 from ..models.enums import JobEventType, WorkerEventType
@@ -64,6 +65,8 @@ class EventService(BaseService):
     def __init__(
         self,
         config: Optional[ServiceConfig] = None,
+        *,
+        naq_config: Optional[NAQConfig] = None,
         connection_service: Optional[ConnectionService] = None,
         kv_store_service: Optional[KVStoreService] = None,
     ) -> None:
@@ -72,17 +75,22 @@ class EventService(BaseService):
 
         Args:
             config: Optional configuration for the service.
+            naq_config: Optional NAQ configuration instance. If not provided, uses global config.
             connection_service: Optional ConnectionService dependency.
             kv_store_service: Optional KVStoreService dependency.
         """
         super().__init__(config)
+        # Store the NAQConfig instance
+        from ..config import get_config
+        self._naq_config = naq_config if naq_config is not None else get_config()
+        # Extract event-specific configuration
         self._event_config = self._extract_event_config()
         self._connection_service = connection_service
         self._kv_store_service = kv_store_service
 
     def _extract_event_config(self) -> EventServiceConfig:
         """
-        Extract event-specific configuration from the service config.
+        Extract event-specific configuration from the NAQ config.
 
         Returns:
             EventServiceConfig instance with event parameters.
@@ -90,7 +98,22 @@ class EventService(BaseService):
         # Start with default config
         event_config = EventServiceConfig()
 
-        # Override with service config if provided
+        # Override with NAQ config event_service settings if provided
+        if self._naq_config and self._naq_config.job_service:
+            naq_job_config = self._naq_config.job_service
+            
+            # Map NAQ config to event service config
+            if naq_job_config.enable_event_logging is not None:
+                event_config.enable_event_logging = naq_job_config.enable_event_logging
+            
+            if naq_job_config.results_bucket_name:
+                # Use job results bucket name as events bucket name if not explicitly set
+                event_config.events_bucket_name = f"{naq_job_config.results_bucket_name}_events"
+            
+            if naq_job_config.auto_create_buckets is not None:
+                event_config.auto_create_bucket = naq_job_config.auto_create_buckets
+
+        # Override with service config if provided (for backward compatibility)
         if self._config and self._config.custom_settings:
             custom_settings = self._config.custom_settings
 

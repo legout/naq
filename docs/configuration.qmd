@@ -12,6 +12,22 @@ NAQ loads configuration from multiple sources with a clear priority order:
 2.  **Default Config Files**: The first file found in a series of default locations (e.g., `./naq.yaml`, `~/.naq.yaml`).
 3.  **Environment Variables**: `NAQ_*` variables override file settings.
 4.  **Default Values**: Built-in defaults are used as a final fallback.
+
+## Centralized Configuration System
+
+NAQ uses a centralized configuration system where all services extract their configuration from a single `NAQConfig` object. This ensures consistent configuration across all components and simplifies configuration management.
+
+### Service Configuration Integration
+
+All core services (Jobs, Events, Scheduler, Streams, Worker, Connection, and KVStore) now extract their configuration from the centralized NAQ configuration system. Each service has its own configuration section in the `naq.yaml` file, and the service configuration classes automatically extract the relevant settings from the main configuration.
+
+### Configuration Validation
+
+The configuration system includes comprehensive validation that checks all configuration sections at load time. If any configuration values are invalid, the system will raise a `ValidationError` with detailed information about the issue. This helps catch configuration problems early, before they can affect system operation.
+
+### Backward Compatibility
+
+The centralized configuration system maintains backward compatibility with existing code. Services can still be initialized with their own configuration objects, which will override the centralized configuration settings. This allows for gradual migration to the new system.
 ## YAML Schema Reference
 
 The following table details all the available configuration options in the `naq.yaml` file.

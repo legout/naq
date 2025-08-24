@@ -11,6 +11,7 @@ import msgspec
 import nats
 from nats.js import JetStreamContext
 from nats.js.api import StreamInfo
+from ..config.types import NAQConfig
 from .base import (
     BaseService,
     ServiceConfig,
@@ -54,6 +55,8 @@ class StreamService(BaseService):
     def __init__(
         self,
         config: Optional[ServiceConfig] = None,
+        *,
+        naq_config: Optional[NAQConfig] = None,
         connection_service: Optional[ConnectionService] = None,
     ) -> None:
         """
@@ -61,17 +64,22 @@ class StreamService(BaseService):
 
         Args:
             config: Optional configuration for the service.
+            naq_config: Optional NAQ configuration instance. If not provided, uses global config.
             connection_service: Optional ConnectionService instance for NATS
                               connectivity. If not provided, one will be created.
         """
         super().__init__(config)
+        # Store the NAQConfig instance
+        from ..config import get_config
+        self._naq_config = naq_config if naq_config is not None else get_config()
+        # Extract stream-specific configuration
         self._stream_config = self._extract_stream_config()
         self._connection_service = connection_service or ConnectionService(config)
         self._jetstream_context: Optional[JetStreamContext] = None
 
     def _extract_stream_config(self) -> StreamServiceConfig:
         """
-        Extract stream-specific configuration from the service config.
+        Extract stream-specific configuration from the NAQ config.
 
         Returns:
             StreamServiceConfig instance with stream parameters.
@@ -79,8 +87,28 @@ class StreamService(BaseService):
         # Start with default config
         stream_config = StreamServiceConfig()
 
-        # Override with service config if provided
-        if self._config and self._config.custom_settings:
+        # Override with NAQ config streams settings if provided
+        if self._naq_config and self._naq_config.streams:
+            naq_stream_config = self._naq_config.streams
+            
+            # Map NAQ config to stream service config
+            if naq_stream_config.storage:
+                stream_config.default_storage = naq_stream_config.storage
+            
+            if naq_stream_config.replicas is not None:
+                stream_config.default_replicas = naq_stream_config.replicas
+            
+            if naq_stream_config.max_age is not None:
+                stream_config.max_age = str(naq_stream_config.max_age)
+            
+            if naq_stream_config.max_msgs is not None:
+                stream_config.max_msgs = naq_stream_config.max_msgs
+            
+            if naq_stream_config.max_bytes is not None:
+                stream_config.max_bytes = naq_stream_config.max_bytes
+
+        # Override with service config if provided (for backward compatibility)
+        if self._config and hasattr(self._config, 'custom_settings') and self._config.custom_settings:
             custom_settings = self._config.custom_settings
 
             if "default_storage" in custom_settings:
