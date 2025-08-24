@@ -568,6 +568,9 @@ async def main():
     # Use the connection for NATS operations
     await nc.publish("test.subject", b"Hello, Service Layer!")
     
+    # Alternatively, use the connection service's publish method
+    await connection_service.publish("test.subject", b"Hello from ConnectionService!")
+    
     # Cleanup
     await connection_service.cleanup()
 ```
@@ -957,13 +960,29 @@ async def new_way():
     manager = ServiceManager()
     await manager.initialize_all()
     
-    connection_service = manager.get_service(ConnectionService)
+    connection_service = manager.get_service("connection")
     nc = await connection_service.get_connection()
     await nc.publish("orders.123", b"order data")
+    
+    # Or use the connection service's publish method for better error handling
+    await connection_service.publish("orders.123", b"order data")
     
     await manager.cleanup_all()
 ```
 
-The service layer approach provides better connection management, error handling, and monitoring capabilities.
+#### Alternative: Using Service Context Patterns
+For even simpler migration, use the service context patterns:
+
+```python
+from naq.service_context import short_lived_service_context
+
+async def context_way():
+    async with short_lived_service_context() as service_manager:
+        connection_service = service_manager.get_connection_service()
+        nc = await connection_service.get_connection()
+        await nc.publish("orders.123", b"order data")
+```
+
+The service layer approach provides better connection management, error handling, monitoring capabilities, and automatic resource cleanup.
 
 By following these service layer patterns and best practices, you can build robust, maintainable, and performant applications with NAQ.
