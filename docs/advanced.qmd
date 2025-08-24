@@ -543,4 +543,427 @@ async def benchmark_connections():
     print(f"Cache hit rate: {cache_hit_rate:.2%}")
 ```
 
-By following these performance optimization strategies, you can ensure that your NAQ deployment runs efficiently and scales well with your workload.
+## Service Layer Architecture
+
+The NAQ service layer provides a modular, extensible foundation for all functionality. Each service is responsible for a specific domain and can be used independently or composed together to create complex workflows.
+
+### Core Services
+
+The service layer consists of several core services, each with a specific responsibility:
+
+#### ConnectionService
+Manages NATS connections, connection pooling, and JetStream contexts with automatic reconnection and monitoring.
+
+```python
+from naq.services.connection import ConnectionService
+
+async def main():
+    # Initialize connection service
+    connection_service = ConnectionService()
+    await connection_service.initialize()
+    
+    # Get a connection (automatically pooled and cached)
+    nc = await connection_service.get_connection()
+    
+    # Use the connection for NATS operations
+    await nc.publish("test.subject", b"Hello, Service Layer!")
+    
+    # Cleanup
+    await connection_service.cleanup()
+```
+
+#### ConfigService
+Provides centralized configuration management with environment variable support and hierarchical settings.
+
+```python
+from naq.services.config import ConfigService
+
+async def main():
+    # Initialize config service
+    config_service = ConfigService()
+    await config_service.initialize()
+    
+    # Set configuration values
+    await config_service.set("database.url", "postgresql://localhost/mydb")
+    await config_service.set("database.pool_size", 10)
+    
+    # Get configuration values
+    db_url = await config_service.get("database.url")
+    pool_size = await config_service.get("database.pool_size")
+    
+    # Cleanup
+    await config_service.cleanup()
+```
+
+#### JobService
+Manages job execution, result storage, and lifecycle events with integrated failure handling.
+
+```python
+from naq.services.jobs import JobService
+from naq.models.jobs import Job
+
+async def process_data(data_id):
+    return f"Processed {data_id}"
+
+async def main():
+    # Initialize job service with dependencies
+    job_service = JobService()
+    await job_service.initialize()
+    
+    # Create and execute a job
+    job = Job(
+        function=process_data,
+        args=("data-123",),
+        queue_name="processing"
+    )
+    
+    result = await job_service.execute_job(job, "worker-1")
+    print(f"Job result: {result.result}")
+    
+    # Cleanup
+    await job_service.cleanup()
+```
+
+#### KVStoreService
+Provides centralized access to NATS KeyValue stores with transaction support and TTL management.
+
+```python
+from naq.services.kvstore import KVStoreService
+
+async def main():
+    # Initialize KV store service
+    kv_service = KVStoreService()
+    await kv_service.initialize()
+    
+    # Store and retrieve data
+    await kv_service.put("user:123", {"name": "Alice", "age": 30})
+    user_data = await kv_service.get("user:123")
+    
+    # Cleanup
+    await kv_service.cleanup()
+```
+
+#### EventService
+Logs and retrieves job and worker events with configurable retention policies.
+
+```python
+from naq.services.events import EventService
+from naq.models.events import Event, EventType
+from datetime import datetime
+
+async def main():
+    # Initialize event service
+    event_service = EventService()
+    await event_service.initialize()
+    
+    # Log an event
+    event = Event(
+        job_id="job-123",
+        event_type=EventType.started,
+        message="Job started",
+        timestamp=datetime.utcnow()
+    )
+    await event_service.log_event(event)
+    
+    # Retrieve events
+    events = await event_service.get_job_events("job-123")
+    
+    # Cleanup
+    await event_service.cleanup()
+```
+
+#### StreamService
+Handles JetStream stream creation, management, and configuration with consistent parameters.
+
+```python
+from naq.services.stream import StreamService
+
+async def main():
+    # Initialize stream service
+    stream_service = StreamService()
+    await stream_service.initialize()
+    
+    # Create or get a stream
+    stream_info = await stream_service.create_or_get_stream()
+    
+    # Publish a message
+    sequence = await stream_service.publish("orders.123", b"order data")
+    
+    # Cleanup
+    await stream_service.cleanup()
+```
+
+#### WorkerService
+Tracks worker registration, status, and heartbeats with lifecycle management.
+
+```python
+from naq.services.worker import WorkerService
+from naq.models.jobs import Job
+
+async def process_task(task_id):
+    return f"Processed task {task_id}"
+
+async def main():
+    # Initialize worker service
+    worker_service = WorkerService()
+    await worker_service.initialize()
+    
+    # Register a job handler
+    @worker_service.register_job_handler("process_task")
+    async def handle_process_task(job: Job):
+        return await process_task(job.args[0])
+    
+    # Start processing jobs
+    await worker_service.start_processing()
+    
+    # Keep running for a while
+    await asyncio.sleep(30)
+    
+    # Stop processing
+    await worker_service.stop_processing()
+    
+    # Cleanup
+    await worker_service.cleanup()
+```
+
+#### SchedulerService
+Handles job scheduling, triggering, cancellation, and pausing with support for recurring jobs.
+
+```python
+from naq.services.scheduler import SchedulerService
+from naq.models.schedules import Schedule, ScheduleType
+from datetime import datetime, timedelta
+
+async def send_report():
+    return "Report sent"
+
+async def main():
+    # Initialize scheduler service
+    scheduler_service = SchedulerService()
+    await scheduler_service.initialize()
+    
+    # Schedule a one-time job
+    schedule = Schedule(
+        schedule_id="daily-report",
+        schedule_type=ScheduleType.ONCE,
+        run_at=datetime.utcnow() + timedelta(hours=1),
+        function=send_report,
+        queue_name="reports"
+    )
+    
+    await scheduler_service.add_schedule(schedule)
+    
+    # Start the scheduler
+    await scheduler_service.start()
+    
+    # Keep running for a while
+    await asyncio.sleep(120)
+    
+    # Stop the scheduler
+    await scheduler_service.stop()
+    
+    # Cleanup
+    await scheduler_service.cleanup()
+```
+
+### ServiceManager: Centralized Service Management
+
+The ServiceManager provides a unified way to manage all services, handling dependency injection, lifecycle management, and performance monitoring.
+
+```python
+from naq.services.base import ServiceManager
+
+async def main():
+    # Create service manager
+    service_manager = ServiceManager()
+    
+    # Initialize all services
+    await service_manager.initialize_all()
+    
+    # Get services as needed
+    connection_service = service_manager.get_service(ConnectionService)
+    job_service = service_manager.get_service(JobService)
+    
+    # Use the services
+    # ...
+    
+    # Cleanup all services
+    await service_manager.cleanup_all()
+```
+
+#### ServiceManager Features
+
+##### Lazy Initialization
+Services are initialized only when first accessed, reducing startup time:
+
+```python
+manager = ServiceManager()
+
+# Register services (not initialized yet)
+await manager.register_service("connection", ConnectionService, initialize=False)
+
+# Service will be initialized only when first accessed
+connection_service = await manager.get_service("connection")
+```
+
+##### Performance Monitoring
+Track service access patterns and initialization times:
+
+```python
+# Get performance statistics
+stats = manager.get_performance_stats()
+for service_name, service_stats in stats.items():
+    print(f"{service_name}: accessed {service_stats['access_count']} times")
+    print(f"Initialization time: {service_stats['initialization_time']:.3f}s")
+```
+
+##### Hot Service Detection
+Identify frequently accessed services for optimization:
+
+```python
+# Get hot services (accessed more than 10 times)
+hot_services = manager.get_hot_services(threshold=10)
+print(f"Hot services: {hot_services}")
+```
+
+### Service Configuration
+
+Services can be configured individually with service-specific settings:
+
+```python
+from naq.services.base import ServiceConfig
+from naq.services.connection import ConnectionServiceConfig
+
+# Create custom configuration
+connection_config = ConnectionServiceConfig(
+    servers=["nats://localhost:4222"],
+    max_reconnect_attempts=10,
+    reconnect_time_wait=5.0
+)
+
+# Initialize service with custom config
+service_config = ServiceConfig(custom_settings=connection_config.as_dict())
+connection_service = ConnectionService(config=service_config)
+```
+
+### Service Dependencies
+
+Services can depend on other services. The ServiceManager automatically handles dependency resolution:
+
+```python
+# EventService depends on KVStoreService
+# JobService depends on ConnectionService, KVStoreService, and EventService
+# ServiceManager will initialize dependencies in the correct order
+```
+
+### Service Lifecycle Management
+
+Services follow a consistent lifecycle pattern:
+
+1. **Registration**: Service is registered with the ServiceManager
+2. **Initialization**: Service is initialized (lazy or eager)
+3. **Usage**: Service is used for its intended purpose
+4. **Cleanup**: Service resources are cleaned up
+
+```python
+async def service_lifecycle_example():
+    manager = ServiceManager()
+    
+    # Registration
+    await manager.register_service("connection", ConnectionService)
+    
+    # Initialization (lazy - happens automatically on first access)
+    connection_service = await manager.get_service("connection")
+    
+    # Usage
+    nc = await connection_service.get_connection()
+    
+    # Cleanup
+    await manager.cleanup_all()
+```
+
+### Best Practices for Service Usage
+
+#### 1. Use ServiceManager for Complex Applications
+For applications that use multiple services, always use the ServiceManager:
+
+```python
+# Good: Use ServiceManager
+manager = ServiceManager()
+await manager.initialize_all()
+job_service = manager.get_service(JobService)
+
+# Bad: Initialize services manually
+job_service = JobService(
+    connection_service=ConnectionService(),
+    kv_store_service=KVStoreService(),
+    event_service=EventService()
+)
+```
+
+#### 2. Choose the Right Initialization Strategy
+Use lazy initialization for services that might not be needed:
+
+```python
+# Lazy initialization (default)
+await manager.register_service("connection", ConnectionService)
+
+# Eager initialization (for critical services)
+await manager.register_service("connection", ConnectionService, initialize=True)
+```
+
+#### 3. Monitor Service Performance
+Use built-in performance monitoring to identify bottlenecks:
+
+```python
+stats = manager.get_performance_stats()
+for service_name, service_stats in stats.items():
+    if service_stats['initialization_time'] > 1.0:
+        print(f"Warning: {service_name} slow to initialize")
+```
+
+#### 4. Handle Service Failures Gracefully
+Services can fail to initialize or operate. Always handle exceptions:
+
+```python
+try:
+    connection_service = await manager.get_service("connection")
+    nc = await connection_service.get_connection()
+except Exception as e:
+    logger.error(f"Failed to get connection: {e}")
+    # Fallback or error handling
+```
+
+### Migration from Direct NATS Usage
+
+When migrating from direct NATS usage to the service layer, follow these guidelines:
+
+#### Before (Direct NATS Usage)
+```python
+import asyncio
+import nats
+
+async def old_way():
+    nc = await nats.connect("nats://localhost:4222")
+    await nc.publish("orders.123", b"order data")
+    await nc.close()
+```
+
+#### After (Service Layer Usage)
+```python
+from naq.services.base import ServiceManager
+
+async def new_way():
+    manager = ServiceManager()
+    await manager.initialize_all()
+    
+    connection_service = manager.get_service(ConnectionService)
+    nc = await connection_service.get_connection()
+    await nc.publish("orders.123", b"order data")
+    
+    await manager.cleanup_all()
+```
+
+The service layer approach provides better connection management, error handling, and monitoring capabilities.
+
+By following these service layer patterns and best practices, you can build robust, maintainable, and performant applications with NAQ.

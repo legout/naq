@@ -21,6 +21,10 @@ NAQ uses a centralized configuration system where all services extract their con
 
 All core services (Jobs, Events, Scheduler, Streams, Worker, Connection, and KVStore) now extract their configuration from the centralized NAQ configuration system. Each service has its own configuration section in the `naq.yaml` file, and the service configuration classes automatically extract the relevant settings from the main configuration.
 
+### ServiceManager Integration
+
+The ServiceManager provides a unified way to manage all services with automatic dependency injection and lifecycle management. It automatically loads configuration from the centralized system and handles service initialization, cleanup, and performance monitoring.
+
 ### Configuration Validation
 
 The configuration system includes comprehensive validation that checks all configuration sections at load time. If any configuration values are invalid, the system will raise a `ValidationError` with detailed information about the issue. This helps catch configuration problems early, before they can affect system operation.

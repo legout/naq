@@ -126,16 +126,78 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-## Example 5: Using JobService with Centralized Configuration
+## Example 5: Using ServiceManager for Simplified Service Management
 
-The `JobService` provides a centralized way to execute jobs, manage results, and handle job lifecycle events. It can now use the centralized configuration system.
+The `ServiceManager` provides a unified way to manage all services with automatic dependency injection and lifecycle management. This is the recommended approach for most applications.
+
+```python
+# service_manager_example.py
+import asyncio
+from naq.services.manager import ServiceManager
+from naq.models.jobs import Job
+from naq.config import get_config
+
+async def process_data(data_id):
+    """Example job function that processes data."""
+    print(f"Processing data with ID: {data_id}")
+    await asyncio.sleep(1)  # Simulate processing time
+    return f"Processed data {data_id}"
+
+async def main():
+    # Load configuration from the centralized config system
+    config = get_config()
+    
+    # Initialize the service manager - handles all service initialization
+    service_manager = ServiceManager(config=config)
+    await service_manager.initialize_all()
+    
+    # Get the services we need
+    job_service = service_manager.get_service("jobs")
+    event_service = service_manager.get_service("events")
+    
+    # Create a job
+    job = Job(
+        function=process_data,
+        args=("data-123",),
+        queue_name="processing",
+        max_retries=2,
+        retry_delay=1.0
+    )
+    
+    # Execute the job
+    print("Executing job...")
+    result = await job_service.execute_job(job, "worker-1")
+    print(f"Job completed with result: {result.result}")
+    print(f"Job status: {result.status}")
+    print(f"Execution time: {result.execution_time:.2f} seconds")
+    
+    # Retrieve the stored result
+    stored_result = await job_service.get_result(job.job_id)
+    print(f"Retrieved result: {stored_result.result}")
+    
+    # Get job events
+    job_events = await event_service.get_job_events(job.job_id)
+    print(f"Job events: {len(job_events)} events logged")
+    for event in job_events:
+        print(f"  - {event.event_type.value} at {event.timestamp}")
+    
+    # Cleanup all services automatically
+    await service_manager.cleanup_all()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Using JobService with Centralized Configuration
+
+For more fine-grained control, you can still initialize services individually:
 
 ```python
 # job_service_example.py
 import asyncio
 from naq.services.jobs import JobService
 from naq.services.connection import ConnectionService
-from naq.services.kv_stores import KVStoreService
+from naq.services.kvstore import KVStoreService
 from naq.services.events import EventService
 from naq.models.jobs import Job
 from naq.config import get_config
@@ -652,7 +714,7 @@ The `KVStoreService` provides a key-value store interface using NATS KV. It can 
 ```python
 # kv_store_example.py
 import asyncio
-from naq.services.kv_stores import KVStoreService
+from naq.services.kvstore import KVStoreService
 from naq.config import get_config
 
 async def main():
@@ -719,7 +781,7 @@ You can also override the centralized configuration with custom settings:
 # kv_store_custom_example.py
 import asyncio
 from naq.services.base import ServiceConfig
-from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+from naq.services.kvstore import KVStoreService, KVStoreServiceConfig
 from naq.config import get_config
 
 async def main():
@@ -767,7 +829,7 @@ The `EventService` provides a structured way to log and retrieve events. It can 
 # event_service_example.py
 import asyncio
 from datetime import datetime
-from naq.services.kv_stores import KVStoreService
+from naq.services.kvstore import KVStoreService
 from naq.services.events import EventService
 from naq.models.events import Event, EventType
 from naq.config import get_config
@@ -847,7 +909,7 @@ You can also override the centralized configuration with custom settings:
 import asyncio
 from datetime import datetime
 from naq.services.base import ServiceConfig
-from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+from naq.services.kvstore import KVStoreService, KVStoreServiceConfig
 from naq.services.events import EventService, EventServiceConfig
 from naq.models.events import Event, EventType
 from naq.config import get_config
@@ -1050,7 +1112,7 @@ The `WorkerService` provides a way to manage workers for processing jobs. It can
 # worker_service_example.py
 import asyncio
 from naq.services.connection import ConnectionService
-from naq.services.kv_stores import KVStoreService
+from naq.services.kvstore import KVStoreService
 from naq.services.events import EventService
 from naq.services.worker import WorkerService
 from naq.models.jobs import Job
@@ -1126,7 +1188,7 @@ You can also override the centralized configuration with custom settings:
 import asyncio
 from naq.services.base import ServiceConfig
 from naq.services.connection import ConnectionService, ConnectionServiceConfig
-from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+from naq.services.kvstore import KVStoreService, KVStoreServiceConfig
 from naq.services.events import EventService, EventServiceConfig
 from naq.services.worker import WorkerService, WorkerServiceConfig
 from naq.models.jobs import Job
@@ -1221,7 +1283,7 @@ The `SchedulerService` provides a way to manage scheduled jobs. It can now use t
 import asyncio
 from datetime import datetime, timedelta
 from naq.services.connection import ConnectionService
-from naq.services.kv_stores import KVStoreService
+from naq.services.kvstore import KVStoreService
 from naq.services.events import EventService
 from naq.services.scheduler import SchedulerService
 from naq.models.schedules import Schedule, ScheduleType
@@ -1329,7 +1391,7 @@ import asyncio
 from datetime import datetime, timedelta
 from naq.services.base import ServiceConfig
 from naq.services.connection import ConnectionService, ConnectionServiceConfig
-from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
+from naq.services.kvstore import KVStoreService, KVStoreServiceConfig
 from naq.services.events import EventService, EventServiceConfig
 from naq.services.scheduler import SchedulerService, SchedulerServiceConfig
 from naq.models.schedules import Schedule, ScheduleType
@@ -1562,7 +1624,7 @@ Here's an example of how to compose multiple services to create a complete workf
 import asyncio
 from datetime import datetime
 from naq.services.connection import ConnectionService
-from naq.services.kv_stores import KVStoreService
+from naq.services.kvstore import KVStoreService
 from naq.services.events import EventService
 from naq.services.jobs import JobService
 from naq.models.jobs import Job

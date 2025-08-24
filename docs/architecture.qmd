@@ -25,7 +25,7 @@ The service layer provides a modular, extensible foundation for all `naq` functi
 **Base Infrastructure:**
 
 - **BaseService**: Abstract base class for all services with consistent lifecycle management and error handling.
-- **ServiceManager**: Centralized service registration, dependency injection, and coordinated cleanup.
+- **ServiceManager**: Centralized service registration, dependency injection, coordinated cleanup, and performance monitoring.
 - **Configuration System**: Hierarchical configuration with environment variable support and service-specific settings.
 
 31 ### 2. Application Layer
