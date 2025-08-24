@@ -42,6 +42,13 @@ class SchedulerServiceConfig(msgspec.Struct):
         enable_event_logging: Whether to enable event logging
         auto_create_bucket: Whether to automatically create the scheduled jobs bucket
         default_poll_interval: Default interval for checking due jobs in seconds
+        scheduler_name: Name of the scheduler instance
+        check_interval: Interval for checking due jobs in seconds
+        lock_ttl: TTL for scheduler locks in seconds
+        lock_renew_interval: Interval for lock renewal in seconds
+        max_concurrent_schedules: Maximum number of concurrent schedules
+        schedules_bucket_name: Name of the KV bucket for schedules
+        lock_bucket_name: Name of the KV bucket for locks
     """
 
     scheduled_jobs_bucket_name: str = "naq_scheduled_jobs"
@@ -50,6 +57,14 @@ class SchedulerServiceConfig(msgspec.Struct):
     enable_event_logging: bool = True
     auto_create_bucket: bool = True
     default_poll_interval: float = 1.0
+    scheduler_name: str = "naq_scheduler"
+    check_interval: float = 1.0
+    lock_ttl: float = 60.0
+    lock_renew_interval: float = 30.0
+    max_concurrent_schedules: int = 10
+    schedules_bucket_name: str = "naq_scheduled_jobs"
+    lock_bucket_name: str = "naq_scheduler_lock"
+    auto_create_buckets: bool = True
 
     def as_dict(self) -> Dict[str, Any]:
         """Convert the configuration to a dictionary."""
@@ -60,6 +75,13 @@ class SchedulerServiceConfig(msgspec.Struct):
             "enable_event_logging": self.enable_event_logging,
             "auto_create_bucket": self.auto_create_bucket,
             "default_poll_interval": self.default_poll_interval,
+            "check_interval": self.check_interval,
+            "lock_ttl": self.lock_ttl,
+            "lock_renew_interval": self.lock_renew_interval,
+            "max_concurrent_schedules": self.max_concurrent_schedules,
+            "schedules_bucket_name": self.schedules_bucket_name,
+            "lock_bucket_name": self.lock_bucket_name,
+            "auto_create_buckets": self.auto_create_buckets,
         }
 
 
@@ -122,43 +144,87 @@ class SchedulerService(BaseService):
             
             if naq_scheduler_config.check_interval is not None:
                 scheduler_config.default_poll_interval = float(naq_scheduler_config.check_interval)
+                scheduler_config.check_interval = float(naq_scheduler_config.check_interval)
             
             if naq_scheduler_config.auto_create_buckets is not None:
                 scheduler_config.auto_create_bucket = naq_scheduler_config.auto_create_buckets
+            
+            if naq_scheduler_config.scheduler_name:
+                scheduler_config.scheduler_name = naq_scheduler_config.scheduler_name
+            
+            if naq_scheduler_config.lock_ttl is not None:
+                scheduler_config.lock_ttl = float(naq_scheduler_config.lock_ttl)
+            
+            if naq_scheduler_config.lock_renew_interval is not None:
+                scheduler_config.lock_renew_interval = float(naq_scheduler_config.lock_renew_interval)
+            
+            if naq_scheduler_config.max_concurrent_schedules is not None:
+                scheduler_config.max_concurrent_schedules = int(naq_scheduler_config.max_concurrent_schedules)
+            
+            if naq_scheduler_config.schedules_bucket_name:
+                scheduler_config.schedules_bucket_name = naq_scheduler_config.schedules_bucket_name
+            
+            if naq_scheduler_config.lock_bucket_name:
+                scheduler_config.lock_bucket_name = naq_scheduler_config.lock_bucket_name
+            
+            if naq_scheduler_config.auto_create_buckets is not None:
+                scheduler_config.auto_create_buckets = naq_scheduler_config.auto_create_buckets
 
         # Override with service config if provided (for backward compatibility)
-        if self._config and self._config.custom_settings:
-            custom_settings = self._config.custom_settings
+        if self._config:
+            # Handle both ServiceConfig with custom_settings and direct dict config
+            custom_settings = getattr(self._config, 'custom_settings', None) or self._config
+            
+            if isinstance(custom_settings, dict):
+                if "scheduled_jobs_bucket_name" in custom_settings:
+                    scheduler_config.scheduled_jobs_bucket_name = custom_settings[
+                        "scheduled_jobs_bucket_name"
+                    ]
 
-            if "scheduled_jobs_bucket_name" in custom_settings:
-                scheduler_config.scheduled_jobs_bucket_name = custom_settings[
-                    "scheduled_jobs_bucket_name"
-                ]
+                if "max_schedule_failures" in custom_settings:
+                    scheduler_config.max_schedule_failures = custom_settings[
+                        "max_schedule_failures"
+                    ]
 
-            if "max_schedule_failures" in custom_settings:
-                scheduler_config.max_schedule_failures = custom_settings[
-                    "max_schedule_failures"
-                ]
+                if "enable_scheduling" in custom_settings:
+                    scheduler_config.enable_scheduling = custom_settings[
+                        "enable_scheduling"
+                    ]
 
-            if "enable_scheduling" in custom_settings:
-                scheduler_config.enable_scheduling = custom_settings[
-                    "enable_scheduling"
-                ]
+                if "enable_event_logging" in custom_settings:
+                    scheduler_config.enable_event_logging = custom_settings[
+                        "enable_event_logging"
+                    ]
 
-            if "enable_event_logging" in custom_settings:
-                scheduler_config.enable_event_logging = custom_settings[
-                    "enable_event_logging"
-                ]
+                if "auto_create_bucket" in custom_settings:
+                    scheduler_config.auto_create_bucket = custom_settings[
+                        "auto_create_bucket"
+                    ]
 
-            if "auto_create_bucket" in custom_settings:
-                scheduler_config.auto_create_bucket = custom_settings[
-                    "auto_create_bucket"
-                ]
+                if "default_poll_interval" in custom_settings:
+                    scheduler_config.default_poll_interval = custom_settings[
+                        "default_poll_interval"
+                    ]
 
-            if "default_poll_interval" in custom_settings:
-                scheduler_config.default_poll_interval = custom_settings[
-                    "default_poll_interval"
-                ]
+                if "check_interval" in custom_settings:
+                    scheduler_config.check_interval = custom_settings[
+                        "check_interval"
+                    ]
+
+                if "lock_ttl" in custom_settings:
+                    scheduler_config.lock_ttl = custom_settings["lock_ttl"]
+
+                if "lock_renew_interval" in custom_settings:
+                    scheduler_config.lock_renew_interval = custom_settings["lock_renew_interval"]
+
+                if "max_concurrent_schedules" in custom_settings:
+                    scheduler_config.max_concurrent_schedules = custom_settings["max_concurrent_schedules"]
+
+                if "schedules_bucket_name" in custom_settings:
+                    scheduler_config.schedules_bucket_name = custom_settings["schedules_bucket_name"]
+
+                if "lock_bucket_name" in custom_settings:
+                    scheduler_config.lock_bucket_name = custom_settings["lock_bucket_name"]
 
         return scheduler_config
 
@@ -346,7 +412,15 @@ class SchedulerService(BaseService):
                 from ..models.events import JobEvent
 
                 scheduled_event = JobEvent.scheduled(
-                    job_id=job.job_id, worker_id="scheduler", queue_name=job.queue_name
+                    job_id=job.job_id,
+                    queue_name=job.queue_name,
+                    scheduled_timestamp_utc=scheduled_timestamp,
+                    worker_id="scheduler",
+                    details={
+                        "cron": cron,
+                        "interval_seconds": interval_seconds,
+                        "repeat": repeat,
+                    }
                 )
                 await self._event_service.log_job_event(scheduled_event)
 
@@ -396,6 +470,27 @@ class SchedulerService(BaseService):
                 except Exception as e:
                     self._logger.error(f"Error processing scheduled job: {e}")
                     error_count += 1
+                    
+                    # Log scheduler error event
+                    if self._event_service and self._scheduler_config.enable_event_logging:
+                        from ..models.events import JobEvent
+                        from ..models.enums import JobEventType
+                        
+                        key = key_bytes.decode("utf-8") if isinstance(key_bytes, bytes) else key_bytes
+                        error_event = JobEvent(
+                            job_id=key,
+                            event_type=JobEventType.SCHEDULER_ERROR,
+                            worker_id="scheduler",
+                            error_type=type(e).__name__,
+                            error_message=str(e),
+                            details={
+                                "schedule_id": key,
+                                "error_type": type(e).__name__,
+                                "error_message": str(e),
+                                "timestamp": now_ts
+                            }
+                        )
+                        await self._event_service.log_job_event(error_event)
 
             return processed_count, error_count
 
@@ -480,7 +575,14 @@ class SchedulerService(BaseService):
                     from ..models.events import JobEvent
 
                     triggered_event = JobEvent.schedule_triggered(
-                        job_id=job_id, worker_id="scheduler", queue_name=queue_name
+                        job_id=job_id,
+                        queue_name=queue_name,
+                        worker_id="scheduler",
+                        details={
+                            "scheduled_time": scheduled_ts,
+                            "actual_trigger_time": now_ts,
+                            "delay": now_ts - scheduled_ts if scheduled_ts else None
+                        }
                     )
                     await self._event_service.log_job_event(triggered_event)
             else:

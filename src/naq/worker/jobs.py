@@ -5,23 +5,21 @@ and result storage. It is responsible for tracking job progress and managing job
 through the service layer.
 """
 
-import cloudpickle
 from typing import Optional
 
+import cloudpickle
 from nats.js import JetStreamContext
 from nats.js.kv import KeyValue
 
-from ..models.jobs import Job
 from ..models import JOB_STATUS
-from ..settings import (
-    DEFAULT_RESULT_TTL_SECONDS,
-    JOB_STATUS_KV_NAME,
-    RESULT_KV_NAME,
-)
-from ..services import ServiceManager, ConnectionService, KVStoreService, JobService
-from ..utils.logging import StructuredLogger
-from ..utils.error_handling import ErrorHandler
+from ..models.jobs import Job
+from ..services import (ConnectionService, JobService, KVStoreService,
+                        ServiceManager)
+from ..settings import (DEFAULT_RESULT_TTL_SECONDS, JOB_STATUS_KV_NAME,
+                        RESULT_KV_NAME)
 from ..utils.decorators import timing
+from ..utils.error_handling import ErrorHandler
+from ..utils.logging import StructuredLogger
 
 
 class JobStatusManager:
@@ -66,9 +64,7 @@ class JobStatusManager:
             )
             self._logger.debug("Successfully obtained services from ServiceManager")
         except Exception as e:
-            self._error_handler.handle_error(
-                e, context={"operation": "get_services"}
-            )
+            self._error_handler.handle_error(e, context={"operation": "get_services"})
             # Continue without services - will fall back to direct worker connections
 
     @timing()
@@ -87,7 +83,11 @@ class JobStatusManager:
                     return self._result_kv_store
                 except Exception as e:
                     self._error_handler.handle_error(
-                        e, context={"operation": "get_result_kv_store", "service": "KVStoreService"}
+                        e,
+                        context={
+                            "operation": "get_result_kv_store",
+                            "service": "KVStoreService",
+                        },
                     )
             else:
                 self._logger.error("KVStoreService not available")
@@ -101,7 +101,7 @@ class JobStatusManager:
         if not kv_store:
             self._logger.warning(
                 f"Result KV store not available. Cannot update status for job {job.job_id}",
-                job_id=job.job_id
+                job_id=job.job_id,
             )
             return
 
@@ -119,7 +119,7 @@ class JobStatusManager:
             self._logger.debug(
                 f"Updated status for job {job.job_id} to {job.status.value}",
                 job_id=job.job_id,
-                status=job.status.value
+                status=job.status.value,
             )
         except Exception as e:
             self._error_handler.handle_error(
@@ -145,15 +145,21 @@ class JobStatusManager:
                 )
                 self._logger.info(
                     f"Bound to job status KV store from KVStoreService: '{JOB_STATUS_KV_NAME}'",
-                    kv_store_name=JOB_STATUS_KV_NAME
+                    kv_store_name=JOB_STATUS_KV_NAME,
                 )
                 return
             except Exception as e:
                 self._error_handler.handle_error(
-                    e, context={"operation": "initialize_status_kv", "service": "KVStoreService"}
+                    e,
+                    context={
+                        "operation": "initialize_status_kv",
+                        "service": "KVStoreService",
+                    },
                 )
         else:
-            self._logger.error("KVStoreService not available, cannot initialize status KV store")
+            self._logger.error(
+                "KVStoreService not available, cannot initialize status KV store"
+            )
             self._status_kv = None
 
     @timing()
@@ -167,15 +173,21 @@ class JobStatusManager:
                 )
                 self._logger.info(
                     f"Bound to result KV store from KVStoreService: '{RESULT_KV_NAME}'",
-                    kv_store_name=RESULT_KV_NAME
+                    kv_store_name=RESULT_KV_NAME,
                 )
                 return
             except Exception as e:
                 self._error_handler.handle_error(
-                    e, context={"operation": "initialize_result_kv", "service": "KVStoreService"}
+                    e,
+                    context={
+                        "operation": "initialize_result_kv",
+                        "service": "KVStoreService",
+                    },
                 )
         else:
-            self._logger.error("KVStoreService not available, cannot initialize result KV store")
+            self._logger.error(
+                "KVStoreService not available, cannot initialize result KV store"
+            )
             self._result_kv_store = None
 
     @timing()
@@ -190,7 +202,7 @@ class JobStatusManager:
                 self._logger.debug(
                     f"Checking dependencies for job {job.job_id}: {job.dependency_ids}",
                     job_id=job.job_id,
-                    dependency_ids=job.dependency_ids
+                    dependency_ids=job.dependency_ids,
                 )
                 for dep_id in job.dependency_ids:
                     try:
@@ -205,7 +217,7 @@ class JobStatusManager:
                                 f"Dependency {dep_id} for job {job.job_id} is completed.",
                                 job_id=job.job_id,
                                 dependency_id=dep_id,
-                                status=status
+                                status=status,
                             )
                             continue  # Dependency met
                         elif status == JOB_STATUS.FAILED.value:
@@ -213,7 +225,7 @@ class JobStatusManager:
                                 f"Dependency {dep_id} for job {job.job_id} failed. Job {job.job_id} will not run.",
                                 job_id=job.job_id,
                                 dependency_id=dep_id,
-                                status=status
+                                status=status,
                             )
                             return False
                         else:
@@ -222,7 +234,7 @@ class JobStatusManager:
                                 f"Dependency {dep_id} for job {job.job_id} has unknown status '{status}'. Treating as unmet.",
                                 job_id=job.job_id,
                                 dependency_id=dep_id,
-                                status=status
+                                status=status,
                             )
                             return False
                     except Exception:
@@ -230,24 +242,28 @@ class JobStatusManager:
                         self._logger.debug(
                             f"Dependency {dep_id} for job {job.job_id} not found in status KV. Not met yet.",
                             job_id=job.job_id,
-                            dependency_id=dep_id
+                            dependency_id=dep_id,
                         )
                         return False
                 # If loop completes, all dependencies were found and completed
                 self._logger.debug(
-                    f"All dependencies met for job {job.job_id}.",
-                    job_id=job.job_id
+                    f"All dependencies met for job {job.job_id}.", job_id=job.job_id
                 )
                 return True
             except Exception as e:
                 self._error_handler.handle_error(
-                    e, context={"operation": "check_dependencies", "job_id": job.job_id, "service": "KVStoreService"}
+                    e,
+                    context={
+                        "operation": "check_dependencies",
+                        "job_id": job.job_id,
+                        "service": "KVStoreService",
+                    },
                 )
                 return False  # Assume dependencies not met on error
         else:
             self._logger.error(
                 "KVStoreService not available, cannot check dependencies for job {job_id}. Assuming not met.",
-                job_id=job.job_id
+                job_id=job.job_id,
             )
             return False
 
@@ -260,7 +276,7 @@ class JobStatusManager:
                 self._logger.debug(
                     f"Updating status for job {job_id} to '{status.value}' using KVStoreService",
                     job_id=job_id,
-                    status=status.value
+                    status=status.value,
                 )
                 await self._kv_store_service.put(
                     JOB_STATUS_KV_NAME, job_id, status.value, serialize=False
@@ -268,12 +284,18 @@ class JobStatusManager:
                 return
             except Exception as e:
                 self._error_handler.handle_error(
-                    e, context={"operation": "update_job_status", "job_id": job_id, "status": status.value, "service": "KVStoreService"}
+                    e,
+                    context={
+                        "operation": "update_job_status",
+                        "job_id": job_id,
+                        "status": status.value,
+                        "service": "KVStoreService",
+                    },
                 )
         else:
             self._logger.error(
                 "KVStoreService not available, cannot update status for job {job_id}",
-                job_id=job_id
+                job_id=job_id,
             )
 
     @timing()
@@ -298,12 +320,17 @@ class JobStatusManager:
                     await self._job_service.store_result(job.job_id, job_result)
                     self._logger.debug(
                         f"Stored result for job {job.job_id} using JobService",
-                        job_id=job.job_id
+                        job_id=job.job_id,
                     )
                     return
                 except Exception as e:
                     self._error_handler.handle_error(
-                        e, context={"operation": "store_result", "job_id": job.job_id, "service": "JobService"}
+                        e,
+                        context={
+                            "operation": "store_result",
+                            "job_id": job.job_id,
+                            "service": "JobService",
+                        },
                     )
                     # Fall back to KVStoreService
 
@@ -320,7 +347,7 @@ class JobStatusManager:
                         }
                         self._logger.debug(
                             f"Storing failure info for job {job.job_id} using KVStoreService",
-                            job_id=job.job_id
+                            job_id=job.job_id,
                         )
                     else:
                         # Store successful result
@@ -330,7 +357,7 @@ class JobStatusManager:
                         }
                         self._logger.debug(
                             f"Storing result for job {job.job_id} using KVStoreService",
-                            job_id=job.job_id
+                            job_id=job.job_id,
                         )
 
                     # Store the result with TTL
@@ -342,17 +369,22 @@ class JobStatusManager:
                     )
                     self._logger.debug(
                         f"Stored result for job {job.job_id} using KVStoreService",
-                        job_id=job.job_id
+                        job_id=job.job_id,
                     )
                     return
                 except Exception as e:
                     self._error_handler.handle_error(
-                        e, context={"operation": "store_result", "job_id": job.job_id, "service": "KVStoreService"}
+                        e,
+                        context={
+                            "operation": "store_result",
+                            "job_id": job.job_id,
+                            "service": "KVStoreService",
+                        },
                     )
             else:
                 self._logger.error(
                     "Neither JobService nor KVStoreService available, cannot store result for job {job_id}",
-                    job_id=job.job_id
+                    job_id=job.job_id,
                 )
 
         except Exception as e:

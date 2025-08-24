@@ -190,9 +190,24 @@ class TestWorkerServiceContext:
                 await worker._connect()
                 
                 # Verify services were retrieved
-                mock_service_manager.get_service.assert_any_call("connection")
-                mock_service_manager.get_service.assert_any_call("jobs")
-                mock_service_manager.get_service.assert_any_call("kv")
+                # The actual calls include service class parameters, so we check just the name
+                for call in mock_service_manager.get_service.call_args_list:
+                    if call[0][0] == "connection":
+                        break
+                else:
+                    assert False, "get_service('connection') call not found"
+                
+                for call in mock_service_manager.get_service.call_args_list:
+                    if call[0][0] == "jobs":
+                        break
+                else:
+                    assert False, "get_service('jobs') call not found"
+                
+                for call in mock_service_manager.get_service.call_args_list:
+                    if call[0][0] == "kv_store":
+                        break
+                else:
+                    assert False, "get_service('kv_store') call not found"
 
 
 class TestSchedulerServiceContext:
@@ -235,11 +250,12 @@ class TestSchedulerServiceContext:
             
             async with Scheduler(nats_url=nats_url, config=custom_config) as scheduler:
                 # Verify long_lived_service_context was called with custom config
-                mock_context.assert_called_once_with(
-                    nats_url=nats_url,
-                    global_config=custom_config,
-                    logger_name="naq.scheduler"
-                )
+                # The logger name includes a dynamic instance ID, so we check the prefix
+                mock_context.assert_called_once()
+                call_args = mock_context.call_args
+                assert call_args[1]['nats_url'] == nats_url
+                assert call_args[1]['global_config'] == custom_config
+                assert call_args[1]['logger_name'].startswith("naq.scheduler.")
 
     @pytest.mark.asyncio
     async def test_scheduler_services_available(self):
@@ -255,9 +271,24 @@ class TestSchedulerServiceContext:
             
             async with Scheduler(nats_url=nats_url) as scheduler:
                 # Verify services are available
-                mock_service_manager.has_service.assert_any_call("connection")
-                mock_service_manager.has_service.assert_any_call("jobs")
-                mock_service_manager.has_service.assert_any_call("kv")
+                # The actual calls include service class parameters, so we check just the name
+                for call in mock_service_manager.has_service.call_args_list:
+                    if call[0][0] == "connection":
+                        break
+                else:
+                    assert False, "has_service('connection') call not found"
+                
+                for call in mock_service_manager.has_service.call_args_list:
+                    if call[0][0] == "jobs":
+                        break
+                else:
+                    assert False, "has_service('jobs') call not found"
+                
+                for call in mock_service_manager.has_service.call_args_list:
+                    if call[0][0] == "kv_store":
+                        break
+                else:
+                    assert False, "has_service('kv_store') call not found"
 
     @pytest.mark.asyncio
     async def test_scheduler_connect_uses_service_manager(self):
@@ -270,10 +301,12 @@ class TestSchedulerServiceContext:
             mock_job_service = MagicMock()
             mock_kv_service = MagicMock()
             
-            mock_service_manager.get_service.side_effect = lambda name: {
+            mock_service_manager.get_service.side_effect = lambda name, service_class: {
                 "connection": mock_connection_service,
                 "jobs": mock_job_service,
-                "kv": mock_kv_service,
+                "kv_store": mock_kv_service,
+                "event": MagicMock(),
+                "scheduler": MagicMock(),
             }[name]
             
             mock_context.return_value.__aenter__.return_value = mock_service_manager

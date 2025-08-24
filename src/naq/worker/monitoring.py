@@ -7,12 +7,12 @@ from typing import Any, Dict, List, Optional
 
 import cloudpickle
 
+from ..services import KVStoreService, ServiceConfig, ServiceManager
 from ..settings import DEFAULT_NATS_URL, WORKER_KV_NAME
-from ..services import ServiceManager, KVStoreService, ServiceConfig
 from ..utils import run_async_from_sync
-from ..utils.logging import StructuredLogger
-from ..utils.error_handling import ErrorHandler, wrap_naq_exception
 from ..utils.decorators import timing
+from ..utils.error_handling import ErrorHandler, wrap_naq_exception
+from ..utils.logging import StructuredLogger
 
 
 class WorkerMonitor:
@@ -67,7 +67,7 @@ class WorkerMonitor:
                 self._error_handler.handle_error(
                     e, context={"operation": "register_connection_service"}
                 )
-            
+
             try:
                 kv_store_service = await service_manager.register_service(
                     "kv_store", KVStoreService, config, initialize=True
@@ -117,7 +117,13 @@ class WorkerMonitor:
                             workers.append(worker_data)
                     except Exception as e:
                         self._error_handler.handle_error(
-                            e, context={"operation": "read_worker_data", "key": key_bytes.decode() if isinstance(key_bytes, bytes) else str(key_bytes)}
+                            e,
+                            context={
+                                "operation": "read_worker_data",
+                                "key": key_bytes.decode()
+                                if isinstance(key_bytes, bytes)
+                                else str(key_bytes),
+                            },
                         )
 
             return workers
@@ -128,13 +134,11 @@ class WorkerMonitor:
             if "not accessible" in str(e).lower() or "not found" in str(e).lower():
                 self._logger.warning(
                     f"Worker status KV store '{WORKER_KV_NAME}' not accessible: {e}",
-                    kv_store_name=WORKER_KV_NAME
+                    kv_store_name=WORKER_KV_NAME,
                 )
                 return []
             else:
-                naq_exception = wrap_naq_exception(
-                    e, context="Error listing workers"
-                )
+                naq_exception = wrap_naq_exception(e, context="Error listing workers")
                 raise naq_exception from e
 
     def list_workers_sync(self, nats_url: Optional[str] = None) -> List[Dict[str, Any]]:

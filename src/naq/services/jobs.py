@@ -286,6 +286,48 @@ class JobService(BaseService):
             self._logger.error(error_msg)
             raise ServiceRuntimeError(error_msg) from e
 
+    async def enqueue_job(self, job: Job, subject: str) -> None:
+        """
+        Enqueue a job to the specified NATS subject.
+
+        Args:
+            job: The job to enqueue.
+            subject: The NATS subject to publish the job to.
+
+        Raises:
+            JobExecutionError: If job enqueuing fails.
+        """
+        if not self._job_config.enable_job_execution:
+            raise JobExecutionError("Job execution is disabled")
+
+        try:
+            # Get JetStream context from connection service
+            if self._connection_service is None:
+                raise JobExecutionError("ConnectionService is not available")
+            
+            js = await self._connection_service.get_jetstream()
+            
+            # Publish the job to NATS
+            job_data = job.serialize()
+            ack = await js.publish(subject, job_data)
+            
+            # Log job enqueued event
+            if self._event_service and self._job_config.enable_event_logging:
+                enqueued_event = JobEvent.enqueued(
+                    job_id=job.job_id,
+                    queue_name=job.queue_name,
+                    nats_subject=subject,
+                    nats_sequence=ack.sequence,
+                )
+                await self._event_service.log_job_event(enqueued_event)
+
+            self._logger.info(f"Job {job.job_id} enqueued successfully to subject {subject}")
+            
+        except Exception as e:
+            error_msg = f"Failed to enqueue job {job.job_id}: {e}"
+            self._logger.error(error_msg)
+            raise JobExecutionError(error_msg) from e
+
     async def execute_job(self, job: Job, worker_id: Optional[str] = None) -> JobResult:
         """
         Execute a job and manage its lifecycle.
@@ -333,11 +375,14 @@ class JobService(BaseService):
             job_result = JobResult.from_job(job)
             job_result.result = result
 
+            # Calculate result size for logging
+            result_size = len(str(result)) if result is not None else 0
+
             # Store result if enabled
             if self._job_config.enable_result_storage:
                 await self.store_result(job.job_id, job_result)
 
-            # Log job completed event
+            # Log job completed event with duration and result size
             if self._event_service and self._job_config.enable_event_logging:
                 duration_ms = (time.time() - start_time) * 1000
                 completed_event = JobEvent.completed(
@@ -345,6 +390,7 @@ class JobService(BaseService):
                     worker_id=worker_id,
                     duration_ms=duration_ms,
                     queue_name=job.queue_name,
+                    details={"result_size": result_size}
                 )
                 await self._event_service.log_job_event(completed_event)
 
@@ -467,13 +513,14 @@ class JobService(BaseService):
                 retry_delay = job.get_next_retry_delay()
                 job.increment_retry_count()
 
-                # Log retry scheduled event
+                # Log retry scheduled event with retry count
                 if self._event_service and self._job_config.enable_event_logging:
                     retry_event = JobEvent.retry_scheduled(
                         job_id=job.job_id,
                         worker_id=worker_id,
                         delay_seconds=retry_delay,
                         queue_name=job.queue_name,
+                        details={"retry_count": job.retry_count}
                     )
                     await self._event_service.log_job_event(retry_event)
 

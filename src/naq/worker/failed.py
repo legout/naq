@@ -9,14 +9,12 @@ from typing import Optional
 from ..exceptions import SerializationError
 from ..models.events import JobEvent
 from ..models.jobs import Job
-from ..services import ServiceManager, ConnectionService, StreamService, EventService
-from ..settings import (
-    FAILED_JOB_STREAM_NAME,
-    FAILED_JOB_SUBJECT_PREFIX,
-)
-from ..utils.logging import StructuredLogger
-from ..utils.error_handling import ErrorHandler, wrap_naq_exception
+from ..services import (ConnectionService, EventService, ServiceManager,
+                        StreamService)
+from ..settings import FAILED_JOB_STREAM_NAME, FAILED_JOB_SUBJECT_PREFIX
 from ..utils.decorators import timing
+from ..utils.error_handling import ErrorHandler, wrap_naq_exception
+from ..utils.logging import StructuredLogger
 
 
 class FailedJobHandler:
@@ -37,7 +35,7 @@ class FailedJobHandler:
         self._connection_service: Optional[ConnectionService] = None
         self._stream_service: Optional[StreamService] = None
         self._event_service: Optional[EventService] = None
-        
+
         # Initialize logging and error handling
         self._logger = StructuredLogger("failed_job_handler")
         self._error_handler = ErrorHandler(self._logger)
@@ -80,7 +78,7 @@ class FailedJobHandler:
                 await self._get_services()
 
                 subject = f"{FAILED_JOB_SUBJECT_PREFIX}.{job.queue_name}"
-                
+
                 # Ensure the failed job stream exists using the StreamService if available
                 if self._stream_service:
                     await self._stream_service.ensure_stream(
@@ -96,7 +94,7 @@ class FailedJobHandler:
                     self._logger.info(
                         "Published failed job to stream",
                         job_id=job.job_id,
-                        subject=subject
+                        subject=subject,
                     )
 
                 # Log the failed job event
@@ -114,8 +112,7 @@ class FailedJobHandler:
             except Exception as e:
                 wrapped_error = wrap_naq_exception(e, "Failed to publish failed job")
                 self._error_handler.handle_error(
-                    wrapped_error,
-                    {"job_id": job.job_id, "subject": subject}
+                    wrapped_error, {"job_id": job.job_id, "subject": subject}
                 )
                 raise
 
@@ -133,7 +130,9 @@ class FailedJobHandler:
                     self._js = await self._connection_service.get_jetstream()
                 await self._ensure_failed_stream()
             except Exception as e:
-                wrapped_error = wrap_naq_exception(e, "Failed to initialize failed job handler")
+                wrapped_error = wrap_naq_exception(
+                    e, "Failed to initialize failed job handler"
+                )
                 self._error_handler.handle_error(wrapped_error)
                 raise
 
@@ -145,7 +144,9 @@ class FailedJobHandler:
                 await self._get_services()
 
                 if not self._stream_service:
-                    self._logger.error("StreamService not available, cannot ensure failed stream")
+                    self._logger.error(
+                        "StreamService not available, cannot ensure failed stream"
+                    )
                     return
 
                 try:
@@ -155,10 +156,11 @@ class FailedJobHandler:
                     )
                 except Exception as e:
                     # Log the error but allow the worker to continue if possible
-                    wrapped_error = wrap_naq_exception(e, "Failed to ensure failed jobs stream")
+                    wrapped_error = wrap_naq_exception(
+                        e, "Failed to ensure failed jobs stream"
+                    )
                     self._error_handler.handle_error(
-                        wrapped_error,
-                        {"stream_name": FAILED_JOB_STREAM_NAME}
+                        wrapped_error, {"stream_name": FAILED_JOB_STREAM_NAME}
                     )
             except Exception as e:
                 wrapped_error = wrap_naq_exception(e, "Error ensuring failed stream")
@@ -176,8 +178,10 @@ class FailedJobHandler:
             try:
                 await self._get_services()
 
-                failed_subject = f"{FAILED_JOB_SUBJECT_PREFIX}.{job.queue_name or 'unknown'}"
-                
+                failed_subject = (
+                    f"{FAILED_JOB_SUBJECT_PREFIX}.{job.queue_name or 'unknown'}"
+                )
+
                 # Publish the failed job using ConnectionService
                 if self._connection_service:
                     js = await self._connection_service.get_jetstream()
@@ -186,7 +190,7 @@ class FailedJobHandler:
                     self._logger.info(
                         "Published failed job details to subject",
                         job_id=job.job_id,
-                        subject=failed_subject
+                        subject=failed_subject,
                     )
 
                 # Log the failed job event
@@ -202,15 +206,13 @@ class FailedJobHandler:
                     )
                     await self._event_service.log_job_event(event)
             except SerializationError as e:
-                wrapped_error = wrap_naq_exception(e, "Could not serialize failed job details")
-                self._error_handler.handle_error(
-                    wrapped_error,
-                    {"job_id": job.job_id}
+                wrapped_error = wrap_naq_exception(
+                    e, "Could not serialize failed job details"
                 )
+                self._error_handler.handle_error(wrapped_error, {"job_id": job.job_id})
             except Exception as e:
                 wrapped_error = wrap_naq_exception(e, "Failed to publish failed job")
                 self._error_handler.handle_error(
-                    wrapped_error,
-                    {"job_id": job.job_id, "subject": failed_subject}
+                    wrapped_error, {"job_id": job.job_id, "subject": failed_subject}
                 )
                 raise

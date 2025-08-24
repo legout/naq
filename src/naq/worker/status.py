@@ -11,18 +11,16 @@ import socket
 import time
 from typing import Any, Dict, List, Optional
 
-
 from ..exceptions import NaqException
 from ..models.enums import WORKER_STATUS
-from ..services import KVStoreService, ServiceManager, ConnectionService
-from ..settings import (
-    DEFAULT_NATS_URL,
-    DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
-    WORKER_KV_NAME,
-)
-from ..utils.logging import StructuredLogger
+from ..services import (ConnectionService, EventService, KVStoreService,
+                        ServiceManager)
+from ..settings import (DEFAULT_NATS_URL,
+                        DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
+                        WORKER_KV_NAME)
+from ..utils.decorators import retry, timing
 from ..utils.error_handling import ErrorHandler
-from ..utils.decorators import timing, retry
+from ..utils.logging import StructuredLogger
 
 
 class WorkerStatusManager:
@@ -46,6 +44,7 @@ class WorkerStatusManager:
         self._service_manager = service_manager
         self._current_status = WORKER_STATUS.STARTING
         self._kv_store_service: Optional[KVStoreService] = None
+        self._event_service: Optional[EventService] = None
         self._heartbeat_task = None
         self.logger = StructuredLogger(__name__)
         self.error_handler = ErrorHandler(self.logger)
@@ -62,15 +61,37 @@ class WorkerStatusManager:
                         "kv_store", KVStoreService
                     )
                 else:
-                    self.logger.error("ServiceManager not available, cannot get KVStoreService")
+                    self.logger.error(
+                        "ServiceManager not available, cannot get KVStoreService"
+                    )
+                    return None
+            except Exception as e:
+                self.error_handler.handle_error(e, {"operation": "initialize_kv_store"})
+                self._kv_store_service = None
+        return self._kv_store_service
+
+    @timing
+    @retry(max_attempts=3, delay=1.0, backoff="exponential")
+    async def _get_event_service(self) -> Optional[EventService]:
+        """Initialize and return the EventService for worker events using the service layer."""
+        if self._event_service is None:
+            try:
+                if self._service_manager:
+                    # Get EventService from ServiceManager
+                    self._event_service = await self._service_manager.get_service(
+                        "events", EventService
+                    )
+                else:
+                    self.logger.error(
+                        "ServiceManager not available, cannot get EventService"
+                    )
                     return None
             except Exception as e:
                 self.error_handler.handle_error(
-                    e,
-                    {"operation": "initialize_kv_store"}
+                    e, {"operation": "initialize_event_service"}
                 )
-                self._kv_store_service = None
-        return self._kv_store_service
+                self._event_service = None
+        return self._event_service
 
     @timing
     async def update_status(
@@ -92,7 +113,7 @@ class WorkerStatusManager:
                 self._current_status = WORKER_STATUS.IDLE
                 self.logger.warning(
                     "Invalid status string '{status}', defaulting to IDLE",
-                    status=status
+                    status=status,
                 )
         else:
             self._current_status = status
@@ -116,15 +137,77 @@ class WorkerStatusManager:
         except Exception as e:
             self.error_handler.handle_error(
                 e,
-                {"operation": "update_worker_status", "worker_id": self.worker.worker_id}
+                {
+                    "operation": "update_worker_status",
+                    "worker_id": self.worker.worker_id,
+                },
             )
 
     @timing
     async def _heartbeat(self) -> None:
         """Sends periodic heartbeat updates."""
         while True:
-            await self.update_status(self._current_status)
-            await asyncio.sleep(DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS)
+            try:
+                await self.update_status(self._current_status)
+
+                # Log worker_heartbeat event
+                event_service = await self._get_event_service()
+                if event_service:
+                    import os
+                    import socket
+
+                    from ..models.enums import WorkerEventType
+                    from ..models.events import WorkerEvent
+
+                    # Calculate active jobs (concurrency - available slots)
+                    active_jobs = 0
+                    if hasattr(self.worker, "_semaphore"):
+                        active_jobs = (
+                            self.worker._concurrency - self.worker._semaphore._value
+                        )
+
+                    event = WorkerEvent.heartbeat(
+                        worker_id=self.worker.worker_id,
+                        queue_names=self.worker.queue_names,
+                        details={
+                            "hostname": socket.gethostname(),
+                            "pid": os.getpid(),
+                            "concurrency": self.worker._concurrency,
+                            "active_jobs": active_jobs,
+                            "status": self._current_status.value,
+                        },
+                    )
+                    await event_service.log_worker_event(event)
+
+                await asyncio.sleep(DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS)
+            except Exception as e:
+                # Log worker_error event if heartbeat fails
+                event_service = await self._get_event_service()
+                if event_service:
+                    import os
+                    import socket
+
+                    from ..models.enums import WorkerEventType
+                    from ..models.events import WorkerEvent
+
+                    event = WorkerEvent(
+                        worker_id=self.worker.worker_id,
+                        event_type=WorkerEventType.HEARTBEAT,  # Use HEARTBEAT as base type
+                        queue_names=self.worker.queue_names,
+                        message=f"Heartbeat error: {str(e)}",
+                        details={
+                            "hostname": socket.gethostname(),
+                            "pid": os.getpid(),
+                            "concurrency": self.worker._concurrency,
+                            "error_type": type(e).__name__,
+                            "error_message": str(e),
+                            "status": self._current_status.value,
+                        },
+                    )
+                    await event_service.log_worker_event(event)
+
+                # Re-raise the exception to maintain existing error handling
+                raise
 
     @timing
     async def start_heartbeat_loop(self) -> None:
@@ -143,20 +226,14 @@ class WorkerStatusManager:
         try:
             await self.update_status(WORKER_STATUS.STOPPING)
         except Exception as e:
-            self.error_handler.handle_error(
-                e,
-                {"operation": "update_status_shutdown"}
-            )
+            self.error_handler.handle_error(e, {"operation": "update_status_shutdown"})
 
         # Cancel and wait for task with proper exception handling
         self._heartbeat_task.cancel()
         try:
             await asyncio.gather(self._heartbeat_task, return_exceptions=True)
         except Exception as e:
-            self.error_handler.handle_error(
-                e,
-                {"operation": "heartbeat_task_shutdown"}
-            )
+            self.error_handler.handle_error(e, {"operation": "heartbeat_task_shutdown"})
 
     @timing
     async def unregister_worker(self) -> None:
@@ -165,20 +242,19 @@ class WorkerStatusManager:
         if not kv_store_service:
             self.logger.warning(
                 "Worker status KV store not available. Cannot unregister worker {worker_id}",
-                worker_id=self.worker.worker_id
+                worker_id=self.worker.worker_id,
             )
             return
 
         try:
             await kv_store_service.delete(WORKER_KV_NAME, self.worker.worker_id)
             self.logger.info(
-                "Unregistered worker {worker_id}",
-                worker_id=self.worker.worker_id
+                "Unregistered worker {worker_id}", worker_id=self.worker.worker_id
             )
         except Exception as e:
             self.error_handler.handle_error(
                 e,
-                {"operation": "unregister_worker", "worker_id": self.worker.worker_id}
+                {"operation": "unregister_worker", "worker_id": self.worker.worker_id},
             )
 
     @staticmethod
@@ -204,12 +280,13 @@ class WorkerStatusManager:
 
         try:
             # Use ServiceManager and KVStoreService
-            from ..services import ServiceManager, ServiceConfig, KVStoreService
-            
+            from ..services import (KVStoreService, ServiceConfig,
+                                    ServiceManager)
+
             # Create config with the provided URL
             config = ServiceConfig(nats_url=nats_url or DEFAULT_NATS_URL)
             service_manager = ServiceManager(config)
-            
+
             # Register and initialize services
             try:
                 await service_manager.register_service(
@@ -232,14 +309,15 @@ class WorkerStatusManager:
                 keys = await kv.keys()
                 for key in keys:
                     try:
-                        entry = await kv_store_service.get(WORKER_KV_NAME, key, deserialize=True)
+                        entry = await kv_store_service.get(
+                            WORKER_KV_NAME, key, deserialize=True
+                        )
                         if entry:
                             workers.append(entry)
                     except Exception as e:
                         key_str = key.decode() if isinstance(key, bytes) else str(key)
                         error_handler.handle_error(
-                            e,
-                            {"operation": "read_worker_data", "key_str": key_str}
+                            e, {"operation": "read_worker_data", "key_str": key_str}
                         )
             except Exception as e:
                 # Only return empty list for KV store access issues
@@ -248,11 +326,13 @@ class WorkerStatusManager:
                     logger.warning(
                         "Worker status KV store '{kv_name}' not accessible: {error}",
                         kv_name=WORKER_KV_NAME,
-                        error=str(e)
+                        error=str(e),
                     )
                     return []
                 else:
-                    raise NaqException(f"Error accessing worker status KV store: {e}") from e
+                    raise NaqException(
+                        f"Error accessing worker status KV store: {e}"
+                    ) from e
 
             return workers
 
@@ -263,7 +343,7 @@ class WorkerStatusManager:
                 logger.warning(
                     "Worker status KV store '{kv_name}' not accessible: {error}",
                     kv_name=WORKER_KV_NAME,
-                    error=str(e)
+                    error=str(e),
                 )
                 return []
             else:
@@ -274,4 +354,6 @@ class WorkerStatusManager:
                 if service_manager is not None:
                     await service_manager.cleanup_all()
             except Exception as e:
-                logger.warning("Error cleaning up service manager: {error}", error=str(e))
+                logger.warning(
+                    "Error cleaning up service manager: {error}", error=str(e)
+                )

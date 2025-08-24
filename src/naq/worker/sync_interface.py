@@ -3,10 +3,10 @@
 This module provides synchronous interface methods for the worker.
 """
 
-from .controller import WorkerController
-from ..utils.logging import StructuredLogger
-from ..utils.error_handling import ErrorHandler
 from ..utils.decorators import timing
+from ..utils.error_handling import ErrorHandler
+from ..utils.logging import StructuredLogger
+from .controller import WorkerController
 
 
 class WorkerSyncInterface:
@@ -31,10 +31,7 @@ class WorkerSyncInterface:
             from anyio.from_thread import start_blocking_portal
         except Exception as e:
             # Keep import local to avoid introducing runtime dependency unless used
-            self.error_handler.handle_error(
-                e,
-                {"operation": "import_anyio"}
-            )
+            self.error_handler.handle_error(e, {"operation": "import_anyio"})
             raise RuntimeError(
                 "anyio is required for Worker.run_sync(). Please ensure 'anyio' is installed."
             ) from e
@@ -59,10 +56,7 @@ class WorkerSyncInterface:
         try:
             from anyio.from_thread import start_blocking_portal
         except Exception as e:
-            self.error_handler.handle_error(
-                e,
-                {"operation": "import_anyio"}
-            )
+            self.error_handler.handle_error(e, {"operation": "import_anyio"})
             raise RuntimeError(
                 "anyio is required for Worker.start_sync(). Please ensure 'anyio' is installed."
             ) from e
@@ -104,7 +98,4 @@ class WorkerSyncInterface:
             try:
                 ctl.stop()
             except Exception as e:
-                self.error_handler.handle_error(
-                    e,
-                    {"operation": "stop_sync_worker"}
-                )
+                self.error_handler.handle_error(e, {"operation": "stop_sync_worker"})

@@ -6,8 +6,8 @@ dedicated submodules.
 """
 
 from .core import Worker
-from .jobs import JobStatusManager
 from .failed import FailedJobHandler
+from .jobs import JobStatusManager
 from .status import WorkerStatusManager
 
 __all__ = [

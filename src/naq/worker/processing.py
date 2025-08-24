@@ -7,11 +7,11 @@ import asyncio
 import traceback
 from typing import Any
 
-from ..models.jobs import Job
 from ..models.enums import JOB_STATUS, WORKER_STATUS
-from ..utils.logging import StructuredLogger
+from ..models.jobs import Job
+from ..utils.decorators import retry, timing
 from ..utils.error_handling import ErrorHandler
-from ..utils.decorators import timing, retry
+from ..utils.logging import StructuredLogger
 from .error_handling import JobErrorHandler
 
 
@@ -41,7 +41,7 @@ class JobProcessor:
             if self.worker._shutdown_event.is_set():
                 self.logger.info(
                     "Shutdown in progress. Job {job_id} will not be processed.",
-                    job_id=job.job_id if job else 'unknown'
+                    job_id=job.job_id if job else "unknown",
                 )
                 if hasattr(msg, "nak"):  # NAK the message so it can be re-queued
                     await msg.nak()
@@ -51,6 +51,27 @@ class JobProcessor:
             await self.worker.status_manager.update_status(
                 WORKER_STATUS.BUSY, job_id=job.job_id
             )
+
+            # Log worker_busy event
+            if hasattr(self.worker, "_event_service") and self.worker._event_service:
+                import os
+                import socket
+
+                from ..models.enums import WorkerEventType
+                from ..models.events import WorkerEvent
+
+                event = WorkerEvent.job_started(
+                    worker_id=self.worker.worker_id,
+                    job_id=job.job_id,
+                    queue_names=self.worker.queue_names,
+                    details={
+                        "hostname": socket.gethostname(),
+                        "pid": os.getpid(),
+                        "concurrency": self.worker._concurrency,
+                        "job_timeout": job.timeout,
+                    },
+                )
+                await self.worker._event_service.log_worker_event(event)
 
             # Execute the job
             try:
@@ -83,8 +104,8 @@ class JobProcessor:
             self.error_handler.handle_error(
                 e,
                 "Error processing job {job_id}",
-                job_id=job.job_id if job else 'unknown',
-                exc_info=True
+                job_id=job.job_id if job else "unknown",
+                exc_info=True,
             )
             # If we have a NATS message and it has a term() method, terminate it
             if hasattr(msg, "term"):
@@ -92,3 +113,33 @@ class JobProcessor:
         finally:
             # Update worker status back to idle
             await self.worker.status_manager.update_status(WORKER_STATUS.IDLE)
+
+            # Log worker_idle event
+            if hasattr(self.worker, "_event_service") and self.worker._event_service:
+                import os
+                import socket
+
+                from ..models.enums import WorkerEventType
+                from ..models.events import WorkerEvent
+
+                # Calculate active jobs (concurrency - available slots)
+                active_jobs = 0
+                if hasattr(self.worker, "_semaphore"):
+                    active_jobs = (
+                        self.worker._concurrency - self.worker._semaphore._value
+                    )
+
+                event = WorkerEvent(
+                    worker_id=self.worker.worker_id,
+                    event_type=WorkerEventType.HEARTBEAT,  # Use HEARTBEAT as base type for idle
+                    queue_names=self.worker.queue_names,
+                    message="Worker idle",
+                    details={
+                        "hostname": socket.gethostname(),
+                        "pid": os.getpid(),
+                        "concurrency": self.worker._concurrency,
+                        "active_jobs": active_jobs,
+                        "status": "idle",
+                    },
+                )
+                await self.worker._event_service.log_worker_event(event)

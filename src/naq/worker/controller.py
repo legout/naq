@@ -6,7 +6,6 @@ keeping a BlockingPortal alive.
 
 from typing import Any, ContextManager
 
-
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception
 from ..utils.logging import StructuredLogger
 
@@ -21,10 +20,7 @@ class WorkerController:
     """
 
     def __init__(
-        self,
-        worker: Any,
-        portal_cm: ContextManager[Any],
-        portal: Any
+        self, worker: Any, portal_cm: ContextManager[Any], portal: Any
     ) -> None:
         """Initialize the worker controller.
 
@@ -60,7 +56,9 @@ class WorkerController:
                 self._logger.info("Worker stopped successfully")
             except Exception as e:
                 wrapped_error = wrap_naq_exception(e, "Failed to stop worker")
-                self._error_handler.handle_error(wrapped_error, {"operation": "worker_stop"})
+                self._error_handler.handle_error(
+                    wrapped_error, {"operation": "worker_stop"}
+                )
                 raise
 
     def status(self) -> bool:
@@ -75,5 +73,7 @@ class WorkerController:
             return is_running
         except Exception as e:
             wrapped_error = wrap_naq_exception(e, "Failed to get worker status")
-            self._error_handler.handle_error(wrapped_error, {"operation": "worker_status"})
+            self._error_handler.handle_error(
+                wrapped_error, {"operation": "worker_status"}
+            )
             raise
