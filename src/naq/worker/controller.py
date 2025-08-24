@@ -6,7 +6,6 @@ keeping a BlockingPortal alive.
 
 from typing import Any, ContextManager
 
-from loguru import logger
 
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception
 from ..utils.logging import StructuredLogger

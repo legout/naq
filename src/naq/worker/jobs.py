@@ -8,9 +8,7 @@ through the service layer.
 import cloudpickle
 from typing import Optional
 
-from loguru import logger
 from nats.js import JetStreamContext
-from nats.js.errors import KeyNotFoundError
 from nats.js.kv import KeyValue
 
 from ..models.jobs import Job
@@ -18,12 +16,11 @@ from ..models import JOB_STATUS
 from ..settings import (
     DEFAULT_RESULT_TTL_SECONDS,
     JOB_STATUS_KV_NAME,
-    JOB_STATUS_TTL_SECONDS,
     RESULT_KV_NAME,
 )
 from ..services import ServiceManager, ConnectionService, KVStoreService, JobService
 from ..utils.logging import StructuredLogger
-from ..utils.error_handling import ErrorHandler, wrap_naq_exception
+from ..utils.error_handling import ErrorHandler
 from ..utils.decorators import timing
 
 

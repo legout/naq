@@ -11,11 +11,10 @@ import socket
 import time
 from typing import Any, Dict, List, Optional
 
-import cloudpickle
 
 from ..exceptions import NaqException
 from ..models.enums import WORKER_STATUS
-from ..services import KVStoreService, ServiceConfig, ServiceManager, ConnectionService
+from ..services import KVStoreService, ServiceManager, ConnectionService
 from ..settings import (
     DEFAULT_NATS_URL,
     DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,

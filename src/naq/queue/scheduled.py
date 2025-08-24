@@ -25,7 +25,6 @@ from ..settings import (
 from ..utils.error_handling import wrap_naq_exception
 from ..utils.logging import StructuredLogger
 from ..utils.validation import validate_parameter
-from ..utils.decorators import retry
 
 
 class ScheduledJobManager:

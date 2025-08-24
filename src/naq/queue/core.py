@@ -61,7 +61,7 @@ class Queue:
         except ValueError as e:
             if "does not match required pattern" in str(e):
                 if not name:
-                    raise ValueError(f"Queue name cannot be empty")
+                    raise ValueError("Queue name cannot be empty")
                 else:
                     raise ValueError(f"Queue name contains invalid characters: '{name}'")
             raise
@@ -181,7 +181,7 @@ class Queue:
         
         # Validate retry_delay is non-negative for numeric types
         if isinstance(retry_delay, (int, float)) and retry_delay < 0:
-            raise ValueError(f"retry_delay cannot be negative")
+            raise ValueError("retry_delay cannot be negative")
             
         if timeout is not None:
             validate_parameter(timeout, "timeout", min_value=0)
@@ -394,7 +394,7 @@ class Queue:
         
         # Validate retry_delay is non-negative for numeric types
         if isinstance(retry_delay, (int, float)) and retry_delay < 0:
-            raise ValueError(f"retry_delay cannot be negative")
+            raise ValueError("retry_delay cannot be negative")
             
         if timeout is not None:
             validate_parameter(timeout, "timeout", min_value=0)

@@ -10,8 +10,8 @@ from typing import Optional
 from nats.aio.msg import Msg
 
 from ..models.jobs import Job
-from ..services import ServiceManager, JobService, EventService
 from ..models.events import JobEvent
+from ..services import ServiceManager, JobService, EventService
 from ..utils.logging import StructuredLogger
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception
 from ..utils.decorators import timing

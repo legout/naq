@@ -15,7 +15,6 @@ import uuid
 from typing import Any, Dict, List, Optional, Sequence
 
 import nats
-from loguru import logger
 from nats.js import JetStreamContext
 from nats.js.api import ConsumerConfig
 

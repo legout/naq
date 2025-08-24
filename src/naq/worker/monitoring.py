@@ -6,9 +6,7 @@ This module provides functionality for monitoring workers.
 from typing import Any, Dict, List, Optional
 
 import cloudpickle
-from loguru import logger
 
-from ..exceptions import NaqException
 from ..settings import DEFAULT_NATS_URL, WORKER_KV_NAME
 from ..services import ServiceManager, KVStoreService, ServiceConfig
 from ..utils import run_async_from_sync

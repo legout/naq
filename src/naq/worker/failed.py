@@ -81,23 +81,16 @@ class FailedJobHandler:
 
                 subject = f"{FAILED_JOB_SUBJECT_PREFIX}.{job.queue_name}"
                 
-                # Use the new context manager for JetStream operations
-                from ..connection.context_managers import nats_jetstream
-                from ..services.config import create_global_config
+                # Ensure the failed job stream exists using the StreamService if available
+                if self._stream_service:
+                    await self._stream_service.ensure_stream(
+                        stream_name=FAILED_JOB_STREAM_NAME,
+                        subjects=[f"{FAILED_JOB_SUBJECT_PREFIX}.*"],
+                    )
 
-                # Create config
-                config = create_global_config()
-
-                # Use the JetStream context manager
-                async with nats_jetstream(config) as (conn, js):
-                    # Ensure the failed job stream exists using the StreamService if available
-                    if self._stream_service:
-                        await self._stream_service.ensure_stream(
-                            stream_name=FAILED_JOB_STREAM_NAME,
-                            subjects=[f"{FAILED_JOB_SUBJECT_PREFIX}.*"],
-                        )
-
-                    # Publish the failed job
+                # Publish the failed job using ConnectionService
+                if self._connection_service:
+                    js = await self._connection_service.get_jetstream()
                     payload = job.serialize_failed_job()
                     await js.publish(subject, payload)
                     self._logger.info(
@@ -185,16 +178,9 @@ class FailedJobHandler:
 
                 failed_subject = f"{FAILED_JOB_SUBJECT_PREFIX}.{job.queue_name or 'unknown'}"
                 
-                # Use the new context manager for JetStream operations
-                from ..connection.context_managers import nats_jetstream
-                from ..services.config import create_global_config
-
-                # Create config
-                config = create_global_config()
-
-                # Use the JetStream context manager
-                async with nats_jetstream(config) as (conn, js):
-                    # Publish the failed job
+                # Publish the failed job using ConnectionService
+                if self._connection_service:
+                    js = await self._connection_service.get_jetstream()
                     payload = job.serialize_failed_job()
                     await js.publish(failed_subject, payload)
                     self._logger.info(
