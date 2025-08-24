@@ -282,3 +282,265 @@ export NAQ_JOB_SERIALIZER=json
 
 It is **strongly recommended** to use the `json` serializer in any environment where the job producer is not fully trusted.
 :::
+
+## Performance Optimization
+
+The NAQ service layer is designed with performance in mind. This section covers optimization strategies and best practices for getting the most out of your NAQ deployment.
+
+### Service Layer Performance Features
+
+The service layer includes several performance optimizations:
+
+#### Lazy Service Initialization
+Services are initialized only when first accessed, reducing startup time and resource usage:
+
+```python
+from naq.services.manager import ServiceManager
+from naq.services.connection import ConnectionService
+
+async def main():
+    # Create service manager
+    manager = ServiceManager()
+    
+    # Register services (not initialized yet)
+    await manager.register_service("connection", ConnectionService, initialize=False)
+    
+    # Service will be initialized only when first accessed
+    connection_service = await manager.get_service("connection")
+    
+    # Get performance statistics
+    stats = manager.get_service_performance_stats()
+    print(f"Connection service init time: {stats['connection']['initialization_time']:.3f}s")
+```
+
+#### Connection Pooling and Caching
+The `ConnectionService` provides efficient connection management:
+
+```python
+from naq.services.connection import ConnectionService
+
+async def main():
+    # Initialize connection service
+    connection_service = ConnectionService()
+    await connection_service.initialize()
+    
+    # Get connection (cached and reused)
+    nc1 = await connection_service.get_connection()
+    nc2 = await connection_service.get_connection()  # Cache hit
+    
+    # Get connection pool information
+    pool_info = connection_service.get_connection_pool_info()
+    print(f"Active connections: {pool_info['active_connections']}")
+    print(f"Cache hits: {connection_service.get_connection_stats()['nats://localhost:4222']['cache_hits']}")
+    
+    # Cleanup idle connections
+    cleaned = await connection_service.cleanup_idle_connections(idle_threshold=300)
+    print(f"Cleaned up {cleaned} idle connections")
+```
+
+#### Hot Service Detection
+Monitor frequently accessed services to optimize performance:
+
+```python
+from naq.services.manager import ServiceManager
+
+async def main():
+    manager = ServiceManager()
+    
+    # Register and use services
+    # ...
+    
+    # Get hot services (frequently accessed)
+    hot_services = manager.get_hot_services(threshold=10)
+    print(f"Hot services: {hot_services}")
+    
+    # Get detailed performance statistics
+    stats = manager.get_service_performance_stats()
+    for service_name, service_stats in stats.items():
+        print(f"{service_name}: accessed {service_stats['access_count']} times")
+```
+
+### Performance Best Practices
+
+#### 1. Reuse Service Instances
+Always reuse service instances rather than creating new ones:
+
+```python
+# Good: Reuse service manager
+manager = ServiceManager()
+connection_service = await manager.get_service("connection")
+
+# Bad: Create new service instances
+connection_service1 = ConnectionService()
+connection_service2 = ConnectionService()
+```
+
+#### 2. Use Appropriate Service Lifecycles
+Choose the right service lifecycle for your use case:
+
+```python
+# For short-lived operations (high throughput)
+async with short_lived_service_context() as manager:
+    job_service = manager.get_job_service()
+    # Process many jobs quickly
+
+# For long-lived applications
+manager = ServiceManager()
+await manager.initialize_all()
+# Run for extended period
+```
+
+#### 3. Monitor Connection Usage
+Keep track of connection usage patterns:
+
+```python
+connection_service = ConnectionService()
+await connection_service.initialize()
+
+# Get connection statistics
+stats = connection_service.get_connection_stats()
+for url, url_stats in stats.items():
+    cache_hit_rate = url_stats['cache_hits'] / (url_stats['cache_hits'] + url_stats['created_count'])
+    print(f"{url}: {cache_hit_rate:.2%} cache hit rate")
+```
+
+#### 4. Optimize Connection Pool Settings
+Configure connection pooling based on your workload:
+
+```python
+from naq.services.connection import ConnectionServiceConfig
+
+# High-throughput configuration
+high_throughput_config = ConnectionServiceConfig(
+    max_reconnect_attempts=10,
+    reconnect_time_wait=1.0,
+    connection_timeout=15.0,
+    ping_interval=60.0
+)
+
+# Low-latency configuration
+low_latency_config = ConnectionServiceConfig(
+    max_reconnect_attempts=3,
+    reconnect_time_wait=0.5,
+    connection_timeout=5.0,
+    ping_interval=10.0
+)
+```
+
+### Performance Monitoring
+
+NAQ provides built-in performance monitoring capabilities:
+
+#### Service Performance Metrics
+```python
+from naq.services.manager import ServiceManager
+
+async def monitor_services():
+    manager = ServiceManager()
+    
+    # Get comprehensive performance statistics
+    stats = manager.get_service_performance_stats()
+    
+    for service_name, service_stats in stats.items():
+        if service_stats['initialization_time']:
+            print(f"{service_name}:")
+            print(f"  Initialization time: {service_stats['initialization_time']:.3f}s")
+            print(f"  Access count: {service_stats['access_count']}")
+            print(f"  Is initialized: {service_stats['is_initialized']}")
+```
+
+#### Connection Pool Metrics
+```python
+from naq.services.connection import ConnectionService
+
+async def monitor_connections():
+    connection_service = ConnectionService()
+    await connection_service.initialize()
+    
+    # Get connection pool information
+    pool_info = connection_service.get_connection_pool_info()
+    print(f"Total connections: {pool_info['total_connections']}")
+    print(f"Active connections: {pool_info['active_connections']}")
+    print(f"JetStream contexts: {pool_info['jetstream_contexts']}")
+    
+    # Get detailed connection statistics
+    stats = connection_service.get_connection_stats()
+    for url, url_stats in stats.items():
+        print(f"{url}:")
+        print(f"  Created: {url_stats['created_count']} times")
+        print(f"  Cache hits: {url_stats['cache_hits']}")
+        print(f"  Errors: {url_stats['connection_errors']}")
+```
+
+### Performance Tuning Guidelines
+
+#### For High-Throughput Scenarios
+- Use connection pooling with appropriate pool sizes
+- Increase `max_reconnect_attempts` for resilience
+- Use longer `ping_interval` to reduce overhead
+- Monitor cache hit rates and adjust accordingly
+
+#### For Low-Latency Scenarios
+- Use shorter timeouts and retry intervals
+- Keep connections warm with frequent access
+- Monitor connection creation times
+- Consider connection pre-warming
+
+#### For Resource-Constrained Environments
+- Use aggressive idle connection cleanup
+- Monitor memory usage of connection pools
+- Use shorter TTL for cached resources
+- Implement connection limits
+
+### Benchmarking
+
+NAQ includes performance benchmarking capabilities:
+
+```python
+import asyncio
+import time
+from naq.services.manager import ServiceManager
+from naq.services.connection import ConnectionService
+
+async def benchmark_service_access():
+    manager = ServiceManager()
+    await manager.register_service("connection", ConnectionService)
+    
+    # Benchmark service access
+    start_time = time.perf_counter()
+    
+    for _ in range(1000):
+        connection_service = await manager.get_service("connection")
+    
+    end_time = time.perf_counter()
+    avg_time = (end_time - start_time) / 1000
+    
+    print(f"Average service access time: {avg_time*1000:.2f}ms")
+    
+    # Get performance statistics
+    stats = manager.get_service_performance_stats()
+    print(f"Cache hits: {stats['connection']['access_count'] - 1}")
+
+async def benchmark_connections():
+    connection_service = ConnectionService()
+    await connection_service.initialize()
+    
+    # Benchmark connection access
+    start_time = time.perf_counter()
+    
+    for _ in range(1000):
+        nc = await connection_service.get_connection()
+    
+    end_time = time.perf_counter()
+    avg_time = (end_time - start_time) / 1000
+    
+    print(f"Average connection access time: {avg_time*1000:.2f}ms")
+    
+    # Get connection statistics
+    stats = connection_service.get_connection_stats()
+    url_stats = list(stats.values())[0]
+    cache_hit_rate = url_stats['cache_hits'] / (url_stats['cache_hits'] + url_stats['created_count'])
+    print(f"Cache hit rate: {cache_hit_rate:.2%}")
+```
+
+By following these performance optimization strategies, you can ensure that your NAQ deployment runs efficiently and scales well with your workload.

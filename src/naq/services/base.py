@@ -247,7 +247,13 @@ class ServiceManager:
 
     This class provides a centralized way to register, retrieve, and manage
     service instances. It supports dependency injection and configuration
-    management for services.
+    management for services with performance optimizations.
+
+    Performance Features:
+    - Lazy service initialization (services are initialized only when first accessed)
+    - Service instance caching and reuse
+    - Connection sharing between services
+    - Minimal overhead in hot paths through optimized service access
 
     Example:
         ```python
@@ -257,7 +263,7 @@ class ServiceManager:
         # Register services
         await manager.register_service("my_service", MyService)
 
-        # Get a service instance
+        # Get a service instance (lazy initialization)
         service = await manager.get_service("my_service")
 
         # Use the service
@@ -283,6 +289,8 @@ class ServiceManager:
         self._naq_config = naq_config if naq_config is not None else get_config()
         self._services: Dict[str, BaseService] = {}
         self._service_configs: Dict[str, ServiceConfig] = {}
+        self._service_creation_times: Dict[str, float] = {}
+        self._service_access_counts: Dict[str, int] = {}
         self._logger = logger.bind(service="ServiceManager")
 
     async def register_service(
@@ -363,6 +371,11 @@ class ServiceManager:
         """
         Get a service instance by name.
 
+        This method implements lazy initialization and performance optimizations:
+        - Services are initialized only when first accessed
+        - Service access is tracked for performance monitoring
+        - Minimal overhead for already initialized services
+
         Args:
             name: Name of the service to retrieve.
             service_class: Optional class to validate the service type against.
@@ -383,11 +396,23 @@ class ServiceManager:
 
         service = self._services[name]
 
-        # Initialize if not already initialized
+        # Track service access for performance monitoring
+        self._service_access_counts[name] = self._service_access_counts.get(name, 0) + 1
+
+        # Initialize if not already initialized (lazy initialization)
         if not service.is_initialized:
+            import time
+            start_time = time.perf_counter()
+            
             try:
                 self._logger.info(f"Initializing service on demand: {name}")
                 await service.initialize()
+                
+                # Track initialization time for performance monitoring
+                init_time = time.perf_counter() - start_time
+                self._service_creation_times[name] = init_time
+                self._logger.debug(f"Service '{name}' initialized in {init_time:.3f}s")
+                
             except Exception as e:
                 error_msg = f"Failed to initialize service '{name}': {e}"
                 self._logger.error(error_msg)
@@ -519,3 +544,37 @@ class ServiceManager:
     def config(self) -> NAQConfig:
         """Get the NAQ configuration instance."""
         return self._naq_config
+    
+    def get_service_performance_stats(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get performance statistics for all services.
+        
+        Returns:
+            Dictionary with performance metrics for each service including:
+            - initialization_time: Time taken to initialize the service
+            - access_count: Number of times the service was accessed
+            - is_initialized: Whether the service is initialized
+        """
+        stats = {}
+        for name in self._services:
+            stats[name] = {
+                "initialization_time": self._service_creation_times.get(name),
+                "access_count": self._service_access_counts.get(name, 0),
+                "is_initialized": self._services[name].is_initialized,
+            }
+        return stats
+    
+    def get_hot_services(self, threshold: int = 10) -> list[str]:
+        """
+        Get list of frequently accessed services (hot services).
+        
+        Args:
+            threshold: Minimum access count to be considered a hot service.
+            
+        Returns:
+            List of service names that are frequently accessed.
+        """
+        return [
+            name for name, count in self._service_access_counts.items()
+            if count >= threshold
+        ]

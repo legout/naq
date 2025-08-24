@@ -47,6 +47,13 @@ class ConnectionService(BaseService):
 
     This service provides pooled NATS connections, JetStream contexts,
     and connection lifecycle management with error recovery and reconnection logic.
+
+    Performance Features:
+    - Connection pooling and reuse for efficient resource management
+    - Lazy connection initialization (connections created only when needed)
+    - Connection caching to minimize connection overhead
+    - Automatic reconnection with exponential backoff
+    - Connection health monitoring and statistics
     """
 
     def __init__(self, config: Optional[ServiceConfig] = None, *, naq_config: Optional[NAQConfig] = None) -> None:
@@ -66,6 +73,8 @@ class ConnectionService(BaseService):
         self._connections: Dict[str, NATSClient] = {}
         self._jetstream_contexts: Dict[str, JetStreamContext] = {}
         self._reconnect_tasks: Dict[str, asyncio.Task] = {}
+        self._connection_stats: Dict[str, Dict[str, Any]] = {}
+        self._connection_locks: Dict[str, asyncio.Lock] = {}
 
     def _extract_connection_config(self) -> ConnectionServiceConfig:
         """
@@ -238,8 +247,11 @@ class ConnectionService(BaseService):
         """
         Get a NATS connection from the pool.
 
-        This method returns an existing connection if available, or creates
-        a new one with the configured parameters.
+        This method implements performance optimizations:
+        - Connection pooling and reuse
+        - Lazy connection initialization
+        - Connection caching with health checks
+        - Minimal overhead for cached connections
 
         Args:
             url: Optional NATS server URL. If not provided, uses the configured URL.
@@ -253,29 +265,63 @@ class ConnectionService(BaseService):
         if url is None:
             url = self._connection_config.nats_url or (self._naq_config.nats.servers[0] if self._naq_config.nats.servers else "nats://localhost:4222")
 
-        # Check if we already have a cached connection
+        # Initialize connection stats if not exists
+        if url not in self._connection_stats:
+            self._connection_stats[url] = {
+                "created_count": 0,
+                "cache_hits": 0,
+                "connection_errors": 0,
+                "last_used": 0,
+            }
+        
+        # Initialize connection lock if not exists (for thread safety)
+        if url not in self._connection_locks:
+            self._connection_locks[url] = asyncio.Lock()
+
+        # Check if we already have a cached and healthy connection
         if url in self._connections and self._connections[url].is_connected:
+            self._connection_stats[url]["cache_hits"] += 1
+            self._connection_stats[url]["last_used"] = asyncio.get_event_loop().time()
+            self._logger.debug(f"Connection cache hit for {url}")
             return self._connections[url]
 
-        try:
-            # Get connection from the underlying connection manager
-            nc = await self._connection_manager.get_connection(
-                url, prefer_thread_local=self._connection_config.prefer_thread_local
-            )
+        # Use lock to prevent multiple connection attempts for the same URL
+        async with self._connection_locks[url]:
+            # Double-check pattern in case another coroutine created the connection while we waited
+            if url in self._connections and self._connections[url].is_connected:
+                self._connection_stats[url]["cache_hits"] += 1
+                self._connection_stats[url]["last_used"] = asyncio.get_event_loop().time()
+                self._logger.debug(f"Connection cache hit after lock for {url}")
+                return self._connections[url]
 
-            # Cache the connection
-            self._connections[url] = nc
+            try:
+                import time
+                start_time = time.perf_counter()
+                
+                # Get connection from the underlying connection manager
+                nc = await self._connection_manager.get_connection(
+                    url, prefer_thread_local=self._connection_config.prefer_thread_local
+                )
 
-            # Set up connection monitoring for reconnection
-            self._monitor_connection(url, nc)
+                # Cache the connection
+                self._connections[url] = nc
+                
+                # Update connection stats
+                connection_time = time.perf_counter() - start_time
+                self._connection_stats[url]["created_count"] += 1
+                self._connection_stats[url]["last_used"] = asyncio.get_event_loop().time()
+                self._logger.debug(f"Created new NATS connection to {url} in {connection_time:.3f}s")
 
-            self._logger.debug(f"Got NATS connection to {url}")
-            return nc
+                # Set up connection monitoring for reconnection
+                self._monitor_connection(url, nc)
 
-        except Exception as e:
-            error_msg = f"Failed to get NATS connection to {url}: {e}"
-            self._logger.error(error_msg)
-            raise NaqConnectionError(error_msg) from e
+                return nc
+
+            except Exception as e:
+                self._connection_stats[url]["connection_errors"] += 1
+                error_msg = f"Failed to get NATS connection to {url}: {e}"
+                self._logger.error(error_msg)
+                raise NaqConnectionError(error_msg) from e
 
     async def get_jetstream(self, url: Optional[str] = None) -> JetStreamContext:
         """
