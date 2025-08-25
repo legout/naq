@@ -58,8 +58,7 @@ async def enqueue(
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
-                config=config.service_config if config else None,
-                global_config=config,
+                config=config,
                 logger_name="naq.queue.async_api.enqueue"
             ) as service_manager:
                 q = Queue(
@@ -122,8 +121,7 @@ async def enqueue_at(
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
-                config=config.service_config if config else None,
-                global_config=config,
+                config=config,
                 logger_name="naq.queue.async_api.enqueue_at"
             ) as service_manager:
                 q = Queue(
@@ -185,8 +183,7 @@ async def enqueue_in(
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
-                config=config.service_config if config else None,
-                global_config=config,
+                config=config,
                 logger_name="naq.queue.async_api.enqueue_in"
             ) as service_manager:
                 q = Queue(
@@ -251,8 +248,7 @@ async def schedule(
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
-                config=config.service_config if config else None,
-                global_config=config,
+                config=config,
                 logger_name="naq.queue.async_api.schedule"
             ) as service_manager:
                 q = Queue(
@@ -306,8 +302,7 @@ async def purge_queue(
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
-                config=config.service_config if config else None,
-                global_config=config,
+                config=config,
                 logger_name="naq.queue.async_api.purge_queue"
             ) as service_manager:
                 q = Queue(
@@ -351,8 +346,7 @@ async def cancel_scheduled_job(
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
-                config=config.service_config if config else None,
-                global_config=config,
+                config=config,
                 logger_name="naq.queue.async_api.cancel_scheduled_job"
             ) as service_manager:
                 q = Queue(
@@ -395,8 +389,7 @@ async def pause_scheduled_job(
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
-                config=config.service_config if config else None,
-                global_config=config,
+                config=config,
                 logger_name="naq.queue.async_api.pause_scheduled_job"
             ) as service_manager:
                 q = Queue(
@@ -436,13 +429,19 @@ async def resume_scheduled_job(
         job_id=job_id
     ):
         try:
-            q = Queue(
+            # Use service context for short-lived operation
+            async with service_context(
                 nats_url=nats_url,
-                prefer_thread_local=prefer_thread_local,
-                config=config or create_global_config(),
-                service_manager=config.service_manager if config else None,
-            )
-            return await q.resume_scheduled_job(job_id)
+                config=config,
+                logger_name="naq.queue.async_api.resume_scheduled_job"
+            ) as service_manager:
+                q = Queue(
+                    nats_url=nats_url,
+                    prefer_thread_local=prefer_thread_local,
+                    config=config or create_global_config(),
+                    service_manager=service_manager,
+                )
+                return await q.resume_scheduled_job(job_id)
         except Exception as e:
             error_handler = ErrorHandler()
             wrapped_error = wrap_naq_exception(e, context="resume_scheduled_job operation")
@@ -475,13 +474,19 @@ async def modify_scheduled_job(
         update_keys=list(updates.keys())
     ):
         try:
-            q = Queue(
+            # Use service context for short-lived operation
+            async with service_context(
                 nats_url=nats_url,
-                prefer_thread_local=prefer_thread_local,
-                config=config or create_global_config(),
-                service_manager=config.service_manager if config else None,
-            )
-            return await q.modify_scheduled_job(job_id, **updates)
+                config=config,
+                logger_name="naq.queue.async_api.modify_scheduled_job"
+            ) as service_manager:
+                q = Queue(
+                    nats_url=nats_url,
+                    prefer_thread_local=prefer_thread_local,
+                    config=config or create_global_config(),
+                    service_manager=service_manager,
+                )
+                return await q.modify_scheduled_job(job_id, **updates)
         except Exception as e:
             error_handler = ErrorHandler()
             wrapped_error = wrap_naq_exception(e, context="modify_scheduled_job operation")

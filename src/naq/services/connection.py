@@ -7,7 +7,7 @@ including connection pooling, lifecycle management, and JetStream context.
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Dict, Optional
+from typing import Any, AsyncIterator, Dict, Optional
 
 import nats
 from nats.aio.client import Client as NATSClient

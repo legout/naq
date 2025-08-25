@@ -1,15 +1,19 @@
 # src/naq/__init__.py
+
 # Core models
-from .models.jobs import Job, JobResult, RetryDelayType
+from .models.jobs import Job as _Job, JobResult, RetryDelayType
 from .models.enums import JOB_STATUS, JobEventType, WorkerEventType
 from .models.events import JobEvent, WorkerEvent
 from .models.schedules import Schedule
 
 # Core components
 from .scheduler import Scheduler
-from .worker.core import Worker
-from .queue.core import Queue
+from .worker.core import Worker as _Worker
+from .queue.core import Queue as _Queue
 from .settings import Config
+
+# Import deprecation utilities
+from .utils.warnings import create_deprecated_class
 
 # Connection management
 from .connection import (
@@ -56,6 +60,25 @@ from .exceptions import (
 
 # Job results management
 from .results import Results
+
+# Create deprecated versions of core classes
+Job = create_deprecated_class(
+    _Job,
+    old_path="naq.Job",
+    new_path="naq.models.jobs.Job"
+)
+
+Queue = create_deprecated_class(
+    _Queue,
+    old_path="naq.Queue",
+    new_path="naq.queue.core.Queue"
+)
+
+Worker = create_deprecated_class(
+    _Worker,
+    old_path="naq.Worker",
+    new_path="naq.worker.core.Worker"
+)
 
 # Worker monitoring
 list_workers = Worker.list_workers

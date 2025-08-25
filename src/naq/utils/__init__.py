@@ -13,6 +13,7 @@ from .logging import setup_logging
 from .nats_helpers import build_subject, parse_subject, stream_exists
 from .serialization import SerializationHelper, serialize_with_metadata, deserialize_with_metadata
 from .timing import Stopwatch, measure_execution_time, measure_execution_time_cm
+from .warnings import deprecated_import_warning, create_deprecated_class
 from .types import (
     # Basic type aliases
     JobID,
@@ -118,6 +119,10 @@ __all__ = [
     "Stopwatch",
     "measure_execution_time",
     "measure_execution_time_cm",
+    
+    # From warnings
+    "deprecated_import_warning",
+    "create_deprecated_class",
     
     # From validation
     "validate_parameter",

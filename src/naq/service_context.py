@@ -69,6 +69,8 @@ async def service_context(
             from .services.connection import ConnectionService
             from .services.jobs import JobService
             from .services.kv_stores import KVStoreService
+            from .services.streams import StreamService
+            from .services.events import EventService
             
             try:
                 # Register connection service first
@@ -76,6 +78,20 @@ async def service_context(
                 
                 # Get the connection service to pass to other services
                 connection_service = await service_manager.get_service("connection", ConnectionService)
+                
+                # Create stream service with connection service directly
+                stream_service = StreamService(
+                    config=service_manager._default_config,
+                    naq_config=service_manager._naq_config,
+                    connection_service=connection_service
+                )
+                
+                # Manually register the already-created service
+                service_manager._services["stream"] = stream_service
+                service_manager._service_configs["stream"] = service_manager._default_config
+                
+                # Now initialize the stream service
+                await stream_service.initialize()
                 
                 # Create job service with connection service directly
                 job_service = JobService(
@@ -104,6 +120,24 @@ async def service_context(
                 
                 # Now initialize the KV store service
                 await kv_service.initialize()
+                
+                # Create event service with connection service directly
+                event_service = EventService(
+                    config=service_manager._default_config,
+                    naq_config=service_manager._naq_config,
+                    connection_service=connection_service
+                )
+                
+                # Manually register the already-created service
+                service_manager._services["event"] = event_service
+                service_manager._service_configs["event"] = service_manager._default_config
+                
+                # Now initialize the event service
+                await event_service.initialize()
+                
+                # Also register with "kv_store" alias for backward compatibility
+                service_manager._services["kv_store"] = kv_service
+                service_manager._service_configs["kv_store"] = service_manager._default_config
                 
             except Exception as e:
                 logger.error("Failed to register core services", error=str(e))
@@ -233,8 +267,8 @@ def run_with_service_context(
             return do_something()
             
         result = run_with_service_context(
-            my_command, 
-            "value1", 
+            my_command,
+            "value1",
             "value2",
             nats_url="nats://localhost:4222"
         )
@@ -250,4 +284,31 @@ def run_with_service_context(
             # Pass the service manager as the first argument
             return await func(service_manager, *args, **kwargs)
     
-    return asyncio.run(_async_wrapper())
+    # Check if we're already in an event loop
+    try:
+        loop = asyncio.get_running_loop()
+        # If we're in a running loop, we need to run in a separate thread
+        import concurrent.futures
+        import threading
+        
+        result = None
+        exception = None
+        
+        def _run_in_thread():
+            nonlocal result, exception
+            try:
+                result = asyncio.run(_async_wrapper())
+            except Exception as e:
+                exception = e
+        
+        thread = threading.Thread(target=_run_in_thread)
+        thread.start()
+        thread.join(timeout=30)  # Wait up to 30 seconds
+        
+        if exception:
+            raise exception
+        
+        return result
+    except RuntimeError:
+        # No running event loop, we can use asyncio.run
+        return asyncio.run(_async_wrapper())

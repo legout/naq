@@ -68,21 +68,22 @@ def enqueue_sync(
       - Services are created and managed by the ServiceManager, providing a
         consistent and reliable way to handle resources.
     """
-    with _sync_logger.operation_context("enqueue_sync", {
-        "queue_name": queue_name,
-        "nats_url": nats_url,
-        "func_name": getattr(func, "__name__", str(func)),
-        "max_retries": max_retries,
-        "timeout": timeout
-    }):
+    with _sync_logger.operation_context("enqueue_sync",
+        queue_name=queue_name,
+        nats_url=nats_url,
+        func_name=getattr(func, "__name__", str(func)),
+        max_retries=max_retries,
+        timeout=timeout
+    ):
         validate_parameter(func, "func", Callable)
         validate_parameter(queue_name, "queue_name", str)
         validate_parameter(nats_url, "nats_url", str)
         
-        _sync_logger.debug("enqueue_sync_start", {
-            "queue_name": queue_name,
-            "func_name": getattr(func, "__name__", str(func))
-        })
+        _sync_logger.debug(
+            message="enqueue_sync_start",
+            queue_name=queue_name,
+            func_name=getattr(func, "__name__", str(func))
+        )
 
         async def _enqueue_with_services(service_manager):
             try:
@@ -107,11 +108,12 @@ def enqueue_sync(
                 })
                 return job
             except Exception as e:
-                _sync_logger.error("enqueue_sync_failed", {
-                    "queue_name": queue_name,
-                    "func_name": getattr(func, "__name__", str(func)),
-                    "error": str(e)
-                })
+                _sync_logger.error(
+                    "enqueue_sync_failed",
+                    queue_name=queue_name,
+                    func_name=getattr(func, "__name__", str(func)),
+                    error=str(e)
+                )
                 raise wrap_naq_exception(e, f"Failed to enqueue job synchronously: {e}")
 
         return run_with_service_context(
@@ -140,24 +142,25 @@ def enqueue_at_sync(
     This sync wrapper uses the service context pattern to manage connections
     and services automatically, ensuring proper initialization and cleanup.
     """
-    with _sync_logger.operation_context("enqueue_at_sync", {
-        "queue_name": queue_name,
-        "nats_url": nats_url,
-        "func_name": getattr(func, "__name__", str(func)),
-        "scheduled_time": dt.isoformat(),
-        "max_retries": max_retries,
-        "timeout": timeout
-    }):
+    with _sync_logger.operation_context("enqueue_at_sync",
+        queue_name=queue_name,
+        nats_url=nats_url,
+        func_name=getattr(func, "__name__", str(func)),
+        scheduled_time=dt.isoformat(),
+        max_retries=max_retries,
+        timeout=timeout
+    ):
         validate_parameter(dt, "dt", datetime.datetime)
         validate_parameter(func, "func", Callable)
         validate_parameter(queue_name, "queue_name", str)
         validate_parameter(nats_url, "nats_url", str)
         
-        _sync_logger.debug("enqueue_at_sync_start", {
-            "queue_name": queue_name,
-            "func_name": getattr(func, "__name__", str(func)),
-            "scheduled_time": dt.isoformat()
-        })
+        _sync_logger.debug(
+            message="enqueue_at_sync_start",
+            queue_name=queue_name,
+            func_name=getattr(func, "__name__", str(func)),
+            scheduled_time=dt.isoformat()
+        )
 
         async def _enqueue_at_with_services(service_manager):
             try:
@@ -216,24 +219,25 @@ def enqueue_in_sync(
 
     Uses the service context pattern to manage connections and services automatically.
     """
-    with _sync_logger.operation_context("enqueue_in_sync", {
-        "queue_name": queue_name,
-        "nats_url": nats_url,
-        "func_name": getattr(func, "__name__", str(func)),
-        "delay_seconds": delta.total_seconds(),
-        "max_retries": max_retries,
-        "timeout": timeout
-    }):
+    with _sync_logger.operation_context("enqueue_in_sync",
+        queue_name=queue_name,
+        nats_url=nats_url,
+        func_name=getattr(func, "__name__", str(func)),
+        delay_seconds=delta.total_seconds(),
+        max_retries=max_retries,
+        timeout=timeout
+    ):
         validate_parameter(delta, "delta", timedelta)
         validate_parameter(func, "func", Callable)
         validate_parameter(queue_name, "queue_name", str)
         validate_parameter(nats_url, "nats_url", str)
         
-        _sync_logger.debug("enqueue_in_sync_start", {
-            "queue_name": queue_name,
-            "func_name": getattr(func, "__name__", str(func)),
-            "delay_seconds": delta.total_seconds()
-        })
+        _sync_logger.debug(
+            message="enqueue_in_sync_start",
+            queue_name=queue_name,
+            func_name=getattr(func, "__name__", str(func)),
+            delay_seconds=delta.total_seconds()
+        )
 
         async def _enqueue_in_with_services(service_manager):
             try:
@@ -294,27 +298,28 @@ def schedule_sync(
 
     Uses the service context pattern to manage connections and services automatically.
     """
-    with _sync_logger.operation_context("schedule_sync", {
-        "queue_name": queue_name,
-        "nats_url": nats_url,
-        "func_name": getattr(func, "__name__", str(func)),
-        "cron": cron,
-        "interval": interval.total_seconds() if isinstance(interval, timedelta) else interval,
-        "repeat": repeat,
-        "max_retries": max_retries,
-        "timeout": timeout
-    }):
+    with _sync_logger.operation_context("schedule_sync",
+        queue_name=queue_name,
+        nats_url=nats_url,
+        func_name=getattr(func, "__name__", str(func)),
+        cron=cron,
+        interval=interval.total_seconds() if isinstance(interval, timedelta) else interval,
+        repeat=repeat,
+        max_retries=max_retries,
+        timeout=timeout
+    ):
         validate_parameter(func, "func", Callable)
         validate_parameter(queue_name, "queue_name", str)
         validate_parameter(nats_url, "nats_url", str)
         
-        _sync_logger.debug("schedule_sync_start", {
-            "queue_name": queue_name,
-            "func_name": getattr(func, "__name__", str(func)),
-            "cron": cron,
-            "interval": interval.total_seconds() if isinstance(interval, timedelta) else interval,
-            "repeat": repeat
-        })
+        _sync_logger.debug(
+            message="schedule_sync_start",
+            queue_name=queue_name,
+            func_name=getattr(func, "__name__", str(func)),
+            cron=cron,
+            interval=interval.total_seconds() if isinstance(interval, timedelta) else interval,
+            repeat=repeat
+        )
 
         async def _schedule_with_services(service_manager):
             try:
@@ -372,16 +377,17 @@ def purge_queue_sync(
 
     Uses the service context pattern to manage connections and services automatically.
     """
-    with _sync_logger.operation_context("purge_queue_sync", {
-        "queue_name": queue_name,
-        "nats_url": nats_url
-    }):
+    with _sync_logger.operation_context("purge_queue_sync",
+        queue_name=queue_name,
+        nats_url=nats_url
+    ):
         validate_parameter(queue_name, "queue_name", str)
         validate_parameter(nats_url, "nats_url", str)
         
-        _sync_logger.debug("purge_queue_sync_start", {
-            "queue_name": queue_name
-        })
+        _sync_logger.debug(
+            message="purge_queue_sync_start",
+            queue_name=queue_name
+        )
 
         async def _purge_with_services(service_manager):
             try:
@@ -422,16 +428,17 @@ def cancel_scheduled_job_sync(
 
     Uses the service context pattern to manage connections and services automatically.
     """
-    with _sync_logger.operation_context("cancel_scheduled_job_sync", {
-        "job_id": job_id,
-        "nats_url": nats_url
-    }):
+    with _sync_logger.operation_context("cancel_scheduled_job_sync",
+        job_id=job_id,
+        nats_url=nats_url
+    ):
         validate_parameter(job_id, "job_id", str)
         validate_parameter(nats_url, "nats_url", str)
         
-        _sync_logger.debug("cancel_scheduled_job_sync_start", {
-            "job_id": job_id
-        })
+        _sync_logger.debug(
+            message="cancel_scheduled_job_sync_start",
+            job_id=job_id
+        )
 
         async def _cancel_with_services(service_manager):
             try:
@@ -472,16 +479,17 @@ def pause_scheduled_job_sync(
 
     Uses the service context pattern to manage connections and services automatically.
     """
-    with _sync_logger.operation_context("pause_scheduled_job_sync", {
-        "job_id": job_id,
-        "nats_url": nats_url
-    }):
+    with _sync_logger.operation_context("pause_scheduled_job_sync",
+        job_id=job_id,
+        nats_url=nats_url
+    ):
         validate_parameter(job_id, "job_id", str)
         validate_parameter(nats_url, "nats_url", str)
         
-        _sync_logger.debug("pause_scheduled_job_sync_start", {
-            "job_id": job_id
-        })
+        _sync_logger.debug(
+            message="pause_scheduled_job_sync_start",
+            job_id=job_id
+        )
 
         async def _pause_with_services(service_manager):
             try:
@@ -522,16 +530,17 @@ def resume_scheduled_job_sync(
 
     Uses the service context pattern to manage connections and services automatically.
     """
-    with _sync_logger.operation_context("resume_scheduled_job_sync", {
-        "job_id": job_id,
-        "nats_url": nats_url
-    }):
+    with _sync_logger.operation_context("resume_scheduled_job_sync",
+        job_id=job_id,
+        nats_url=nats_url
+    ):
         validate_parameter(job_id, "job_id", str)
         validate_parameter(nats_url, "nats_url", str)
         
-        _sync_logger.debug("resume_scheduled_job_sync_start", {
-            "job_id": job_id
-        })
+        _sync_logger.debug(
+            message="resume_scheduled_job_sync_start",
+            job_id=job_id
+        )
 
         async def _resume_with_services(service_manager):
             try:
@@ -573,18 +582,19 @@ def modify_scheduled_job_sync(
 
     Uses the service context pattern to manage connections and services automatically.
     """
-    with _sync_logger.operation_context("modify_scheduled_job_sync", {
-        "job_id": job_id,
-        "nats_url": nats_url,
-        "updates": list(updates.keys())
-    }):
+    with _sync_logger.operation_context("modify_scheduled_job_sync",
+        job_id=job_id,
+        nats_url=nats_url,
+        updates=list(updates.keys())
+    ):
         validate_parameter(job_id, "job_id", str)
         validate_parameter(nats_url, "nats_url", str)
         
-        _sync_logger.debug("modify_scheduled_job_sync_start", {
-            "job_id": job_id,
-            "updates": list(updates.keys())
-        })
+        _sync_logger.debug(
+            message="modify_scheduled_job_sync_start",
+            job_id=job_id,
+            updates=list(updates.keys())
+        )
 
         async def _modify_with_services(service_manager):
             try:
@@ -626,12 +636,12 @@ def close_sync_connections(nats_url: str = DEFAULT_NATS_URL) -> None:
     This function is kept for backward compatibility. With the service context pattern,
     connections are automatically managed and cleaned up when the context exits.
     """
-    with _sync_logger.operation_context("close_sync_connections", {
-        "nats_url": nats_url
-    }):
+    with _sync_logger.operation_context("close_sync_connections",
+        nats_url=nats_url
+    ):
         validate_parameter(nats_url, "nats_url", str)
         
-        _sync_logger.debug("close_sync_connections_start")
+        _sync_logger.debug(message="close_sync_connections_start")
 
         async def _close_with_services(service_manager):
             try:
