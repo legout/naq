@@ -82,14 +82,14 @@ def start_worker(
     """
     Starts a naq worker process to listen for and execute jobs on the specified queues.
     """
-    setup_logging(log_level if log_level else None)
+    setup_logging(log_level if log_level else "CRITICAL")
 
     # Validate and convert parameters
     queues = ensure_type(queues, list, "queues", convert=True) or []
     nats_url = ensure_type(nats_url, str, "nats_url")
     concurrency = ensure_type(concurrency, int, "concurrency")
     name = ensure_type(name, str, "name", convert=True) if name is not None else None
-    module_paths = ensure_type(module_paths, list, "module_paths", convert=True) or []
+    module_paths = ensure_type(module_paths, (list, type(None)), "module_paths", convert=True) or []
     log_level = ensure_type(log_level, str, "log_level", convert=True) if log_level is not None else None
     
     # Validate parameter constraints
@@ -122,7 +122,7 @@ def start_worker(
         metadata={
             "component": "worker_commands",
             "action": "start_worker",
-            "timestamp": asyncio.get_event_loop().time()
+            "timestamp": None  # Will be set in async context
         }
     )
     
@@ -171,21 +171,21 @@ def start_worker(
                 worker_logger.error("Required JetStream stream not found", stream_name=stream_name)
                 raise typer.Exit(code=1)
 
-                # Create and run worker
-                w = Worker(
-                    queues=queues,
-                    nats_url=nats_url,
-                    concurrency=concurrency,
-                    worker_name=name,
-                    module_paths=module_paths,
-                    connection_service=None,  # Not needed with context manager
-                    worker_service=worker_service,
-                )
+            # Create and run worker
+            w = Worker(
+                queues=queues,
+                nats_url=nats_url,
+                concurrency=concurrency,
+                worker_name=name,
+                module_paths=module_paths,
+                connection_service=None,  # Not needed with context manager
+                worker_service=worker_service,
+            )
 
-                # Register the worker with the service
-                await worker_service.register_worker(w)
+            # Register the worker with the service
+            await worker_service.register_worker(w)
 
-                await w.run()
+            await w.run()
 
         except KeyboardInterrupt:
             worker_logger.info(
@@ -237,9 +237,10 @@ def list_workers(
     from rich.console import Console
     from rich.table import Table
 
-    from ..settings import DEFAULT_WORKER_TTL_SECONDS, WORKER_STATUS
+    from ..settings import DEFAULT_WORKER_TTL_SECONDS
+    from ..models.enums import WORKER_STATUS
 
-    setup_logging(log_level if log_level else None)
+    setup_logging(log_level if log_level else "CRITICAL")
     
     # Validate and convert parameters
     nats_url = ensure_type(nats_url, str, "nats_url")
@@ -263,7 +264,7 @@ def list_workers(
         metadata={
             "component": "worker_commands",
             "action": "list_workers",
-            "timestamp": asyncio.get_event_loop().time()
+            "timestamp": None  # Will be set in async context
         }
     )
     
@@ -327,6 +328,10 @@ def list_workers(
             for worker in workers:
                 worker_id = worker.get("worker_id", "unknown")
                 status = worker.get("status", "?")
+                
+                # Convert status to string if it's an enum
+                if hasattr(status, 'value'):
+                    status = status.value
 
                 # Determine status style
                 status_style = "green"
@@ -338,7 +343,7 @@ def list_workers(
                 queues = ", ".join(worker.get("queues", []))
                 current_job = (
                     worker.get("current_job_id", "-")
-                    if status == WORKER_STATUS.BUSY
+                    if status == "busy"
                     else "-"
                 )
 

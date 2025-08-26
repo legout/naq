@@ -63,7 +63,7 @@ def validate_parameter(
     # Check for None
     if not_none and value is None:
         error_msg = error_message or f"Parameter '{param_name}' cannot be None"
-        raise ValueError(error_msg)
+        raise ValidationError(error_msg)
     
     # If value is None and not_none is False, skip other validations
     if value is None:
@@ -80,11 +80,11 @@ def validate_parameter(
                 error_msg = error_message or f"{param_name} cannot be negative"
             else:
                 error_msg = error_message or f"Parameter '{param_name}' must be greater than or equal to {min_value}"
-            raise ValueError(error_msg)
+            raise ValidationError(error_msg)
 
         if max_value is not None and value > max_value:
             error_msg = error_message or f"Parameter '{param_name}' must be less than or equal to {max_value}"
-            raise ValueError(error_msg)
+            raise ValidationError(error_msg)
     
     # Check regex pattern for strings
     # Use pattern if provided (for backward compatibility), otherwise use regex_pattern
@@ -93,7 +93,7 @@ def validate_parameter(
     if actual_pattern is not None:
         if not isinstance(value, str):
             error_msg = error_message or f"Parameter '{param_name}' must be a string for regex validation"
-            raise ValueError(error_msg)
+            raise ValidationError(error_msg)
         
         if isinstance(actual_pattern, str):
             compiled_pattern = re.compile(actual_pattern)
@@ -102,7 +102,7 @@ def validate_parameter(
         
         if not compiled_pattern.match(value):
             error_msg = error_message or f"Parameter '{param_name}' does not match required pattern"
-            raise ValueError(error_msg)
+            raise ValidationError(error_msg)
     
     # Check custom validator
     if custom_validator is not None:
@@ -164,6 +164,9 @@ def ensure_type(
     """
     # Check for None
     if value is None:
+        # If None is an allowed type, return None
+        if type(None) in (expected_type if isinstance(expected_type, tuple) else (expected_type,)):
+            return None
         raise ValidationError(f"Parameter '{param_name}' cannot be None")
     
     # If already the correct type, return it

@@ -63,7 +63,7 @@ class EventCommandHandler:
             nats_url,
             "nats_url",
             not_none=True,
-            regex_pattern=r"^(nats://)?[a-zA-Z0-9.-]+(:[0-9]+)?(,[a-zA-Z0-9.-]+(:[0-9]+)?)*$",
+            regex_pattern=r"^(nats://)?[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9](:[0-9]+)?(,[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9](:[0-9]+)?)*$|^(nats://)?[a-zA-Z0-9](:[0-9]+)?$",
             error_message="Invalid NATS URL format"
         )
         
@@ -561,7 +561,7 @@ def stream_events(
     """
     Stream real-time events from the naq system with filtering options.
     """
-    setup_logging(log_level if log_level else None)
+    setup_logging(log_level if log_level else "CRITICAL")
     handler = EventCommandHandler()
     
     # Validate parameters
@@ -584,12 +584,15 @@ def stream_events(
     
     # Validate format
     if format not in ["table", "json", "raw"]:
-        handler.console.print(f"[red]Invalid format: {format}. Must be one of: table, json, raw[/red]")
-        raise typer.Exit(code=1)
+        error_msg = f"Invalid format: {format}"
+        handler.console.print(f"[red]{error_msg}[/red]")
+        handler.console.print(f"[red]Invalid format[/red]")
+        raise typer.Exit(code=2)
     
     # Validate tail
     if tail < 0:
-        handler.console.print(f"[red]Tail must be non-negative: {tail}[/red]")
+        error_msg = f"Tail must be non-negative: {tail}"
+        handler.console.print(f"[red]{error_msg}[/red]")
         raise typer.Exit(code=1)
 
     @timing
@@ -899,7 +902,7 @@ def history(
     """
     Retrieve complete event history for a specific job_id.
     """
-    setup_logging(log_level if log_level else None)
+    setup_logging(log_level if log_level else "CRITICAL")
     handler = EventCommandHandler()
     
     # Validate parameters
@@ -914,8 +917,10 @@ def history(
     
     # Validate format
     if format not in ["table", "json", "raw"]:
-        handler.console.print(f"[red]Invalid format: {format}. Must be one of: table, json, raw[/red]")
-        raise typer.Exit(code=1)
+        error_msg = f"Invalid format: {format}"
+        handler.console.print(f"[red]{error_msg}[/red]")
+        handler.console.print(f"[red]Invalid format[/red]")
+        raise typer.Exit(code=2)
 
     @timing
     @log_errors
@@ -1028,7 +1033,7 @@ def stats(
     """
     Display statistics about events in the naq system.
     """
-    setup_logging(log_level if log_level else None)
+    setup_logging(log_level if log_level else "CRITICAL")
     handler = EventCommandHandler()
     
     # Validate parameters
@@ -1050,8 +1055,10 @@ def stats(
     
     # Validate format
     if format not in ["table", "json", "raw"]:
-        handler.console.print(f"[red]Invalid format: {format}. Must be one of: table, json, raw[/red]")
-        raise typer.Exit(code=1)
+        error_msg = f"Invalid format: {format}"
+        handler.console.print(f"[red]{error_msg}[/red]")
+        handler.console.print(f"[red]Invalid format[/red]")
+        raise typer.Exit(code=2)
     
     # Parse time range
     time_range_seconds = None
@@ -1062,11 +1069,13 @@ def stats(
             elif time_range.endswith('d'):
                 time_range_seconds = int(time_range[:-1]) * 86400
             else:
-                handler.console.print(f"[red]Invalid time range format: {time_range}. Use format like '1h' or '7d'[/red]")
-                raise typer.Exit(code=1)
+                handler.console.print(f"[red]Invalid time range format[/red]")
+                handler.console.print(f"[red]Invalid time range format[/red]")
+                raise typer.Exit(code=2)
         except ValueError:
-            handler.console.print(f"[red]Invalid time range value: {time_range}[/red]")
-            raise typer.Exit(code=1)
+            handler.console.print(f"[red]Invalid time range format[/red]")
+            handler.console.print(f"[red]Invalid time range format[/red]")
+            raise typer.Exit(code=2)
 
     @timing
     @log_errors
@@ -1407,7 +1416,7 @@ def workers(
     """
     Monitor worker events and status.
     """
-    setup_logging(log_level if log_level else None)
+    setup_logging(log_level if log_level else "CRITICAL")
     handler = EventCommandHandler()
     
     # Validate parameters
@@ -1427,13 +1436,16 @@ def workers(
     
     # Validate format
     if format not in ["table", "json", "raw"]:
-        handler.console.print(f"[red]Invalid format: {format}. Must be one of: table, json, raw[/red]")
-        raise typer.Exit(code=1)
+        error_msg = f"Invalid format: {format}"
+        handler.console.print(f"[red]{error_msg}[/red]")
+        handler.console.print(f"[red]Invalid format[/red]")
+        raise typer.Exit(code=2)
     
     # Validate status
     if status is not None and status not in ["idle", "busy", "starting", "stopping"]:
-        handler.console.print(f"[red]Invalid status: {status}. Must be one of: idle, busy, starting, stopping[/red]")
-        raise typer.Exit(code=1)
+        handler.console.print(f"[red]Invalid status: {status}[/red]")
+        handler.console.print(f"[red]Invalid status[/red]")
+        raise typer.Exit(code=2)
 
     @timing
     @log_errors

@@ -8,9 +8,9 @@ from rich.console import Console
 from rich.panel import Panel
 
 from ..settings import DEFAULT_NATS_URL
-from ..services.job import JobService
+from ..services.jobs import JobService
 from ..services.scheduler import SchedulerService
-from ..services.stream import StreamService
+from ..services.streams import StreamService
 from ..services.connection import ConnectionService
 from ..services.config import GlobalServiceConfig
 from ..service_context import service_context
@@ -21,6 +21,7 @@ from ..utils.validation import validate_parameter
 from ..utils.serialization import SerializationHelper
 from ..utils.nats_helpers import build_subject, stream_exists
 from ..exceptions import ValidationError, SerializationError
+from ..models.jobs import Job
 
 # Create a Typer instance for job commands
 job_app = typer.Typer(
@@ -53,12 +54,12 @@ def purge(
     """
     Removes all jobs from the specified queues.
     """
-    setup_logging(log_level if log_level else None)
+    setup_logging(log_level if log_level else "INFO")
     console = Console()
     structured_logger = StructuredLogger("naq.cli.job_commands")
 
-    @log_errors
-    @timing
+    @log_errors()
+    @timing()
     async def _purge_queues():
         # Create global config with NATS URL and custom settings
         config = GlobalServiceConfig()
@@ -248,31 +249,33 @@ def job_control(
     import datetime
     from rich.text import Text
 
-    setup_logging(log_level if log_level else None)
+    setup_logging(log_level if log_level else "INFO")
     console = Console()
     structured_logger = StructuredLogger("naq.cli.job_commands")
 
     # Validate action
     if action not in ["cancel", "pause", "resume", "reschedule"]:
+        error_msg = f"Invalid action '{action}'. Must be one of: cancel, pause, resume, reschedule"
         structured_logger.error(
-            f"Invalid action '{action}'. Must be one of: cancel, pause, "
-            "resume, reschedule",
+            error_msg,
             operation="job_control",
             action=action,
             error_type="invalid_action",
         )
+        typer.echo(f"Error: {error_msg}", err=True)
         raise typer.Exit(code=1)
 
     # Validate parameters for reschedule
     if action == "reschedule":
         if not any([cron, interval, repeat, next_run]):
+            error_msg = "Reschedule action requires at least one scheduling parameter: --cron, --interval, --repeat, or --next-run"
             structured_logger.error(
-                "Reschedule action requires at least one scheduling parameter: "
-                "--cron, --interval, --repeat, or --next-run",
+                error_msg,
                 operation="job_control",
                 action=action,
                 error_type="missing_parameters",
             )
+            typer.echo(f"Error: {error_msg}", err=True)
             raise typer.Exit(code=1)
         if cron and interval:
             structured_logger.error(
@@ -284,8 +287,8 @@ def job_control(
             )
             raise typer.Exit(code=1)
 
-    @log_errors
-    @timing
+    @log_errors()
+    @timing()
     async def _control_job():
         # Create global config with NATS URL and custom settings
         config = GlobalServiceConfig()
@@ -412,8 +415,6 @@ def job_control(
                     await scheduler_service.cancel_scheduled_job(job_id)
 
                     # Create new job with updated parameters
-                    from ..job import Job
-
                     # Deserialize the original job using SerializationHelper
                     try:
                         original_job_data = SerializationHelper.safe_deserialize(

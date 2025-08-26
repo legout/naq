@@ -83,7 +83,7 @@ def start_scheduler(
     ensure_type(log_level, (str, type(None)), "log_level", convert=False)
     ensure_type(instance_id, (str, type(None)), "instance_id", convert=False)
     
-    setup_logging(log_level if log_level else None)
+    setup_logging(log_level if log_level else "CRITICAL")
     enable_ha = not disable_ha
 
     # Use structured logger
@@ -281,12 +281,12 @@ def list_scheduled_jobs(
     # Validate parameters
     validate_parameter(nats_url, "nats_url", not_none=True)
     validate_parameter(queue, "queue", not_none=True)
-    ensure_type(status, (str, type(None)), "status", convert=False)
+    ensure_type(status, (str, type(None)), "status", convert=True)
     ensure_type(job_id, (str, type(None)), "job_id", convert=False)
     ensure_type(detailed, bool, "detailed", convert=False)
     ensure_type(log_level, (str, type(None)), "log_level", convert=False)
     
-    setup_logging(log_level if log_level else None)
+    setup_logging(log_level if log_level else "CRITICAL")
     
     # Use structured logger
     structured_logger = StructuredLogger("scheduler_jobs")
@@ -361,16 +361,13 @@ def list_scheduled_jobs(
                 if status:
                     try:
                         # Validate status parameter
-                        validate_parameter(
-                            status,
-                            "status",
-                            not_none=True,
-                            custom_validator=lambda x: x in [
-                                SCHEDULED_JOB_STATUS.ACTIVE,
-                                SCHEDULED_JOB_STATUS.PAUSED,
-                                SCHEDULED_JOB_STATUS.FAILED
-                            ]
-                        )
+                        valid_statuses = [
+                            SCHEDULED_JOB_STATUS.ACTIVE,
+                            SCHEDULED_JOB_STATUS.PAUSED,
+                            SCHEDULED_JOB_STATUS.FAILED
+                        ]
+                        if status not in valid_statuses:
+                            raise ValueError(f"Invalid status: {status}")
                         status_filter = SCHEDULED_JOB_STATUS(status)
                     except ValueError as e:
                         structured_logger.error(
@@ -381,7 +378,8 @@ def list_scheduled_jobs(
                             error=str(e)
                         )
                         console.print(f"[red]Invalid status: {status}[/red]")
-                        return
+                        console.print(f"[red]Invalid status[/red]")
+                        raise typer.Exit(code=2)
 
                 # Get scheduled jobs using the service
                 try:
@@ -541,6 +539,9 @@ def list_scheduled_jobs(
 
                 console.print(table)
                 console.print(f"\n[bold]Total:[/bold] {len(jobs_data)} scheduled job(s)")
+            except typer.Exit:
+                # Re-raise typer.Exit exceptions to ensure proper exit code
+                raise
             except Exception as e:
                 structured_logger.error(
                     f"Error listing scheduled jobs: {e}",

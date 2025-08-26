@@ -58,7 +58,13 @@ def setup_logging(level: str = None):
 
     # Determine the effective log level
     # CLI argument takes precedence over environment variable
-    effective_level = level.upper() if level else LOG_LEVEL
+    effective_level = LOG_LEVEL
+    if level is not None:
+        effective_level = level.upper()
+    
+    # Ensure effective_level is not None
+    if effective_level is None:
+        effective_level = "CRITICAL"
 
     # Add stdout handler
     logger.add(
