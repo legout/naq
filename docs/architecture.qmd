@@ -28,6 +28,28 @@ The service layer provides a modular, extensible foundation for all `naq` functi
 - **ServiceManager**: Centralized service registration, dependency injection, coordinated cleanup, and performance monitoring.
 - **Configuration System**: Hierarchical configuration with environment variable support and service-specific settings.
 
+### ServiceManager Integration Testing
+
+The ServiceManager includes comprehensive integration tests that validate cross-service communication, dependency injection, and lifecycle management:
+
+**Test Coverage**:
+- ServiceManager initialization and service registration
+- Automatic dependency injection across all services
+- Cross-service communication and data flow validation
+- Full lifecycle management for all services
+- Error handling and recovery scenarios
+- Circular dependency detection
+- Mixed real and mock service configurations
+
+**Key Test Scenarios**:
+- Validates that JobService receives correct dependencies from ConnectionService, KVStoreService, and EventService
+- Tests cross-service communication patterns (e.g., JobService to EventService event logging)
+- Verifies proper initialization order based on service dependencies
+- Ensures coordinated cleanup in the correct reverse order
+- Tests error propagation and recovery during service failures
+
+The integration tests are located in `tests/test_services/test_service_manager.py` and use the existing testing infrastructure with fixtures and utilities for consistent test patterns.
+
 31 ### 2. Application Layer
 
 The application layer builds on the service layer to provide the high-level task queue functionality:

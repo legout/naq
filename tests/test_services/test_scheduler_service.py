@@ -6,7 +6,7 @@ service lifecycle management and basic functionality.
 """
 from pathlib import Path
 import sys
-sys.path.append(Path(__file__).parent)
+sys.path.append(Path(__file__).parent.as_posix())
 import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch

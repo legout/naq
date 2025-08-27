@@ -38,9 +38,44 @@ This document outlines the comprehensive testing strategy for the OmniQ project,
 ### Integration Tests
 
 -   **Purpose**: Test component interactions
--   **Location**: `tests/integration/`
--   **Count**: \~200 tests
--   **Status**: Heavily impacted by service architecture changes
+-   **Location**: `tests/integration/` and `tests/test_services/`
+-   **Count**: \~200 tests + comprehensive ServiceManager integration tests
+-   **Status**: Heavily impacted by service architecture changes, now enhanced with ServiceManager integration tests
+
+### ServiceManager Integration Tests
+
+The ServiceManager integration tests provide comprehensive validation of cross-service communication, dependency injection, and lifecycle management:
+
+**Test Location**: `tests/test_services/test_service_manager.py`
+
+**Key Test Categories**:
+- **ServiceManager Initialization**: Tests service registration, initialization order, and configuration
+- **Dependency Injection**: Validates automatic dependency resolution and injection across all services
+- **Cross-Service Communication**: Tests data flow and communication patterns between services
+- **Lifecycle Management**: Validates coordinated initialization and cleanup of all services
+- **Error Handling**: Tests error propagation, recovery, and circular dependency detection
+- **Mixed Service Configurations**: Tests combinations of real and mock services
+
+**Test Fixtures**:
+- `service_manager_with_real_services`: Provides ServiceManager with all real services
+- `service_manager_with_mixed_services`: Provides ServiceManager with mix of real and mock services
+- `service_lifecycle_tracker`: Tracks lifecycle events for validation
+- Service-specific test data fixtures (jobs, events, etc.)
+
+**Example Test Scenario**:
+```python
+async def test_automatic_dependency_injection(self, service_manager_with_real_services):
+    """Test that dependencies are automatically injected."""
+    manager = service_manager_with_real_services
+    
+    # Get services
+    connection_service = manager.get_service("connection", ConnectionService)
+    job_service = manager.get_service("jobs", JobService)
+    
+    # Check that JobService has all its dependencies
+    assert_service_dependency(job_service, '_connection_service', ConnectionService)
+    assert job_service._connection_service == connection_service
+```
 
 ### Smoke Tests
 
@@ -122,10 +157,56 @@ tests/
 @pytest.fixture
 def service_manager():
     """Provide a ServiceManager instance for tests."""
-    from naq.services.manager import ServiceManager
+    from naq.services.base import ServiceManager
     manager = ServiceManager()
     yield manager
     # Cleanup
+```
+
+#### ServiceManager Integration Test Fixtures
+
+``` python
+@pytest_asyncio.fixture
+async def service_manager_with_real_services(service_manager_config: ServiceConfig) -> ServiceManager:
+    """Fixture providing a ServiceManager instance with real services."""
+    manager = ServiceManager(config=service_manager_config)
+    
+    # Register all services
+    manager.register_service("connection", ConnectionService)
+    manager.register_service("kv_store", KVStoreService)
+    manager.register_service("events", EventService)
+    manager.register_service("stream", StreamService)
+    manager.register_service("scheduler", SchedulerService)
+    manager.register_service("jobs", JobService)
+    manager.register_service("worker", WorkerService)
+    
+    try:
+        await manager.initialize_all()
+        yield manager
+    finally:
+        await manager.cleanup_all()
+
+@pytest_asyncio.fixture
+async def service_manager_with_mixed_services(service_manager_config: ServiceConfig) -> ServiceManager:
+    """Fixture providing a ServiceManager instance with a mix of real and mock services."""
+    manager = ServiceManager(config=service_manager_config)
+    
+    # Register real connection service
+    manager.register_service("connection", ConnectionService)
+    
+    # Register mock services for others
+    manager.register_service("kv_store", create_mock_service(KVStoreService))
+    manager.register_service("events", create_mock_service(EventService))
+    manager.register_service("stream", create_mock_service(StreamService))
+    manager.register_service("scheduler", create_mock_service(SchedulerService))
+    manager.register_service("jobs", create_mock_service(JobService))
+    manager.register_service("worker", create_mock_service(WorkerService))
+    
+    try:
+        await manager.initialize_all()
+        yield manager
+    finally:
+        await manager.cleanup_all()
 ```
 
 #### Queue Service Fixture
@@ -206,6 +287,59 @@ def test_queue_worker_integration(service_manager):
     # Assert
     assert result.status == "completed"
     assert result.job_id == job.id
+```
+
+#### ServiceManager Integration Test Best Practices
+
+``` python
+class TestServiceManagerIntegration:
+    """Test ServiceManager integration with all services."""
+    
+    async def test_cross_service_communication(self, service_manager_with_real_services):
+        """Test communication between services through ServiceManager."""
+        manager = service_manager_with_real_services
+        
+        # Get services
+        job_service = manager.get_service("jobs", JobService)
+        event_service = manager.get_service("events", EventService)
+        
+        # Act: Log a job event through JobService
+        test_event = JobEvent.enqueued("test-job", "default", "jobs.default", 1)
+        await job_service._event_service.log_job_event(test_event)
+        
+        # Assert: Event is retrievable through EventService
+        events = await event_service.get_job_events("test-job")
+        assert len(events) == 1
+        assert events[0].job_id == "test-job"
+    
+    async def test_dependency_injection_validation(self, service_manager_with_real_services):
+        """Test that all services receive correct dependencies."""
+        manager = service_manager_with_real_services
+        
+        # Get services
+        connection_service = manager.get_service("connection", ConnectionService)
+        job_service = manager.get_service("jobs", JobService)
+        
+        # Assert: JobService has all required dependencies
+        assert job_service._connection_service == connection_service
+        assert job_service._kv_store_service is not None
+        assert job_service._event_service is not None
+```
+
+#### Running ServiceManager Integration Tests
+
+To run the ServiceManager integration tests:
+
+```bash
+# Run all ServiceManager integration tests
+pytest tests/test_services/test_service_manager.py -v
+
+# Run specific test categories
+pytest tests/test_services/test_service_manager.py::TestServiceManagerInitialization -v
+pytest tests/test_services/test_service_manager.py::TestServiceManagerDependencyInjection -v
+
+# Run with coverage
+pytest tests/test_services/test_service_manager.py --cov=src/naq/services --cov-report=term-missing
 ```
 
 ### Writing Performance Tests
