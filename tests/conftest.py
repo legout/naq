@@ -4,6 +4,10 @@ from unittest.mock import AsyncMock, MagicMock
 from nats.js.kv import KeyValue
 from nats.js import JetStreamContext
 import nats
+import tempfile
+import os
+from contextlib import asynccontextmanager
+from typing import Any, Dict, Optional, AsyncIterator
 
 import socket
 
@@ -15,6 +19,14 @@ from naq.settings import (
 )
 
 from naq.worker import Worker
+from naq.services.base import ServiceManager, ServiceConfig
+from naq.services.connection import ConnectionService
+from naq.services.jobs import JobService
+from naq.services.events import EventService
+from naq.services.streams import StreamService
+from naq.services.kv_stores import KVStoreService
+from naq.models.jobs import Job
+from naq.models.enums import JOB_STATUS
 
 
 @pytest.fixture
@@ -46,16 +58,6 @@ def mock_job_status_manager():
     return mock
 
 
-@pytest.fixture
-def worker_dict():
-    """Fixture for a minimal Worker constructor argument dictionary."""
-    return {
-        "queues": ["default"],
-        "nats_url": "nats://localhost:4222",
-        "concurrency": 2,
-        "worker_name": "test-worker",
-        # Add other params if needed by tests
-    }
 
 
 def is_port_in_use(port: int) -> bool:
@@ -101,63 +103,10 @@ async def nats_server():
 
 @pytest_asyncio.fixture
 async def mock_nats(mocker):
-    """Provide a mock NATS client with full JetStream support for testing"""
-    # Create mock JetStream context with proper spec
-    mock_js = AsyncMock(spec=JetStreamContext)
-    mock_js.publish = AsyncMock(return_value=MagicMock(stream="test_stream", seq=1))
-    mock_js.purge_stream = AsyncMock(return_value=5)
-    mock_js.stream = AsyncMock()
-    mock_js.consumer = AsyncMock()
-
-    # Create distinct, fully mocked KeyValue store instances
-    mock_worker_kv = AsyncMock(spec=KeyValue)
-    mock_worker_kv.put = AsyncMock(name=f"{WORKER_KV_NAME}.put")
-    mock_worker_kv.get = AsyncMock(name=f"{WORKER_KV_NAME}.get", return_value=None)
-    mock_worker_kv.delete = AsyncMock(name=f"{WORKER_KV_NAME}.delete")
-    mock_worker_kv.keys = AsyncMock(name=f"{WORKER_KV_NAME}.keys", return_value=[])
-
-    mock_job_status_kv = AsyncMock(spec=KeyValue)
-    mock_job_status_kv.put = AsyncMock(name=f"{JOB_STATUS_KV_NAME}.put")
-    mock_job_status_kv.get = AsyncMock(
-        name=f"{JOB_STATUS_KV_NAME}.get", return_value=None
-    )
-    mock_job_status_kv.delete = AsyncMock(name=f"{JOB_STATUS_KV_NAME}.delete")
-    mock_job_status_kv.keys = AsyncMock(
-        name=f"{JOB_STATUS_KV_NAME}.keys", return_value=[]
-    )
-
-    mock_result_kv = AsyncMock(spec=KeyValue)
-    mock_result_kv.put = AsyncMock(name=f"{RESULT_KV_NAME}.put")
-    mock_result_kv.get = AsyncMock(name=f"{RESULT_KV_NAME}.get", return_value=None)
-    mock_result_kv.delete = AsyncMock(name=f"{RESULT_KV_NAME}.delete")
-    mock_result_kv.keys = AsyncMock(name=f"{RESULT_KV_NAME}.keys", return_value=[])
-
-    # Configure key_value to return appropriate KV store based on bucket name
-    async def get_key_value_store_side_effect(bucket=None, **kwargs):
-        print(f"DEBUG: mock_js.key_value called for bucket: {bucket}")  # Debug print
-        if bucket == WORKER_KV_NAME:
-            return mock_worker_kv
-        elif bucket == JOB_STATUS_KV_NAME:
-            return mock_job_status_kv
-        elif bucket == RESULT_KV_NAME:
-            return mock_result_kv
-        raise ValueError(f"mock_js.key_value called with unexpected bucket: {bucket}")
-
-    # Set up key_value with the side effect
-    mock_js.key_value = AsyncMock(side_effect=get_key_value_store_side_effect)
-    mock_js.create_key_value = AsyncMock(return_value=AsyncMock(spec=KeyValue))
-
-    # Create NATS client mock with properly configured JetStream
-    mock_nc = AsyncMock()
-    mock_nc.jetstream = AsyncMock(
-        return_value=mock_js
-    )  # Make this an AsyncMock for consistency
-
-    print(
-        f"DEBUG: mock_nats fixture returning mock_js: {mock_js}, mock_js.key_value: {mock_js.key_value}"
-    )
-
-    return mock_nc, mock_js
+    """Provide a mock NATS client with full JetStream support for testing (deprecated - use service_aware_nats_mock instead)"""
+    # This fixture is deprecated. Use service_aware_nats_mock instead.
+    # For backward compatibility, we'll delegate to the new fixture.
+    return await service_aware_nats_mock(mocker)
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -223,12 +172,12 @@ def mock_worker_status_manager():
 @pytest_asyncio.fixture # Change to async fixture
 async def worker_instance_dict( # Add async keyword
     mocker, # Add mocker fixture
-    worker_dict,
+    service_test_config, # Replace worker_dict with service_test_config
     mock_job_status_manager,
     mock_worker_status_manager,
     mock_queue_manager,
     mock_failed_job_handler,
-    mock_nats, # Add mock_nats for _connect
+    service_aware_nats_mock, # Replace mock_nats with service_aware_nats_mock
     settings_with_valid_queue # Add for queues argument
 ):
     """Fixture that returns a dict with a 'worker' key containing a Worker instance (with patched managers) and mock managers."""
@@ -239,7 +188,7 @@ async def worker_instance_dict( # Add async keyword
     mocker.patch('naq.worker.FailedJobHandler', return_value=mock_failed_job_handler)
     
     # Patch NATS connections for _connect
-    mock_nc, mock_js = mock_nats
+    mock_nc, mock_js = service_aware_nats_mock
     mocker.patch('naq.connection.get_nats_connection', return_value=mock_nc)
     mocker.patch('naq.connection.get_jetstream_context', return_value=mock_js)
     mocker.patch('naq.connection.ensure_stream')
@@ -252,8 +201,8 @@ async def worker_instance_dict( # Add async keyword
     from naq.services.jobs import JobService
     from naq.services.events import EventService
     
-    # Create service manager with mock config
-    service_config = ServiceConfig(nats_url="nats://mock:4222")
+    # Create service manager with service_test_config
+    service_config = ServiceConfig(**service_test_config["service_config"])
     service_manager = ServiceManager(service_config)
     
     # Register connection service with mocked NATS
@@ -298,9 +247,9 @@ async def worker_instance_dict( # Add async keyword
     service_manager._services["events"] = event_service
     service_manager._service_configs["events"] = service_config
 
-    # Create worker with basic args from worker_dict, but ensure queues is correct for this context
-    # worker_dict might not have the right queue name if settings_with_valid_queue is different
-    worker_args = worker_dict.copy()
+    # Create worker with basic args from service_test_config, but ensure queues is correct for this context
+    # service_test_config might not have the right queue name if settings_with_valid_queue is different
+    worker_args = service_test_config.copy()
     worker_args["queues"] = [settings_with_valid_queue['DEFAULT_QUEUE_NAME']]
     worker_args["service_manager"] = service_manager
 
@@ -308,7 +257,7 @@ async def worker_instance_dict( # Add async keyword
     
     # Run _connect manually as it's not part of the constructor and tests might rely on it
     # Need to ensure worker_instance._js is set up for _get_kv_store if real managers were used (though they are mocked)
-    # The mock_js from mock_nats should be used by the worker instance.
+    # The mock_js from service_aware_nats_mock should be used by the worker instance.
     # The worker._connect() method will use the patched get_nats_connection and get_jetstream_context.
     
     # Setup mock KV stores on the mock_js that worker_instance will use
@@ -326,12 +275,12 @@ async def worker_instance_dict( # Add async keyword
             return mock_worker_kv_for_dict
         raise ValueError(f"Unexpected bucket name for mock_js.key_value in worker_instance_dict: {bucket}")
     
-    mock_js.key_value.side_effect = kv_side_effect_for_dict # Configure the mock_js from mock_nats
+    mock_js.key_value.side_effect = kv_side_effect_for_dict # Configure the mock_js from service_aware_nats_mock
 
     # Run _connect as the fixture is async and pytest-asyncio handles the loop.
     await worker_instance._connect()
 
-    result = dict(worker_dict) # Start with original worker_dict for other params
+    result = dict(service_test_config) # Start with original service_test_config for other params
     result["worker"] = worker_instance # This worker instance now has mocked managers
     result["job_status_manager"] = mock_job_status_manager # The mock itself
     result["worker_status_manager"] = mock_worker_status_manager # The mock itself
@@ -350,3 +299,270 @@ def mock_failed_job_handler():
     mock.initialize = AsyncMock(name="initialize")
     mock.handle_failed_job = AsyncMock(name="handle_failed_job")
     return mock
+
+
+@pytest_asyncio.fixture
+async def service_manager():
+    """Fixture for a real ServiceManager instance for testing."""
+    # Create service config with test settings
+    service_config = ServiceConfig(
+        nats_url="nats://localhost:4222",
+        custom_settings={
+            "log_level": "DEBUG",
+            "test_mode": True
+        }
+    )
+    
+    # Create service manager
+    manager = ServiceManager(service_config)
+    
+    # Initialize the service manager
+    try:
+        # Register core services
+        await manager.register_service("connection", ConnectionService, initialize=False)
+        await manager.register_service("stream", StreamService, initialize=False)
+        await manager.register_service("kv_store", KVStoreService, initialize=False)
+        await manager.register_service("jobs", JobService, initialize=False)
+        await manager.register_service("events", EventService, initialize=False)
+        
+        yield manager
+        
+    finally:
+        # Cleanup all services
+        await manager.cleanup_all()
+
+
+@pytest.fixture
+def mock_service_manager():
+    """Fixture for a mock ServiceManager with all services mocked."""
+    # Create mock service manager
+    manager = AsyncMock(spec=ServiceManager)
+    manager._services = {}
+    manager._service_configs = {}
+    manager.has_service = MagicMock(return_value=True)
+    manager.get_service = AsyncMock()
+    
+    # Create mock services
+    mock_connection_service = AsyncMock(spec=ConnectionService)
+    mock_connection_service._is_initialized = True
+    mock_connection_service.get_connection = AsyncMock()
+    mock_connection_service.get_jetstream = AsyncMock()
+    
+    # Add jetstream_scope context manager mocking
+    @asynccontextmanager
+    async def mock_jetstream_scope(url: Optional[str] = None) -> AsyncIterator[Any]:
+        """Mock jetstream_scope context manager."""
+        mock_nc = AsyncMock()
+        mock_js = AsyncMock(spec=JetStreamContext)
+        yield mock_nc
+    
+    mock_connection_service.jetstream_scope = mock_jetstream_scope
+    
+    mock_job_service = AsyncMock(spec=JobService)
+    mock_job_service._is_initialized = True
+    mock_job_service.enqueue_job = AsyncMock()
+    mock_job_service.execute_job = AsyncMock()
+    mock_job_service.store_result = AsyncMock()
+    mock_job_service.get_result = AsyncMock()
+    
+    mock_event_service = AsyncMock(spec=EventService)
+    mock_event_service._is_initialized = True
+    mock_event_service.log_job_event = AsyncMock()
+    mock_event_service.log_worker_event = AsyncMock()
+    mock_event_service.get_job_events = AsyncMock(return_value=[])
+    mock_event_service.get_worker_events = AsyncMock(return_value=[])
+    
+    mock_stream_service = AsyncMock(spec=StreamService)
+    mock_stream_service._is_initialized = True
+    mock_stream_service.ensure_stream = AsyncMock()
+    mock_stream_service.get_stream_info = AsyncMock()
+    
+    mock_kv_store_service = AsyncMock(spec=KVStoreService)
+    mock_kv_store_service._is_initialized = True
+    mock_kv_store_service.put = AsyncMock()
+    mock_kv_store_service.get = AsyncMock()
+    mock_kv_store_service.delete = AsyncMock()
+    mock_kv_store_service.get_kv_store = AsyncMock()
+    
+    # Configure service manager to return mock services
+    async def mock_get_service(name: str, service_class: Optional[type] = None):
+        """Mock get_service method."""
+        if name == "connection" and (service_class is None or issubclass(service_class, ConnectionService)):
+            return mock_connection_service
+        elif name == "jobs" and (service_class is None or issubclass(service_class, JobService)):
+            return mock_job_service
+        elif name == "events" and (service_class is None or issubclass(service_class, EventService)):
+            return mock_event_service
+        elif name == "stream" and (service_class is None or issubclass(service_class, StreamService)):
+            return mock_stream_service
+        elif name == "kv_store" and (service_class is None or issubclass(service_class, KVStoreService)):
+            return mock_kv_store_service
+        else:
+            raise ValueError(f"Unknown service: {name}")
+    
+    manager.get_service.side_effect = mock_get_service
+    
+    # Store mock services for direct access
+    manager._mock_connection_service = mock_connection_service
+    manager._mock_job_service = mock_job_service
+    manager._mock_event_service = mock_event_service
+    manager._mock_stream_service = mock_stream_service
+    manager._mock_kv_store_service = mock_kv_store_service
+    
+    return manager
+
+
+@pytest.fixture
+def service_test_config():
+    """Fixture for service test configuration."""
+    return {
+        "queues": ["default"],
+        "nats_url": "nats://localhost:4222",
+        "concurrency": 2,
+        "worker_name": "test-worker",
+        "service_config": {
+            "nats_url": "nats://localhost:4222",
+            "log_level": "DEBUG",
+            "custom_settings": {
+                "test_mode": True,
+                "auto_create_buckets": True,
+                "enable_event_logging": True,
+                "enable_job_execution": True,
+                "enable_result_storage": True
+            }
+        }
+    }
+
+
+@pytest.fixture
+def temp_config_file():
+    """Fixture for a temporary configuration file."""
+    # Create a temporary config file
+    config_content = """
+nats:
+  servers:
+    - "nats://localhost:4222"
+  max_reconnect_attempts: 5
+  reconnect_time_wait: 2.0
+  connection_timeout: 30.0
+
+job_service:
+  enable_job_execution: true
+  enable_result_storage: true
+  enable_event_logging: true
+  max_job_execution_time: 300
+  default_result_ttl: 86400
+  results_bucket_name: "naq_job_results"
+  auto_create_buckets: true
+
+events:
+  enabled: true
+  stream: "naq_events"
+  batch_size: 100
+  flush_interval: 1.0
+  max_buffer_size: 1000
+
+kv_store:
+  bucket_name: "naq_kv_store"
+  ttl: 86400
+  history: 10
+  replicas: 1
+
+streams:
+  storage: "file"
+  retention: "work_queue"
+  replicas: 1
+  auto_create_streams: true
+"""
+    
+    # Create temporary file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        f.write(config_content)
+        temp_file_path = f.name
+    
+    yield temp_file_path
+    
+    # Clean up
+    os.unlink(temp_file_path)
+
+
+@pytest_asyncio.fixture
+async def service_aware_nats_mock(mocker):
+    """Provide a mock NATS client with full JetStream support for service-aware testing."""
+    # Create mock JetStream context with proper spec
+    mock_js = AsyncMock(spec=JetStreamContext)
+    mock_js.publish = AsyncMock(return_value=MagicMock(stream="test_stream", seq=1))
+    mock_js.purge_stream = AsyncMock(return_value=5)
+    mock_js.stream = AsyncMock()
+    mock_js.consumer = AsyncMock()
+
+    # Create distinct, fully mocked KeyValue store instances
+    mock_worker_kv = AsyncMock(spec=KeyValue)
+    mock_worker_kv.put = AsyncMock(name=f"{WORKER_KV_NAME}.put")
+    mock_worker_kv.get = AsyncMock(name=f"{WORKER_KV_NAME}.get", return_value=None)
+    mock_worker_kv.delete = AsyncMock(name=f"{WORKER_KV_NAME}.delete")
+    mock_worker_kv.keys = AsyncMock(name=f"{WORKER_KV_NAME}.keys", return_value=[])
+
+    mock_job_status_kv = AsyncMock(spec=KeyValue)
+    mock_job_status_kv.put = AsyncMock(name=f"{JOB_STATUS_KV_NAME}.put")
+    mock_job_status_kv.get = AsyncMock(
+        name=f"{JOB_STATUS_KV_NAME}.get", return_value=None
+    )
+    mock_job_status_kv.delete = AsyncMock(name=f"{JOB_STATUS_KV_NAME}.delete")
+    mock_job_status_kv.keys = AsyncMock(
+        name=f"{JOB_STATUS_KV_NAME}.keys", return_value=[]
+    )
+
+    mock_result_kv = AsyncMock(spec=KeyValue)
+    mock_result_kv.put = AsyncMock(name=f"{RESULT_KV_NAME}.put")
+    mock_result_kv.get = AsyncMock(name=f"{RESULT_KV_NAME}.get", return_value=None)
+    mock_result_kv.delete = AsyncMock(name=f"{RESULT_KV_NAME}.delete")
+    mock_result_kv.keys = AsyncMock(name=f"{RESULT_KV_NAME}.keys", return_value=[])
+
+    # Configure key_value to return appropriate KV store based on bucket name
+    async def get_key_value_store_side_effect(bucket=None, **kwargs):
+        print(f"DEBUG: service_aware_nats_mock.js.key_value called for bucket: {bucket}")
+        if bucket == WORKER_KV_NAME:
+            return mock_worker_kv
+        elif bucket == JOB_STATUS_KV_NAME:
+            return mock_job_status_kv
+        elif bucket == RESULT_KV_NAME:
+            return mock_result_kv
+        raise ValueError(f"service_aware_nats_mock.js.key_value called with unexpected bucket: {bucket}")
+
+    # Set up key_value with the side effect
+    mock_js.key_value = AsyncMock(side_effect=get_key_value_store_side_effect)
+    mock_js.create_key_value = AsyncMock(return_value=AsyncMock(spec=KeyValue))
+
+    # Create NATS client mock with properly configured JetStream
+    mock_nc = AsyncMock()
+    mock_nc.jetstream = AsyncMock(return_value=mock_js)
+
+    print(
+        f"DEBUG: service_aware_nats_mock fixture returning mock_js: {mock_js}, mock_js.key_value: {mock_js.key_value}"
+    )
+
+    return mock_nc, mock_js
+
+
+@pytest.fixture
+def service_test_job():
+    """Fixture for a test job aligned with the new Job model structure."""
+    return Job(
+        job_id="test-job-123",
+        queue_name="default",
+        func=lambda: "test result",
+        args=(),
+        kwargs={},
+        status=JOB_STATUS.PENDING.value,
+        retry_count=0,
+        max_retries=3,
+        timeout=30,
+        scheduled_at=None,
+        created_at=None,
+        started_at=None,
+        completed_at=None,
+        error=None,
+        traceback=None,
+        result=None
+    )
