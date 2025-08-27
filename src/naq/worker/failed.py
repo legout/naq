@@ -59,7 +59,7 @@ class FailedJobHandler:
                     )
                 if self._event_service is None:
                     self._event_service = await self._service_manager.get_service(
-                        "event", EventService
+                        "events", EventService
                     )
             except Exception as e:
                 wrapped_error = wrap_naq_exception(e, "Failed to get services")

@@ -1,0 +1,247 @@
+---
+title: "Development Workflow"
+---
+
+# Development Workflow
+
+This document describes the development workflow and CI/CD pipeline for the `naq` project.
+
+## Overview
+
+The `naq` project uses a comprehensive development workflow that includes automated testing, code quality checks, and documentation generation. The CI/CD pipeline ensures that all changes are thoroughly tested before being merged into the main branch.
+
+## CI/CD Pipeline
+
+The CI/CD pipeline is defined in [`.github/workflows/test.yml`](https://github.com/legout/naq/blob/main/.github/workflows/test.yml) and runs on every push to the `main` and `develop` branches, as well as on every pull request.
+
+### Pipeline Stages
+
+#### 1. Setup
+
+- **Checkout**: Retrieves the source code
+- **Python Setup**: Sets up the required Python version (3.12, 3.13)
+- **Install uv**: Installs the uv package manager
+- **Install Dependencies**: Installs project dependencies using `uv pip install -e .[dev,test]`
+
+#### 2. Code Quality Checks
+
+- **Linting**: Runs `ruff check src/` to check for code style and potential issues
+- **Formatting**: Runs `ruff format --check src/` to verify code formatting
+- **Type Checking**: Runs `ruff check src/ --select E,F,W` for type validation
+
+#### 3. Testing
+
+The pipeline runs tests in stages to provide clear feedback on different types of failures:
+
+##### Unit Tests
+```bash
+pytest tests/test_models/ tests/test_services/ tests/test_config/ tests/test_cli/ -v
+```
+- Tests individual components in isolation
+- Includes model, service, configuration, and CLI tests
+- Fast execution with mocked dependencies
+
+##### Integration Tests
+```bash
+pytest tests/test_integration/ -v
+```
+- Tests interactions between components
+- Requires a running NATS server (provided as a service)
+- Includes end-to-end scenarios and smoke tests
+
+##### Compatibility Tests
+```bash
+pytest tests/test_compatibility/ -v
+```
+- Tests API compatibility and user workflows
+- Ensures backward compatibility
+- Validates user-facing functionality
+
+##### Performance Tests
+```bash
+pytest tests/test_performance/ -v
+```
+- Tests performance benchmarks and memory usage
+- Identifies performance regressions
+- Monitors resource utilization
+
+### Services
+
+The CI pipeline includes a NATS server as a service for integration tests:
+
+```yaml
+services:
+  nats:
+    image: nats:2.10
+    ports:
+      - 4222:4222
+      - 8222:8222
+    options: >-
+      --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:8222/varz || exit 1"
+      --health-interval 10s
+      --health-timeout 5s
+      --health-retries 5
+```
+
+### Test Dependencies
+
+The pipeline installs both development and testing dependencies:
+
+```bash
+uv pip install -e .[dev,test]
+```
+
+This includes:
+- **pytest**: Test framework
+- **pytest-mock**: Mocking utilities
+- **pytest-asyncio**: Async test support
+- **freezegun**: Time-based testing
+- **ruff**: Code quality and formatting
+
+## Local Development
+
+### Setting Up Your Environment
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/legout/naq.git
+   cd naq
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   uv pip install -e .[dev,test]
+   ```
+
+3. **Start NATS server** (for integration tests):
+   ```bash
+   cd docker
+   docker-compose up -d
+   ```
+
+### Running Tests Locally
+
+#### Run All Tests
+```bash
+pytest
+```
+
+#### Run Specific Test Categories
+```bash
+# Unit tests
+pytest tests/test_models/ tests/test_services/ tests/test_config/ tests/test_cli/
+
+# Integration tests
+pytest tests/test_integration/
+
+# Compatibility tests
+pytest tests/test_compatibility/
+
+# Performance tests
+pytest tests/test_performance/
+```
+
+#### Run Specific Test Files
+```bash
+pytest tests/test_services/test_my_service.py
+```
+
+#### Run Specific Tests
+```bash
+pytest tests/test_services/test_my_service.py::test_my_service_initialization
+```
+
+### Code Quality Checks
+
+#### Linting
+```bash
+ruff check src/
+```
+
+#### Formatting
+```bash
+ruff format src/
+```
+
+#### Type Checking
+```bash
+ruff check src/ --select E,F,W
+```
+
+### Running All Checks
+```bash
+# Format code
+ruff format src/
+
+# Check for issues
+ruff check src/
+
+# Run type checking
+ruff check src/ --select E,F,W
+
+# Run tests
+pytest
+```
+
+## Test Organization
+
+The test suite is organized into the following directories:
+
+- **`tests/test_models/`**: Tests for data models and structures
+- **`tests/test_services/`**: Tests for service layer components and utilities
+- **`tests/test_integration/`**: Tests for integration between components
+- **`tests/test_compatibility/`**: Tests for API compatibility and user workflows
+- **`tests/test_performance/`**: Tests for performance benchmarks and memory usage
+- **`tests/test_config/`**: Tests for configuration system components
+- **`tests/test_cli/`**: Tests for command-line interface functionality
+
+## Contributing
+
+When contributing to the project:
+
+1. **Create a feature branch** from `develop`
+2. **Write tests** for your changes
+3. **Run all checks** locally before committing
+4. **Submit a pull request** to the `develop` branch
+5. **Ensure CI/CD pipeline** passes
+
+For more detailed contribution guidelines, see [Contributing](contributing.qmd).
+
+## Troubleshooting
+
+### Common Issues
+
+#### NATS Server Connection Issues
+If integration tests fail due to NATS connection issues:
+1. Ensure NATS server is running: `docker-compose ps`
+2. Check NATS logs: `docker-compose logs nats`
+3. Restart NATS: `docker-compose restart nats`
+
+#### Test Failures
+If tests fail locally:
+1. Ensure all dependencies are installed: `uv pip install -e .[dev,test]`
+2. Check for missing test files: `ls tests/`
+3. Run tests with verbose output: `pytest -v`
+
+#### Code Quality Issues
+If code quality checks fail:
+1. Run formatting: `ruff format src/`
+2. Fix linting issues: `ruff check --fix src/`
+3. Check for type errors: `ruff check src/ --select E,F,W`
+
+## Performance Considerations
+
+The CI/CD pipeline is designed to run efficiently:
+- Unit tests run in parallel and complete quickly
+- Integration tests run only after unit tests pass
+- Performance tests are isolated to prevent false positives
+- The entire pipeline completes in under 5 minutes
+
+## Future Improvements
+
+Planned improvements to the CI/CD pipeline:
+- **Code Coverage**: Add coverage reporting and thresholds
+- **Documentation Generation**: Automated documentation builds
+- **Security Scanning**: Integration with security scanning tools
+- **Performance Benchmarking**: Historical performance tracking
+- **Multi-platform Testing**: Testing across different operating systems

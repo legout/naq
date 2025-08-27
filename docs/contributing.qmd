@@ -210,6 +210,79 @@ All services should inherit from the base [`Service`](src/naq/services/base.py:1
 210|     assert service.is_initialized
 211|     await service.cleanup()
 212| ```
+#### Test Organization
+
+The test suite is organized into the following directories:
+
+- `tests/test_models/`: Tests for data models and structures
+- `tests/test_services/`: Tests for service layer components and utilities
+- `tests/test_integration/`: Tests for integration between components and end-to-end scenarios
+- `tests/test_compatibility/`: Tests for API compatibility and user workflows
+- `tests/test_performance/`: Tests for performance benchmarks and memory usage
+- `tests/test_config/`: Tests for configuration system components
+- `tests/test_cli/`: Tests for command-line interface functionality
+
+#### Running Tests
+
+To run the entire test suite:
+
+```bash
+pytest
+```
+
+To run specific test categories:
+
+```bash
+# Run unit tests (models, services, config, CLI)
+pytest tests/test_models/ tests/test_services/ tests/test_config/ tests/test_cli/
+
+# Run integration tests
+pytest tests/test_integration/
+
+# Run compatibility tests
+pytest tests/test_compatibility/
+
+# Run performance tests
+pytest tests/test_performance/
+```
+
+To run a specific test file:
+
+```bash
+pytest tests/test_services/test_my_service.py
+```
+
+To run a specific test:
+
+```bash
+pytest tests/test_services/test_my_service.py::test_my_service_initialization
+```
+
+#### Test Dependencies
+
+Test dependencies are installed using:
+
+```bash
+uv pip install -e .[dev,test]
+```
+
+This installs both development and testing dependencies including:
+- pytest for test framework
+- pytest-mock for mocking
+- pytest-asyncio for async test support
+- freezegun for time-based testing
+- ruff for linting and formatting
+
+#### Writing Tests
+
+When writing new tests:
+
+1. Place the test file in the appropriate directory based on what it tests
+2. Use descriptive test names that follow the pattern `test_<functionality>_<scenario>`
+3. Use pytest markers to categorize tests (e.g., `@pytest.mark.asyncio` for async tests)
+4. Mock external dependencies like NATS using `pytest-mock`
+5. Test both success and failure scenarios
+6. Include docstrings for complex test scenarios
 213|
 214|### Documentation
 215|

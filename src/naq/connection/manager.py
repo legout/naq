@@ -5,7 +5,7 @@ import asyncio
 import threading
 import nats
 from nats.aio.client import Client as NATSClient
-from nats.js import JetStreamContext
+from nats.js import JetStreamContext, api
 
 from ..exceptions import NaqConnectionError
 from ..settings import DEFAULT_NATS_URL
@@ -62,39 +62,47 @@ class ConnectionManager:
                 )
                 return nc
 
-        async with self._lock:
-            # Process-wide pooled connection
-            if not prefer_thread_local:
-                if url in self._connections and self._connections[url].is_connected:
-                    return self._connections[url]
+        # First check if we already have a connection without holding the lock
+        if not prefer_thread_local:
+            if url in self._connections and self._connections[url].is_connected:
+                return self._connections[url]
 
-            # If prefer_thread_local, try to re-check TLS map under lock to avoid racing creation
-            if prefer_thread_local:
-                tls_conns, _ = self._get_tls_maps()
-                nc = tls_conns.get(url)
-                if nc and nc.is_connected:
-                    return nc
-
-            # Create a new connection
-            try:
-                nc = await nats.connect(url, name="naq_client")
-                logger.info(f"NATS connection established to {url}")
-                if prefer_thread_local:
-                    tls_conns[url] = nc
-                else:
-                    self._connections[url] = nc
+        # For thread-local, check outside the lock first
+        if prefer_thread_local:
+            tls_conns, _ = self._get_tls_maps()
+            nc = tls_conns.get(url)
+            if nc and nc.is_connected:
                 return nc
-            except Exception as e:
-                # Clean up any partial connection
-                if not prefer_thread_local and url in self._connections:
-                    del self._connections[url]
+
+        # Create a new connection outside the lock
+        try:
+            nc = await nats.connect(url, name="naq_client")
+            logger.info(f"NATS connection established to {url}")
+            
+            # Now acquire the lock only to store the connection
+            async with self._lock:
+                # Double-check pattern to prevent race conditions
+                if not prefer_thread_local:
+                    # Check again if another connection was created while we were connecting
+                    if url in self._connections and self._connections[url].is_connected:
+                        # Close our new connection and use the existing one
+                        await nc.close()
+                        return self._connections[url]
+                    self._connections[url] = nc
                 else:
+                    # For thread-local, check again
                     tls_conns, _ = self._get_tls_maps()
-                    if url in tls_conns:
-                        del tls_conns[url]
-                raise NaqConnectionError(
-                    f"Failed to connect to NATS at {url}: {e}"
-                ) from e
+                    existing_nc = tls_conns.get(url)
+                    if existing_nc and existing_nc.is_connected:
+                        # Close our new connection and use the existing one
+                        await nc.close()
+                        return existing_nc
+                    tls_conns[url] = nc
+                return nc
+        except Exception as e:
+            raise NaqConnectionError(
+                f"Failed to connect to NATS at {url}: {e}"
+            ) from e
 
     async def get_jetstream(
         self, url: str = DEFAULT_NATS_URL, *, prefer_thread_local: bool = False
@@ -195,15 +203,11 @@ class ConnectionManager:
                         await nc.drain()
                         await nc.close()
                         logger.info(f"NATS connection to {url} closed")
-                    except nats.errors.FlushTimeoutError:
+                    except Exception as e:
                         logger.warning(
-                            f"ConnectionManager: Flush timeout when draining NATS connection to {url}. Forcing close."
+                            f"ConnectionManager: Flush timeout when draining NATS connection to {url}. Forcing close. Error: {e}"
                         )
                         await nc.close()  # Attempt to force close
-                    except Exception as e:
-                        logger.error(
-                            f"ConnectionManager: Error closing NATS connection to {url}: {e}"
-                        )
                 else:
                     logger.debug(
                         f"ConnectionManager: Process-wide NATS connection to {url} already disconnected or not found."
@@ -226,15 +230,11 @@ class ConnectionManager:
                         await nc.drain()
                         await nc.close()
                         logger.info(f"[TLS] NATS connection to {url} closed")
-                    except nats.errors.FlushTimeoutError:
+                    except Exception as e:
                         logger.warning(
-                            f"ConnectionManager: [TLS] Flush timeout when draining NATS connection to {url}. Forcing close."
+                            f"ConnectionManager: [TLS] Flush timeout when draining NATS connection to {url}. Forcing close. Error: {e}"
                         )
                         await nc.close()  # Attempt to force close
-                    except Exception as e:
-                        logger.error(
-                            f"ConnectionManager: [TLS] Error closing NATS connection to {url}: {e}"
-                        )
                 else:
                     logger.debug(
                         f"ConnectionManager: Thread-local NATS connection to {url} already disconnected or not found."
@@ -341,15 +341,13 @@ async def ensure_stream(
         # Check if stream exists
         await js.stream_info(stream_name)
         logger.info(f"Stream '{stream_name}' already exists.")
-    except nats.js.errors.NotFoundError:
+    except Exception:
         # Create stream if it doesn't exist
         logger.info(f"Stream '{stream_name}' not found, creating...")
         await js.add_stream(
             name=stream_name,
             subjects=subjects,
-            storage=nats.js.api.StorageType.FILE,  # Use File storage
-            retention=nats.js.api.RetentionPolicy.WORK_QUEUE,  # Consume then delete
+            storage=api.StorageType.FILE,  # Use File storage
+            retention=api.RetentionPolicy.WORK_QUEUE,  # Consume then delete
         )
         logger.info(f"Stream '{stream_name}' created with subjects {subjects}.")
-    except Exception as e:
-        raise NaqConnectionError(f"Failed to ensure stream '{stream_name}': {e}") from e

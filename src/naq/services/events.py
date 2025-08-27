@@ -34,6 +34,11 @@ class EventServiceConfig(msgspec.Struct):
         event_retention_seconds: Time to retain events in seconds
         enable_event_logging: Whether to enable event logging
         auto_create_bucket: Whether to automatically create the events bucket
+        enabled: Whether the event service is enabled (alias for enable_event_logging)
+        batch_size: Number of events to batch together for processing
+        flush_interval: Interval in seconds to flush events to storage
+        max_buffer_size: Maximum number of events to buffer in memory
+        stream: Name of the stream for events (alias for events_bucket_name)
     """
 
     events_bucket_name: str = "naq_events"
@@ -41,6 +46,11 @@ class EventServiceConfig(msgspec.Struct):
     event_retention_seconds: Optional[int] = None
     enable_event_logging: bool = True
     auto_create_bucket: bool = True
+    enabled: bool = True
+    batch_size: Optional[int] = None
+    flush_interval: Optional[float] = None
+    max_buffer_size: Optional[int] = None
+    stream: Optional[str] = None
 
     def as_dict(self) -> Dict[str, Any]:
         """Convert the configuration to a dictionary."""
@@ -50,6 +60,11 @@ class EventServiceConfig(msgspec.Struct):
             "event_retention_seconds": self.event_retention_seconds,
             "enable_event_logging": self.enable_event_logging,
             "auto_create_bucket": self.auto_create_bucket,
+            "enabled": self.enabled,
+            "batch_size": self.batch_size,
+            "flush_interval": self.flush_interval,
+            "max_buffer_size": self.max_buffer_size,
+            "stream": self.stream,
         }
 
 
@@ -100,15 +115,43 @@ class EventService(BaseService):
         # Start with default config
         event_config = EventServiceConfig()
 
-        # Override with NAQ config event_service settings if provided
+        # Override with NAQ config events settings if provided
+        if self._naq_config and self._naq_config.events:
+            naq_events_config = self._naq_config.events
+            
+            # Map NAQ config to event service config
+            if naq_events_config.enabled is not None:
+                event_config.enable_event_logging = naq_events_config.enabled
+                event_config.enabled = naq_events_config.enabled
+            
+            if naq_events_config.stream:
+                event_config.events_bucket_name = naq_events_config.stream
+                event_config.stream = naq_events_config.stream
+            
+            if naq_events_config.batch_size is not None:
+                event_config.max_events_per_job = naq_events_config.batch_size
+                event_config.batch_size = naq_events_config.batch_size
+            
+            if naq_events_config.flush_interval is not None:
+                event_config.event_retention_seconds = int(naq_events_config.flush_interval)
+                event_config.flush_interval = naq_events_config.flush_interval
+            
+            if naq_events_config.max_buffer_size is not None:
+                # Use max_buffer_size as a factor for max_events_per_job
+                event_config.max_events_per_job = max(event_config.max_events_per_job, naq_events_config.max_buffer_size // 10)
+                event_config.max_buffer_size = naq_events_config.max_buffer_size
+        
+        # Override with NAQ config job_service settings if provided (for backward compatibility)
+        # Only apply if not already set by events config
         if self._naq_config and self._naq_config.job_service:
             naq_job_config = self._naq_config.job_service
             
             # Map NAQ config to event service config
-            if naq_job_config.enable_event_logging is not None:
+            if naq_job_config.enable_event_logging is not None and event_config.enabled is None:
                 event_config.enable_event_logging = naq_job_config.enable_event_logging
+                event_config.enabled = naq_job_config.enable_event_logging
             
-            if naq_job_config.results_bucket_name:
+            if naq_job_config.results_bucket_name and event_config.events_bucket_name == "naq_events":
                 # Use job results bucket name as events bucket name if not explicitly set
                 event_config.events_bucket_name = f"{naq_job_config.results_bucket_name}_events"
             
@@ -116,7 +159,7 @@ class EventService(BaseService):
                 event_config.auto_create_bucket = naq_job_config.auto_create_buckets
 
         # Override with service config if provided (for backward compatibility)
-        if self._config and self._config.custom_settings:
+        if self._config and hasattr(self._config, 'custom_settings') and self._config.custom_settings:
             custom_settings = self._config.custom_settings
 
             if "events_bucket_name" in custom_settings:

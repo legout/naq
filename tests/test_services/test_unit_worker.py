@@ -24,6 +24,60 @@ async def worker(mock_nats, mocker, settings_with_valid_queue, mock_queue_manage
     """Setup a test worker with mocked NATS and managers."""
     mock_nc, mock_js = mock_nats
 
+    # Create a service manager and register all required services
+    from naq.services.base import ServiceManager, ServiceConfig
+    from naq.services.connection import ConnectionService
+    from naq.services.streams import StreamService
+    from naq.services.kv_stores import KVStoreService
+    from naq.services.jobs import JobService
+    from naq.services.events import EventService
+    
+    # Create service manager with mock config
+    service_config = ServiceConfig(nats_url="nats://mock:4222")
+    service_manager = ServiceManager(service_config)
+    
+    # Register connection service with mocked NATS
+    connection_service = ConnectionService(config=service_config)
+    connection_service._nc = mock_nc
+    connection_service._js = mock_js
+    connection_service._is_initialized = True
+    
+    # Register stream service with mocked NATS and connection service
+    stream_service = StreamService(config=service_config, connection_service=connection_service)
+    stream_service._nc = mock_nc
+    stream_service._js = mock_js
+    stream_service._is_initialized = True
+    
+    # Register kv_store service with mocked NATS and connection service
+    kv_store_service = KVStoreService(config=service_config, connection_service=connection_service)
+    kv_store_service._nc = mock_nc
+    kv_store_service._js = mock_js
+    kv_store_service._is_initialized = True
+    
+    # Register job service with mocked NATS and connection service
+    job_service = JobService(config=service_config, connection_service=connection_service)
+    job_service._nc = mock_nc
+    job_service._js = mock_js
+    job_service._is_initialized = True
+    
+    # Register event service with mocked NATS and connection service
+    event_service = EventService(config=service_config, connection_service=connection_service)
+    event_service._nc = mock_nc
+    event_service._js = mock_js
+    event_service._is_initialized = True
+    
+    # Manually register all services
+    service_manager._services["connection"] = connection_service
+    service_manager._service_configs["connection"] = service_config
+    service_manager._services["stream"] = stream_service
+    service_manager._service_configs["stream"] = service_config
+    service_manager._services["kv_store"] = kv_store_service
+    service_manager._service_configs["kv_store"] = service_config
+    service_manager._services["jobs"] = job_service
+    service_manager._service_configs["jobs"] = service_config
+    service_manager._services["events"] = event_service
+    service_manager._service_configs["events"] = service_config
+
     # Patch worker dependencies with our mocks
     mocker.patch('naq.connection.get_nats_connection', return_value=mock_nc)
     mocker.patch('naq.connection.get_jetstream_context', return_value=mock_js)
@@ -36,6 +90,7 @@ async def worker(mock_nats, mocker, settings_with_valid_queue, mock_queue_manage
     worker_instance = Worker(
         queues=[settings_with_valid_queue['DEFAULT_QUEUE_NAME']],
         worker_name="test_worker",
+        service_manager=service_manager,
     )
 
     # Setup mock KV stores
@@ -105,11 +160,12 @@ class TestWorker:
         )
 
         # Create mock message with job data
+        from naq.serializers import PickleSerializer
         mock_msg = AsyncMock()
-        mock_msg.data = cloudpickle.dumps(job)
+        mock_msg.data = PickleSerializer.serialize_job(job)
         
         # Process the message
-        await worker.process_message(mock_msg)
+        await worker.job_processor.process_message(mock_msg)
         
         assert isinstance(job, Job)
         assert job.job_id == "test_job"
@@ -125,7 +181,7 @@ class TestWorker:
         mock_msg.data = cloudpickle.dumps({})
         
         # Process the empty message
-        await worker.process_message(mock_msg)
+        await worker.job_processor.process_message(mock_msg)
         
         # Verify no processing occurred
         mock_js.publish.assert_not_awaited()
@@ -145,7 +201,7 @@ class TestWorker:
             kwargs={}
         )
         
-        await worker.process_message(job)
+        await worker.job_processor.process_message(job)
         
         assert job.result == mock_result
         assert job.status == JOB_STATUS.COMPLETED
@@ -167,7 +223,7 @@ class TestWorker:
             max_retries=0  # No retries for this test
         )
         
-        await worker.process_message(job)
+        await worker.job_processor.process_message(job)
         
         assert job.status == JOB_STATUS.FAILED
         assert job.error == error_msg
@@ -190,7 +246,7 @@ class TestWorker:
         )
     
         # Act
-        await worker_instance.process_message(job)
+        await worker_instance.job_processor.process_message(job)
     
         # Assert
         # Verify JobStatusManager interactions
@@ -233,7 +289,7 @@ class TestWorker:
         )
         
         # Act
-        await worker_instance.process_message(job)
+        await worker_instance.job_processor.process_message(job)
     
         # Assert
         mock_jsm.store_result.assert_awaited_with(job)
@@ -275,7 +331,7 @@ class TestWorker:
         )
     
         # Act
-        await worker_instance.process_message(job)
+        await worker_instance.job_processor.process_message(job)
     
         # Assert
         wsm_calls = mock_wsm.update_status.await_args_list
@@ -306,83 +362,83 @@ class TestWorker:
         assert idle_indices, "IDLE state not found in WorkerStatusManager calls"
         assert min(busy_indices) < max(idle_indices), "BUSY state did not occur before final IDLE state"
     
-        @pytest.mark.asyncio
-        async def test_concurrency_limit(self, worker_instance_dict, mock_nats):
-            worker_instance = worker_instance_dict["worker"]
-            mock_wsm = worker_instance_dict["worker_status_manager"]
-            mock_nc, mock_js = mock_nats
-            mock_nc, mock_js = mock_nats
-            worker_kv = await mock_js.key_value(bucket=WORKER_KV_NAME)
+    @pytest.mark.asyncio
+    async def test_concurrency_limit(self, worker_instance_dict, mock_nats):
+        worker_instance = worker_instance_dict["worker"]
+        mock_wsm = worker_instance_dict["worker_status_manager"]
+        mock_nc, mock_js = mock_nats
+        mock_nc, mock_js = mock_nats
+        worker_kv = await mock_js.key_value(bucket=WORKER_KV_NAME)
+        
+        # Set up worker with concurrency of 2
+        worker_instance._concurrency = 2
+        worker_instance._semaphore = asyncio.Semaphore(2)
+
+        # Create mock jobs that take time to process
+        async def slow_job():
+            await asyncio.sleep(0.1)
+            return "done"
+
+        jobs = []
+        for i in range(4):  # Create 4 jobs
+            job = Job(
+                function=slow_job,
+                job_id=f"test_job_{i}",
+                queue_name="test_queue",
+                args=(),
+                kwargs={}
+            )
+            jobs.append(job)
+
+        # Process jobs concurrently
+        start_time = datetime.now(timezone.utc)
+        tasks = [worker_instance.job_processor.process_message(job) for job in jobs]
+        await asyncio.gather(*tasks)
+        end_time = datetime.now(timezone.utc)
+
+        # With concurrency of 2, processing 4 jobs should take at least 2 cycles
+        duration = (end_time - start_time).total_seconds()
+        assert duration >= 0.18  # At least 2 cycles of 0.1 seconds with buffer
+
+        # Get all status updates
+        wsm_calls = mock_wsm.update_status.await_args_list
+        status_updates_from_manager = []
+        for call in wsm_calls:
+            status_updates_from_manager.append({
+                "status": call.args[1],
+                "job_id": call.kwargs.get("job_id"),
+            })
             
-            # Set up worker with concurrency of 2
-            worker._concurrency = 2
-            worker._semaphore = asyncio.Semaphore(2)
-    
-            # Create mock jobs that take time to process
-            async def slow_job():
-                await asyncio.sleep(0.1)
-                return "done"
-    
-            jobs = []
-            for i in range(4):  # Create 4 jobs
-                job = Job(
-                    function=slow_job,
-                    job_id=f"test_job_{i}",
-                    queue_name="test_queue",
-                    args=(),
-                    kwargs={}
-                )
-                jobs.append(job)
-    
-            # Process jobs concurrently
-            start_time = datetime.now(timezone.utc)
-            tasks = [worker.process_message(job) for job in jobs]
-            await asyncio.gather(*tasks)
-            end_time = datetime.now(timezone.utc)
-    
-            # With concurrency of 2, processing 4 jobs should take at least 2 cycles
-            duration = (end_time - start_time).total_seconds()
-            assert duration >= 0.18  # At least 2 cycles of 0.1 seconds with buffer
-    
-            # Get all status updates
-            wsm_calls = mock_wsm.update_status.await_args_list
-            status_updates_from_manager = []
-            for call in wsm_calls:
-                status_updates_from_manager.append({
-                    "status": call.args[1],
-                    "job_id": call.kwargs.get("job_id"),
-                })
+        max_concurrent = 0
+        current_busy = 0
+        for update in status_updates_from_manager:
+            if update["status"] == WORKER_STATUS.BUSY:
+                current_busy += 1
+                max_concurrent = max(max_concurrent, current_busy)
+            elif update["status"] == WORKER_STATUS.IDLE and update.get("job_id") is not None:
+                current_busy -= 1
             
-            max_concurrent = 0
-            current_busy = 0
-            for update in status_updates_from_manager:
-                if update["status"] == WORKER_STATUS.BUSY:
-                    current_busy += 1
-                    max_concurrent = max(max_concurrent, current_busy)
-                elif update["status"] == WORKER_STATUS.IDLE and update.get("job_id") is not None:
-                    current_busy -= 1
+        assert max_concurrent <= worker_instance._concurrency
+        assert current_busy == 0
+
+        # Track maximum concurrent busy states
+        max_concurrent = 0
+        current_busy = 0
+        for update in status_updates_from_manager:
+            if update["status"] == WORKER_STATUS.BUSY:
+                current_busy += 1
+                max_concurrent = max(max_concurrent, current_busy)
+            elif update["status"] == WORKER_STATUS.IDLE:
+                current_busy -= 1
+
+        # Verify concurrency limit was respected
+        assert max_concurrent <= worker_instance._concurrency
+        assert current_busy == 0  # Should end with all jobs complete
             
-            assert max_concurrent <= worker_instance._concurrency
-            assert current_busy == 0
-    
-            # Track maximum concurrent busy states
-            max_concurrent = 0
-            current_busy = 0
-            for update in status_updates_from_manager:
-                if update["status"] == WORKER_STATUS.BUSY:
-                    current_busy += 1
-                    max_concurrent = max(max_concurrent, current_busy)
-                elif update["status"] == WORKER_STATUS.IDLE:
-                    current_busy -= 1
-    
-            # Verify concurrency limit was respected
-            assert max_concurrent <= worker._concurrency
-            assert current_busy == 0  # Should end with all jobs complete
-            
-            # Verify all jobs completed
-            for job in jobs:
-                assert job.status == JOB_STATUS.COMPLETED
-                assert job.result == "done"
+        # Verify all jobs completed
+        for job in jobs:
+            assert job.status == JOB_STATUS.COMPLETED
+            assert job.result == "done"
         
 
     @pytest.mark.asyncio
@@ -409,7 +465,7 @@ class TestWorker:
         assert worker_instance._shutdown_event.is_set() is True
         
         # Process message after shutdown signal
-        await worker_instance.process_message(job)
+        await worker_instance.job_processor.process_message(job)
         
         # Verify job wasn't executed
         mock_func.assert_not_awaited()
@@ -444,7 +500,7 @@ class TestWorker:
         )
 
         # Start job processing
-        process_task = asyncio.create_task(worker.process_message(job))
+        process_task = asyncio.create_task(worker.job_processor.process_message(job))
 
         # Wait briefly then trigger shutdown
         await asyncio.sleep(0.1)

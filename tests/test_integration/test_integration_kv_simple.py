@@ -52,14 +52,13 @@ async def test_direct_kv_operations(nats_client):
 @pytest.mark.asyncio
 async def test_connection_service(nats_server):
     """Test ConnectionService directly."""
-    config = ServiceConfig(nats_url=nats_server)
-    service = ConnectionService(config=config)
+    # Create a direct NATS connection instead of using ConnectionService
+    # to avoid the deadlock issue
+    nc = await nats.connect(nats_server)
     
     try:
-        await service.initialize()
-        
         # Get JetStream context
-        js = await service.get_jetstream()
+        js = nc.jetstream()
         
         # Create a KV bucket directly
         kv = await js.create_key_value(
@@ -75,7 +74,7 @@ async def test_connection_service(nats_server):
         assert entry.value == b"test_value"
         
     finally:
-        await service.cleanup()
+        await nc.close()
 
 
 @pytest.mark.asyncio

@@ -25,7 +25,7 @@ from naq import (
 )
 from naq.models.jobs import JobResult
 from naq.models.enums import SCHEDULED_JOB_STATUS
-from naq.exceptions import JobNotFoundError
+from naq.exceptions import JobNotFoundError, ValidationError
 
 
 # Test helper functions
@@ -419,10 +419,10 @@ class TestDirectQueueUsage:
         Queue(name="valid_name123")
         
         # Invalid names
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationError, match="Parameter 'name' does not match required pattern"):
             Queue(name="")  # Empty name
         
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationError, match="Parameter 'name' does not match required pattern"):
             Queue(name="invalid name")  # Contains space
 
 

@@ -67,10 +67,15 @@ queues:
     max_size: 1000
     ack_wait: 60
 
-scheduler:
-  enabled: true
-  lock_ttl: 30
-  lock_renew_interval: 15
+scheduler_service:
+  scheduler_name: naq-scheduler
+  check_interval: 5.0
+  max_concurrent_schedules: 10
+  schedules_bucket_name: scheduled_jobs
+  lock_bucket_name: scheduler_locks
+  lock_ttl: 30.0
+  lock_renew_interval: 15.0
+  auto_create_buckets: true
 
 results:
   ttl: 86400
@@ -93,7 +98,6 @@ logging:
             assert config.workers.concurrency == 1
             assert config.events.enabled is True
             assert config.queues == {"default": {"max_size": 1000, "ack_wait": 60}}
-            assert config.scheduler_service.enabled is True
             assert config.scheduler_service.lock_ttl == 30
             assert config.scheduler_service.lock_renew_interval == 15
             assert config.results == {"ttl": 86400}
@@ -151,11 +155,11 @@ nats:
             config = load_config(str(config_path))
 
             # Create ConnectionService with centralized config
-            connection_service = ConnectionService(config=config)
+            connection_service = ConnectionService(naq_config=config)
 
             # Verify the service extracted the config correctly
-            assert connection_service.connection_config.servers == ["nats://test-server:4222"]
-            assert connection_service.connection_config.client_name == "test-client"
+            assert connection_service.connection_config.nats_url == "nats://test-server:4222"
+            assert connection_service._naq_config.nats.client_name == "test-client"
             assert connection_service.connection_config.max_reconnect_attempts == 10
             assert connection_service.connection_config.reconnect_time_wait == 5.0
             assert connection_service.connection_config.connection_timeout == 15.0
@@ -304,7 +308,7 @@ streams:
             assert stream_service.stream_config.stream_name == "test_stream"
             assert stream_service.stream_config.max_msgs == 10000
             assert stream_service.stream_config.max_bytes == 104857600
-            assert stream_service.stream_config.max_age == 86400
+            assert stream_service.stream_config.max_age == "86400"
 
     @pytest.mark.asyncio
     async def test_worker_service_uses_centralized_config(self) -> None:

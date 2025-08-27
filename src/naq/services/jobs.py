@@ -137,7 +137,7 @@ class JobService(BaseService):
                 job_config.auto_create_buckets = naq_job_config.auto_create_buckets
 
         # Override with service config if provided (for backward compatibility)
-        if self._config and self._config.custom_settings:
+        if self._config and hasattr(self._config, 'custom_settings') and self._config.custom_settings:
             custom_settings = self._config.custom_settings
 
             if "results_bucket_name" in custom_settings:

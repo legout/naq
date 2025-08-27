@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>Exceptions and Error Handling – naq</title>
+<title>Development Workflow – naq</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -58,27 +58,27 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </style>
 
 
-<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
-<script src="../site_libs/quarto-nav/headroom.min.js"></script>
-<script src="../site_libs/clipboard/clipboard.min.js"></script>
-<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
-<script src="../site_libs/quarto-search/fuse.min.js"></script>
-<script src="../site_libs/quarto-search/quarto-search.js"></script>
-<meta name="quarto:offset" content="../">
-<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
-<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
-<script src="../site_libs/quarto-html/popper.min.js"></script>
-<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
-<script src="../site_libs/quarto-html/anchor.min.js"></script>
-<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-dark-bc185b5c5bdbcb35c2eb49d8a876ef70.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
-<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
-<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="../site_libs/bootstrap/bootstrap-dark-ccd81253fefb92e9cd3f9eb5b5d87b54.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="../site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-bc185b5c5bdbcb35c2eb49d8a876ef70.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-ccd81253fefb92e9cd3f9eb5b5d87b54.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -279,7 +279,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container mx-auto">
-    <a class="navbar-brand" href="../index.html">
+    <a class="navbar-brand" href="./index.html">
     <span class="navbar-title">naq</span>
     </a>
   </div>
@@ -290,39 +290,39 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
           <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav navbar-nav-scroll me-auto">
   <li class="nav-item">
-    <a class="nav-link" href="../index.html"> 
+    <a class="nav-link" href="./index.html"> 
 <span class="menu-text">Home</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../installation.html"> 
+    <a class="nav-link" href="./installation.html"> 
 <span class="menu-text">Installation</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../quickstart.html"> 
+    <a class="nav-link" href="./quickstart.html"> 
 <span class="menu-text">Quickstart</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../configuration.html"> 
+    <a class="nav-link" href="./configuration.html"> 
 <span class="menu-text">Configuration</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../architecture.html"> 
+    <a class="nav-link" href="./architecture.html"> 
 <span class="menu-text">Architecture</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../examples.html"> 
+    <a class="nav-link" href="./examples.html"> 
 <span class="menu-text">Examples</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../advanced.html"> 
+    <a class="nav-link" href="./advanced.html"> 
 <span class="menu-text">Advanced</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../api/index.html"> 
+    <a class="nav-link" href="./api/index.html"> 
 <span class="menu-text">API</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="../contributing.html"> 
+    <a class="nav-link" href="./contributing.html"> 
 <span class="menu-text">Contributing</span></a>
   </li>  
 </ul>
@@ -342,20 +342,30 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#naqexception" id="toc-naqexception" class="nav-link active" data-scroll-target="#naqexception"><code>NaqException</code></a></li>
-  <li><a href="#naqconnectionerror" id="toc-naqconnectionerror" class="nav-link" data-scroll-target="#naqconnectionerror"><code>NaqConnectionError</code></a></li>
-  <li><a href="#configurationerror" id="toc-configurationerror" class="nav-link" data-scroll-target="#configurationerror"><code>ConfigurationError</code></a></li>
-  <li><a href="#serializationerror" id="toc-serializationerror" class="nav-link" data-scroll-target="#serializationerror"><code>SerializationError</code></a></li>
-  <li><a href="#jobexecutionerror" id="toc-jobexecutionerror" class="nav-link" data-scroll-target="#jobexecutionerror"><code>JobExecutionError</code></a></li>
-  <li><a href="#jobnotfounderror" id="toc-jobnotfounderror" class="nav-link" data-scroll-target="#jobnotfounderror"><code>JobNotFoundError</code></a></li>
-  <li><a href="#error-handling-utilities" id="toc-error-handling-utilities" class="nav-link" data-scroll-target="#error-handling-utilities">Error Handling Utilities</a>
+  <li><a href="#development-workflow" id="toc-development-workflow" class="nav-link active" data-scroll-target="#development-workflow">Development Workflow</a>
   <ul class="collapse">
-  <li><a href="#create_error_contextoperation_name-str---dictstr-any" id="toc-create_error_contextoperation_name-str---dictstr-any" class="nav-link" data-scroll-target="#create_error_contextoperation_name-str---dictstr-any"><code>create_error_context(operation_name: str) -&gt; Dict[str, Any]</code></a></li>
-  <li><a href="#serviceinitializationerror" id="toc-serviceinitializationerror" class="nav-link" data-scroll-target="#serviceinitializationerror"><code>ServiceInitializationError</code></a></li>
-  <li><a href="#serviceconfigurationerror" id="toc-serviceconfigurationerror" class="nav-link" data-scroll-target="#serviceconfigurationerror"><code>ServiceConfigurationError</code></a></li>
-  <li><a href="#servicedependencyerror" id="toc-servicedependencyerror" class="nav-link" data-scroll-target="#servicedependencyerror"><code>ServiceDependencyError</code></a></li>
-  <li><a href="#serviceruntimeerror" id="toc-serviceruntimeerror" class="nav-link" data-scroll-target="#serviceruntimeerror"><code>ServiceRuntimeError</code></a></li>
-  <li><a href="#example-service-layer-error-handling" id="toc-example-service-layer-error-handling" class="nav-link" data-scroll-target="#example-service-layer-error-handling">Example: Service Layer Error Handling</a></li>
+  <li><a href="#overview" id="toc-overview" class="nav-link" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#cicd-pipeline" id="toc-cicd-pipeline" class="nav-link" data-scroll-target="#cicd-pipeline">CI/CD Pipeline</a>
+  <ul class="collapse">
+  <li><a href="#pipeline-stages" id="toc-pipeline-stages" class="nav-link" data-scroll-target="#pipeline-stages">Pipeline Stages</a></li>
+  <li><a href="#services" id="toc-services" class="nav-link" data-scroll-target="#services">Services</a></li>
+  <li><a href="#test-dependencies" id="toc-test-dependencies" class="nav-link" data-scroll-target="#test-dependencies">Test Dependencies</a></li>
+  </ul></li>
+  <li><a href="#local-development" id="toc-local-development" class="nav-link" data-scroll-target="#local-development">Local Development</a>
+  <ul class="collapse">
+  <li><a href="#setting-up-your-environment" id="toc-setting-up-your-environment" class="nav-link" data-scroll-target="#setting-up-your-environment">Setting Up Your Environment</a></li>
+  <li><a href="#running-tests-locally" id="toc-running-tests-locally" class="nav-link" data-scroll-target="#running-tests-locally">Running Tests Locally</a></li>
+  <li><a href="#code-quality-checks-1" id="toc-code-quality-checks-1" class="nav-link" data-scroll-target="#code-quality-checks-1">Code Quality Checks</a></li>
+  <li><a href="#running-all-checks" id="toc-running-all-checks" class="nav-link" data-scroll-target="#running-all-checks">Running All Checks</a></li>
+  </ul></li>
+  <li><a href="#test-organization" id="toc-test-organization" class="nav-link" data-scroll-target="#test-organization">Test Organization</a></li>
+  <li><a href="#contributing" id="toc-contributing" class="nav-link" data-scroll-target="#contributing">Contributing</a></li>
+  <li><a href="#troubleshooting" id="toc-troubleshooting" class="nav-link" data-scroll-target="#troubleshooting">Troubleshooting</a>
+  <ul class="collapse">
+  <li><a href="#common-issues" id="toc-common-issues" class="nav-link" data-scroll-target="#common-issues">Common Issues</a></li>
+  </ul></li>
+  <li><a href="#performance-considerations" id="toc-performance-considerations" class="nav-link" data-scroll-target="#performance-considerations">Performance Considerations</a></li>
+  <li><a href="#future-improvements" id="toc-future-improvements" class="nav-link" data-scroll-target="#future-improvements">Future Improvements</a></li>
   </ul></li>
   </ul>
 </nav>
@@ -366,7 +376,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Exceptions and Error Handling</h1>
+<h1 class="title">Development Workflow</h1>
 </div>
 
 
@@ -383,101 +393,222 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>The <code>naq</code> library uses a set of custom exceptions to indicate specific error conditions. All custom exceptions inherit from the base <code>NaqException</code>. Additionally, <code>naq</code> provides utilities for error handling and context creation.</p>
-<section id="naqexception" class="level3">
-<h3 class="anchored" data-anchor-id="naqexception"><code>NaqException</code></h3>
-<p>The base exception for all errors raised by <code>naq</code>.</p>
+<section id="development-workflow" class="level1">
+<h1>Development Workflow</h1>
+<p>This document describes the development workflow and CI/CD pipeline for the <code>naq</code> project.</p>
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>The <code>naq</code> project uses a comprehensive development workflow that includes automated testing, code quality checks, and documentation generation. The CI/CD pipeline ensures that all changes are thoroughly tested before being merged into the main branch.</p>
 </section>
-<section id="naqconnectionerror" class="level3">
-<h3 class="anchored" data-anchor-id="naqconnectionerror"><code>NaqConnectionError</code></h3>
-<p>Raised when there is an issue connecting to the NATS server or a problem with the connection during an operation.</p>
+<section id="cicd-pipeline" class="level2">
+<h2 class="anchored" data-anchor-id="cicd-pipeline">CI/CD Pipeline</h2>
+<p>The CI/CD pipeline is defined in <a href="https://github.com/legout/naq/blob/main/.github/workflows/test.yml"><code>.github/workflows/test.yml</code></a> and runs on every push to the <code>main</code> and <code>develop</code> branches, as well as on every pull request.</p>
+<section id="pipeline-stages" class="level3">
+<h3 class="anchored" data-anchor-id="pipeline-stages">Pipeline Stages</h3>
+<section id="setup" class="level4">
+<h4 class="anchored" data-anchor-id="setup">1. Setup</h4>
+<ul>
+<li><strong>Checkout</strong>: Retrieves the source code</li>
+<li><strong>Python Setup</strong>: Sets up the required Python version (3.12, 3.13)</li>
+<li><strong>Install uv</strong>: Installs the uv package manager</li>
+<li><strong>Install Dependencies</strong>: Installs project dependencies using <code>uv pip install -e .[dev,test]</code></li>
+</ul>
 </section>
-<section id="configurationerror" class="level3">
-<h3 class="anchored" data-anchor-id="configurationerror"><code>ConfigurationError</code></h3>
-<p>Raised when there is an issue with the configuration of <code>naq</code>, such as providing invalid parameters to a <code>Queue</code> or <code>Worker</code>.</p>
+<section id="code-quality-checks" class="level4">
+<h4 class="anchored" data-anchor-id="code-quality-checks">2. Code Quality Checks</h4>
+<ul>
+<li><strong>Linting</strong>: Runs <code>ruff check src/</code> to check for code style and potential issues</li>
+<li><strong>Formatting</strong>: Runs <code>ruff format --check src/</code> to verify code formatting</li>
+<li><strong>Type Checking</strong>: Runs <code>ruff check src/ --select E,F,W</code> for type validation</li>
+</ul>
 </section>
-<section id="serializationerror" class="level3">
-<h3 class="anchored" data-anchor-id="serializationerror"><code>SerializationError</code></h3>
-<p>Raised if <code>naq</code> fails to serialize or deserialize a job. This can happen if you are using the <code>json</code> serializer and try to enqueue a job with un-serializable arguments (like complex objects).</p>
+<section id="testing" class="level4">
+<h4 class="anchored" data-anchor-id="testing">3. Testing</h4>
+<p>The pipeline runs tests in stages to provide clear feedback on different types of failures:</p>
+<section id="unit-tests" class="level5">
+<h5 class="anchored" data-anchor-id="unit-tests">Unit Tests</h5>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_models/ tests/test_services/ tests/test_config/ tests/test_cli/ <span class="at">-v</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<ul>
+<li>Tests individual components in isolation</li>
+<li>Includes model, service, configuration, and CLI tests</li>
+<li>Fast execution with mocked dependencies</li>
+</ul>
 </section>
-<section id="jobexecutionerror" class="level3">
-<h3 class="anchored" data-anchor-id="jobexecutionerror"><code>JobExecutionError</code></h3>
-<p>Raised by <code>Job.fetch_result()</code> if the job failed during execution on the worker. The exception message will contain the original error and traceback from the worker.</p>
+<section id="integration-tests" class="level5">
+<h5 class="anchored" data-anchor-id="integration-tests">Integration Tests</h5>
+<div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_integration/ <span class="at">-v</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<ul>
+<li>Tests interactions between components</li>
+<li>Requires a running NATS server (provided as a service)</li>
+<li>Includes end-to-end scenarios and smoke tests</li>
+</ul>
 </section>
-<section id="jobnotfounderror" class="level3">
-<h3 class="anchored" data-anchor-id="jobnotfounderror"><code>JobNotFoundError</code></h3>
-<p>Raised by <code>Job.fetch_result()</code> if the result for the specified <code>job_id</code> cannot be found. This could be because the job has not completed yet, the result has expired and been cleaned up, or the job never existed.</p>
+<section id="compatibility-tests" class="level5">
+<h5 class="anchored" data-anchor-id="compatibility-tests">Compatibility Tests</h5>
+<div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_compatibility/ <span class="at">-v</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<ul>
+<li>Tests API compatibility and user workflows</li>
+<li>Ensures backward compatibility</li>
+<li>Validates user-facing functionality</li>
+</ul>
 </section>
-<section id="error-handling-utilities" class="level2">
-<h2 class="anchored" data-anchor-id="error-handling-utilities">Error Handling Utilities</h2>
-<section id="create_error_contextoperation_name-str---dictstr-any" class="level3">
-<h3 class="anchored" data-anchor-id="create_error_contextoperation_name-str---dictstr-any"><code>create_error_context(operation_name: str) -&gt; Dict[str, Any]</code></h3>
-<p>Creates a dictionary with contextual information about an error. This function captures essential contextual information when an error occurs, including the operation name, timestamp, current traceback, and thread ID.</p>
-<p><strong>Parameters:</strong> - <code>operation_name</code>: The name of the operation that failed or where the error occurred.</p>
-<p><strong>Returns:</strong> A dictionary containing the following keys: - <code>operation_name</code>: The name of the operation that failed. - <code>timestamp</code>: The current Unix timestamp when the error context was created. - <code>traceback</code>: The current exception traceback as a string, formatted using <code>traceback.format_exc()</code>. - <code>thread_id</code>: The identifier of the current thread where the error occurred.</p>
-<p><strong>Example:</strong></p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.error_handling <span class="im">import</span> create_error_context</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span>:</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Code that might raise an exception</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> <span class="dv">1</span> <span class="op">/</span> <span class="dv">0</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="cf">except</span> <span class="pp">Exception</span>:</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    error_context <span class="op">=</span> create_error_context(<span class="st">"division_operation"</span>)</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># error_context will contain:</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="co"># {</span></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="co">#     "operation_name": "division_operation",</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">#     "timestamp": 1625097600.0,</span></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="co">#     "traceback": "Traceback (most recent call last):\n...",</span></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="co">#     "thread_id": 12345</span></span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="co"># }</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<p><strong>Note:</strong> This function should be called within an exception handler (except block) to capture the most relevant traceback information. If called outside of an exception context, the traceback value will indicate that no exception is currently being handled. ## Service Layer Exceptions</p>
-<p>The following exceptions have been added as part of the service layer architecture:</p>
+<section id="performance-tests" class="level5">
+<h5 class="anchored" data-anchor-id="performance-tests">Performance Tests</h5>
+<div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_performance/ <span class="at">-v</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<ul>
+<li>Tests performance benchmarks and memory usage</li>
+<li>Identifies performance regressions</li>
+<li>Monitors resource utilization</li>
+</ul>
 </section>
-<section id="serviceinitializationerror" class="level3">
-<h3 class="anchored" data-anchor-id="serviceinitializationerror"><code>ServiceInitializationError</code></h3>
-<p>Raised when a service fails to initialize properly. This can occur due to configuration issues, dependency problems, or resource allocation failures.</p>
 </section>
-<section id="serviceconfigurationerror" class="level3">
-<h3 class="anchored" data-anchor-id="serviceconfigurationerror"><code>ServiceConfigurationError</code></h3>
-<p>Raised when there is an issue with service configuration, such as invalid parameters or missing required settings.</p>
 </section>
-<section id="servicedependencyerror" class="level3">
-<h3 class="anchored" data-anchor-id="servicedependencyerror"><code>ServiceDependencyError</code></h3>
-<p>Raised when there is an issue with service dependencies, such as circular dependencies or missing required services.</p>
+<section id="services" class="level3">
+<h3 class="anchored" data-anchor-id="services">Services</h3>
+<p>The CI pipeline includes a NATS server as a service for integration tests:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode yaml code-with-copy"><code class="sourceCode yaml"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">services</span><span class="kw">:</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">nats</span><span class="kw">:</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">image</span><span class="kw">:</span><span class="at"> nats:2.10</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">ports</span><span class="kw">:</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> 4222:4222</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="at">      </span><span class="kw">-</span><span class="at"> 8222:8222</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="fu">    options</span><span class="kw">: </span><span class="ch">&gt;-</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>      --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:8222/varz || exit 1"</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>      --health-interval 10s</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>      --health-timeout 5s</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>      --health-retries 5</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </section>
-<section id="serviceruntimeerror" class="level3">
-<h3 class="anchored" data-anchor-id="serviceruntimeerror"><code>ServiceRuntimeError</code></h3>
-<p>Raised when a service encounters an error during operation, such as connection failures or resource exhaustion.</p>
+<section id="test-dependencies" class="level3">
+<h3 class="anchored" data-anchor-id="test-dependencies">Test Dependencies</h3>
+<p>The pipeline installs both development and testing dependencies:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> pip install <span class="at">-e</span> .<span class="pp">[</span><span class="ss">dev,test</span><span class="pp">]</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>This includes: - <strong>pytest</strong>: Test framework - <strong>pytest-mock</strong>: Mocking utilities - <strong>pytest-asyncio</strong>: Async test support - <strong>freezegun</strong>: Time-based testing - <strong>ruff</strong>: Code quality and formatting</p>
 </section>
-<section id="example-service-layer-error-handling" class="level3">
-<h3 class="anchored" data-anchor-id="example-service-layer-error-handling">Example: Service Layer Error Handling</h3>
-<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.exceptions <span class="im">import</span> ServiceInitializationError, ServiceConfigurationError</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services.manager <span class="im">import</span> ServiceManager</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services.base <span class="im">import</span> ServiceConfig</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span>:</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create and initialize service manager</span></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    service_manager <span class="op">=</span> ServiceManager(config<span class="op">=</span>ServiceConfig())</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> service_manager.initialize_all()</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Use services</span></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    connection_service <span class="op">=</span> service_manager.get_service(<span class="st">"connection"</span>, ConnectionService)</span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="cf">except</span> ServiceInitializationError <span class="im">as</span> e:</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Failed to initialize services: </span><span class="sc">{</span>e<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Handle initialization failure</span></span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="cf">except</span> ServiceConfigurationError <span class="im">as</span> e:</span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Invalid service configuration: </span><span class="sc">{</span>e<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Handle configuration error</span></span>
-<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a><span class="cf">except</span> ServiceDependencyError <span class="im">as</span> e:</span>
-<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Service dependency issue: </span><span class="sc">{</span>e<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Handle dependency problem</span></span>
-<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a><span class="cf">except</span> ServiceRuntimeError <span class="im">as</span> e:</span>
-<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Service runtime error: </span><span class="sc">{</span>e<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Handle runtime error</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="local-development" class="level2">
+<h2 class="anchored" data-anchor-id="local-development">Local Development</h2>
+<section id="setting-up-your-environment" class="level3">
+<h3 class="anchored" data-anchor-id="setting-up-your-environment">Setting Up Your Environment</h3>
+<ol type="1">
+<li><p><strong>Clone the repository</strong>:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/legout/naq.git</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> naq</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div></li>
+<li><p><strong>Install dependencies</strong>:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> pip install <span class="at">-e</span> .<span class="pp">[</span><span class="ss">dev,test</span><span class="pp">]</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div></li>
+<li><p><strong>Start NATS server</strong> (for integration tests):</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="bu">cd</span> docker</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">docker-compose</span> up <span class="at">-d</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div></li>
+</ol>
+</section>
+<section id="running-tests-locally" class="level3">
+<h3 class="anchored" data-anchor-id="running-tests-locally">Running Tests Locally</h3>
+<section id="run-all-tests" class="level4">
+<h4 class="anchored" data-anchor-id="run-all-tests">Run All Tests</h4>
+<div class="sourceCode" id="cb10"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="run-specific-test-categories" class="level4">
+<h4 class="anchored" data-anchor-id="run-specific-test-categories">Run Specific Test Categories</h4>
+<div class="sourceCode" id="cb11"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Unit tests</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_models/ tests/test_services/ tests/test_config/ tests/test_cli/</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Integration tests</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_integration/</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Compatibility tests</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_compatibility/</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Performance tests</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_performance/</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="run-specific-test-files" class="level4">
+<h4 class="anchored" data-anchor-id="run-specific-test-files">Run Specific Test Files</h4>
+<div class="sourceCode" id="cb12"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_services/test_my_service.py</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="run-specific-tests" class="level4">
+<h4 class="anchored" data-anchor-id="run-specific-tests">Run Specific Tests</h4>
+<div class="sourceCode" id="cb13"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_services/test_my_service.py::test_my_service_initialization</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="code-quality-checks-1" class="level3">
+<h3 class="anchored" data-anchor-id="code-quality-checks-1">Code Quality Checks</h3>
+<section id="linting" class="level4">
+<h4 class="anchored" data-anchor-id="linting">Linting</h4>
+<div class="sourceCode" id="cb14"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ruff</span> check src/</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="formatting" class="level4">
+<h4 class="anchored" data-anchor-id="formatting">Formatting</h4>
+<div class="sourceCode" id="cb15"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ruff</span> format src/</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="type-checking" class="level4">
+<h4 class="anchored" data-anchor-id="type-checking">Type Checking</h4>
+<div class="sourceCode" id="cb16"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ruff</span> check src/ <span class="at">--select</span> E,F,W</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="running-all-checks" class="level3">
+<h3 class="anchored" data-anchor-id="running-all-checks">Running All Checks</h3>
+<div class="sourceCode" id="cb17"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Format code</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="ex">ruff</span> format src/</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Check for issues</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="ex">ruff</span> check src/</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Run type checking</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a><span class="ex">ruff</span> check src/ <span class="at">--select</span> E,F,W</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Run tests</span></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="test-organization" class="level2">
+<h2 class="anchored" data-anchor-id="test-organization">Test Organization</h2>
+<p>The test suite is organized into the following directories:</p>
+<ul>
+<li><strong><code>tests/test_models/</code></strong>: Tests for data models and structures</li>
+<li><strong><code>tests/test_services/</code></strong>: Tests for service layer components and utilities</li>
+<li><strong><code>tests/test_integration/</code></strong>: Tests for integration between components</li>
+<li><strong><code>tests/test_compatibility/</code></strong>: Tests for API compatibility and user workflows</li>
+<li><strong><code>tests/test_performance/</code></strong>: Tests for performance benchmarks and memory usage</li>
+<li><strong><code>tests/test_config/</code></strong>: Tests for configuration system components</li>
+<li><strong><code>tests/test_cli/</code></strong>: Tests for command-line interface functionality</li>
+</ul>
+</section>
+<section id="contributing" class="level2">
+<h2 class="anchored" data-anchor-id="contributing">Contributing</h2>
+<p>When contributing to the project:</p>
+<ol type="1">
+<li><strong>Create a feature branch</strong> from <code>develop</code></li>
+<li><strong>Write tests</strong> for your changes</li>
+<li><strong>Run all checks</strong> locally before committing</li>
+<li><strong>Submit a pull request</strong> to the <code>develop</code> branch</li>
+<li><strong>Ensure CI/CD pipeline</strong> passes</li>
+</ol>
+<p>For more detailed contribution guidelines, see <a href="./contributing.html">Contributing</a>.</p>
+</section>
+<section id="troubleshooting" class="level2">
+<h2 class="anchored" data-anchor-id="troubleshooting">Troubleshooting</h2>
+<section id="common-issues" class="level3">
+<h3 class="anchored" data-anchor-id="common-issues">Common Issues</h3>
+<section id="nats-server-connection-issues" class="level4">
+<h4 class="anchored" data-anchor-id="nats-server-connection-issues">NATS Server Connection Issues</h4>
+<p>If integration tests fail due to NATS connection issues: 1. Ensure NATS server is running: <code>docker-compose ps</code> 2. Check NATS logs: <code>docker-compose logs nats</code> 3. Restart NATS: <code>docker-compose restart nats</code></p>
+</section>
+<section id="test-failures" class="level4">
+<h4 class="anchored" data-anchor-id="test-failures">Test Failures</h4>
+<p>If tests fail locally: 1. Ensure all dependencies are installed: <code>uv pip install -e .[dev,test]</code> 2. Check for missing test files: <code>ls tests/</code> 3. Run tests with verbose output: <code>pytest -v</code></p>
+</section>
+<section id="code-quality-issues" class="level4">
+<h4 class="anchored" data-anchor-id="code-quality-issues">Code Quality Issues</h4>
+<p>If code quality checks fail: 1. Run formatting: <code>ruff format src/</code> 2. Fix linting issues: <code>ruff check --fix src/</code> 3. Check for type errors: <code>ruff check src/ --select E,F,W</code></p>
+</section>
+</section>
+</section>
+<section id="performance-considerations" class="level2">
+<h2 class="anchored" data-anchor-id="performance-considerations">Performance Considerations</h2>
+<p>The CI/CD pipeline is designed to run efficiently: - Unit tests run in parallel and complete quickly - Integration tests run only after unit tests pass - Performance tests are isolated to prevent false positives - The entire pipeline completes in under 5 minutes</p>
+</section>
+<section id="future-improvements" class="level2">
+<h2 class="anchored" data-anchor-id="future-improvements">Future Improvements</h2>
+<p>Planned improvements to the CI/CD pipeline: - <strong>Code Coverage</strong>: Add coverage reporting and thresholds - <strong>Documentation Generation</strong>: Automated documentation builds - <strong>Security Scanning</strong>: Integration with security scanning tools - <strong>Performance Benchmarking</strong>: Historical performance tracking - <strong>Multi-platform Testing</strong>: Testing across different operating systems</p>
 
 
 </section>

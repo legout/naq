@@ -32,30 +32,42 @@ class WorkerServiceConfig(msgspec.Struct):
     Configuration for the WorkerService.
 
     Attributes:
+        concurrency: Number of concurrent jobs a worker can handle
+        heartbeat_interval: Interval for worker heartbeats in seconds
+        ttl: Default TTL for worker status in seconds
+        max_job_duration: Maximum duration for a job in seconds
+        shutdown_timeout: Timeout for worker shutdown in seconds
         workers_bucket_name: Name of the KV bucket for storing worker status
         default_worker_ttl: Default TTL for worker status in seconds
         enable_worker_registration: Whether to enable worker registration
         enable_event_logging: Whether to enable event logging
         auto_create_buckets: Whether to automatically create buckets
-        heartbeat_interval: Interval for worker heartbeats in seconds
     """
 
+    concurrency: int = 1
+    heartbeat_interval: float = 30.0
+    ttl: float = 120.0
+    max_job_duration: float = 3600.0
+    shutdown_timeout: float = 10.0
     workers_bucket_name: str = "naq_workers"
     default_worker_ttl: int = 300  # 5 minutes
     enable_worker_registration: bool = True
     enable_event_logging: bool = True
     auto_create_buckets: bool = True
-    heartbeat_interval: float = 30.0
 
     def as_dict(self) -> Dict[str, Any]:
         """Convert the configuration to a dictionary."""
         return {
+            "concurrency": self.concurrency,
+            "heartbeat_interval": self.heartbeat_interval,
+            "ttl": self.ttl,
+            "max_job_duration": self.max_job_duration,
+            "shutdown_timeout": self.shutdown_timeout,
             "workers_bucket_name": self.workers_bucket_name,
             "default_worker_ttl": self.default_worker_ttl,
             "enable_worker_registration": self.enable_worker_registration,
             "enable_event_logging": self.enable_event_logging,
             "auto_create_buckets": self.auto_create_buckets,
-            "heartbeat_interval": self.heartbeat_interval,
         }
 
 
@@ -106,24 +118,25 @@ class WorkerService(BaseService):
         # Start with default config
         worker_config = WorkerServiceConfig()
 
-        # Override with NAQ config if available
-        if self._naq_config and self._naq_config.worker_service:
-            worker_service_config = self._naq_config.worker_service
+        # Override with NAQ config workers settings if provided
+        if self._naq_config and self._naq_config.workers:
+            workers_config = self._naq_config.workers
             
             # Map fields from NAQ config to worker config
-            if worker_service_config.status_bucket_name is not None:
-                worker_config.workers_bucket_name = worker_service_config.status_bucket_name
+            if hasattr(workers_config, 'concurrency') and workers_config.concurrency is not None:
+                worker_config.concurrency = int(workers_config.concurrency)
                 
-            if worker_service_config.ttl is not None:
-                worker_config.default_worker_ttl = int(worker_service_config.ttl)
+            if hasattr(workers_config, 'heartbeat_interval') and workers_config.heartbeat_interval is not None:
+                worker_config.heartbeat_interval = float(workers_config.heartbeat_interval)
                 
-            # Note: worker_service doesn't have enable_worker_registration field
-            
-            if worker_service_config.auto_create_buckets is not None:
-                worker_config.auto_create_buckets = worker_service_config.auto_create_buckets
+            if hasattr(workers_config, 'ttl') and workers_config.ttl is not None:
+                worker_config.ttl = float(workers_config.ttl)
                 
-            if worker_service_config.heartbeat_interval is not None:
-                worker_config.heartbeat_interval = worker_service_config.heartbeat_interval
+            if hasattr(workers_config, 'max_job_duration') and workers_config.max_job_duration is not None:
+                worker_config.max_job_duration = float(workers_config.max_job_duration)
+                
+            if hasattr(workers_config, 'shutdown_timeout') and workers_config.shutdown_timeout is not None:
+                worker_config.shutdown_timeout = float(workers_config.shutdown_timeout)
 
         # Override with service config if provided (for backward compatibility)
         if self._config and hasattr(self._config, 'custom_settings') and self._config.custom_settings:

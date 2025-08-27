@@ -19,3 +19,10 @@ sqlite/
 AGENTS.md
 package-lock.json
 package.json
+.coverage
+coverage_report.*
+OmniQ_Project_Plan.md
+verification_reports/verification_report_20250827_142153.*
+.github_bak/
+coverage*
+verification_reports/verification_results_20250827_142153.json

@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.32">
+<meta name="generator" content="quarto-1.7.33">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -71,14 +71,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-2fef5ea3f8957b3e4ecc936fc74692ca.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-bc185b5c5bdbcb35c2eb49d8a876ef70.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="site_libs/bootstrap/bootstrap-dark-08799928d293638fe9563d5c5a2794e5.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-ccd81253fefb92e9cd3f9eb5b5d87b54.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -302,6 +302,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span class="menu-text">Quickstart</span></a>
   </li>  
   <li class="nav-item">
+    <a class="nav-link" href="./configuration.html"> 
+<span class="menu-text">Configuration</span></a>
+  </li>  
+  <li class="nav-item">
     <a class="nav-link" href="./architecture.html"> 
 <span class="menu-text">Architecture</span></a>
   </li>  
@@ -343,7 +347,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#development-setup" id="toc-development-setup" class="nav-link" data-scroll-target="#development-setup">Development Setup</a></li>
   </ul></li>
   <li><a href="#making-changes" id="toc-making-changes" class="nav-link" data-scroll-target="#making-changes">Making Changes</a></li>
-  <li><a href="#code-of-conduct" id="toc-code-of-conduct" class="nav-link" data-scroll-target="#code-of-conduct">Code of Conduct</a></li>
+  <li><a href="#developing-services" id="toc-developing-services" class="nav-link" data-scroll-target="#developing-services">Developing Services</a>
+  <ul class="collapse">
+  <li><a href="#service-architecture" id="toc-service-architecture" class="nav-link" data-scroll-target="#service-architecture">Service Architecture</a></li>
+  </ul></li>
   </ul>
 </nav>
     </div>
@@ -420,12 +427,68 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Open a pull request from your fork to the <code>main</code> branch of the <code>naq</code> repository. Provide a clear description of your changes and reference any related issues.</p></li>
 </ol>
 </section>
-<section id="code-of-conduct" class="level2">
-<h2 class="anchored" data-anchor-id="code-of-conduct">Code of Conduct</h2>
-<p>Please note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by its terms.</p>
-<p>Thank you for contributing to <code>naq</code>!</p>
+<section id="developing-services" class="level2">
+<h2 class="anchored" data-anchor-id="developing-services">Developing Services</h2>
+<p>When contributing to the service layer, please follow these guidelines:</p>
+<section id="service-architecture" class="level3">
+<h3 class="anchored" data-anchor-id="service-architecture">Service Architecture</h3>
+<p>All services should inherit from the base <a href="src/naq/services/base.py:1"><code>Service</code></a> class and implement the required methods:</p>
+<ul>
+<li><code>initialize()</code>: Set up the service and establish connections</li>
+<li><code>cleanup()</code>: Clean up resources and close connections 100| 101| Services should be designed to be: 102| 103| - <strong>Modular</strong>: Each service should have a single responsibility 104| - <strong>Testable</strong>: Services should be easy to test in isolation 105| - <strong>Composable</strong>: Services should work well together 106| - <strong>Configurable</strong>: Services should be configurable through environment variables and parameters 107| 108|### Configuration 109| 110| Services use <a href="src/naq/services/base.py:1"><code>msgspec.Struct</code></a> for configuration. Configuration classes should: 111| 112| - Inherit from <a href="src/naq/services/base.py:1"><code>ServiceConfigBase</code></a> 113| - Provide default values for all settings 114| - Validate settings in the <code>__post_init__</code> method 115| - Use type hints for all configuration parameters 116| 117| Example: 118| 119| <code>python 120| # src/naq/services/my_service.py 121| from msgspec import Struct 122| from naq.services.base import ServiceConfigBase 123| 124| class MyServiceConfig(ServiceConfigBase): 125|     timeout: int = 30 126|     max_retries: int = 3 127| 128|     def __post_init__(self): 129|         if self.timeout &lt;= 0: 130|             raise ValueError("Timeout must be positive") 131|         if self.max_retries &lt; 0: 132|             raise ValueError("Max retries cannot be negative") 133|</code> 134| 135|### Dependencies 136| 137| Services can depend on other services. Dependencies should be: 138| 139| - Injected through the constructor 140| - Optional when possible (with sensible defaults) 141| - Properly documented in the service’s docstring 142| 143| Example: 144| 145| <code>python 146| # src/naq/services/my_service.py 147| from naq.services.base import Service 148| from naq.services.connection import ConnectionService 149| from naq.services.kv_stores import KVStoreService 150| 151| class MyService(Service): 152|     def __init__(self, config, connection_service: ConnectionService, kv_store_service: KVStoreService | None = None): 153|         super().__init__(config) 154|         self.connection_service = connection_service 155|         self.kv_store_service = kv_store_service 156|</code> 157| 158|### Error Handling 159| 160| Services should: 161| 162| - Use custom exceptions from the <code>.exceptions</code> module 163| - Log errors using <code>loguru</code> 164| - Provide meaningful error messages 165| - Implement retry logic for transient failures 166| 167| Example: 168| 169| <code>python 170| # src/naq/services/my_service.py 171| import asyncio 172| from loguru import logger 173| from naq.exceptions import ServiceError 174| 175| class MyService(Service): 176|     async def do_something(self): 177|         try: 178|             result = await self.connection_service.publish("subject", b"data") 179|             return result 180|         except Exception as e: 181|             logger.error(f"Failed to publish message: {e}") 182|             raise ServiceError(f"Could not publish message: {e}") from e 183|</code> 184| 185|### Testing 186| 187| When testing services: 188| 189| - Use pytest with async support 190| - Mock external dependencies (NATS, etc.) 191| - Test both success and failure scenarios 192| - Test configuration validation 193| 194| Example test: 195| 196| <code>python 197| # tests/unit/test_my_service.py 198| import pytest 199| from unittest.mock import AsyncMock, MagicMock 200| 201| from naq.services.my_service import MyService, MyServiceConfig 202| from naq.services.base import ServiceConfig 203| 204| @pytest.mark.asyncio 205| async def test_my_service_initialization(): 206|     config = MyServiceConfig() 207|     service = MyService(ServiceConfig(custom_settings=config.as_dict())) 208| 209|     await service.initialize() 210|     assert service.is_initialized 211|     await service.cleanup() 212|</code> #### Test Organization</li>
+</ul>
+<p>The test suite is organized into the following directories:</p>
+<ul>
+<li><code>tests/test_models/</code>: Tests for data models and structures</li>
+<li><code>tests/test_services/</code>: Tests for service layer components and utilities</li>
+<li><code>tests/test_integration/</code>: Tests for integration between components and end-to-end scenarios</li>
+<li><code>tests/test_compatibility/</code>: Tests for API compatibility and user workflows</li>
+<li><code>tests/test_performance/</code>: Tests for performance benchmarks and memory usage</li>
+<li><code>tests/test_config/</code>: Tests for configuration system components</li>
+<li><code>tests/test_cli/</code>: Tests for command-line interface functionality</li>
+</ul>
+<section id="running-tests" class="level4">
+<h4 class="anchored" data-anchor-id="running-tests">Running Tests</h4>
+<p>To run the entire test suite:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>To run specific test categories:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Run unit tests (models, services, config, CLI)</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_models/ tests/test_services/ tests/test_config/ tests/test_cli/</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Run integration tests</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_integration/</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Run compatibility tests</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_compatibility/</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Run performance tests</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_performance/</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>To run a specific test file:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_services/test_my_service.py</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>To run a specific test:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pytest</span> tests/test_services/test_my_service.py::test_my_service_initialization</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="test-dependencies" class="level4">
+<h4 class="anchored" data-anchor-id="test-dependencies">Test Dependencies</h4>
+<p>Test dependencies are installed using:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> pip install <span class="at">-e</span> .<span class="pp">[</span><span class="ss">dev,test</span><span class="pp">]</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>This installs both development and testing dependencies including: - pytest for test framework - pytest-mock for mocking - pytest-asyncio for async test support - freezegun for time-based testing - ruff for linting and formatting</p>
+</section>
+<section id="writing-tests" class="level4">
+<h4 class="anchored" data-anchor-id="writing-tests">Writing Tests</h4>
+<p>When writing new tests:</p>
+<ol type="1">
+<li>Place the test file in the appropriate directory based on what it tests</li>
+<li>Use descriptive test names that follow the pattern <code>test_&lt;functionality&gt;_&lt;scenario&gt;</code></li>
+<li>Use pytest markers to categorize tests (e.g., <code>@pytest.mark.asyncio</code> for async tests)</li>
+<li>Mock external dependencies like NATS using <code>pytest-mock</code></li>
+<li>Test both success and failure scenarios</li>
+<li>Include docstrings for complex test scenarios 213| 214|### Documentation 215| 216| When adding a new service: 217| 218| - Add a comprehensive docstring to the service class 219| - Document all public methods with type hints 220| - Include examples in the docstring 221| - Update the <a href="./architecture.html">architecture documentation</a> 222| - Add usage examples to <a href="./examples.html">examples.qmd</a> 223| 224|### Naming Conventions 225| 226| Follow these naming conventions for services: 227| 228| - Service classes: PascalCase (e.g., <code>MyService</code>) 229| - Service files: snake_case (e.g., <code>my_service.py</code>) 230| - Configuration classes: PascalCase with <code>Config</code> suffix (e.g., <code>MyServiceConfig</code>) 231| - Service methods: snake_case 232| - Service constants: UPPER_SNAKE_CASE 233| 234|## Code of Conduct 235| 236| Please note that this project is released with a Contributor Code of Conduct. By participating in this project you agree to abide by its terms. 237| 238| Thank you for contributing to <code>naq</code>!</li>
+</ol>
 
 
+</section>
+</section>
 </section>
 
 </main> <!-- /main -->

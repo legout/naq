@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.32">
+<meta name="generator" content="quarto-1.7.33">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -71,14 +71,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-2fef5ea3f8957b3e4ecc936fc74692ca.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-bc185b5c5bdbcb35c2eb49d8a876ef70.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="site_libs/bootstrap/bootstrap-dark-08799928d293638fe9563d5c5a2794e5.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-ccd81253fefb92e9cd3f9eb5b5d87b54.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -302,6 +302,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span class="menu-text">Quickstart</span></a>
   </li>  
   <li class="nav-item">
+    <a class="nav-link" href="./configuration.html"> 
+<span class="menu-text">Configuration</span></a>
+  </li>  
+  <li class="nav-item">
     <a class="nav-link" href="./architecture.html"> 
 <span class="menu-text">Architecture</span></a>
   </li>  
@@ -341,7 +345,27 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#define-a-task" id="toc-define-a-task" class="nav-link active" data-scroll-target="#define-a-task">1. Define a Task</a></li>
   <li><a href="#enqueue-the-job" id="toc-enqueue-the-job" class="nav-link" data-scroll-target="#enqueue-the-job">2. Enqueue the Job</a></li>
   <li><a href="#run-the-worker" id="toc-run-the-worker" class="nav-link" data-scroll-target="#run-the-worker">3. Run the Worker</a></li>
+  <li><a href="#using-service-context-patterns" id="toc-using-service-context-patterns" class="nav-link" data-scroll-target="#using-service-context-patterns">Using Service Context Patterns</a>
+  <ul class="collapse">
+  <li><a href="#short-lived-operations" id="toc-short-lived-operations" class="nav-link" data-scroll-target="#short-lived-operations">Short-Lived Operations</a></li>
+  <li><a href="#long-lived-components" id="toc-long-lived-components" class="nav-link" data-scroll-target="#long-lived-components">Long-Lived Components</a></li>
+  <li><a href="#synchronous-api-compatibility" id="toc-synchronous-api-compatibility" class="nav-link" data-scroll-target="#synchronous-api-compatibility">Synchronous API Compatibility</a></li>
+  <li><a href="#service-context-benefits" id="toc-service-context-benefits" class="nav-link" data-scroll-target="#service-context-benefits">Service Context Benefits</a></li>
+  </ul></li>
+  <li><a href="#using-the-service-layer" id="toc-using-the-service-layer" class="nav-link" data-scroll-target="#using-the-service-layer">Using the Service Layer</a>
+  <ul class="collapse">
+  <li><a href="#using-servicemanager-recommended" id="toc-using-servicemanager-recommended" class="nav-link" data-scroll-target="#using-servicemanager-recommended">Using ServiceManager (Recommended)</a></li>
+  <li><a href="#using-individual-services" id="toc-using-individual-services" class="nav-link" data-scroll-target="#using-individual-services">Using Individual Services</a></li>
+  </ul></li>
+  <li><a href="#service-layer-benefits" id="toc-service-layer-benefits" class="nav-link" data-scroll-target="#service-layer-benefits">Service Layer Benefits</a></li>
   <li><a href="#whats-next" id="toc-whats-next" class="nav-link" data-scroll-target="#whats-next">What’s Next?</a></li>
+  <li><a href="#event-monitoring-cli" id="toc-event-monitoring-cli" class="nav-link" data-scroll-target="#event-monitoring-cli">Event Monitoring CLI</a>
+  <ul class="collapse">
+  <li><a href="#stream-events" id="toc-stream-events" class="nav-link" data-scroll-target="#stream-events">Stream Events</a></li>
+  <li><a href="#view-event-history" id="toc-view-event-history" class="nav-link" data-scroll-target="#view-event-history">View Event History</a></li>
+  <li><a href="#get-event-statistics" id="toc-get-event-statistics" class="nav-link" data-scroll-target="#get-event-statistics">Get Event Statistics</a></li>
+  <li><a href="#monitor-workers" id="toc-monitor-workers" class="nav-link" data-scroll-target="#monitor-workers">Monitor Workers</a></li>
+  </ul></li>
   </ul>
 </nav>
     </div>
@@ -368,7 +392,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>This guide will walk you through the basics of setting up a task, enqueuing it, and running a worker to process it.</p>
+<p>This guide will walk you through the basics of setting up a task, enqueuing it, and running a worker to process it using <code>naq</code>’s service layer architecture.</p>
 <section id="define-a-task" class="level2">
 <h2 class="anchored" data-anchor-id="define-a-task">1. Define a Task</h2>
 <p>First, create a Python file to define the function you want to run in the background. Let’s call this file <code>tasks.py</code>.</p>
@@ -424,15 +448,368 @@ Found 25 words.
 14:30:18.245 INFO     Job 1a2b3c4d completed. Result: 25</code></pre>
 <p>Congratulations! You’ve successfully enqueued and processed your first background job with <code>naq</code>.</p>
 </section>
+<section id="using-service-context-patterns" class="level2">
+<h2 class="anchored" data-anchor-id="using-service-context-patterns">Using Service Context Patterns</h2>
+<p>For a more structured approach to working with services, <code>naq</code> provides service context patterns that handle service lifecycle, dependency management, and resource cleanup automatically. These patterns are designed for different use cases: short-lived operations, long-lived components, and synchronous API compatibility.</p>
+<section id="short-lived-operations" class="level3">
+<h3 class="anchored" data-anchor-id="short-lived-operations">Short-Lived Operations</h3>
+<p>For operations that need services for a brief period, use the <code>short_lived_service_context</code> context manager:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># short_lived_example.py</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> asyncio</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.service_context <span class="im">import</span> short_lived_service_context</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.models.jobs <span class="im">import</span> Job</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> tasks <span class="im">import</span> count_words</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> main():</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Use the short-lived service context for brief operations</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> short_lived_service_context() <span class="im">as</span> service_manager:</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Get the job service</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>        job_service <span class="op">=</span> service_manager.get_job_service()</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Create a job</span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>        long_text <span class="op">=</span> (</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>            <span class="st">"A journey of a thousand miles begins with a single step. "</span></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>            <span class="st">"The best time to plant a tree was 20 years ago. "</span></span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>            <span class="st">"The second best time is now."</span></span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>        job <span class="op">=</span> Job(</span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>            function<span class="op">=</span>count_words,</span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>            args<span class="op">=</span>(long_text,),</span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a>            queue_name<span class="op">=</span><span class="st">"default"</span></span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Execute the job</span></span>
+<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="st">"Executing job using short-lived service context..."</span>)</span>
+<span id="cb5-28"><a href="#cb5-28" aria-hidden="true" tabindex="-1"></a>        result <span class="op">=</span> <span class="cf">await</span> job_service.execute_job(job, <span class="st">"worker-1"</span>)</span>
+<span id="cb5-29"><a href="#cb5-29" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"Job completed with result: </span><span class="sc">{</span>result<span class="sc">.</span>result<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb5-30"><a href="#cb5-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-31"><a href="#cb5-31" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">__name__</span> <span class="op">==</span> <span class="st">"__main__"</span>:</span>
+<span id="cb5-32"><a href="#cb5-32" aria-hidden="true" tabindex="-1"></a>    asyncio.run(main())</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="long-lived-components" class="level3">
+<h3 class="anchored" data-anchor-id="long-lived-components">Long-Lived Components</h3>
+<p>For components that need services for an extended period, use the <code>long_lived_service_context</code> context manager:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># long_lived_example.py</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> asyncio</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.service_context <span class="im">import</span> long_lived_service_context</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.queue <span class="im">import</span> Queue</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.worker <span class="im">import</span> Worker</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.scheduler <span class="im">import</span> Scheduler</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> main():</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Use the long-lived service context for extended operations</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="cf">with</span> long_lived_service_context() <span class="im">as</span> service_manager:</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Create a queue</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>        queue <span class="op">=</span> Queue(service_manager<span class="op">=</span>service_manager, queue_name<span class="op">=</span><span class="st">"default"</span>)</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Create a worker</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>        worker <span class="op">=</span> Worker(service_manager<span class="op">=</span>service_manager, queue_name<span class="op">=</span><span class="st">"default"</span>)</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Create a scheduler</span></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>        scheduler <span class="op">=</span> Scheduler(service_manager<span class="op">=</span>service_manager)</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Start the worker and scheduler</span></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> worker.start()</span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> scheduler.start()</span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Enqueue a job</span></span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>        <span class="im">from</span> tasks <span class="im">import</span> count_words</span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>        long_text <span class="op">=</span> (</span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>            <span class="st">"A journey of a thousand miles begins with a single step. "</span></span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a>            <span class="st">"The best time to plant a tree was 20 years ago. "</span></span>
+<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>            <span class="st">"The second best time is now."</span></span>
+<span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb6-31"><a href="#cb6-31" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb6-32"><a href="#cb6-32" aria-hidden="true" tabindex="-1"></a>        job <span class="op">=</span> <span class="cf">await</span> queue.enqueue(count_words, long_text)</span>
+<span id="cb6-33"><a href="#cb6-33" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"Enqueued job </span><span class="sc">{</span>job<span class="sc">.</span>job_id<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb6-34"><a href="#cb6-34" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb6-35"><a href="#cb6-35" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Let the worker process the job</span></span>
+<span id="cb6-36"><a href="#cb6-36" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> asyncio.sleep(<span class="dv">5</span>)</span>
+<span id="cb6-37"><a href="#cb6-37" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb6-38"><a href="#cb6-38" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Stop the worker and scheduler</span></span>
+<span id="cb6-39"><a href="#cb6-39" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> worker.stop()</span>
+<span id="cb6-40"><a href="#cb6-40" aria-hidden="true" tabindex="-1"></a>        <span class="cf">await</span> scheduler.stop()</span>
+<span id="cb6-41"><a href="#cb6-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-42"><a href="#cb6-42" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">__name__</span> <span class="op">==</span> <span class="st">"__main__"</span>:</span>
+<span id="cb6-43"><a href="#cb6-43" aria-hidden="true" tabindex="-1"></a>    asyncio.run(main())</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="synchronous-api-compatibility" class="level3">
+<h3 class="anchored" data-anchor-id="synchronous-api-compatibility">Synchronous API Compatibility</h3>
+<p>For synchronous code that needs to use services, use the <code>run_with_service_context</code> function:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># sync_example.py</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.service_context <span class="im">import</span> run_with_service_context</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq <span class="im">import</span> enqueue_sync, get_job_result_sync</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> tasks <span class="im">import</span> count_words</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> main():</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Use the synchronous service context for sync operations</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> enqueue_and_get_result():</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Enqueue a job</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>        long_text <span class="op">=</span> (</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>            <span class="st">"A journey of a thousand miles begins with a single step. "</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>            <span class="st">"The best time to plant a tree was 20 years ago. "</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>            <span class="st">"The second best time is now."</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>        job <span class="op">=</span> enqueue_sync(count_words, long_text)</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"Enqueued job </span><span class="sc">{</span>job<span class="sc">.</span>job_id<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Get the job result</span></span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>        result <span class="op">=</span> get_job_result_sync(job.job_id)</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>        <span class="bu">print</span>(<span class="ss">f"Job result: </span><span class="sc">{</span>result<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> result</span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Run the synchronous function with service context</span></span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> run_with_service_context(enqueue_and_get_result)</span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Final result: </span><span class="sc">{</span>result<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">__name__</span> <span class="op">==</span> <span class="st">"__main__"</span>:</span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>    main()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="service-context-benefits" class="level3">
+<h3 class="anchored" data-anchor-id="service-context-benefits">Service Context Benefits</h3>
+<p>Using service context patterns provides several advantages:</p>
+<ul>
+<li><strong>Structured Service Management</strong>: Automatic service initialization and cleanup</li>
+<li><strong>Dependency Injection</strong>: Services are automatically wired together</li>
+<li><strong>Resource Efficiency</strong>: Services are shared appropriately based on usage patterns</li>
+<li><strong>Error Handling</strong>: Proper cleanup even if exceptions occur</li>
+<li><strong>Flexibility</strong>: Different patterns for different use cases</li>
+<li><strong>Synchronous Compatibility</strong>: Easy to use in both async and sync code</li>
+</ul>
+</section>
+</section>
+<section id="using-the-service-layer" class="level2">
+<h2 class="anchored" data-anchor-id="using-the-service-layer">Using the Service Layer</h2>
+<p>For more control and advanced features, you can use <code>naq</code>’s service layer directly. The service layer provides modular components that can be used independently or composed together.</p>
+<section id="using-servicemanager-recommended" class="level3">
+<h3 class="anchored" data-anchor-id="using-servicemanager-recommended">Using ServiceManager (Recommended)</h3>
+<p>The ServiceManager provides a unified way to manage all services with automatic dependency injection and lifecycle management:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># service_manager_example.py</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> asyncio</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services.base <span class="im">import</span> ServiceManager</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.models.jobs <span class="im">import</span> Job</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> tasks <span class="im">import</span> count_words</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> main():</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create service manager - handles all service initialization</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    service_manager <span class="op">=</span> ServiceManager()</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> service_manager.initialize_all()</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Get the services you need</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>    job_service <span class="op">=</span> service_manager.get_service(JobService)</span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create a job</span></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>    long_text <span class="op">=</span> (</span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>        <span class="st">"A journey of a thousand miles begins with a single step. "</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>        <span class="st">"The best time to plant a tree was 20 years ago. "</span></span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>        <span class="st">"The second best time is now."</span></span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>    job <span class="op">=</span> Job(</span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>        function<span class="op">=</span>count_words,</span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>        args<span class="op">=</span>(long_text,),</span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>        queue_name<span class="op">=</span><span class="st">"default"</span></span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Execute the job</span></span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Executing job using ServiceManager..."</span>)</span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> <span class="cf">await</span> job_service.execute_job(job, <span class="st">"worker-1"</span>)</span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Job completed with result: </span><span class="sc">{</span>result<span class="sc">.</span>result<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Cleanup all services automatically</span></span>
+<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> service_manager.cleanup_all()</span>
+<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-36"><a href="#cb8-36" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">__name__</span> <span class="op">==</span> <span class="st">"__main__"</span>:</span>
+<span id="cb8-37"><a href="#cb8-37" aria-hidden="true" tabindex="-1"></a>    asyncio.run(main())</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="using-individual-services" class="level3">
+<h3 class="anchored" data-anchor-id="using-individual-services">Using Individual Services</h3>
+<p>For fine-grained control, you can initialize services individually:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># individual_services_example.py</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> asyncio</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services.base <span class="im">import</span> ServiceConfig</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services.connection <span class="im">import</span> ConnectionService, ConnectionServiceConfig</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services.kvstore <span class="im">import</span> KVStoreService, KVStoreServiceConfig</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services.events <span class="im">import</span> EventService, EventServiceConfig</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services.jobs <span class="im">import</span> JobService, JobServiceConfig</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.models.jobs <span class="im">import</span> Job</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> tasks <span class="im">import</span> count_words</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> main():</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Initialize all required services</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>    connection_config <span class="op">=</span> ConnectionServiceConfig()</span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>    connection_service <span class="op">=</span> ConnectionService(config<span class="op">=</span>ServiceConfig(custom_settings<span class="op">=</span>connection_config.as_dict()))</span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> connection_service.initialize()</span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>    kv_store_config <span class="op">=</span> KVStoreServiceConfig()</span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a>    kv_store_service <span class="op">=</span> KVStoreService(config<span class="op">=</span>ServiceConfig(custom_settings<span class="op">=</span>kv_store_config.as_dict()))</span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> kv_store_service.initialize()</span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>    event_config <span class="op">=</span> EventServiceConfig()</span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>    event_service <span class="op">=</span> EventService(config<span class="op">=</span>ServiceConfig(custom_settings<span class="op">=</span>event_config.as_dict()), kv_store_service<span class="op">=</span>kv_store_service)</span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> event_service.initialize()</span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create JobService with configuration</span></span>
+<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a>    job_config <span class="op">=</span> JobServiceConfig(</span>
+<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a>        enable_job_execution<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a>        enable_result_storage<span class="op">=</span><span class="va">True</span>,</span>
+<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a>        enable_event_logging<span class="op">=</span><span class="va">True</span></span>
+<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a>    job_service <span class="op">=</span> JobService(</span>
+<span id="cb9-32"><a href="#cb9-32" aria-hidden="true" tabindex="-1"></a>        config<span class="op">=</span>ServiceConfig(custom_settings<span class="op">=</span>job_config.as_dict()),</span>
+<span id="cb9-33"><a href="#cb9-33" aria-hidden="true" tabindex="-1"></a>        connection_service<span class="op">=</span>connection_service,</span>
+<span id="cb9-34"><a href="#cb9-34" aria-hidden="true" tabindex="-1"></a>        kv_store_service<span class="op">=</span>kv_store_service,</span>
+<span id="cb9-35"><a href="#cb9-35" aria-hidden="true" tabindex="-1"></a>        event_service<span class="op">=</span>event_service</span>
+<span id="cb9-36"><a href="#cb9-36" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb9-37"><a href="#cb9-37" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> job_service.initialize()</span>
+<span id="cb9-38"><a href="#cb9-38" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb9-39"><a href="#cb9-39" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create a job</span></span>
+<span id="cb9-40"><a href="#cb9-40" aria-hidden="true" tabindex="-1"></a>    long_text <span class="op">=</span> (</span>
+<span id="cb9-41"><a href="#cb9-41" aria-hidden="true" tabindex="-1"></a>        <span class="st">"A journey of a thousand miles begins with a single step. "</span></span>
+<span id="cb9-42"><a href="#cb9-42" aria-hidden="true" tabindex="-1"></a>        <span class="st">"The best time to plant a tree was 20 years ago. "</span></span>
+<span id="cb9-43"><a href="#cb9-43" aria-hidden="true" tabindex="-1"></a>        <span class="st">"The second best time is now."</span></span>
+<span id="cb9-44"><a href="#cb9-44" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb9-45"><a href="#cb9-45" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb9-46"><a href="#cb9-46" aria-hidden="true" tabindex="-1"></a>    job <span class="op">=</span> Job(</span>
+<span id="cb9-47"><a href="#cb9-47" aria-hidden="true" tabindex="-1"></a>        function<span class="op">=</span>count_words,</span>
+<span id="cb9-48"><a href="#cb9-48" aria-hidden="true" tabindex="-1"></a>        args<span class="op">=</span>(long_text,),</span>
+<span id="cb9-49"><a href="#cb9-49" aria-hidden="true" tabindex="-1"></a>        queue_name<span class="op">=</span><span class="st">"default"</span></span>
+<span id="cb9-50"><a href="#cb9-50" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb9-51"><a href="#cb9-51" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb9-52"><a href="#cb9-52" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Execute the job</span></span>
+<span id="cb9-53"><a href="#cb9-53" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Executing job using individual services..."</span>)</span>
+<span id="cb9-54"><a href="#cb9-54" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> <span class="cf">await</span> job_service.execute_job(job, <span class="st">"worker-1"</span>)</span>
+<span id="cb9-55"><a href="#cb9-55" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Job completed with result: </span><span class="sc">{</span>result<span class="sc">.</span>result<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb9-56"><a href="#cb9-56" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb9-57"><a href="#cb9-57" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Cleanup</span></span>
+<span id="cb9-58"><a href="#cb9-58" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> job_service.cleanup()</span>
+<span id="cb9-59"><a href="#cb9-59" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> event_service.cleanup()</span>
+<span id="cb9-60"><a href="#cb9-60" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> kv_store_service.cleanup()</span>
+<span id="cb9-61"><a href="#cb9-61" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> connection_service.cleanup()</span>
+<span id="cb9-62"><a href="#cb9-62" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-63"><a href="#cb9-63" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">__name__</span> <span class="op">==</span> <span class="st">"__main__"</span>:</span>
+<span id="cb9-64"><a href="#cb9-64" aria-hidden="true" tabindex="-1"></a>    asyncio.run(main())</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+</section>
+<section id="service-layer-benefits" class="level2">
+<h2 class="anchored" data-anchor-id="service-layer-benefits">Service Layer Benefits</h2>
+<p>Using the service layer provides several advantages:</p>
+<ul>
+<li><strong>Modularity</strong>: Use only the services you need</li>
+<li><strong>Control</strong>: Fine-grained configuration and management</li>
+<li><strong>Composability</strong>: Services can be combined to create complex workflows</li>
+<li><strong>Monitoring</strong>: Built-in event logging and statistics</li>
+<li><strong>Persistence</strong>: Automatic result storage and retrieval</li>
+</ul>
+</section>
 <section id="whats-next" class="level2">
 <h2 class="anchored" data-anchor-id="whats-next">What’s Next?</h2>
 <ul>
 <li>Explore how to <a href="./examples.html">schedule jobs</a> to run in the future.</li>
 <li>Learn about the <a href="./architecture.html">architecture</a> of <code>naq</code>.</li>
 <li>Check out more complex <a href="./examples.html">examples</a>.</li>
+<li>Discover how to use individual <a href="./examples.html#service-layer-examples">services</a>.</li>
+</ul>
+</section>
+<section id="event-monitoring-cli" class="level2">
+<h2 class="anchored" data-anchor-id="event-monitoring-cli">Event Monitoring CLI</h2>
+<p><code>naq</code> provides powerful command-line tools to monitor events in real-time, inspect historical event data, and view statistics about job and worker activities. These commands interact directly with the <code>EventService</code> and the underlying NATS JetStream Key-Value store where events are persisted.</p>
+<section id="stream-events" class="level3">
+<h3 class="anchored" data-anchor-id="stream-events">Stream Events</h3>
+<p>The <code>naq events stream</code> command allows you to view a live stream of all events occurring in your <code>naq</code> system. You can apply various filters to focus on specific events.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Stream all events</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events stream</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Stream events for a specific job ID</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events stream <span class="at">--job-id</span> <span class="op">&lt;</span>YOUR_JOB_ID<span class="op">&gt;</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Stream only 'COMPLETED' job events</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events stream <span class="at">--event-type</span> COMPLETED</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Stream worker heartbeats from a specific worker</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events stream <span class="at">--event-type</span> HEARTBEAT <span class="at">--worker</span> <span class="op">&lt;</span>YOUR_WORKER_ID<span class="op">&gt;</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Show the last 10 historical events, then follow new events</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events stream <span class="at">--tail</span> 10</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Output events in JSON format</span></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events stream <span class="at">--format</span> json</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><strong>Options:</strong></p>
+<ul>
+<li><code>--job-id</code>, <code>-j</code>: Filter events by a specific job ID.</li>
+<li><code>--event-type</code>, <code>-e</code>: Filter events by event type (e.g., <code>started</code>, <code>completed</code>, <code>failed</code>, <code>heartbeat</code>).</li>
+<li><code>--queue</code>, <code>-q</code>: Filter events by the queue name.</li>
+<li><code>--worker</code>, <code>-w</code>: Filter events by a specific worker ID.</li>
+<li><code>--format</code>, <code>-f</code>: Output format: <code>table</code> (default), <code>json</code>, or <code>raw</code>.</li>
+<li><code>--follow</code>: Continue streaming live events after showing historical data (default: <code>true</code>). Use <code>--no-follow</code> to only show historical events.</li>
+<li><code>--tail</code>, <code>-t</code>: Number of historical events to display before starting to follow live events.</li>
+<li><code>--nats-url</code>, <code>-u</code>: URL of the NATS server.</li>
+<li><code>--log-level</code>, <code>-l</code>: Set logging level for the CLI command.</li>
+</ul>
+</section>
+<section id="view-event-history" class="level3">
+<h3 class="anchored" data-anchor-id="view-event-history">View Event History</h3>
+<p>To retrieve the complete event history for a specific job, use the <code>naq events history</code> command:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Get all events for a job with ID 'my-job-123'</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events history my-job-123</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Output history in JSON format</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events history my-job-123 <span class="at">--format</span> json</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="get-event-statistics" class="level3">
+<h3 class="anchored" data-anchor-id="get-event-statistics">Get Event Statistics</h3>
+<p>The <code>naq events stats</code> command provides aggregated statistics about events, which can be filtered by job ID, queue, worker, or time range.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Get overall event statistics</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events stats</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Get statistics for events in the last 24 hours</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events stats <span class="at">--time-range</span> 24h</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Get job event statistics for a specific queue over the last 7 days</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events stats <span class="at">--queue</span> my_queue <span class="at">--time-range</span> 7d</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Output statistics in JSON format</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events stats <span class="at">--format</span> json</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><strong>Options:</strong></p>
+<ul>
+<li><code>--job-id</code>, <code>-j</code>: Filter statistics by a specific job ID.</li>
+<li><code>--queue</code>, <code>-q</code>: Filter statistics by queue name.</li>
+<li><code>--worker</code>, <code>-w</code>: Filter statistics by worker ID.</li>
+<li><code>--time-range</code>, <code>-t</code>: Time range for statistics (e.g., <code>1h</code>, <code>24h</code>, <code>7d</code>, <code>30d</code>).</li>
+<li><code>--format</code>, <code>-f</code>: Output format: <code>table</code> (default), <code>json</code>, or <code>raw</code>.</li>
+<li><code>--nats-url</code>, <code>-u</code>: URL of the NATS server.</li>
+<li><code>--log-level</code>, <code>-l</code>: Set logging level for the CLI command.</li>
+</ul>
+</section>
+<section id="monitor-workers" class="level3">
+<h3 class="anchored" data-anchor-id="monitor-workers">Monitor Workers</h3>
+<p>The <code>naq events workers</code> command allows you to view the status and activity of all registered workers in your <code>naq</code> system.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># List all workers</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events workers</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="co"># List workers on a specific queue</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events workers <span class="at">--queue</span> my_queue</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Follow live worker status updates</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events workers <span class="at">--follow</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Output worker data in JSON format</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="ex">naq</span> events workers <span class="at">--format</span> json</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p><strong>Options:</strong></p>
+<ul>
+<li><code>--worker-id</code>, <code>-w</code>: Filter by specific worker ID.</li>
+<li><code>--queue</code>, <code>-q</code>: Filter by queue name.</li>
+<li><code>--status</code>, <code>-s</code>: Filter by worker status (e.g., <code>idle</code>, <code>busy</code>, <code>starting</code>, <code>stopping</code>).</li>
+<li><code>--format</code>, <code>-f</code>: Output format: <code>table</code> (default), <code>json</code>, or <code>raw</code>.</li>
+<li><code>--follow</code>: Continue streaming live worker status updates (default: <code>false</code>).</li>
+<li><code>--nats-url</code>, <code>-u</code>: URL of the NATS server.</li>
+<li><code>--log-level</code>, <code>-l</code>: Set logging level for the CLI command.</li>
 </ul>
 
 
+</section>
 </section>
 
 </main> <!-- /main -->

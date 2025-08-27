@@ -38,6 +38,10 @@ class KVStoreServiceConfig(msgspec.Struct):
         max_pool_size: Maximum number of KV stores to pool
         enable_transactions: Whether to enable transaction support
         auto_create_buckets: Whether to automatically create buckets if they don't exist
+        bucket_name: Default bucket name for KV operations
+        history: Number of history entries to keep for the bucket
+        ttl: Default TTL for the bucket in seconds
+        replicas: Number of replicas for the bucket
     """
 
     nats_url: Optional[str] = None
@@ -47,6 +51,10 @@ class KVStoreServiceConfig(msgspec.Struct):
     max_pool_size: int = 10
     enable_transactions: bool = True
     auto_create_buckets: bool = True
+    bucket_name: Optional[str] = None
+    history: Optional[int] = None
+    ttl: Optional[int] = None
+    replicas: Optional[int] = None
 
     def as_dict(self) -> Dict[str, Any]:
         """Convert the configuration to a dictionary."""
@@ -58,6 +66,10 @@ class KVStoreServiceConfig(msgspec.Struct):
             "max_pool_size": self.max_pool_size,
             "enable_transactions": self.enable_transactions,
             "auto_create_buckets": self.auto_create_buckets,
+            "bucket_name": self.bucket_name,
+            "history": self.history,
+            "ttl": self.ttl,
+            "replicas": self.replicas,
         }
 
 
@@ -113,22 +125,24 @@ class KVStoreService(BaseService):
             
             # Map NAQ config to KV store service config
             if naq_kv_config.bucket_name:
-                # Use bucket_name as default for operations
-                kv_config.nats_url = naq_kv_config.bucket_name
+                kv_config.bucket_name = naq_kv_config.bucket_name
             
             if naq_kv_config.ttl is not None:
+                kv_config.ttl = int(naq_kv_config.ttl)
                 kv_config.default_bucket_ttl = int(naq_kv_config.ttl)
             
             if naq_kv_config.history is not None:
+                kv_config.history = naq_kv_config.history
                 # Use history as max_pool_size if not explicitly set
                 kv_config.max_pool_size = naq_kv_config.history
             
             if naq_kv_config.replicas is not None:
+                kv_config.replicas = naq_kv_config.replicas
                 # Use replicas as a factor for pool size
                 kv_config.max_pool_size = max(kv_config.max_pool_size, naq_kv_config.replicas * 2)
 
         # Override with service config if provided (for backward compatibility)
-        if self._config and self._config.custom_settings:
+        if self._config and hasattr(self._config, 'custom_settings') and self._config.custom_settings:
             custom_settings = self._config.custom_settings
 
             if "default_bucket_ttl" in custom_settings:

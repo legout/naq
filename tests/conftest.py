@@ -244,12 +244,65 @@ async def worker_instance_dict( # Add async keyword
     mocker.patch('naq.connection.get_jetstream_context', return_value=mock_js)
     mocker.patch('naq.connection.ensure_stream')
 
+    # Create a service manager and register all required services
+    from naq.services.base import ServiceManager, ServiceConfig
+    from naq.services.connection import ConnectionService
+    from naq.services.streams import StreamService
+    from naq.services.kv_stores import KVStoreService
+    from naq.services.jobs import JobService
+    from naq.services.events import EventService
+    
+    # Create service manager with mock config
+    service_config = ServiceConfig(nats_url="nats://mock:4222")
+    service_manager = ServiceManager(service_config)
+    
+    # Register connection service with mocked NATS
+    connection_service = ConnectionService(config=service_config)
+    connection_service._nc = mock_nc
+    connection_service._js = mock_js
+    connection_service._is_initialized = True
+    
+    # Register stream service with mocked NATS and connection service
+    stream_service = StreamService(config=service_config, connection_service=connection_service)
+    stream_service._nc = mock_nc
+    stream_service._js = mock_js
+    stream_service._is_initialized = True
+    
+    # Register kv_store service with mocked NATS and connection service
+    kv_store_service = KVStoreService(config=service_config, connection_service=connection_service)
+    kv_store_service._nc = mock_nc
+    kv_store_service._js = mock_js
+    kv_store_service._is_initialized = True
+    
+    # Register job service with mocked NATS and connection service
+    job_service = JobService(config=service_config, connection_service=connection_service)
+    job_service._nc = mock_nc
+    job_service._js = mock_js
+    job_service._is_initialized = True
+    
+    # Register event service with mocked NATS and connection service
+    event_service = EventService(config=service_config, connection_service=connection_service)
+    event_service._nc = mock_nc
+    event_service._js = mock_js
+    event_service._is_initialized = True
+    
+    # Manually register all services
+    service_manager._services["connection"] = connection_service
+    service_manager._service_configs["connection"] = service_config
+    service_manager._services["stream"] = stream_service
+    service_manager._service_configs["stream"] = service_config
+    service_manager._services["kv_store"] = kv_store_service
+    service_manager._service_configs["kv_store"] = service_config
+    service_manager._services["jobs"] = job_service
+    service_manager._service_configs["jobs"] = service_config
+    service_manager._services["events"] = event_service
+    service_manager._service_configs["events"] = service_config
 
     # Create worker with basic args from worker_dict, but ensure queues is correct for this context
     # worker_dict might not have the right queue name if settings_with_valid_queue is different
     worker_args = worker_dict.copy()
     worker_args["queues"] = [settings_with_valid_queue['DEFAULT_QUEUE_NAME']]
-
+    worker_args["service_manager"] = service_manager
 
     worker_instance = Worker(**worker_args)
     

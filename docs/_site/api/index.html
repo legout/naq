@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.32">
+<meta name="generator" content="quarto-1.7.33">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -20,6 +20,41 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
 </style>
 
 
@@ -36,14 +71,14 @@ ul.task-list li input[type="checkbox"] {
 <script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="../site_libs/quarto-html/anchor.min.js"></script>
 <link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-dark-2fef5ea3f8957b3e4ecc936fc74692ca.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
-<link href="../site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-dark-bc185b5c5bdbcb35c2eb49d8a876ef70.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
 <script src="../site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="../site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="../site_libs/bootstrap/bootstrap-dark-08799928d293638fe9563d5c5a2794e5.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="../site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="../site_libs/bootstrap/bootstrap-dark-ccd81253fefb92e9cd3f9eb5b5d87b54.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="../site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -267,6 +302,10 @@ ul.task-list li input[type="checkbox"] {
 <span class="menu-text">Quickstart</span></a>
   </li>  
   <li class="nav-item">
+    <a class="nav-link" href="../configuration.html"> 
+<span class="menu-text">Configuration</span></a>
+  </li>  
+  <li class="nav-item">
     <a class="nav-link" href="../architecture.html"> 
 <span class="menu-text">Architecture</span></a>
   </li>  
@@ -304,6 +343,14 @@ ul.task-list li input[type="checkbox"] {
    
   <ul>
   <li><a href="#core-modules" id="toc-core-modules" class="nav-link active" data-scroll-target="#core-modules">Core Modules</a></li>
+  <li><a href="#services" id="toc-services" class="nav-link" data-scroll-target="#services">Services</a></li>
+  <li><a href="#service-layer-architecture" id="toc-service-layer-architecture" class="nav-link" data-scroll-target="#service-layer-architecture">Service Layer Architecture</a>
+  <ul class="collapse">
+  <li><a href="#core-services" id="toc-core-services" class="nav-link" data-scroll-target="#core-services">Core Services</a></li>
+  <li><a href="#servicemanager" id="toc-servicemanager" class="nav-link" data-scroll-target="#servicemanager">ServiceManager</a></li>
+  <li><a href="#service-configuration" id="toc-service-configuration" class="nav-link" data-scroll-target="#service-configuration">Service Configuration</a></li>
+  <li><a href="#migration-guide" id="toc-migration-guide" class="nav-link" data-scroll-target="#migration-guide">Migration Guide</a></li>
+  </ul></li>
   </ul>
 </nav>
     </div>
@@ -339,10 +386,128 @@ ul.task-list li input[type="checkbox"] {
 <li><p><a href="../api/job.html"><strong><code>job</code> Module</strong></a>: Defines the <code>Job</code> class, which represents a unit of work to be executed.</p></li>
 <li><p><a href="../api/worker.html"><strong><code>worker</code> Module</strong></a>: Contains the <code>Worker</code> class, responsible for executing jobs from one or more queues.</p></li>
 <li><p><a href="../api/scheduler.html"><strong><code>scheduler</code> Module</strong></a>: Contains the <code>Scheduler</code> class, responsible for enqueuing scheduled and recurring jobs.</p></li>
+<li><p><a href="../api/connection.html"><strong><code>connection</code> Module</strong></a>: Provides utilities for managing NATS connections, including connection monitoring, metrics tracking, and connection pooling.</p></li>
 <li><p><a href="../api/exceptions.html"><strong><code>exceptions</code> Module</strong></a>: Defines custom exceptions raised by <code>naq</code>.</p></li>
+<li><p><a href="../api/utils.html"><strong><code>utils</code> Module</strong></a>: Provides utility functions and classes for common functionality used throughout the NAQ codebase, including validation, error handling, serialization, and more.</p></li>
 </ul>
+</section>
+<section id="services" class="level2">
+<h2 class="anchored" data-anchor-id="services">Services</h2>
+<ul>
+<li><p><a href="../api/services.html"><strong><code>services</code> Module</strong></a>: Provides a comprehensive service layer with modular components for connection management, job processing, event logging, and more. Includes the ServiceManager for dependency injection, service lifecycle management, and performance monitoring.</p></li>
+<li><p><a href="../api/kv_stores.html"><strong><code>kv_stores</code> Module</strong></a>: Provides a robust, centralized service for managing NATS KeyValue stores with support for pooling, transactions, and TTL.</p></li>
+</ul>
+</section>
+<section id="service-layer-architecture" class="level2">
+<h2 class="anchored" data-anchor-id="service-layer-architecture">Service Layer Architecture</h2>
+<p>The service layer is the foundation of NAQ’s modular architecture, providing a clean separation of concerns and enabling flexible composition of functionality. Each service is designed to be:</p>
+<ul>
+<li><strong>Modular</strong>: Can be used independently or composed with other services</li>
+<li><strong>Configurable</strong>: Supports both centralized and service-specific configuration</li>
+<li><strong>Monitorable</strong>: Built-in performance tracking and health monitoring</li>
+<li><strong>Extensible</strong>: Easy to extend with custom functionality</li>
+</ul>
+<section id="core-services" class="level3">
+<h3 class="anchored" data-anchor-id="core-services">Core Services</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 36%">
+<col style="width: 38%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Service</th>
+<th>Description</th>
+<th>Key Features</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>ConnectionService</strong></td>
+<td>Manages NATS connections and JetStream contexts</td>
+<td>Connection pooling, caching, automatic reconnection</td>
+</tr>
+<tr class="even">
+<td><strong>ConfigService</strong></td>
+<td>Provides centralized configuration management</td>
+<td>Environment variables, hierarchical settings, validation</td>
+</tr>
+<tr class="odd">
+<td><strong>JobService</strong></td>
+<td>Handles job execution and lifecycle management</td>
+<td>Result storage, event logging, retry handling</td>
+</tr>
+<tr class="even">
+<td><strong>KVStoreService</strong></td>
+<td>Manages NATS KeyValue stores</td>
+<td>Transactions, TTL, history tracking</td>
+</tr>
+<tr class="odd">
+<td><strong>EventService</strong></td>
+<td>Logs and retrieves system events</td>
+<td>Configurable retention, event types, filtering</td>
+</tr>
+<tr class="even">
+<td><strong>StreamService</strong></td>
+<td>Manages JetStream streams</td>
+<td>Stream creation, consumer management, message publishing</td>
+</tr>
+<tr class="odd">
+<td><strong>WorkerService</strong></td>
+<td>Tracks worker status and job processing</td>
+<td>Heartbeat monitoring, job registration, lifecycle management</td>
+</tr>
+<tr class="even">
+<td><strong>SchedulerService</strong></td>
+<td>Handles job scheduling and triggering</td>
+<td>Cron expressions, one-time schedules, recurring jobs</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="servicemanager" class="level3">
+<h3 class="anchored" data-anchor-id="servicemanager">ServiceManager</h3>
+<p>The <code>ServiceManager</code> is the central component that orchestrates all services:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services.base <span class="im">import</span> ServiceManager</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> main():</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create and initialize service manager</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    manager <span class="op">=</span> ServiceManager()</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> manager.initialize_all()</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Access services as needed</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    connection_service <span class="op">=</span> manager.get_service(ConnectionService)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    job_service <span class="op">=</span> manager.get_service(JobService)</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Use services...</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Cleanup all services</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> manager.cleanup_all()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="service-configuration" class="level3">
+<h3 class="anchored" data-anchor-id="service-configuration">Service Configuration</h3>
+<p>Services can be configured through the centralized configuration system:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services.base <span class="im">import</span> ServiceConfig</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services.connection <span class="im">import</span> ConnectionServiceConfig</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Create service-specific configuration</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>connection_config <span class="op">=</span> ConnectionServiceConfig(</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    servers<span class="op">=</span>[<span class="st">"nats://localhost:4222"</span>],</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    max_reconnect_attempts<span class="op">=</span><span class="dv">10</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Apply to service</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>service_config <span class="op">=</span> ServiceConfig(custom_settings<span class="op">=</span>connection_config.as_dict())</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>connection_service <span class="op">=</span> ConnectionService(config<span class="op">=</span>service_config)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</section>
+<section id="migration-guide" class="level3">
+<h3 class="anchored" data-anchor-id="migration-guide">Migration Guide</h3>
+<p>For detailed information on migrating to the service layer, see the <a href="../architecture.html#migration-validation">Migration Validation</a> section in the architecture documentation.</p>
+<p>For advanced usage patterns and performance optimization, see the <a href="../advanced.html#service-layer-architecture">Service Layer Architecture</a> section in the advanced documentation.</p>
 
 
+</section>
 </section>
 
 </main> <!-- /main -->

@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.7.32">
+<meta name="generator" content="quarto-1.7.33">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -20,6 +20,41 @@ ul.task-list li input[type="checkbox"] {
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
 }
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
 </style>
 
 
@@ -36,14 +71,14 @@ ul.task-list li input[type="checkbox"] {
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
 <script src="site_libs/quarto-html/anchor.min.js"></script>
 <link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-2fef5ea3f8957b3e4ecc936fc74692ca.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
-<link href="site_libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-bc185b5c5bdbcb35c2eb49d8a876ef70.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
 <script src="site_libs/bootstrap/bootstrap.min.js"></script>
 <link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="site_libs/bootstrap/bootstrap-dark-08799928d293638fe9563d5c5a2794e5.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<link href="site_libs/bootstrap/bootstrap-cc63fce9873912f1bbbccf05079cc9ea.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-ccd81253fefb92e9cd3f9eb5b5d87b54.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-6bdd2aebeb936dcddaa5f935a5de481c.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light">
 <script id="quarto-search-options" type="application/json">{
   "location": "navbar",
   "copy-button": false,
@@ -271,6 +306,10 @@ ul.task-list li input[type="checkbox"] {
 <span class="menu-text">Quickstart</span></a>
   </li>  
   <li class="nav-item">
+    <a class="nav-link" href="./configuration.html"> 
+<span class="menu-text">Configuration</span></a>
+  </li>  
+  <li class="nav-item">
     <a class="nav-link active" href="./architecture.html" aria-current="page"> 
 <span class="menu-text">Architecture</span></a>
   </li>  
@@ -307,9 +346,21 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#core-components" id="toc-core-components" class="nav-link active" data-scroll-target="#core-components">Core Components</a></li>
+  <li><a href="#core-components" id="toc-core-components" class="nav-link active" data-scroll-target="#core-components">Core Components</a>
+  <ul class="collapse">
+  <li><a href="#service-layer-architecture" id="toc-service-layer-architecture" class="nav-link" data-scroll-target="#service-layer-architecture">1. Service Layer Architecture</a></li>
+  </ul></li>
+  <li><a href="#service-layer-benefits" id="toc-service-layer-benefits" class="nav-link" data-scroll-target="#service-layer-benefits">Service Layer Benefits</a></li>
   <li><a href="#how-it-works-the-job-lifecycle" id="toc-how-it-works-the-job-lifecycle" class="nav-link" data-scroll-target="#how-it-works-the-job-lifecycle">How It Works: The Job Lifecycle</a></li>
+  <li><a href="#event-system-architecture" id="toc-event-system-architecture" class="nav-link" data-scroll-target="#event-system-architecture">Event System Architecture</a></li>
+  <li><a href="#service-dependencies-and-relationships" id="toc-service-dependencies-and-relationships" class="nav-link" data-scroll-target="#service-dependencies-and-relationships">Service Dependencies and Relationships</a></li>
   <li><a href="#why-nats" id="toc-why-nats" class="nav-link" data-scroll-target="#why-nats">Why NATS?</a></li>
+  <li><a href="#migration-validation" id="toc-migration-validation" class="nav-link" data-scroll-target="#migration-validation">Migration Validation</a>
+  <ul class="collapse">
+  <li><a href="#pre-integration-checklist" id="toc-pre-integration-checklist" class="nav-link" data-scroll-target="#pre-integration-checklist">Pre-Integration Checklist</a></li>
+  <li><a href="#post-integration-checklist" id="toc-post-integration-checklist" class="nav-link" data-scroll-target="#post-integration-checklist">Post-Integration Checklist</a></li>
+  <li><a href="#automated-migration-validation" id="toc-automated-migration-validation" class="nav-link" data-scroll-target="#automated-migration-validation">Automated Migration Validation</a></li>
+  </ul></li>
   </ul>
 </nav>
     </div>
@@ -339,13 +390,51 @@ ul.task-list li input[type="checkbox"] {
 <p><code>naq</code> is designed to be a simple yet powerful distributed task queue. Its architecture is fundamentally built around <a href="https://nats.io">NATS</a> and its persistence layer, <a href="https://docs.nats.io/jetstream/jetstream">JetStream</a>, which serve as the central nervous system for communication between clients, workers, and the scheduler.</p>
 <section id="core-components" class="level2">
 <h2 class="anchored" data-anchor-id="core-components">Core Components</h2>
-<p>The <code>naq</code> ecosystem consists of four main components:</p>
-<ol type="1">
-<li><strong>The Client (Producer)</strong>: Any application that enqueues jobs. This could be a web server, a script, or any other part of your system that needs to offload work.</li>
+<p>The <code>naq</code> ecosystem consists of two main architectural layers:</p>
+<section id="service-layer-architecture" class="level3">
+<h3 class="anchored" data-anchor-id="service-layer-architecture">1. Service Layer Architecture</h3>
+<p>The service layer provides a modular, extensible foundation for all <code>naq</code> functionality. Each service is responsible for a specific domain and can be used independently or composed together to create complex workflows.</p>
+<p><strong>Core Services:</strong></p>
+<ul>
+<li><strong>ConnectionService</strong>: Manages NATS connections, connection pooling, and JetStream contexts with automatic reconnection and monitoring.</li>
+<li><strong>KVStoreService</strong>: Provides centralized access to NATS KeyValue stores with transaction support and TTL management.</li>
+<li><strong>StreamService</strong>: Handles JetStream stream creation, management, and configuration with consistent parameters.</li>
+<li><strong>EventService</strong>: Logs and retrieves job and worker events with configurable retention policies.</li>
+<li><strong>JobService</strong>: Manages job execution, result storage, and lifecycle events with integrated failure handling.</li>
+<li><strong>WorkerService</strong>: Tracks worker registration, status, and heartbeats with lifecycle management.</li>
+<li><strong>SchedulerService</strong>: Handles job scheduling, triggering, cancellation, and pausing with support for recurring jobs.</li>
+</ul>
+<p><strong>Base Infrastructure:</strong></p>
+<ul>
+<li><strong>BaseService</strong>: Abstract base class for all services with consistent lifecycle management and error handling.</li>
+<li><strong>ServiceManager</strong>: Centralized service registration, dependency injection, coordinated cleanup, and performance monitoring.</li>
+<li><strong>Configuration System</strong>: Hierarchical configuration with environment variable support and service-specific settings.</li>
+</ul>
+<p>31 ### 2. Application Layer</p>
+<p>The application layer builds on the service layer to provide the high-level task queue functionality:</p>
+<ul>
+<li><strong>Client (Producer)</strong>: Any application that enqueues jobs using the service layer or simplified enqueue functions.</li>
+<li><strong>Worker(s)</strong>: Processes that subscribe to queues, execute jobs, and report results using the JobService.</li>
+<li><strong>Scheduler</strong>: Dedicated process that uses the SchedulerService to handle time-based events.</li>
+</ul>
+<p><strong>NATS Infrastructure:</strong></p>
+<ul>
 <li><strong>NATS Server (with JetStream)</strong>: The message broker that provides persistence, message delivery, and storage for job results and worker metadata.</li>
-<li><strong>The Worker(s)</strong>: The processes that subscribe to queues, execute jobs, and report back their results. You can run as many workers as you need, on as many machines as you want.</li>
-<li><strong>The Scheduler</strong>: A dedicated process that handles time-based events, such as scheduled jobs and recurring tasks.</li>
-</ol>
+</ul>
+</section>
+</section>
+<section id="service-layer-benefits" class="level2">
+<h2 class="anchored" data-anchor-id="service-layer-benefits">Service Layer Benefits</h2>
+<p>The service layer architecture provides several key advantages:</p>
+<ul>
+<li><strong>Modularity</strong>: Each service has a single responsibility and can be used independently or composed as needed.</li>
+<li><strong>Testability</strong>: Services can be easily mocked or stubbed for unit testing, and dependencies can be injected.</li>
+<li><strong>Reusability</strong>: Services can be shared across different parts of an application or even different applications.</li>
+<li><strong>Consistency</strong>: All services follow the same lifecycle pattern and error handling conventions.</li>
+<li><strong>Extensibility</strong>: New services can be added without modifying existing ones, following the open/closed principle.</li>
+<li><strong>Dependency Management</strong>: The ServiceManager handles service initialization, dependency resolution, and cleanup in the correct order.</li>
+<li><strong>Configuration Flexibility</strong>: Services can be configured globally or individually, with environment variable support.</li>
+</ul>
 </section>
 <section id="how-it-works-the-job-lifecycle" class="level2">
 <h2 class="anchored" data-anchor-id="how-it-works-the-job-lifecycle">How It Works: The Job Lifecycle</h2>
@@ -356,30 +445,47 @@ ul.task-list li input[type="checkbox"] {
 <p></p><figure class="figure"><p></p>
 <div>
 <pre class="mermaid mermaid-js">graph TD
-    subgraph "Your Application"
+    subgraph "Application Layer"
         Client[Client]
-        PythonCode[Python Code]
-    end
-
-    subgraph "NAQ Processes"
         Worker[Worker]
         Scheduler[Scheduler]
     end
+    
+    subgraph "Service Layer"
+        JobService[JobService]
+        ConnectionService[ConnectionService]
+        KVStoreService[KVStoreService]
+        EventService[EventService]
+        WorkerService[WorkerService]
+        SchedulerService[SchedulerService]
+    end
 
-    subgraph "NATS Server (JetStream)"
+    subgraph "NATS Infrastructure"
         QueueStream[Queue Stream]
         ResultStore[Result KV Store]
         ScheduledJobs[Scheduled Jobs KV]
+        WorkerStatus[Worker Status KV]
+        EventsKV[Events KV Store]
     end
 
-    Client -- "1. Enqueue Job" --&gt; QueueStream
-    Scheduler -- "7. Check for Due Jobs" --&gt; ScheduledJobs
-    ScheduledJobs -- "Job is Due" --&gt; Scheduler
-    Scheduler -- "8. Enqueue Due Job" --&gt; QueueStream
-    Worker -- "3. Fetch Job" --&gt; QueueStream
-    Worker -- "4. Execute Function" --&gt; PythonCode
-    PythonCode -- "5. Return Result" --&gt; Worker
-    Worker -- "6. Store Result" --&gt; ResultStore
+    Client -- "1. Enqueue Job" --&gt; JobService
+    JobService -- "2. Publish to NATS" --&gt; QueueStream
+    JobService -- "3. Logs Job Events" --&gt; EventService
+    
+    Scheduler -- "4. Check for Due Jobs" --&gt; SchedulerService
+    SchedulerService -- "5. Trigger Due Jobs" --&gt; QueueStream
+    SchedulerService -- "6. Logs Scheduler Events" --&gt; EventService
+    
+    Worker -- "7. Fetch Job" --&gt; QueueStream
+    Worker -- "8. Executes via JobService" --&gt; JobService
+    Worker -- "9. Logs Worker Events" --&gt; EventService
+    JobService -- "10. Store Result" --&gt; ResultStore
+    JobService -- "11. Logs Job Events" --&gt; EventService
+    
+    EventService -- "12. Stores Events" --&gt; EventsKV
+    
+    Worker -- "13. Register/Update Status" --&gt; WorkerService
+    WorkerService -- "14. Store Status" --&gt; WorkerStatus
 </pre>
 </div>
 <p></p></figure><p></p>
@@ -387,13 +493,105 @@ ul.task-list li input[type="checkbox"] {
 </div>
 </div>
 <ol type="1">
-<li><p><strong>Enqueueing</strong>: The client calls an <code>enqueue</code> function (e.g., <code>enqueue_sync</code>). The function, its arguments, and other metadata are serialized into a job payload. This payload is then published as a message to a NATS subject that corresponds to the target queue.</p></li>
-<li><p><strong>Persistence</strong>: NATS JetStream receives this message and persists it in a <strong>Stream</strong>. Each queue in <code>naq</code> maps directly to a JetStream Stream. This ensures that even if no workers are online, the job is safely stored and will be processed later.</p></li>
-<li><p><strong>Fetching</strong>: A <code>naq</code> worker process is constantly listening on the queue’s Stream. When a new job is available, the worker consumes the message, acknowledging it to NATS so that it isn’t delivered to another worker.</p></li>
-<li><p><strong>Execution</strong>: The worker deserializes the job payload and executes the specified Python function with the provided arguments.</p></li>
-<li><p><strong>Result Handling</strong>: Once the function completes, its return value is serialized. The worker then stores this result in a NATS <strong>Key-Value (KV) Store</strong>, using the unique job ID as the key. This result has a configurable Time-To-Live (TTL), after which it is automatically purged by NATS.</p></li>
-<li><p><strong>Scheduled Jobs</strong>: The <code>naq scheduler</code> process periodically scans a dedicated KV store for jobs that are due to run. When it finds one, it enqueues it into the appropriate queue, and the job follows the normal lifecycle from there.</p></li>
+<li><p><strong>Enqueueing</strong>: The client calls an <code>enqueue</code> function or directly uses the JobService. The function, its arguments, and metadata are serialized into a job payload and published to a NATS subject.</p></li>
+<li><p><strong>Job Service Processing</strong>: The JobService handles the publishing to NATS and logs job events through the EventService.</p></li>
+<li><p><strong>Scheduler Triggering</strong>: The SchedulerService periodically checks for due jobs and triggers them by publishing to the appropriate queue, also logging scheduler events.</p></li>
+<li><p><strong>Persistence</strong>: NATS JetStream receives the message and persists it in a <strong>Stream</strong>. Each queue maps directly to a JetStream Stream.</p></li>
+<li><p><strong>Fetching</strong>: A worker process fetches jobs from the queue’s Stream. The WorkerService tracks worker registration and status, and the Worker also logs its own events.</p></li>
+<li><p><strong>Execution</strong>: The worker uses the JobService to execute the job, which handles the actual function execution, result storage, and event logging.</p></li>
+<li><p><strong>Result Handling</strong>: The JobService stores results in a NATS <strong>Key-Value (KV) Store</strong> with configurable TTL and logs completion events.</p></li>
+<li><p><strong>Event Storage</strong>: The EventService stores all logged events (Job, Worker, Scheduler, System) in a dedicated NATS Key-Value store, allowing for historical lookup and auditing.</p></li>
+<li><p><strong>Worker Management</strong>: The WorkerService tracks worker registration, status updates, and heartbeats in a dedicated KV store.</p></li>
 </ol>
+</section>
+<section id="event-system-architecture" class="level2">
+<h2 class="anchored" data-anchor-id="event-system-architecture">Event System Architecture</h2>
+<p>The <code>naq</code> event system is designed to provide comprehensive observability into the job queue’s operation. It captures various events related to jobs, workers, and the scheduler, storing them for real-time monitoring and historical analysis.</p>
+<p><strong>Key Principles:</strong> - <strong>Centralized Logging</strong>: All events are funneled through the <code>EventService</code> and stored in a dedicated NATS Key-Value (KV) store. - <strong>Structured Events</strong>: Events are strongly typed using <code>msgspec.Struct</code> for efficient serialization and clear data fields. - <strong>Extensibility</strong>: Custom event processors can be implemented and registered to react to specific events (e.g., send notifications, update dashboards). - <strong>CLI Integration</strong>: Event data is exposed via CLI commands for easy inspection and monitoring.</p>
+<p><strong>Event Flow:</strong></p>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">graph TD
+    subgraph "NAQ Components"
+        JobService[JobService]
+        Worker[Worker]
+        Scheduler[Scheduler]
+    end
+
+    subgraph "Event System"
+        EventService[EventService]
+        EventsKV[Events KV Store]
+        EventProcessors[Custom Event Processors]
+    end
+
+    JobService -- "Logs Job Events" --&gt; EventService
+    Worker -- "Logs Worker Events" --&gt; EventService
+    Scheduler -- "Logs Scheduler Events" --&gt; EventService
+    
+    EventService -- "Stores Events" --&gt; EventsKV
+    EventsKV -- "Real-time Stream" --&gt; CLI[CLI Monitoring Commands]
+    EventsKV -- "Historical Query" --&gt; CLI
+    EventsKV -- "Processed by" --&gt; EventProcessors
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+<p><strong>Event Types:</strong></p>
+<p><code>naq</code> defines several categories of events to cover different aspects of the system:</p>
+<ul>
+<li><strong>Job Events</strong>: Track the lifecycle of individual jobs (e.g., <code>ENQUEUED</code>, <code>STARTED</code>, <code>COMPLETED</code>, <code>FAILED</code>, <code>RETRY_SCHEDULED</code>, <code>SCHEDULED</code>, <code>SCHEDULE_TRIGGERED</code>, <code>CANCELLED</code>, <code>STATUS_CHANGED</code>).</li>
+<li><strong>Worker Events</strong>: Monitor the status and activity of workers (e.g., <code>STARTED</code>, <code>STOPPED</code>, <code>HEARTBEAT</code>, <code>JOB_STARTED</code>, <code>JOB_COMPLETED</code>, <code>JOB_FAILED</code>, <code>PAUSED</code>, <code>RESUMED</code>).</li>
+<li><strong>Scheduler Events</strong>: Log actions performed by the scheduler (e.g., job scheduling, triggering).</li>
+<li><strong>System Events</strong>: General system-level events (e.g., service startup/shutdown, configuration changes).</li>
+</ul>
+<p>For a detailed description of each event type and their data fields, refer to the <a href="./api/events.html">Events API Reference</a>.</p>
+</section>
+<section id="service-dependencies-and-relationships" class="level2">
+<h2 class="anchored" data-anchor-id="service-dependencies-and-relationships">Service Dependencies and Relationships</h2>
+<p>Services are designed to work together with clear dependency relationships:</p>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">graph TD
+    ConnectionService -- "provides" --&gt; KVStoreService
+    ConnectionService -- "provides" --&gt; StreamService
+    ConnectionService -- "provides" --&gt; JobService
+    ConnectionService -- "provides" --&gt; WorkerService
+    ConnectionService -- "provides" --&gt; SchedulerService
+    ConnectionService -- "provides" --&gt; EventService
+    
+    KVStoreService -- "used by" --&gt; EventService
+    KVStoreService -- "used by" --&gt; JobService
+    KVStoreService -- "used by" --&gt; WorkerService
+    KVStoreService -- "used by" --&gt; SchedulerService
+    
+    EventService -- "used by" --&gt; JobService
+    EventService -- "used by" --&gt; WorkerService
+    EventService -- "used by" --&gt; SchedulerService
+    
+    WorkerService -- "manages" --&gt; WorkerStatus
+    SchedulerService -- "manages" --&gt; ScheduledJobs
+    JobService -- "stores" --&gt; JobResults
+    EventService -- "stores" --&gt; EventsKV
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+<ul>
+<li><strong>ConnectionService</strong> is the foundation service that provides NATS connectivity to all other services.</li>
+<li><strong>KVStoreService</strong> depends on ConnectionService and provides storage capabilities used by most other services.</li>
+<li><strong>EventService</strong> depends on both ConnectionService and KVStoreService to provide event logging functionality.</li>
+<li><strong>JobService</strong>, <strong>WorkerService</strong>, and <strong>SchedulerService</strong> all depend on the lower-level services to provide their domain-specific functionality.</li>
+</ul>
 </section>
 <section id="why-nats" class="level2">
 <h2 class="anchored" data-anchor-id="why-nats">Why NATS?</h2>
@@ -403,9 +601,130 @@ ul.task-list li input[type="checkbox"] {
 <li><strong>Scalability</strong>: You can add more workers at any time to increase your processing capacity. NATS handles the load balancing of jobs to available workers automatically.</li>
 <li><strong>Resilience</strong>: If a worker crashes, JetStream ensures that the job it was processing will be re-delivered to another worker after a timeout. If the entire <code>naq</code> system goes down, the jobs are safe in the NATS stream, ready to be processed when the system comes back online.</li>
 <li><strong>Simplicity</strong>: By offloading the complexities of persistence, delivery guarantees, and storage to NATS, the <code>naq</code> codebase can remain focused on the core logic of job execution and scheduling.</li>
+<li><strong>Service Flexibility</strong>: The service layer architecture allows each component to leverage NATS features independently while maintaining a consistent interface.</li>
 </ul>
+</section>
+<section id="migration-validation" class="level2">
+<h2 class="anchored" data-anchor-id="migration-validation">Migration Validation</h2>
+<p>When migrating to the service layer architecture, it’s important to follow a structured validation process to ensure a successful transition. The following checklists provide comprehensive validation steps for both pre-integration and post-integration phases.</p>
+<section id="pre-integration-checklist" class="level3">
+<h3 class="anchored" data-anchor-id="pre-integration-checklist">Pre-Integration Checklist</h3>
+<p>Complete these checks before integrating with the service layer:</p>
+<ul class="task-list">
+<li><label><input type="checkbox"><strong>Verify all services are implemented and tested</strong></label>
+<ul class="task-list">
+<li><label><input type="checkbox">ConnectionService is implemented and passes tests</label></li>
+<li><label><input type="checkbox">ConfigService is implemented and passes tests</label></li>
+<li><label><input type="checkbox">JobService is implemented and passes tests</label></li>
+<li><label><input type="checkbox">KVStoreService is implemented and passes tests</label></li>
+<li><label><input type="checkbox">StreamService is implemented and passes tests</label></li>
+<li><label><input type="checkbox">EventService is implemented and passes tests</label></li>
+<li><label><input type="checkbox">WorkerService is implemented and passes tests</label></li>
+<li><label><input type="checkbox">SchedulerService is implemented and passes tests</label></li>
+</ul></li>
+<li><label><input type="checkbox"><strong>Confirm configuration system is working</strong></label>
+<ul class="task-list">
+<li><label><input type="checkbox">Configuration can be set and retrieved correctly</label></li>
+<li><label><input type="checkbox">Environment variable overrides work as expected</label></li>
+<li><label><input type="checkbox">Service-specific configuration is properly isolated</label></li>
+<li><label><input type="checkbox">Configuration validation is working</label></li>
+</ul></li>
+<li><label><input type="checkbox"><strong>Ensure common patterns are extracted</strong></label>
+<ul class="task-list">
+<li><label><input type="checkbox">Connection pooling is implemented in ConnectionService</label></li>
+<li><label><input type="checkbox">Error handling patterns are consistent across services</label></li>
+<li><label><input type="checkbox">Logging is standardized using loguru</label></li>
+<li><label><input type="checkbox">Performance monitoring is integrated into services</label></li>
+<li><label><input type="checkbox">Resource cleanup is implemented consistently</label></li>
+</ul></li>
+<li><label><input type="checkbox"><strong>Record performance benchmarks</strong></label>
+<ul class="task-list">
+<li><label><input type="checkbox">Service initialization times are measured</label></li>
+<li><label><input type="checkbox">Connection acquisition times are recorded</label></li>
+<li><label><input type="checkbox">Memory usage patterns are documented</label></li>
+<li><label><input type="checkbox">Throughput metrics are established</label></li>
+<li><label><input type="checkbox">Resource utilization benchmarks are captured</label></li>
+</ul></li>
+</ul>
+</section>
+<section id="post-integration-checklist" class="level3">
+<h3 class="anchored" data-anchor-id="post-integration-checklist">Post-Integration Checklist</h3>
+<p>Complete these checks after integrating with the service layer:</p>
+<ul class="task-list">
+<li><label><input type="checkbox"><strong>Verify all components use the service layer</strong></label>
+<ul class="task-list">
+<li><label><input type="checkbox">Client applications use JobService for job operations</label></li>
+<li><label><input type="checkbox">Worker processes use JobService for job execution</label></li>
+<li><label><input type="checkbox">Scheduler uses SchedulerService for time-based events</label></li>
+<li><label><input type="checkbox">No direct NATS operations in application code</label></li>
+<li><label><input type="checkbox">All components properly initialize services</label></li>
+</ul></li>
+<li><label><input type="checkbox"><strong>Confirm no direct NATS operations outside services</strong></label>
+<ul class="task-list">
+<li><label><input type="checkbox">All NATS connections go through ConnectionService</label></li>
+<li><label><input type="checkbox">All JetStream operations use appropriate services</label></li>
+<li><label><input type="checkbox">No direct subject subscriptions in application code</label></li>
+<li><label><input type="checkbox">All message publishing uses service layer</label></li>
+<li><label><input type="checkbox">All KV operations use KVStoreService</label></li>
+</ul></li>
+<li><label><input type="checkbox"><strong>Validate configuration is passed correctly</strong></label>
+<ul class="task-list">
+<li><label><input type="checkbox">Services receive correct configuration parameters</label></li>
+<li><label><input type="checkbox">Configuration overrides work as expected</label></li>
+<li><label><input type="checkbox">Service-specific configuration is properly applied</label></li>
+<li><label><input type="checkbox">Configuration changes are propagated correctly</label></li>
+<li><label><input type="checkbox">Default configuration values are appropriate</label></li>
+</ul></li>
+<li><label><input type="checkbox"><strong>Ensure all tests pass</strong></label>
+<ul class="task-list">
+<li><label><input type="checkbox">Unit tests for all services pass</label></li>
+<li><label><input type="checkbox">Integration tests pass</label></li>
+<li><label><input type="checkbox">End-to-end tests pass</label></li>
+<li><label><input type="checkbox">Performance tests meet requirements</label></li>
+<li><label><input type="checkbox">Load tests pass under expected conditions</label></li>
+</ul></li>
+<li><label><input type="checkbox"><strong>Verify performance meets or exceeds benchmarks</strong></label>
+<ul class="task-list">
+<li><label><input type="checkbox">Service initialization times are within acceptable limits</label></li>
+<li><label><input type="checkbox">Connection acquisition times are improved or maintained</label></li>
+<li><label><input type="checkbox">Memory usage is within expected bounds</label></li>
+<li><label><input type="checkbox">Throughput meets or exceeds previous benchmarks</label></li>
+<li><label><input type="checkbox">Resource utilization is optimized</label></li>
+</ul></li>
+<li><label><input type="checkbox"><strong>Confirm resource cleanup is working</strong></label>
+<ul class="task-list">
+<li><label><input type="checkbox">Services properly clean up resources on shutdown</label></li>
+<li><label><input type="checkbox">Connection pools are properly managed</label></li>
+<li><label><input type="checkbox">Memory is properly released</label></li>
+<li><label><input type="checkbox">File handles are properly closed</label></li>
+<li><label><input type="checkbox">No resource leaks detected</label></li>
+</ul></li>
+</ul>
+</section>
+<section id="automated-migration-validation" class="level3">
+<h3 class="anchored" data-anchor-id="automated-migration-validation">Automated Migration Validation</h3>
+<p>The <code>src/naq/migration_validation.py</code> module provides automated validation of these checklists. To run a complete migration validation:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services.base <span class="im">import</span> ServiceManager</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.migration_validation <span class="im">import</span> validate_migration</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Create and configure service manager</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>service_manager <span class="op">=</span> ServiceManager()</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Run complete migration validation</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>report <span class="op">=</span> <span class="cf">await</span> validate_migration(service_manager)</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Check results</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> report.overall_passed:</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Migration validation passed successfully!"</span>)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span>:</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="st">"Migration validation failed:"</span>)</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> result <span class="kw">in</span> report.pre_integration_results <span class="op">+</span> report.post_integration_results:</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> result.status <span class="op">!=</span> ValidationStatus.PASS:</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>            <span class="bu">print</span>(<span class="ss">f"  - </span><span class="sc">{</span>result<span class="sc">.</span>name<span class="sc">}</span><span class="ss">: </span><span class="sc">{</span>result<span class="sc">.</span>message<span class="sc">}</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<p>The validation report provides detailed information about each check, including performance metrics and any issues found. This automated approach ensures consistent validation and provides a comprehensive audit trail for the migration process.</p>
 
 
+</section>
 </section>
 
 </main> <!-- /main -->

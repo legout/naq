@@ -5,7 +5,7 @@ This module provides a centralized service for JetStream stream creation, manage
 and operations, ensuring consistent configuration and lifecycle management for streams.
 """
 
-from typing import Any, Optional, List
+from typing import Any, Dict, Optional, List
 
 import msgspec
 import nats
@@ -26,6 +26,8 @@ class StreamServiceConfig(msgspec.Struct):
     Configuration for the StreamService.
 
     Attributes:
+        stream_name: Name of the stream
+        subjects: List of subjects the stream should handle
         default_storage: Default storage type for streams (file or memory)
         default_retention: Default retention policy for streams
         default_replicas: Default number of replicas for stream data
@@ -35,6 +37,8 @@ class StreamServiceConfig(msgspec.Struct):
         auto_create_streams: Whether to automatically create streams when accessed
     """
 
+    stream_name: Optional[str] = None
+    subjects: Optional[List[str]] = None
     default_storage: str = "file"
     default_retention: str = "work_queue"
     default_replicas: int = 1
@@ -42,6 +46,20 @@ class StreamServiceConfig(msgspec.Struct):
     max_msgs: Optional[int] = None
     max_bytes: Optional[int] = None
     auto_create_streams: bool = True
+
+    def as_dict(self) -> Dict[str, Any]:
+        """Convert the configuration to a dictionary."""
+        return {
+            "stream_name": self.stream_name,
+            "subjects": self.subjects,
+            "default_storage": self.default_storage,
+            "default_retention": self.default_retention,
+            "default_replicas": self.default_replicas,
+            "max_age": self.max_age,
+            "max_msgs": self.max_msgs,
+            "max_bytes": self.max_bytes,
+            "auto_create_streams": self.auto_create_streams,
+        }
 
 
 class StreamService(BaseService):
@@ -92,19 +110,29 @@ class StreamService(BaseService):
             naq_stream_config = self._naq_config.streams
             
             # Map NAQ config to stream service config
-            if naq_stream_config.storage:
+            if hasattr(naq_stream_config, 'stream_name') and naq_stream_config.stream_name:
+                stream_config.stream_name = naq_stream_config.stream_name
+            
+            if hasattr(naq_stream_config, 'subjects') and naq_stream_config.subjects:
+                stream_config.subjects = naq_stream_config.subjects
+            
+            if hasattr(naq_stream_config, 'storage') and naq_stream_config.storage:
                 stream_config.default_storage = naq_stream_config.storage
             
-            if naq_stream_config.replicas is not None:
+            if hasattr(naq_stream_config, 'replicas') and naq_stream_config.replicas is not None:
                 stream_config.default_replicas = naq_stream_config.replicas
             
-            if naq_stream_config.max_age is not None:
-                stream_config.max_age = str(naq_stream_config.max_age)
+            if hasattr(naq_stream_config, 'max_age') and naq_stream_config.max_age is not None:
+                # Convert to int if it's a whole number, otherwise keep as string
+                if isinstance(naq_stream_config.max_age, float) and naq_stream_config.max_age.is_integer():
+                    stream_config.max_age = str(int(naq_stream_config.max_age))
+                else:
+                    stream_config.max_age = str(naq_stream_config.max_age)
             
-            if naq_stream_config.max_msgs is not None:
+            if hasattr(naq_stream_config, 'max_msgs') and naq_stream_config.max_msgs is not None:
                 stream_config.max_msgs = naq_stream_config.max_msgs
             
-            if naq_stream_config.max_bytes is not None:
+            if hasattr(naq_stream_config, 'max_bytes') and naq_stream_config.max_bytes is not None:
                 stream_config.max_bytes = naq_stream_config.max_bytes
 
         # Override with service config if provided (for backward compatibility)
@@ -341,7 +369,6 @@ class StreamService(BaseService):
                     "subjects": subjects,
                     "storage": self._get_storage_type(storage),
                     "retention": self._get_retention_policy(retention),
-                    "replicas": replicas,
                 }
 
                 # Add optional parameters if provided

@@ -101,12 +101,14 @@ class JobProcessor:
                 await msg.ack()
 
         except Exception as e:
-            self.error_handler.handle_error(
-                e,
-                "Error processing job {job_id}",
-                job_id=job.job_id if job else "unknown",
-                exc_info=True,
-            )
+            error_context = {
+                "job_id": job.job_id if job else "unknown",
+            }
+            error_context = {
+                "job_id": job.job_id if job else "unknown",
+                "message": f"Error processing job {job.job_id if job else 'unknown'}",
+            }
+            self.error_handler.handle_error(e, context=error_context)
             # If we have a NATS message and it has a term() method, terminate it
             if hasattr(msg, "term"):
                 await msg.term()

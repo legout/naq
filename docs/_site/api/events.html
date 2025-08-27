@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>Exceptions and Error Handling – naq</title>
+<title>Events API Reference – naq</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -342,21 +342,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#naqexception" id="toc-naqexception" class="nav-link active" data-scroll-target="#naqexception"><code>NaqException</code></a></li>
-  <li><a href="#naqconnectionerror" id="toc-naqconnectionerror" class="nav-link" data-scroll-target="#naqconnectionerror"><code>NaqConnectionError</code></a></li>
-  <li><a href="#configurationerror" id="toc-configurationerror" class="nav-link" data-scroll-target="#configurationerror"><code>ConfigurationError</code></a></li>
-  <li><a href="#serializationerror" id="toc-serializationerror" class="nav-link" data-scroll-target="#serializationerror"><code>SerializationError</code></a></li>
-  <li><a href="#jobexecutionerror" id="toc-jobexecutionerror" class="nav-link" data-scroll-target="#jobexecutionerror"><code>JobExecutionError</code></a></li>
-  <li><a href="#jobnotfounderror" id="toc-jobnotfounderror" class="nav-link" data-scroll-target="#jobnotfounderror"><code>JobNotFoundError</code></a></li>
-  <li><a href="#error-handling-utilities" id="toc-error-handling-utilities" class="nav-link" data-scroll-target="#error-handling-utilities">Error Handling Utilities</a>
+  <li><a href="#event-categories" id="toc-event-categories" class="nav-link active" data-scroll-target="#event-categories">Event Categories</a></li>
+  <li><a href="#job-events" id="toc-job-events" class="nav-link" data-scroll-target="#job-events">Job Events</a>
   <ul class="collapse">
-  <li><a href="#create_error_contextoperation_name-str---dictstr-any" id="toc-create_error_contextoperation_name-str---dictstr-any" class="nav-link" data-scroll-target="#create_error_contextoperation_name-str---dictstr-any"><code>create_error_context(operation_name: str) -&gt; Dict[str, Any]</code></a></li>
-  <li><a href="#serviceinitializationerror" id="toc-serviceinitializationerror" class="nav-link" data-scroll-target="#serviceinitializationerror"><code>ServiceInitializationError</code></a></li>
-  <li><a href="#serviceconfigurationerror" id="toc-serviceconfigurationerror" class="nav-link" data-scroll-target="#serviceconfigurationerror"><code>ServiceConfigurationError</code></a></li>
-  <li><a href="#servicedependencyerror" id="toc-servicedependencyerror" class="nav-link" data-scroll-target="#servicedependencyerror"><code>ServiceDependencyError</code></a></li>
-  <li><a href="#serviceruntimeerror" id="toc-serviceruntimeerror" class="nav-link" data-scroll-target="#serviceruntimeerror"><code>ServiceRuntimeError</code></a></li>
-  <li><a href="#example-service-layer-error-handling" id="toc-example-service-layer-error-handling" class="nav-link" data-scroll-target="#example-service-layer-error-handling">Example: Service Layer Error Handling</a></li>
+  <li><a href="#jobevent-structure" id="toc-jobevent-structure" class="nav-link" data-scroll-target="#jobevent-structure">JobEvent Structure</a></li>
+  <li><a href="#jobeventtype" id="toc-jobeventtype" class="nav-link" data-scroll-target="#jobeventtype">JobEventType</a></li>
   </ul></li>
+  <li><a href="#worker-events" id="toc-worker-events" class="nav-link" data-scroll-target="#worker-events">Worker Events</a>
+  <ul class="collapse">
+  <li><a href="#workerevent-structure" id="toc-workerevent-structure" class="nav-link" data-scroll-target="#workerevent-structure">WorkerEvent Structure</a></li>
+  <li><a href="#workereventtype" id="toc-workereventtype" class="nav-link" data-scroll-target="#workereventtype">WorkerEventType</a></li>
+  </ul></li>
+  <li><a href="#scheduler-events" id="toc-scheduler-events" class="nav-link" data-scroll-target="#scheduler-events">Scheduler Events</a></li>
+  <li><a href="#system-events" id="toc-system-events" class="nav-link" data-scroll-target="#system-events">System Events</a></li>
+  <li><a href="#event-storage-and-retrieval" id="toc-event-storage-and-retrieval" class="nav-link" data-scroll-target="#event-storage-and-retrieval">Event Storage and Retrieval</a></li>
   </ul>
 </nav>
     </div>
@@ -366,7 +365,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Exceptions and Error Handling</h1>
+<h1 class="title">Events API Reference</h1>
 </div>
 
 
@@ -383,104 +382,133 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>The <code>naq</code> library uses a set of custom exceptions to indicate specific error conditions. All custom exceptions inherit from the base <code>NaqException</code>. Additionally, <code>naq</code> provides utilities for error handling and context creation.</p>
-<section id="naqexception" class="level3">
-<h3 class="anchored" data-anchor-id="naqexception"><code>NaqException</code></h3>
-<p>The base exception for all errors raised by <code>naq</code>.</p>
+<p>The <code>naq</code> event system provides a comprehensive mechanism for tracking the lifecycle and status of jobs, workers, and the overall system. Events are crucial for monitoring, debugging, and building custom analytics or reactive systems.</p>
+<p>All events are strongly typed using <code>msgspec.Struct</code> for efficient serialization and clear, consistent data fields.</p>
+<section id="event-categories" class="level2">
+<h2 class="anchored" data-anchor-id="event-categories">Event Categories</h2>
+<p><code>naq</code> categorizes events into the following main types:</p>
+<ul>
+<li><strong>Job Events</strong>: Relate to the lifecycle of individual jobs.</li>
+<li><strong>Worker Events</strong>: Relate to the status and activity of worker processes.</li>
+<li><strong>Scheduler Events</strong>: Relate to actions performed by the <code>naq</code> scheduler.</li>
+<li><strong>System Events</strong>: General system-level occurrences.</li>
+</ul>
 </section>
-<section id="naqconnectionerror" class="level3">
-<h3 class="anchored" data-anchor-id="naqconnectionerror"><code>NaqConnectionError</code></h3>
-<p>Raised when there is an issue connecting to the NATS server or a problem with the connection during an operation.</p>
+<section id="job-events" class="level2">
+<h2 class="anchored" data-anchor-id="job-events">Job Events</h2>
+<p>Job events provide detailed insights into the journey of a job through the <code>naq</code> system, from enqueueing to completion or failure.</p>
+<section id="jobevent-structure" class="level3">
+<h3 class="anchored" data-anchor-id="jobevent-structure">JobEvent Structure</h3>
+<p>The <code>JobEvent</code> is defined by the following fields:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> JobEvent(msgspec.Struct):</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    job_id: <span class="bu">str</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    event_type: JobEventType</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    timestamp: <span class="bu">float</span> <span class="op">=</span> msgspec.field(default_factory<span class="op">=</span>time.time)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    worker_id: Optional[<span class="bu">str</span>] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    queue_name: Optional[<span class="bu">str</span>] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    message: Optional[<span class="bu">str</span>] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    details: Optional[Dict[<span class="bu">str</span>, Any]] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    error_type: Optional[<span class="bu">str</span>] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    error_message: Optional[<span class="bu">str</span>] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    duration_ms: Optional[<span class="bu">float</span>] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    nats_subject: Optional[<span class="bu">str</span>] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    nats_sequence: Optional[<span class="bu">int</span>] <span class="op">=</span> <span class="va">None</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<ul>
+<li><code>job_id</code> (<code>str</code>): Unique identifier for the job.</li>
+<li><code>event_type</code> (<a href="#jobeventtype"><code>JobEventType</code></a>): The specific type of job event.</li>
+<li><code>timestamp</code> (<code>float</code>): Unix timestamp (in seconds) when the event occurred.</li>
+<li><code>worker_id</code> (<code>Optional[str]</code>): ID of the worker associated with the event, if applicable.</li>
+<li><code>queue_name</code> (<code>Optional[str]</code>): Name of the queue the job belongs to.</li>
+<li><code>message</code> (<code>Optional[str]</code>): A human-readable message describing the event.</li>
+<li><code>details</code> (<code>Optional[Dict[str, Any]]</code>): A dictionary for additional event-specific data.</li>
+<li><code>error_type</code> (<code>Optional[str]</code>): The type of error (e.g., <code>ValueError</code>, <code>ConnectionError</code>) if the event is an error.</li>
+<li><code>error_message</code> (<code>Optional[str]</code>): The error message if the event is an error.</li>
+<li><code>duration_ms</code> (<code>Optional[float]</code>): Duration of an operation in milliseconds, if applicable (e.g., job execution time).</li>
+<li><code>nats_subject</code> (<code>Optional[str]</code>): The NATS subject where the event was published.</li>
+<li><code>nats_sequence</code> (<code>Optional[int]</code>): The NATS sequence number of the message in the stream.</li>
+</ul>
 </section>
-<section id="configurationerror" class="level3">
-<h3 class="anchored" data-anchor-id="configurationerror"><code>ConfigurationError</code></h3>
-<p>Raised when there is an issue with the configuration of <code>naq</code>, such as providing invalid parameters to a <code>Queue</code> or <code>Worker</code>.</p>
+<section id="jobeventtype" class="level3">
+<h3 class="anchored" data-anchor-id="jobeventtype">JobEventType</h3>
+<p>The <code>JobEventType</code> enum defines the possible types of job-related events:</p>
+<ul>
+<li><code>ENQUEUED</code>: Job has been added to a queue.</li>
+<li><code>STARTED</code>: Job processing has started by a worker.</li>
+<li><code>COMPLETED</code>: Job finished successfully.</li>
+<li><code>FAILED</code>: Job failed to complete.</li>
+<li><code>RETRY_SCHEDULED</code>: Job failed and has been scheduled for a retry.</li>
+<li><code>SCHEDULED</code>: Job has been scheduled for future execution (one-time or recurring).</li>
+<li><code>SCHEDULE_TRIGGERED</code>: A scheduled job has been triggered for execution by the scheduler.</li>
+<li><code>CANCELLED</code>: Job was explicitly cancelled.</li>
+<li><code>STATUS_CHANGED</code>: A job’s internal status has changed.</li>
+</ul>
 </section>
-<section id="serializationerror" class="level3">
-<h3 class="anchored" data-anchor-id="serializationerror"><code>SerializationError</code></h3>
-<p>Raised if <code>naq</code> fails to serialize or deserialize a job. This can happen if you are using the <code>json</code> serializer and try to enqueue a job with un-serializable arguments (like complex objects).</p>
 </section>
-<section id="jobexecutionerror" class="level3">
-<h3 class="anchored" data-anchor-id="jobexecutionerror"><code>JobExecutionError</code></h3>
-<p>Raised by <code>Job.fetch_result()</code> if the job failed during execution on the worker. The exception message will contain the original error and traceback from the worker.</p>
+<section id="worker-events" class="level2">
+<h2 class="anchored" data-anchor-id="worker-events">Worker Events</h2>
+<p>Worker events provide information about the state and health of individual worker processes.</p>
+<section id="workerevent-structure" class="level3">
+<h3 class="anchored" data-anchor-id="workerevent-structure">WorkerEvent Structure</h3>
+<p>The <code>WorkerEvent</code> is defined by the following fields:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> WorkerEvent(msgspec.Struct):</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    worker_id: <span class="bu">str</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    event_type: WorkerEventType</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    timestamp: <span class="bu">float</span> <span class="op">=</span> msgspec.field(default_factory<span class="op">=</span>time.time)</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    queue_names: Optional[<span class="bu">list</span>[<span class="bu">str</span>]] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    message: Optional[<span class="bu">str</span>] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    details: Optional[Dict[<span class="bu">str</span>, Any]] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    job_id: Optional[<span class="bu">str</span>] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    duration_ms: Optional[<span class="bu">float</span>] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    cpu_usage: Optional[<span class="bu">float</span>] <span class="op">=</span> <span class="va">None</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    memory_usage: Optional[<span class="bu">float</span>] <span class="op">=</span> <span class="va">None</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<ul>
+<li><code>worker_id</code> (<code>str</code>): Unique identifier for the worker.</li>
+<li><code>event_type</code> (<a href="#workereventtype"><code>WorkerEventType</code></a>): The specific type of worker event.</li>
+<li><code>timestamp</code> (<code>float</code>): Unix timestamp (in seconds) when the event occurred.</li>
+<li><code>queue_names</code> (<code>Optional[list[str]]</code>): List of queue names the worker is currently processing or configured to process.</li>
+<li><code>message</code> (<code>Optional[str]</code>): A human-readable message describing the event.</li>
+<li><code>details</code> (<code>Optional[Dict[str, Any]]</code>): A dictionary for additional event-specific data.</li>
+<li><code>job_id</code> (<code>Optional[str]</code>): ID of the job currently being processed by the worker, if applicable.</li>
+<li><code>duration_ms</code> (<code>Optional[float]</code>): Duration of an operation in milliseconds, if applicable.</li>
+<li><code>cpu_usage</code> (<code>Optional[float]</code>): Current CPU usage percentage of the worker process.</li>
+<li><code>memory_usage</code> (<code>Optional[float]</code>): Current memory usage (e.g., in MB or percentage) of the worker process.</li>
+</ul>
 </section>
-<section id="jobnotfounderror" class="level3">
-<h3 class="anchored" data-anchor-id="jobnotfounderror"><code>JobNotFoundError</code></h3>
-<p>Raised by <code>Job.fetch_result()</code> if the result for the specified <code>job_id</code> cannot be found. This could be because the job has not completed yet, the result has expired and been cleaned up, or the job never existed.</p>
+<section id="workereventtype" class="level3">
+<h3 class="anchored" data-anchor-id="workereventtype">WorkerEventType</h3>
+<p>The <code>WorkerEventType</code> enum defines the possible types of worker-related events:</p>
+<ul>
+<li><code>STARTED</code>: Worker process has started.</li>
+<li><code>STOPPED</code>: Worker process has stopped.</li>
+<li><code>HEARTBEAT</code>: Worker sends a periodic signal indicating it’s alive and healthy.</li>
+<li><code>JOB_STARTED</code>: Worker has started processing a specific job.</li>
+<li><code>JOB_COMPLETED</code>: Worker successfully completed a specific job.</li>
+<li><code>JOB_FAILED</code>: Worker failed to complete a specific job.</li>
+<li><code>PAUSED</code>: Worker has been paused.</li>
+<li><code>RESUMED</code>: Worker has resumed from a paused state.</li>
+</ul>
 </section>
-<section id="error-handling-utilities" class="level2">
-<h2 class="anchored" data-anchor-id="error-handling-utilities">Error Handling Utilities</h2>
-<section id="create_error_contextoperation_name-str---dictstr-any" class="level3">
-<h3 class="anchored" data-anchor-id="create_error_contextoperation_name-str---dictstr-any"><code>create_error_context(operation_name: str) -&gt; Dict[str, Any]</code></h3>
-<p>Creates a dictionary with contextual information about an error. This function captures essential contextual information when an error occurs, including the operation name, timestamp, current traceback, and thread ID.</p>
-<p><strong>Parameters:</strong> - <code>operation_name</code>: The name of the operation that failed or where the error occurred.</p>
-<p><strong>Returns:</strong> A dictionary containing the following keys: - <code>operation_name</code>: The name of the operation that failed. - <code>timestamp</code>: The current Unix timestamp when the error context was created. - <code>traceback</code>: The current exception traceback as a string, formatted using <code>traceback.format_exc()</code>. - <code>thread_id</code>: The identifier of the current thread where the error occurred.</p>
-<p><strong>Example:</strong></p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.utils.error_handling <span class="im">import</span> create_error_context</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span>:</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Code that might raise an exception</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> <span class="dv">1</span> <span class="op">/</span> <span class="dv">0</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="cf">except</span> <span class="pp">Exception</span>:</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    error_context <span class="op">=</span> create_error_context(<span class="st">"division_operation"</span>)</span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="co"># error_context will contain:</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="co"># {</span></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="co">#     "operation_name": "division_operation",</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">#     "timestamp": 1625097600.0,</span></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="co">#     "traceback": "Traceback (most recent call last):\n...",</span></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="co">#     "thread_id": 12345</span></span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="co"># }</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
-<p><strong>Note:</strong> This function should be called within an exception handler (except block) to capture the most relevant traceback information. If called outside of an exception context, the traceback value will indicate that no exception is currently being handled. ## Service Layer Exceptions</p>
-<p>The following exceptions have been added as part of the service layer architecture:</p>
 </section>
-<section id="serviceinitializationerror" class="level3">
-<h3 class="anchored" data-anchor-id="serviceinitializationerror"><code>ServiceInitializationError</code></h3>
-<p>Raised when a service fails to initialize properly. This can occur due to configuration issues, dependency problems, or resource allocation failures.</p>
+<section id="scheduler-events" class="level2">
+<h2 class="anchored" data-anchor-id="scheduler-events">Scheduler Events</h2>
+<p>Scheduler events provide visibility into the scheduler’s operations, particularly around managing scheduled jobs. These events are often logged by the <code>SchedulerService</code> and can be observed through the event system.</p>
+<p>While there isn’t a dedicated <code>SchedulerEvent</code> class in <code>naq/models/events.py</code> at the moment, scheduler activities (like triggering scheduled jobs) are often reflected as <code>JobEvent</code>s (e.g., <code>SCHEDULE_TRIGGERED</code>). Future versions might introduce a dedicated <code>SchedulerEvent</code> for more granular tracking.</p>
 </section>
-<section id="serviceconfigurationerror" class="level3">
-<h3 class="anchored" data-anchor-id="serviceconfigurationerror"><code>ServiceConfigurationError</code></h3>
-<p>Raised when there is an issue with service configuration, such as invalid parameters or missing required settings.</p>
+<section id="system-events" class="level2">
+<h2 class="anchored" data-anchor-id="system-events">System Events</h2>
+<p>System events encompass broader occurrences within the <code>naq</code> ecosystem that are not directly tied to a specific job or worker, such as service startup/shutdown, configuration changes, or critical errors within the core services. These events are typically logged by the respective services and provide an overview of the system’s health and operational state.</p>
+<p>Similar to Scheduler Events, System Events are currently integrated into the general event logging mechanism, often utilizing existing <code>JobEvent</code> or <code>WorkerEvent</code> types with appropriate <code>message</code> and <code>details</code> fields, or logged directly to the system’s logging infrastructure. A dedicated <code>SystemEvent</code> class might be introduced in future iterations for more explicit typing.</p>
 </section>
-<section id="servicedependencyerror" class="level3">
-<h3 class="anchored" data-anchor-id="servicedependencyerror"><code>ServiceDependencyError</code></h3>
-<p>Raised when there is an issue with service dependencies, such as circular dependencies or missing required services.</p>
-</section>
-<section id="serviceruntimeerror" class="level3">
-<h3 class="anchored" data-anchor-id="serviceruntimeerror"><code>ServiceRuntimeError</code></h3>
-<p>Raised when a service encounters an error during operation, such as connection failures or resource exhaustion.</p>
-</section>
-<section id="example-service-layer-error-handling" class="level3">
-<h3 class="anchored" data-anchor-id="example-service-layer-error-handling">Example: Service Layer Error Handling</h3>
-<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.exceptions <span class="im">import</span> ServiceInitializationError, ServiceConfigurationError</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services.manager <span class="im">import</span> ServiceManager</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> naq.services.base <span class="im">import</span> ServiceConfig</span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span>:</span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Create and initialize service manager</span></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    service_manager <span class="op">=</span> ServiceManager(config<span class="op">=</span>ServiceConfig())</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> service_manager.initialize_all()</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Use services</span></span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    connection_service <span class="op">=</span> service_manager.get_service(<span class="st">"connection"</span>, ConnectionService)</span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="cf">except</span> ServiceInitializationError <span class="im">as</span> e:</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Failed to initialize services: </span><span class="sc">{</span>e<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Handle initialization failure</span></span>
-<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="cf">except</span> ServiceConfigurationError <span class="im">as</span> e:</span>
-<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Invalid service configuration: </span><span class="sc">{</span>e<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Handle configuration error</span></span>
-<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a><span class="cf">except</span> ServiceDependencyError <span class="im">as</span> e:</span>
-<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Service dependency issue: </span><span class="sc">{</span>e<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Handle dependency problem</span></span>
-<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>    </span>
-<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a><span class="cf">except</span> ServiceRuntimeError <span class="im">as</span> e:</span>
-<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"Service runtime error: </span><span class="sc">{</span>e<span class="sc">}</span><span class="ss">"</span>)</span>
-<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Handle runtime error</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<section id="event-storage-and-retrieval" class="level2">
+<h2 class="anchored" data-anchor-id="event-storage-and-retrieval">Event Storage and Retrieval</h2>
+<p>All events are stored in a dedicated NATS Key-Value (KV) store, managed by the <code>EventService</code>. This allows for:</p>
+<ul>
+<li><strong>Real-time Streaming</strong>: Events can be streamed live for immediate monitoring.</li>
+<li><strong>Historical Lookup</strong>: Events can be queried by <code>job_id</code>, <code>worker_id</code>, <code>event_type</code>, or time range for post-mortem analysis and auditing.</li>
+</ul>
+<p>The <code>EventService</code> provides methods for logging and retrieving these events. For examples on how to interact with the EventService and query events, refer to the <a href="examples.qmd#event-logging-streaming-and-querying">Usage Examples - Event Logging, Streaming, and Querying</a> section.</p>
 
 
-</section>
 </section>
 
 </main> <!-- /main -->

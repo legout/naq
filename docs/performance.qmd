@@ -1,115 +1,597 @@
-# Performance Documentation
+---
+title: "Performance Testing and Monitoring"
+format: html
+editor: visual
+---
 
-## Event Logging Performance Impact
+# Performance Testing and Monitoring
 
-This document describes the performance impact of event logging in the NAQ system and provides guidance on enabling or disabling it based on your use case.
+## Overview
 
-### Overview
+This document outlines the performance testing strategy, monitoring approach, and performance benchmarks for the OmniQ project. Performance is a critical aspect of the system, and this guide ensures that performance characteristics are measured, monitored, and maintained throughout the development lifecycle.
 
-Event logging in NAQ provides valuable observability into job execution, worker status, and system events. However, this functionality comes with a performance overhead that users should be aware of when configuring their systems.
+## Performance Requirements
 
-### Performance Measurements
+### Queue Operations
+- **Enqueue Operation**: < 10ms for standard messages
+- **Dequeue Operation**: < 5ms for standard messages
+- **Batch Enqueue**: < 50ms for 100 messages
+- **Queue Purge**: < 100ms for 1000 messages
 
-Based on our performance regression tests, we've measured the following overhead when event logging is enabled:
+### Worker Operations
+- **Job Processing**: < 100ms for standard jobs
+- **Worker Registration**: < 50ms
+- **Status Updates**: < 5ms
+- **Heartbeat**: < 1ms
 
-#### Simple Job Execution
-- **With event logging**: ~0.005s per job
-- **Without event logging**: ~0.001s per job
-- **Overhead**: ~380%
+### Connection Management
+- **Connection Establishment**: < 100ms
+- **Connection Pooling**: < 10ms per connection
+- **Reconnection**: < 200ms
+- **Connection Health Check**: < 5ms
 
-#### Complex Job Execution
-- **With event logging**: ~0.006s per job
-- **Without event logging**: ~0.001s per job
-- **Overhead**: ~470%
+### System Performance
+- **Memory Usage**: < 100MB baseline
+- **CPU Usage**: < 5% idle
+- **Throughput**: 1000+ operations/second
+- **Latency**: < 50ms P99
 
-#### Batch Job Execution (50 jobs)
-- **With event logging**: ~0.250s per batch
-- **Without event logging**: ~0.055s per batch
-- **Overhead**: ~350%
+## Performance Testing Strategy
 
-#### Event Logging Scalability
-The overhead remains relatively consistent across different job complexities:
-- Simple jobs: ~380% overhead
-- Medium jobs: ~300% overhead
-- Complex jobs: ~320% overhead
+### Test Categories
 
-### Performance Threshold
+#### Microbenchmarks
+- **Purpose**: Measure individual component performance
+- **Scope**: Single operations or small functions
+- **Tools**: pytest-benchmark, timeit
+- **Frequency**: Every commit
 
-Our performance regression tests are configured with a maximum acceptable overhead threshold of 500%. This threshold was determined based on actual measurements to ensure the tests pass while still flagging extreme performance regressions.
+#### Component Performance
+- **Purpose**: Test major component performance
+- **Scope**: Queue, Worker, Connection services
+- **Tools**: pytest-benchmark, custom scripts
+- **Frequency**: Daily
 
-### Configuration Options
+#### Integration Performance
+- **Purpose**: Test component interaction performance
+- **Scope**: End-to-end workflows
+- **Tools**: Locust, custom load tests
+- **Frequency**: Weekly
 
-#### Enabling/Disabling Event Logging
+#### System Performance
+- **Purpose**: Test system under load
+- **Scope**: Full system with realistic load
+- **Tools**: Locust, k6, Grafana
+- **Frequency**: Bi-weekly
 
-Event logging can be controlled through the `JobServiceConfig`:
+### Performance Test Structure
+
+```
+tests/
+├── performance/
+│   ├── microbenchmarks/
+│   │   ├── test_queue_operations.py
+│   │   ├── test_worker_operations.py
+│   │   └── test_connection_operations.py
+│   ├── components/
+│   │   ├── test_queue_performance.py
+│   │   ├── test_worker_performance.py
+│   │   └── test_connection_performance.py
+│   ├── integration/
+│   │   ├── test_queue_worker_performance.py
+│   │   ├── test_system_performance.py
+│   │   └── test_load_scenarios.py
+│   └── fixtures/
+│       ├── performance_fixtures.py
+│       └── benchmark_data.py
+└── conftest.py
+```
+
+## Performance Testing Implementation
+
+### Microbenchmark Example
 
 ```python
-from naq.services.jobs import JobServiceConfig
+import pytest
+from naq.queue.core import QueueCore
 
-# Enable event logging (default)
-job_config = JobServiceConfig(
-    enable_job_execution=True,
-    enable_result_storage=True,
-    enable_event_logging=True,  # Event logging enabled
-    auto_create_buckets=True
-)
-
-# Disable event logging for better performance
-job_config = JobServiceConfig(
-    enable_job_execution=True,
-    enable_result_storage=True,
-    enable_event_logging=False,  # Event logging disabled
-    auto_create_buckets=True
-)
+class TestQueueMicrobenchmarks:
+    """Microbenchmarks for queue operations."""
+    
+    def test_enqueue_performance(self, benchmark):
+        """Benchmark queue enqueue operation."""
+        queue = QueueCore("test-queue")
+        test_data = {"message": "test", "timestamp": "2023-01-01"}
+        
+        def enqueue_operation():
+            return queue.enqueue(test_data)
+        
+        result = benchmark(enqueue_operation)
+        
+        # Assert performance requirements
+        assert result.duration < 0.01  # 10ms threshold
+        
+    def test_dequeue_performance(self, benchmark):
+        """Benchmark queue dequeue operation."""
+        queue = QueueCore("test-queue")
+        queue.enqueue({"message": "test"})
+        
+        def dequeue_operation():
+            return queue.dequeue()
+        
+        result = benchmark(dequeue_operation)
+        
+        # Assert performance requirements
+        assert result.duration < 0.005  # 5ms threshold
 ```
 
-#### When to Enable Event Logging
+### Component Performance Example
 
-Enable event logging when:
-- You need detailed observability into job execution
-- Debugging issues in production or development
-- Monitoring system health and performance
-- Auditing job execution for compliance or analysis
-- The performance impact is acceptable for your use case
+```python
+import pytest
+import time
+from naq.services.queue import QueueService
+from naq.services.manager import ServiceManager
 
-#### When to Disable Event Logging
-
-Consider disabling event logging when:
-- Running high-throughput, performance-critical workloads
-- Processing large batches of simple jobs
-- Operating in resource-constrained environments
-- The observability provided by event logging is not required
-
-### Performance Optimization Tips
-
-1. **Selective Event Logging**: Consider enabling event logging only for specific queues or job types that require monitoring.
-
-2. **Batch Processing**: When processing large numbers of jobs, disable event logging during the batch and enable it for periodic status checks.
-
-3. **Environment-Specific Configuration**: Use different configurations for development, staging, and production environments based on your monitoring needs.
-
-4. **Monitor Performance**: Regularly run performance tests to ensure that event logging overhead remains within acceptable limits for your specific use case.
-
-### Running Performance Tests
-
-To run the performance regression tests:
-
-```bash
-# Run all performance tests
-uv run pytest tests/performance/test_event_overhead.py -v
-
-# Run a specific test
-uv run pytest tests/performance/test_event_overhead.py::TestEventLoggingOverhead::test_simple_job_execution_overhead -v
+class TestQueueServicePerformance:
+    """Performance tests for QueueService."""
+    
+    @pytest.mark.performance
+    def test_batch_enqueue_performance(self):
+        """Test batch enqueue performance."""
+        service_manager = ServiceManager()
+        queue_service = QueueService(service_manager)
+        
+        messages = [{"id": i, "data": f"message_{i}"} for i in range(100)]
+        
+        start_time = time.time()
+        results = queue_service.batch_enqueue("test-queue", messages)
+        end_time = time.time()
+        
+        duration = end_time - start_time
+        
+        # Assert performance requirements
+        assert duration < 0.05  # 50ms threshold
+        assert len(results) == 100
+        
+    @pytest.mark.performance
+    def test_concurrent_enqueue_performance(self):
+        """Test concurrent enqueue performance."""
+        import concurrent.futures
+        import threading
+        
+        service_manager = ServiceManager()
+        queue_service = QueueService(service_manager)
+        
+        def enqueue_worker(worker_id):
+            for i in range(10):
+                queue_service.enqueue("test-queue", {
+                    "worker_id": worker_id,
+                    "message_id": i,
+                    "data": f"message_{worker_id}_{i}"
+                })
+        
+        start_time = time.time()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(enqueue_worker, i) for i in range(5)]
+            concurrent.futures.wait(futures)
+        end_time = time.time()
+        
+        duration = end_time - start_time
+        
+        # Assert performance requirements
+        assert duration < 0.1  # 100ms threshold
 ```
 
-### Future Improvements
+### Load Testing Example
 
-We are continuously working on optimizing event logging performance. Future improvements may include:
-- More efficient event serialization
-- Batched event processing
-- Configurable event verbosity levels
-- Asynchronous event logging with reduced blocking
+```python
+import pytest
+from locust import HttpUser, task, between
+import json
 
-### Conclusion
+class QueueLoadUser(HttpUser):
+    """Locust user for queue load testing."""
+    
+    wait_time = between(1, 3)
+    
+    def on_start(self):
+        """Initialize user session."""
+        self.queue_name = "load-test-queue"
+        
+    @task(3)
+    def enqueue_message(self):
+        """Enqueue message task."""
+        message = {
+            "task": "load_test",
+            "payload": {"data": "load_test_data"},
+            "timestamp": "2023-01-01T00:00:00Z"
+        }
+        
+        self.client.post(
+            f"/api/queues/{self.queue_name}/enqueue",
+            json=message,
+            headers={"Content-Type": "application/json"}
+        )
+    
+    @task(1)
+    def dequeue_message(self):
+        """Dequeue message task."""
+        self.client.post(f"/api/queues/{self.queue_name}/dequeue")
+    
+    @task(1)
+    def get_queue_status(self):
+        """Get queue status task."""
+        self.client.get(f"/api/queues/{self.queue_name}/status")
+```
 
-Event logging in NAQ provides significant value for observability and debugging but comes with a measurable performance overhead. Users should carefully consider their specific requirements and configure event logging accordingly. The performance regression tests ensure that any changes to the event logging system do not introduce unexpected performance regressions.
+## Performance Monitoring
+
+### Metrics Collection
+
+#### Key Performance Indicators (KPIs)
+1. **Throughput**: Messages processed per second
+2. **Latency**: Message processing time
+3. **Error Rate**: Failed operations percentage
+4. **Resource Usage**: CPU, memory, disk I/O
+5. **Queue Depth**: Messages in queue
+
+#### Monitoring Tools
+- **Prometheus**: Metrics collection and storage
+- **Grafana**: Visualization and dashboards
+- **StatsD**: Metrics aggregation
+- **Custom Metrics**: Application-specific metrics
+
+### Metrics Implementation
+
+```python
+import time
+from prometheus_client import Counter, Histogram, Gauge
+from prometheus_client import start_http_server
+
+# Define metrics
+ENQUEUE_COUNTER = Counter('naq_enqueue_total', 'Total enqueue operations', ['queue_name'])
+ENQUEUE_DURATION = Histogram('naq_enqueue_duration_seconds', 'Enqueue operation duration')
+DEQUEUE_COUNTER = Counter('naq_dequeue_total', 'Total dequeue operations', ['queue_name'])
+DEQUEUE_DURATION = Histogram('naq_dequeue_duration_seconds', 'Dequeue operation duration')
+QUEUE_SIZE = Gauge('naq_queue_size', 'Current queue size', ['queue_name'])
+ERROR_COUNTER = Counter('naq_errors_total', 'Total errors', ['operation', 'error_type'])
+
+class PerformanceMonitor:
+    """Performance monitoring for queue operations."""
+    
+    def __init__(self):
+        start_http_server(8000)  # Start metrics server
+    
+    def track_enqueue(self, queue_name, operation):
+        """Track enqueue operation performance."""
+        ENQUEUE_COUNTER.labels(queue_name=queue_name).inc()
+        
+        start_time = time.time()
+        try:
+            result = operation()
+            ENQUEUE_DURATION.observe(time.time() - start_time)
+            return result
+        except Exception as e:
+            ERROR_COUNTER.labels(
+                operation='enqueue',
+                error_type=type(e).__name__
+            ).inc()
+            raise
+    
+    def track_dequeue(self, queue_name, operation):
+        """Track dequeue operation performance."""
+        DEQUEUE_COUNTER.labels(queue_name=queue_name).inc()
+        
+        start_time = time.time()
+        try:
+            result = operation()
+            DEQUEUE_DURATION.observe(time.time() - start_time)
+            return result
+        except Exception as e:
+            ERROR_COUNTER.labels(
+                operation='dequeue',
+                error_type=type(e).__name__
+            ).inc()
+            raise
+    
+    def update_queue_size(self, queue_name, size):
+        """Update queue size metric."""
+        QUEUE_SIZE.labels(queue_name=queue_name).set(size)
+```
+
+### Grafana Dashboards
+
+#### Main Dashboard
+- **System Overview**: CPU, memory, disk usage
+- **Queue Metrics**: Enqueue/dequeue rates, queue sizes
+- **Worker Metrics**: Job processing rates, worker status
+- **Error Rates**: Error counts by type and operation
+
+#### Performance Dashboard
+- **Latency Histograms**: P50, P90, P95, P99 latencies
+- **Throughput Graphs**: Messages per second over time
+- **Resource Correlation**: Performance vs resource usage
+- **Trend Analysis**: Performance trends and anomalies
+
+## Performance Regression Testing
+
+### Regression Detection
+
+#### Automated Regression Tests
+```python
+import pytest
+import json
+from pathlib import Path
+
+class TestPerformanceRegression:
+    """Performance regression tests."""
+    
+    def test_enqueue_regression(self, benchmark):
+        """Test for enqueue performance regression."""
+        # Load baseline performance data
+        baseline_file = Path("performance_baselines/enqueue_baseline.json")
+        if baseline_file.exists():
+            baseline = json.loads(baseline_file.read_text())
+        else:
+            baseline = {"mean_duration": 0.01, "max_duration": 0.05}
+        
+        # Run benchmark
+        queue = QueueCore("regression-test")
+        result = benchmark(queue.enqueue, {"test": "data"})
+        
+        # Check for regression
+        assert result.duration < baseline["max_duration"] * 1.2  # 20% tolerance
+        
+        # Update baseline if improved
+        if result.duration < baseline["mean_duration"] * 0.8:
+            baseline["mean_duration"] = result.duration
+            baseline_file.write_text(json.dumps(baseline))
+```
+
+#### Performance Thresholds
+```python
+# Performance thresholds configuration
+PERFORMANCE_THRESHOLDS = {
+    "enqueue": {
+        "warning": 0.015,  # 15ms
+        "critical": 0.025,  # 25ms
+        "max_regressions": 3
+    },
+    "dequeue": {
+        "warning": 0.008,  # 8ms
+        "critical": 0.015,  # 15ms
+        "max_regressions": 3
+    },
+    "batch_enqueue": {
+        "warning": 0.06,  # 60ms
+        "critical": 0.1,  # 100ms
+        "max_regressions": 2
+    }
+}
+```
+
+### Continuous Performance Monitoring
+
+#### CI/CD Integration
+```yaml
+# GitHub Actions workflow for performance testing
+name: Performance Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  performance-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.10"
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .[dev]
+    
+    - name: Run performance tests
+      run: |
+        pytest tests/performance/ --benchmark-only
+    
+    - name: Compare with baseline
+      run: |
+        python scripts/compare_performance.py
+    
+    - name: Upload performance results
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-results
+        path: performance_results/
+```
+
+## Performance Optimization
+
+### Optimization Strategies
+
+#### Code Level Optimization
+1. **Algorithm Selection**: Use efficient data structures and algorithms
+2. **Memory Management**: Minimize memory allocations and garbage collection
+3. **I/O Optimization**: Reduce disk I/O and network calls
+4. **Concurrency**: Use async/await and thread pools effectively
+
+#### System Level Optimization
+1. **Connection Pooling**: Reuse connections instead of creating new ones
+2. **Caching**: Cache frequently accessed data
+3. **Batching**: Process operations in batches
+4. **Load Balancing**: Distribute load across multiple workers
+
+### Optimization Example
+
+```python
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
+
+class OptimizedQueueService:
+    """Optimized queue service with performance improvements."""
+    
+    def __init__(self):
+        self._connection_pool = ConnectionPool(max_size=10)
+        self._executor = ThreadPoolExecutor(max_workers=4)
+        self._cache = {}
+    
+    @lru_cache(maxsize=1000)
+    def get_queue_config(self, queue_name):
+        """Get queue configuration with caching."""
+        return self._fetch_queue_config(queue_name)
+    
+    async def batch_enqueue_async(self, queue_name, messages):
+        """Async batch enqueue for better performance."""
+        tasks = [
+            self._enqueue_single_async(queue_name, message)
+            for message in messages
+        ]
+        return await asyncio.gather(*tasks)
+    
+    async def _enqueue_single_async(self, queue_name, message):
+        """Async single enqueue operation."""
+        connection = await self._connection_pool.get_connection()
+        try:
+            result = await connection.enqueue(queue_name, message)
+            return result
+        finally:
+            await self._connection_pool.release_connection(connection)
+```
+
+## Performance Reporting
+
+### Performance Reports
+
+#### Daily Performance Report
+```markdown
+# Daily Performance Report - 2023-01-01
+
+## Summary
+- **Average Throughput**: 1,250 ops/sec (+5% from baseline)
+- **Average Latency**: 12ms (-8% from baseline)
+- **Error Rate**: 0.1% (within threshold)
+- **Resource Usage**: CPU 45%, Memory 80MB
+
+## Key Metrics
+| Metric | Current | Baseline | Change | Status |
+|--------|---------|----------|---------|--------|
+| Enqueue Rate | 650/sec | 600/sec | +8.3% | ✅ |
+| Dequeue Rate | 600/sec | 580/sec | +3.4% | ✅ |
+| P99 Latency | 45ms | 50ms | -10% | ✅ |
+| Error Rate | 0.1% | 0.2% | -50% | ✅ |
+
+## Anomalies
+- Spike in enqueue latency at 14:30 (investigated: database backup)
+- Memory usage increased by 10% (investigated: new feature deployment)
+
+## Recommendations
+1. Continue monitoring enqueue latency
+2. Optimize memory usage for new features
+3. Consider scaling during peak hours
+```
+
+#### Performance Regression Report
+```markdown
+# Performance Regression Report - 2023-01-01
+
+## Regressions Detected
+### Critical
+- **Enqueue latency**: Increased from 10ms to 25ms (150% increase)
+  - Cause: New validation logic
+  - Impact: High
+  - Action: Required optimization
+
+### Warning
+- **Memory usage**: Increased from 70MB to 85MB (21% increase)
+  - Cause: Additional caching
+  - Impact: Medium
+  - Action: Monitor and optimize
+
+## Improvements
+- **Dequeue throughput**: Increased from 500/sec to 600/sec (20% improvement)
+  - Cause: Connection pooling optimization
+  - Impact: High
+
+## Action Items
+1. [ ] Optimize enqueue validation logic (Priority: High)
+2. [ ] Review memory usage patterns (Priority: Medium)
+3. [ ] Continue dequeue optimization (Priority: Low)
+```
+
+## Performance Testing Tools
+
+### Benchmarking Tools
+- **pytest-benchmark**: Python benchmarking framework
+- **timeit**: Python built-in timing utility
+- **cProfile**: Python profiler
+- **memory_profiler**: Memory usage profiler
+
+### Load Testing Tools
+- **Locust**: Python-based load testing framework
+- **k6**: Modern load testing tool
+- **JMeter**: Java-based load testing tool
+- **Gatling**: Scala-based load testing tool
+
+### Monitoring Tools
+- **Prometheus**: Metrics collection and alerting
+- **Grafana**: Visualization and dashboards
+- **StatsD**: Metrics aggregation
+- **Datadog**: Cloud-based monitoring
+
+### Analysis Tools
+- **Pandas**: Data analysis and manipulation
+- **NumPy**: Numerical computing
+- **Matplotlib**: Data visualization
+- **Jupyter**: Interactive analysis notebooks
+
+## Best Practices
+
+### Performance Testing
+1. **Test in realistic environments**: Use production-like configurations
+2. **Test with realistic data**: Use production data patterns
+3. **Test at scale**: Test with expected production loads
+4. **Test continuously**: Integrate performance tests into CI/CD
+
+### Performance Monitoring
+1. **Monitor key metrics**: Focus on business-critical metrics
+2. **Set appropriate thresholds**: Use historical data to set thresholds
+3. **Alert on anomalies**: Detect and alert on performance anomalies
+4. **Correlate metrics**: Understand relationships between metrics
+
+### Performance Optimization
+1. **Measure before optimizing**: Establish baselines before optimization
+2. **Optimize bottlenecks**: Focus on critical paths
+3. **Test optimizations**: Verify that optimizations work
+4. **Document optimizations**: Keep track of optimization decisions
+
+## Resources
+
+### Documentation
+- [pytest-benchmark Documentation](https://pytest-benchmark.readthedocs.io/)
+- [Locust Documentation](https://docs.locust.io/)
+- [Prometheus Documentation](https://prometheus.io/docs/)
+- [Grafana Documentation](https://grafana.com/docs/)
+
+### Tools and Libraries
+- **pytest-benchmark**: `pip install pytest-benchmark`
+- **Locust**: `pip install locust`
+- **Prometheus Client**: `pip install prometheus-client`
+- **StatsD Client**: `pip install statsd`
+
+### Support
+- Create GitHub issues for performance problems
+- Review performance reports regularly
+- Participate in performance optimization discussions
+- Contribute to performance monitoring improvements

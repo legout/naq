@@ -118,6 +118,63 @@ By following these guidelines, you can avoid common pitfalls related to timezone
 *   High Availability for the scheduler process via leader election.
 *   Optional web dashboard (requires `naq[dashboard]`).
 *   Command-line interface (`naq`) for workers, scheduler, queue management, and dashboard.
+
+## Testing
+
+### Current Status
+
+- **Total Tests**: 943
+- **Passing**: 744 (78.9%)
+- **Failing**: 188 (19.9%)
+- **Skipped**: 4 (0.4%)
+- **Errors**: 22 (2.3%)
+- **Coverage**: 55.89% (Target: 80%)
+
+### Test Categories
+
+- **Unit Tests**: ~600 tests testing individual components
+- **Integration Tests**: ~200 tests testing component interactions
+- **Smoke Tests**: ~20 tests verifying basic functionality
+- **Performance Tests**: ~50 tests benchmarking performance
+
+### Known Issues
+
+The primary issue affecting test stability is the ServiceManager dependency introduced in recent architectural changes. Most test failures (150+) are related to "ServiceManager is required for Queue operations" errors.
+
+### Success Criteria
+
+#### Short-term (1-2 weeks)
+- [ ] Reduce critical failures from 150+ to under 50
+- [ ] Implement ServiceManager fixture in all affected tests
+- [ ] Achieve basic test functionality for core modules
+
+#### Medium-term (1 month)
+- [ ] Reduce total failures from 188+ to under 50
+- [ ] Implement comprehensive test fixtures
+- [ ] Achieve 70% test pass rate
+
+#### Long-term (2 months)
+- [ ] Reduce total failures to under 20
+- [ ] Achieve 90% test pass rate
+- [ ] Implement full test coverage with proper service setup
+
+### Running Tests
+
+```bash
+# Run all tests
+uv run pytest tests/
+
+# Run with coverage
+uv run pytest tests/ --cov=src
+
+# Run specific test categories
+uv run pytest tests/unit/
+uv run pytest tests/integration/
+uv run pytest tests/smoke/
+```
+
+For detailed testing strategy and guidelines, see [docs/testing.qmd](docs/testing.qmd).
+
 ## Installation
 
 Install `naq` using pip:
