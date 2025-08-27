@@ -442,37 +442,82 @@ def temp_config_file():
 nats:
   servers:
     - "nats://localhost:4222"
+  client_name: naq-test-client
   max_reconnect_attempts: 5
   reconnect_time_wait: 2.0
   connection_timeout: 30.0
+  drain_timeout: 30.0
+
+workers:
+  concurrency: 4
+  heartbeat_interval: 30.0
+  ttl: 300.0
+  max_job_duration: 3600.0
+  shutdown_timeout: 60.0
+
+events:
+  enabled: true
+  batch_size: 100
+  flush_interval: 5.0
+  max_buffer_size: 1000
+  stream: naq_events
+
+streams:
+  stream_name: naq_stream
+  subjects:
+    - naq.>
+  retention_limit: null
+  max_age: null
+  max_msgs: null
+  max_bytes: null
+  replicas: 1
+  storage: file
+
+kv_store:
+  bucket_name: naq_kv_store
+  history: 10
+  replicas: 1
+  stream_name: null
+  ttl: null
 
 job_service:
   enable_job_execution: true
   enable_result_storage: true
   enable_event_logging: true
-  max_job_execution_time: 300
-  default_result_ttl: 86400
-  results_bucket_name: "naq_job_results"
+  max_job_execution_time: 3600.0
+  default_result_ttl: 86400.0
+  results_bucket_name: naq_results
+  auto_create_buckets: true
+  default_queue: default
+  default_max_retries: 3
+  default_retry_delay: 60.0
+
+worker_service:
+  worker_name: test_worker
+  queues:
+    - default
+  max_concurrent_jobs: 4
+  heartbeat_interval: 30.0
+  ttl: 300.0
+  max_job_duration: 3600.0
+  shutdown_timeout: 60.0
+  status_bucket_name: naq_worker_status
   auto_create_buckets: true
 
-events:
-  enabled: true
-  stream: "naq_events"
-  batch_size: 100
-  flush_interval: 1.0
-  max_buffer_size: 1000
+scheduler_service:
+  scheduler_name: test_scheduler
+  check_interval: 1.0
+  max_concurrent_schedules: 100
+  schedules_bucket_name: naq_schedules
+  lock_bucket_name: naq_locks
+  lock_ttl: 30.0
+  lock_renew_interval: 10.0
+  auto_create_buckets: true
 
-kv_store:
-  bucket_name: "naq_kv_store"
-  ttl: 86400
-  history: 10
-  replicas: 1
-
-streams:
-  storage: "file"
-  retention: "work_queue"
-  replicas: 1
-  auto_create_streams: true
+logging:
+  level: INFO
+  to_file_enabled: false
+  file_path: naq.log
 """
     
     # Create temporary file

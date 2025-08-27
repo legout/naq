@@ -230,8 +230,16 @@ class ConfigLoader:
             value: The string value from the environment variable.
 
         Returns:
-            The value converted to the appropriate type (bool, int, float, or str).
+            The value converted to the appropriate type (bool, int, float, list, or str).
         """
+        # Try to parse as JSON first (for lists and complex objects)
+        try:
+            import json
+            parsed = json.loads(value)
+            return parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+
         # Convert boolean values
         if value.lower() in ("true", "yes", "1", "on"):
             return True

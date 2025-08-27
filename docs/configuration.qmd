@@ -80,6 +80,60 @@ The following table details all the available configuration options in the `naq.
 | &nbsp;&nbsp;`to_file_enabled` | `boolean` | Enable file logging. | `false` | No |
 | &nbsp;&nbsp;`file_path` | `string` | Log file path. | `null` | No |
 | **database** | `object` | Database configuration (reserved for future use). | `null` | No |
+| **connection** | `object` | Connection service configuration. | | No |
+| &nbsp;&nbsp;`servers` | `array` | List of NATS server URLs. | `["nats://localhost:4222"]` | Yes |
+| &nbsp;&nbsp;`client_name` | `string` | Name to identify this client connection. | `naq-connection-service` | Yes |
+| &nbsp;&nbsp;`max_reconnect_attempts` | `integer` | Maximum number of reconnection attempts. | `5` | Yes |
+| &nbsp;&nbsp;`reconnect_time_wait` | `number` | Time to wait between reconnection attempts (seconds). | `2.0` | Yes |
+| &nbsp;&nbsp;`connection_timeout` | `number` | Timeout for establishing a connection (seconds). | `5.0` | Yes |
+| &nbsp;&nbsp;`drain_timeout` | `number` | Timeout for draining connections (seconds). | `30.0` | Yes |
+| &nbsp;&nbsp;`auth` | `object` | Authentication configuration. | `null` | No |
+| &nbsp;&nbsp;`tls` | `object` | TLS configuration for secure connections. | `null` | No |
+| **kv_store** | `object` | Key-value store configuration. | | No |
+| &nbsp;&nbsp;`bucket_name` | `string` | Name of the KV bucket. | `naq_kv_store` | Yes |
+| &nbsp;&nbsp;`history` | `integer` | Number of historical values to keep. | `10` | No |
+| &nbsp;&nbsp;`stream_name` | `string` | Name of the underlying stream. | `null` | No |
+| &nbsp;&nbsp;`ttl` | `number` | Time-to-live for keys in seconds. | `null` | No |
+| &nbsp;&nbsp;`replicas` | `integer` | Number of replicas for the bucket. | `1` | No |
+| **streams** | `object` | Stream service configuration. | | No |
+| &nbsp;&nbsp;`stream_name` | `string` | Name of the stream. | | Yes |
+| &nbsp;&nbsp;`subjects` | `array` | List of subjects for the stream. | | Yes |
+| &nbsp;&nbsp;`retention_limit` | `integer` | Maximum number of messages to retain. | `null` | No |
+| &nbsp;&nbsp;`max_age` | `number` | Maximum age of messages in seconds. | `null` | No |
+| &nbsp;&nbsp;`max_msgs` | `integer` | Maximum number of messages. | `null` | No |
+| &nbsp;&nbsp;`max_bytes` | `integer` | Maximum size of messages in bytes. | `null` | No |
+| &nbsp;&nbsp;`replicas` | `integer` | Number of replicas for the stream. | `1` | No |
+| &nbsp;&nbsp;`storage` | `string` | Storage type for the stream. | `file` | No |
+| **job_service** | `object` | Job service configuration. | | No |
+| &nbsp;&nbsp;`enable_job_execution` | `boolean` | Whether job execution is enabled. | `true` | Yes |
+| &nbsp;&nbsp;`enable_result_storage` | `boolean` | Whether result storage is enabled. | `true` | Yes |
+| &nbsp;&nbsp;`enable_event_logging` | `boolean` | Whether event logging is enabled. | `true` | Yes |
+| &nbsp;&nbsp;`max_job_execution_time` | `number` | Maximum time for job execution in seconds. | `3600.0` | Yes |
+| &nbsp;&nbsp;`default_result_ttl` | `number` | Default TTL for job results in seconds. | `86400.0` | Yes |
+| &nbsp;&nbsp;`results_bucket_name` | `string` | Name of the results bucket. | `naq_results` | Yes |
+| &nbsp;&nbsp;`auto_create_buckets` | `boolean` | Whether to automatically create buckets. | `true` | Yes |
+| &nbsp;&nbsp;`default_queue` | `string` | Default queue name. | `default` | Yes |
+| &nbsp;&nbsp;`default_max_retries` | `integer` | Default maximum number of retries. | `3` | Yes |
+| &nbsp;&nbsp;`default_retry_delay` | `number` | Default retry delay in seconds. | `60.0` | Yes |
+| **worker_service** | `object` | Worker service configuration. | | No |
+| &nbsp;&nbsp;`worker_name` | `string` | Name of the worker. | | Yes |
+| &nbsp;&nbsp;`queues` | `array` | List of queues the worker processes. | | Yes |
+| &nbsp;&nbsp;`max_concurrent_jobs` | `integer` | Maximum number of concurrent jobs. | | Yes |
+| &nbsp;&nbsp;`heartbeat_interval` | `number` | Heartbeat interval in seconds. | | Yes |
+| &nbsp;&nbsp;`ttl` | `number` | Time-to-live for worker status in seconds. | | Yes |
+| &nbsp;&nbsp;`max_job_duration` | `number` | Maximum job duration in seconds. | | Yes |
+| &nbsp;&nbsp;`shutdown_timeout` | `number` | Shutdown timeout in seconds. | | Yes |
+| &nbsp;&nbsp;`status_bucket_name` | `string` | Name of the status bucket. | | Yes |
+| &nbsp;&nbsp;`auto_create_buckets` | `boolean` | Whether to automatically create buckets. | `true` | Yes |
+| **scheduler_service** | `object` | Scheduler service configuration. | | No |
+| &nbsp;&nbsp;`scheduler_name` | `string` | Name of the scheduler. | | Yes |
+| &nbsp;&nbsp;`check_interval` | `number` | Interval for checking scheduled jobs in seconds. | | Yes |
+| &nbsp;&nbsp;`max_concurrent_schedules` | `integer` | Maximum number of concurrent schedules. | | Yes |
+| &nbsp;&nbsp;`schedules_bucket_name` | `string` | Name of the schedules bucket. | | Yes |
+| &nbsp;&nbsp;`lock_bucket_name` | `string` | Name of the locks bucket. | | Yes |
+| &nbsp;&nbsp;`lock_ttl` | `number` | Time-to-live for locks in seconds. | | Yes |
+| &nbsp;&nbsp;`lock_renew_interval` | `number` | Interval for renewing locks in seconds. | | Yes |
+| &nbsp;&nbsp;`auto_create_buckets` | `boolean` | Whether to automatically create buckets. | `true` | Yes |
 ## Configuration Examples
 
 Here are some example `naq.yaml` files for different environments.
@@ -188,6 +242,120 @@ logging:
   level: DEBUG
   format: "[TEST] %(levelname)s: %(message)s"
 ```
+
+### Complete Configuration Example
+
+This example shows a complete configuration with all service sections configured:
+
+```yaml
+# Core NAQ configuration
+nats:
+  servers:
+    - nats://localhost:4222
+  client_name: naq-client
+  max_reconnect_attempts: 5
+  reconnect_time_wait: 2.0
+  connection_timeout: 5.0
+  drain_timeout: 30.0
+
+workers:
+  concurrency: 4
+  heartbeat_interval: 30.0
+  ttl: 300.0
+  max_job_duration: 3600.0
+  shutdown_timeout: 60.0
+
+events:
+  enabled: true
+  batch_size: 100
+  flush_interval: 5.0
+  max_buffer_size: 1000
+  stream: naq_events
+
+# Service configurations
+connection:
+  servers:
+    - nats://localhost:4222
+  client_name: naq-connection-service
+  max_reconnect_attempts: 5
+  reconnect_time_wait: 2.0
+  connection_timeout: 5.0
+  drain_timeout: 30.0
+
+kv_store:
+  bucket_name: naq_kv_store
+  history: 10
+  replicas: 1
+  stream_name: null
+  ttl: null
+
+streams:
+  stream_name: naq_stream
+  subjects:
+    - naq.>
+  retention_limit: null
+  max_age: null
+  max_msgs: null
+  max_bytes: null
+  replicas: 1
+  storage: file
+
+job_service:
+  enable_job_execution: true
+  enable_result_storage: true
+  enable_event_logging: true
+  max_job_execution_time: 3600.0
+  default_result_ttl: 86400.0
+  results_bucket_name: naq_results
+  auto_create_buckets: true
+  default_queue: default
+  default_max_retries: 3
+  default_retry_delay: 60.0
+
+worker_service:
+  worker_name: test_worker
+  queues:
+    - default
+  max_concurrent_jobs: 4
+  heartbeat_interval: 30.0
+  ttl: 300.0
+  max_job_duration: 3600.0
+  shutdown_timeout: 60.0
+  status_bucket_name: naq_worker_status
+  auto_create_buckets: true
+
+scheduler_service:
+  scheduler_name: test_scheduler
+  check_interval: 1.0
+  max_concurrent_schedules: 100
+  schedules_bucket_name: naq_schedules
+  lock_bucket_name: naq_locks
+  lock_ttl: 30.0
+  lock_renew_interval: 10.0
+  auto_create_buckets: true
+
+# Additional configuration
+queues:
+  default_name: default
+  ack_wait: 30
+
+scheduler:
+  lock_ttl: 30
+  lock_renew_interval: 10
+  job_status_ttl: 3600
+  max_failures: 3
+
+results:
+  ttl: 3600
+
+serialization:
+  method: cloudpickle
+
+logging:
+  level: INFO
+  to_file_enabled: false
+  file_path: naq.log
+```
 ## Migrating from Environment Variables
 
 If you were previously using environment variables to configure NAQ, you can easily migrate to a `naq.yaml` file. The new configuration system still supports environment variables, but a YAML file is recommended for better organization and clarity.
@@ -226,6 +394,86 @@ This corresponds to the following YAML structure:
 ```yaml
 workers:
   concurrency: 20
+```
+
+### Environment Variable Examples for Service Configurations
+
+Here are examples of environment variables for the service configurations:
+
+```bash
+# Connection service
+export NAQ_CONNECTION__SERVERS='["nats://prod:4222", "nats://prod2:4222"]'
+export NAQ_CONNECTION__CLIENT_NAME="prod-connection-service"
+
+# KV Store service
+export NAQ_KV_STORE__BUCKET_NAME="prod_kv_store"
+export NAQ_KV_STORE__TTL="86400"
+
+# Streams service
+export NAQ_STREAMS__STREAM_NAME="prod_streams"
+export NAQ_STREAMS__SUBJECTS='["prod.>"]'
+export NAQ_STREAMS__REPLICAS="3"
+
+# Job service
+export NAQ_JOB_SERVICE__ENABLE_JOB_EXECUTION="true"
+export NAQ_JOB_SERVICE__MAX_JOB_EXECUTION_TIME="7200"
+export NAQ_JOB_SERVICE__DEFAULT_RESULT_TTL="172800"
+
+# Worker service
+export NAQ_WORKER_SERVICE__WORKER_NAME="prod-worker"
+export NAQ_WORKER_SERVICE__QUEUES='["default", "high-priority"]'
+export NAQ_WORKER_SERVICE__MAX_CONCURRENT_JOBS="8"
+
+# Scheduler service
+export NAQ_SCHEDULER_SERVICE__SCHEDULER_NAME="prod-scheduler"
+export NAQ_SCHEDULER_SERVICE__CHECK_INTERVAL="5.0"
+export NAQ_SCHEDULER_SERVICE__LOCK_TTL="60"
+```
+
+### Array Values in Environment Variables
+
+When setting array values via environment variables, use JSON format:
+
+```bash
+# Single server (JSON array)
+export NAQ_NATS__SERVERS='["nats://localhost:4222"]'
+
+# Multiple servers (JSON array)
+export NAQ_NATS__SERVERS='["nats://server1:4222", "nats://server2:4222"]'
+
+# Multiple subjects (JSON array)
+export NAQ_STREAMS__SUBJECTS='["subject1", "subject2", "subject3"]'
+
+# Multiple queues (JSON array)
+export NAQ_WORKER_SERVICE__QUEUES='["queue1", "queue2", "queue3"]'
+```
+
+### Boolean Values in Environment Variables
+
+Boolean values should be set as strings:
+
+```bash
+# Enable features
+export NAQ_JOB_SERVICE__ENABLE_JOB_EXECUTION="true"
+export NAQ_EVENTS__ENABLED="true"
+
+# Disable features
+export NAQ_JOB_SERVICE__ENABLE_EVENT_LOGGING="false"
+export NAQ_EVENTS__ENABLED="false"
+```
+
+### Number Values in Environment Variables
+
+Numeric values should be set as strings:
+
+```bash
+# Integers
+export NAQ_WORKERS__CONCURRENCY="10"
+export NAQ_KV_STORE__HISTORY="20"
+
+# Floats
+export NAQ_WORKERS__HEARTBEAT_INTERVAL="30.5"
+export NAQ_SCHEDULER_SERVICE__CHECK_INTERVAL="2.5"
 ```
 ## CLI Commands
 
