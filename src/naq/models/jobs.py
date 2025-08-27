@@ -22,9 +22,7 @@ from ..settings import (
 
 if TYPE_CHECKING:
     # Import here to avoid circular imports
-    from .events import JobEvent
-    from ..queue.core import Queue
-    from ..worker.core import Worker
+    pass
 
 
 # Define retry strategies

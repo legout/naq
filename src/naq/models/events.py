@@ -16,7 +16,7 @@ from .enums import JobEventType, WorkerEventType
 
 if TYPE_CHECKING:
     # Import here to avoid circular imports
-    from .jobs import Job
+    pass
 
 
 class JobEvent(msgspec.Struct):
@@ -525,6 +525,41 @@ class JobEvent(msgspec.Struct):
             },
         )
 
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Convert the JobEvent to a dictionary representation.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing all event data with enum values converted to strings.
+
+        Example:
+            ```python
+            event = JobEvent.started(
+                job_id="job-123",
+                worker_id="worker-1",
+                queue_name="default"
+            )
+            event_dict = event.to_dict()
+            print(event_dict["event_type"])  # "started"
+            ```
+        """
+        result = {
+            "job_id": self.job_id,
+            "event_type": self.event_type.value if hasattr(self.event_type, "value") else str(self.event_type),
+            "timestamp": self.timestamp,
+            "worker_id": self.worker_id,
+            "queue_name": self.queue_name,
+            "message": self.message,
+            "details": self.details,
+            "error_type": self.error_type,
+            "error_message": self.error_message,
+            "duration_ms": self.duration_ms,
+            "nats_subject": self.nats_subject,
+            "nats_sequence": self.nats_sequence,
+        }
+        # Remove None values to keep the dictionary clean
+        return {k: v for k, v in result.items() if v is not None}
+
 
 class WorkerEvent(msgspec.Struct):
     """
@@ -856,6 +891,38 @@ class WorkerEvent(msgspec.Struct):
             message=f"Worker {worker_id} paused",
             details=details or {},
         )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Convert the WorkerEvent to a dictionary representation.
+
+        Returns:
+            Dict[str, Any]: A dictionary containing all event data with enum values converted to strings.
+
+        Example:
+            ```python
+            event = WorkerEvent.started(
+                worker_id="worker-1",
+                queue_names=["default", "high-priority"]
+            )
+            event_dict = event.to_dict()
+            print(event_dict["event_type"])  # "started"
+            ```
+        """
+        result = {
+            "worker_id": self.worker_id,
+            "event_type": self.event_type.value if hasattr(self.event_type, "value") else str(self.event_type),
+            "timestamp": self.timestamp,
+            "queue_names": self.queue_names,
+            "message": self.message,
+            "details": self.details,
+            "job_id": self.job_id,
+            "duration_ms": self.duration_ms,
+            "cpu_usage": self.cpu_usage,
+            "memory_usage": self.memory_usage,
+        }
+        # Remove None values to keep the dictionary clean
+        return {k: v for k, v in result.items() if v is not None}
 
     @classmethod
     def resumed(

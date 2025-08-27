@@ -358,6 +358,108 @@ class TestJobEvent:
         assert "test-job-123" in repr_str
         assert "started" in repr_str
 
+    def test_job_event_to_dict_minimal(self) -> None:
+        """Test JobEvent.to_dict method with minimal parameters."""
+        job_event = JobEvent(
+            job_id="test-job-123",
+            event_type=JobEventType.STARTED
+        )
+
+        result = job_event.to_dict()
+
+        assert result["job_id"] == "test-job-123"
+        assert result["event_type"] == "started"
+        assert "timestamp" in result
+        assert result["timestamp"] > 0
+        # None values should be filtered out
+        assert "worker_id" not in result
+        assert "queue_name" not in result
+        assert "message" not in result
+        assert "details" not in result
+        assert "error_type" not in result
+        assert "error_message" not in result
+        assert "duration_ms" not in result
+        assert "nats_subject" not in result
+        assert "nats_sequence" not in result
+
+    def test_job_event_to_dict_with_all_params(self) -> None:
+        """Test JobEvent.to_dict method with all parameters."""
+        job_event = JobEvent(
+            job_id="test-job-123",
+            event_type=JobEventType.COMPLETED,
+            timestamp=1625097600.0,
+            worker_id="worker-1",
+            queue_name="test-queue",
+            message="Job completed successfully",
+            details={"result": "success", "output": 42},
+            error_type=None,
+            error_message=None,
+            duration_ms=1500.0,
+            nats_subject="naq.jobs.test",
+            nats_sequence=123
+        )
+
+        result = job_event.to_dict()
+
+        assert result["job_id"] == "test-job-123"
+        assert result["event_type"] == "completed"
+        assert result["timestamp"] == 1625097600.0
+        assert result["worker_id"] == "worker-1"
+        assert result["queue_name"] == "test-queue"
+        assert result["message"] == "Job completed successfully"
+        assert result["details"] == {"result": "success", "output": 42}
+        assert result["duration_ms"] == 1500.0
+        assert result["nats_subject"] == "naq.jobs.test"
+        assert result["nats_sequence"] == 123
+        # None values should be filtered out
+        assert "error_type" not in result
+        assert "error_message" not in result
+
+    def test_job_event_to_dict_with_error(self) -> None:
+        """Test JobEvent.to_dict method with error information."""
+        job_event = JobEvent(
+            job_id="test-job-123",
+            event_type=JobEventType.FAILED,
+            error_type="ValueError",
+            error_message="Invalid input data",
+            duration_ms=500.0
+        )
+
+        result = job_event.to_dict()
+
+        assert result["job_id"] == "test-job-123"
+        assert result["event_type"] == "failed"
+        assert result["error_type"] == "ValueError"
+        assert result["error_message"] == "Invalid input data"
+        assert result["duration_ms"] == 500.0
+        # None values should be filtered out
+        assert "worker_id" not in result
+        assert "queue_name" not in result
+        assert "message" not in result
+        assert "details" not in result
+        assert "nats_subject" not in result
+        assert "nats_sequence" not in result
+
+    def test_job_event_to_dict_with_factory_method(self) -> None:
+        """Test JobEvent.to_dict method with event created by factory method."""
+        job_event = JobEvent.completed(
+            job_id="test-job-123",
+            worker_id="worker-1",
+            duration_ms=1500.0,
+            queue_name="test-queue",
+            details={"result": "success"}
+        )
+
+        result = job_event.to_dict()
+
+        assert result["job_id"] == "test-job-123"
+        assert result["event_type"] == "completed"
+        assert result["worker_id"] == "worker-1"
+        assert result["duration_ms"] == 1500.0
+        assert result["queue_name"] == "test-queue"
+        assert result["details"]["duration_ms"] == 1500.0
+        assert result["details"]["result"] == "success"
+
 
 class TestWorkerEvent:
     """Test cases for the WorkerEvent class."""
@@ -633,3 +735,100 @@ class TestWorkerEvent:
         worker_event = WorkerEvent.started(worker_id="test-worker-123", details=None)
         
         assert worker_event.details == {}
+
+    def test_worker_event_to_dict_minimal(self) -> None:
+        """Test WorkerEvent.to_dict method with minimal parameters."""
+        worker_event = WorkerEvent(
+            worker_id="test-worker-123",
+            event_type=WorkerEventType.STARTED
+        )
+
+        result = worker_event.to_dict()
+
+        assert result["worker_id"] == "test-worker-123"
+        assert result["event_type"] == "started"
+        assert "timestamp" in result
+        assert result["timestamp"] > 0
+        # None values should be filtered out
+        assert "queue_names" not in result
+        assert "message" not in result
+        assert "details" not in result
+        assert "job_id" not in result
+        assert "duration_ms" not in result
+        assert "cpu_usage" not in result
+        assert "memory_usage" not in result
+
+    def test_worker_event_to_dict_with_all_params(self) -> None:
+        """Test WorkerEvent.to_dict method with all parameters."""
+        worker_event = WorkerEvent(
+            worker_id="test-worker-123",
+            event_type=WorkerEventType.HEARTBEAT,
+            timestamp=1625097600.0,
+            queue_names=["queue1", "queue2"],
+            message="Worker heartbeat",
+            details={"status": "healthy"},
+            job_id="job-456",
+            duration_ms=100.0,
+            cpu_usage=45.5,
+            memory_usage=512.0
+        )
+
+        result = worker_event.to_dict()
+
+        assert result["worker_id"] == "test-worker-123"
+        assert result["event_type"] == "heartbeat"
+        assert result["timestamp"] == 1625097600.0
+        assert result["queue_names"] == ["queue1", "queue2"]
+        assert result["message"] == "Worker heartbeat"
+        assert result["details"] == {"status": "healthy"}
+        assert result["job_id"] == "job-456"
+        assert result["duration_ms"] == 100.0
+        assert result["cpu_usage"] == 45.5
+        assert result["memory_usage"] == 512.0
+
+    def test_worker_event_to_dict_with_job_event(self) -> None:
+        """Test WorkerEvent.to_dict method with job-related event."""
+        worker_event = WorkerEvent.job_completed(
+            worker_id="test-worker-123",
+            job_id="job-456",
+            duration_ms=1500.0,
+            queue_names=["queue1"],
+            details={"result": "success"}
+        )
+
+        result = worker_event.to_dict()
+
+        assert result["worker_id"] == "test-worker-123"
+        assert result["event_type"] == "job_completed"
+        assert result["job_id"] == "job-456"
+        assert result["duration_ms"] == 1500.0
+        assert result["queue_names"] == ["queue1"]
+        assert result["message"] == "Worker test-worker-123 completed job job-456"
+        assert result["details"]["duration_ms"] == 1500.0
+        assert result["details"]["result"] == "success"
+        # None values should be filtered out
+        assert "cpu_usage" not in result
+        assert "memory_usage" not in result
+
+    def test_worker_event_to_dict_with_system_event(self) -> None:
+        """Test WorkerEvent.to_dict method with system event."""
+        worker_event = WorkerEvent.heartbeat(
+            worker_id="test-worker-123",
+            queue_names=["queue1", "queue2"],
+            cpu_usage=45.5,
+            memory_usage=512.0,
+            details={"status": "healthy"}
+        )
+
+        result = worker_event.to_dict()
+
+        assert result["worker_id"] == "test-worker-123"
+        assert result["event_type"] == "heartbeat"
+        assert result["queue_names"] == ["queue1", "queue2"]
+        assert result["cpu_usage"] == 45.5
+        assert result["memory_usage"] == 512.0
+        assert result["details"] == {"status": "healthy"}
+        # None values should be filtered out
+        assert "message" not in result
+        assert "job_id" not in result
+        assert "duration_ms" not in result
