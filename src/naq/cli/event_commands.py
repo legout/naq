@@ -14,11 +14,9 @@ from rich.live import Live
 from rich.layout import Layout
 
 from ..settings import DEFAULT_NATS_URL
-from ..services.base import ServiceManager, ServiceConfig
 from ..services.events import EventService
 from ..services.connection import ConnectionService
 from ..services.worker import WorkerService
-from ..services.config import GlobalServiceConfig
 from ..service_context import service_context
 from ..utils import setup_logging
 from ..utils.validation import validate_parameter, ensure_type
@@ -29,6 +27,7 @@ from ..utils.serialization import SerializationHelper
 from ..exceptions import NaqConnectionError
 from ..models.events import JobEvent, WorkerEvent
 from ..models.enums import JobEventType
+from .cli_base import BaseCLICommand, display_event, display_event_table, display_stats_table, display_worker_table
 
 
 class EventCommandHandler:
