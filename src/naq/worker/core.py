@@ -96,7 +96,9 @@ class Worker:
                 creates a default one.
         """
         # Validate parameters
-        self._validate_init_parameters(concurrency, heartbeat_interval, worker_ttl, nats_url)
+        self._validate_init_parameters(
+            concurrency, heartbeat_interval, worker_ttl, nats_url
+        )
 
         # Process queues parameter
         if isinstance(queues, str):
@@ -148,9 +150,7 @@ class Worker:
         self._running = False
         self._shutdown_event = asyncio.Event()
         self._semaphore = asyncio.Semaphore(concurrency)
-        self._consumers: Dict[
-            QueueName, Any
-        ] = {}  # Track queue consumers
+        self._consumers: Dict[QueueName, Any] = {}  # Track queue consumers
 
         # JetStream stream name
         self.stream_name = f"{NAQ_PREFIX}_jobs"
@@ -167,7 +167,10 @@ class Worker:
 
             config = ServiceConfig(nats_url=self._nats_url)
             self._service_manager = ServiceManager(config)
-            self._logger.info("Created default ServiceManager", registered_services=self._service_manager.get_service_names())
+            self._logger.info(
+                "Created default ServiceManager",
+                registered_services=self._service_manager.get_service_names(),
+            )
             # Note: Services will be registered asynchronously in _initialize_services method
 
         # Create component managers
@@ -200,10 +203,10 @@ class Worker:
         service_manager: Optional[ServiceManager] = None,
     ) -> "Worker":
         """Create and initialize a Worker instance with services.
-        
+
         This is the recommended way to create Worker instances as it ensures
         all services are properly initialized.
-        
+
         Args:
             queues: Optional sequence of queue names or single queue name to process.
                 If None or empty, defaults to DEFAULT_QUEUE_NAME.
@@ -219,7 +222,7 @@ class Worker:
                 for job function imports.
             service_manager: Optional ServiceManager instance to use. If None,
                 creates a default one.
-                
+
         Returns:
             A fully initialized Worker instance.
         """
@@ -235,22 +238,25 @@ class Worker:
             module_paths=module_paths,
             service_manager=service_manager,
         )
-        
+
         # Initialize services
         await worker._initialize_services()
-        
+
         return worker
 
     async def _initialize_services(self) -> None:
         """Initialize and register all core services with the service manager."""
         if self._service_manager is None:
             raise NaqException("ServiceManager is not initialized")
-            
+
         # Check if services are already registered
         if self._service_manager.has_service("connection"):
-            self._logger.info("Services already registered", available_services=self._service_manager.get_service_names())
+            self._logger.info(
+                "Services already registered",
+                available_services=self._service_manager.get_service_names(),
+            )
             return
-            
+
         from ..services.connection import ConnectionService
         from ..services.jobs import JobService
         from ..services.kv_stores import KVStoreService
@@ -310,7 +316,9 @@ class Worker:
 
             # Manually register the already-created service
             self._service_manager._services["kv"] = kv_service
-            self._service_manager._service_configs["kv"] = self._service_manager._default_config
+            self._service_manager._service_configs["kv"] = (
+                self._service_manager._default_config
+            )
 
             # Now initialize the KV store service
             await kv_service.initialize()
@@ -337,8 +345,10 @@ class Worker:
                 self._service_manager._default_config
             )
 
-            self._logger.info("All core services registered successfully",
-                            registered_services=self._service_manager.get_service_names())
+            self._logger.info(
+                "All core services registered successfully",
+                registered_services=self._service_manager.get_service_names(),
+            )
 
         except Exception as e:
             self._logger.error("Failed to register core services", error=str(e))
@@ -362,13 +372,19 @@ class Worker:
                     await self._initialize_services()
 
                     # Use long-lived service context for worker lifecycle
-                    self._logger.info("Entering long_lived_service_context", available_services=self._service_manager.get_service_names())
+                    self._logger.info(
+                        "Entering long_lived_service_context",
+                        available_services=self._service_manager.get_service_names(),
+                    )
                     async with long_lived_service_context(
                         self._service_manager,
                         logger_name=f"naq.worker.core.{self.worker_id}",
                     ) as service_manager:
                         # Get services from the service manager
-                        self._logger.info("Attempting to get connection service", available_services=service_manager.get_service_names())
+                        self._logger.info(
+                            "Attempting to get connection service",
+                            available_services=service_manager.get_service_names(),
+                        )
                         self._connection_service = await service_manager.get_service(
                             "connection", ConnectionService
                         )
@@ -463,7 +479,9 @@ class Worker:
                     subject=subject,
                     durable_name=durable_name,
                     stream_name=self.stream_name,
-                    available_streams=await self._get_available_streams() if self._js else "No JS context",
+                    available_streams=await self._get_available_streams()
+                    if self._js
+                    else "No JS context",
                 )
 
                 # Resolve ack_wait seconds for this queue
@@ -503,7 +521,7 @@ class Worker:
         self, psub: Any, durable_name: str, queue_name: QueueName
     ) -> None:
         """Process messages in a loop for a given queue consumer.
-        
+
         Args:
             psub: The pull subscription for the queue
             durable_name: The durable consumer name
@@ -515,15 +533,17 @@ class Worker:
             for msg in msgs:
                 # Acquire semaphore to respect concurrency limits
                 await self._semaphore.acquire()
-                
+
                 # Create a callback to release the semaphore when processing is done
                 def release_semaphore(_):
                     self._semaphore.release()
-                
+
                 try:
                     # Process the message asynchronously
                     task = asyncio.create_task(
-                        self.job_processor.process_message(msg, queue_name, durable_name)
+                        self.job_processor.process_message(
+                            msg, queue_name, durable_name
+                        )
                     )
                     # Add callback to release semaphore when task completes
                     task.add_done_callback(release_semaphore)
@@ -531,7 +551,8 @@ class Worker:
                     self._semaphore.release()
                     wrapped_error = wrap_naq_exception(e, "Error processing message")
                     self._error_handler.handle_error(
-                        wrapped_error, {"queue_name": queue_name, "durable_name": durable_name}
+                        wrapped_error,
+                        {"queue_name": queue_name, "durable_name": durable_name},
                     )
         except asyncio.TimeoutError:
             # Timeout is expected when no messages are available, continue loop
@@ -569,10 +590,14 @@ class Worker:
                         stream_name=self.stream_name,
                         subjects=[f"{NAQ_PREFIX}.queue.*"],
                     )
-                self._logger.info("Stream ensured successfully", stream_name=self.stream_name)
+                self._logger.info(
+                    "Stream ensured successfully", stream_name=self.stream_name
+                )
 
                 # Start subscription tasks for each queue
-                self._logger.info("Starting subscription tasks", queue_names=self.queue_names)
+                self._logger.info(
+                    "Starting subscription tasks", queue_names=self.queue_names
+                )
                 subscription_tasks = [
                     asyncio.create_task(self._subscribe_to_queue(q_name))
                     for q_name in self.queue_names
@@ -641,7 +666,11 @@ class Worker:
             except asyncio.CancelledError:
                 self._logger.info("Run task cancelled")
             except Exception as e:
-                await self._handle_worker_error(e, "Worker run loop encountered an error", {"worker_id": self.worker_id})
+                await self._handle_worker_error(
+                    e,
+                    "Worker run loop encountered an error",
+                    {"worker_id": self.worker_id},
+                )
                 await self.status_manager.update_status(status=WORKER_STATUS.STOPPING)
             finally:
                 self._logger.info("Worker shutting down")
@@ -678,7 +707,7 @@ class Worker:
                     )
                     await consumer.unsubscribe()
                     # Note: drain() method may not exist on PullSubscription in all NATS versions
-                    if hasattr(consumer, 'drain'):
+                    if hasattr(consumer, "drain"):
                         self._logger.debug(
                             "Draining consumer for queue", queue_name=queue_name
                         )
@@ -737,7 +766,7 @@ class Worker:
         """Get list of available JetStream streams for debugging."""
         if not self._js:
             return []
-        
+
         try:
             streams = await self._js.stream_names()
             return list(streams)
@@ -795,11 +824,7 @@ class Worker:
 
     # --- Sync interface for long-running worker using anyio.BlockingPortal ---
     def _validate_init_parameters(
-        self,
-        concurrency: int,
-        heartbeat_interval: int,
-        worker_ttl: int,
-        nats_url: str
+        self, concurrency: int, heartbeat_interval: int, worker_ttl: int, nats_url: str
     ) -> None:
         """Validate initialization parameters."""
         validate_parameter(concurrency, "concurrency", not_none=True, min_value=1)
@@ -821,14 +846,21 @@ class Worker:
     def stop_sync(self) -> None:
         """Convenience synchronous stop for a worker that was started via start_sync()."""
         return self.sync_interface.stop_sync()
-    
-    async def _handle_worker_error(self, exception: Exception, context: str, error_context: Optional[Dict[str, Any]] = None) -> None:
+
+    async def _handle_worker_error(
+        self,
+        exception: Exception,
+        context: str,
+        error_context: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """Handle worker errors with consistent logging and error wrapping."""
         wrapped_error = wrap_naq_exception(exception, context)
         self._error_handler.handle_error(wrapped_error, error_context or {})
-    
+
     @staticmethod
-    async def _list_workers_internal(nats_url: str, async_mode: bool) -> List[Dict[str, Any]]:
+    async def _list_workers_internal(
+        nats_url: str, async_mode: bool
+    ) -> List[Dict[str, Any]]:
         """Internal method to list workers, supporting both async and sync modes."""
         from ..services import ServiceConfig, ServiceManager
         from ..utils.error_handling import ErrorHandler, wrap_naq_exception
@@ -852,7 +884,11 @@ class Worker:
                 else:
                     return monitor.list_workers_sync(nats_url)
         except Exception as e:
-            error_msg = "Error listing workers" if async_mode else "Error listing workers synchronously"
+            error_msg = (
+                "Error listing workers"
+                if async_mode
+                else "Error listing workers synchronously"
+            )
             wrapped_error = wrap_naq_exception(e, error_msg)
             error_handler.handle_error(wrapped_error, {"nats_url": nats_url})
             raise
@@ -863,6 +899,7 @@ class Worker:
                     await service_manager.cleanup_all()
                 else:
                     import asyncio
+
                     loop = asyncio.get_event_loop()
                     if loop.is_running():
                         # Create a task for cleanup if loop is running

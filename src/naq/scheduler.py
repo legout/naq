@@ -56,16 +56,12 @@ class LeaderElection:
 
     async def initialize(self) -> None:
         """Initialize the leader election system."""
-        try:
-            logger.info(
-                f"Initialized leader election for KV store '{SCHEDULER_LOCK_KV_NAME}'"
-            )
-        except Exception as e:
-            logger.error(
-                f"Failed to initialize leader election with KV store "
-                f"'{SCHEDULER_LOCK_KV_NAME}': {e}"
-            )
-            raise NaqConnectionError(f"Failed to access lock KV store: {e}") from e
+        if not self._kv_store_service:
+            raise NaqConnectionError("KVStoreService is required for leader election")
+
+        logger.info(
+            f"Initialized leader election for KV store '{SCHEDULER_LOCK_KV_NAME}'"
+        )
 
     async def try_become_leader(self) -> bool:
         """
@@ -119,14 +115,7 @@ class LeaderElection:
             )
 
             # Log leader_elected event
-            if self._kv_store_service:
-                try:
-                    # Try to get event service from the KV store service
-                    # This is a bit of a hack since we don't have direct access to event service
-                    # but we need to log the leader election event
-                    logger.info(f"Leader elected: {self.instance_id} at {time.time()}")
-                except Exception as e:
-                    logger.debug(f"Could not log leader_elected event: {e}")
+            logger.info(f"Leader elected: {self.instance_id} at {time.time()}")
 
             return True
 
@@ -136,6 +125,9 @@ class LeaderElection:
 
     async def start_renewal_task(self, running_flag: bool) -> None:
         """Start a background task to renew the leader lock."""
+        if not self._kv_store_service:
+            raise NaqConnectionError("KVStoreService is required for lock renewal")
+
         self._shutdown_event.clear()
         self._is_leader = True
         self._lock_renewal_task = asyncio.create_task(
@@ -204,15 +196,18 @@ class LeaderElection:
 
     async def release_lock(self) -> None:
         """Explicitly release the leader lock when shutting down."""
+        if not self._kv_store_service:
+            logger.error("KVStoreService not available for releasing lock")
+            return
+
         if self._is_leader:
             try:
-                if self._kv_store_service:
-                    await self._kv_store_service.delete(
-                        SCHEDULER_LOCK_KV_NAME, SCHEDULER_LOCK_KEY, purge=True
-                    )
-                    logger.info("Released scheduler leader lock")
-                    # Log leader_revoked event
-                    logger.info(f"Leader revoked: {self.instance_id} at {time.time()}")
+                await self._kv_store_service.delete(
+                    SCHEDULER_LOCK_KV_NAME, SCHEDULER_LOCK_KEY, purge=True
+                )
+                logger.info("Released scheduler leader lock")
+                # Log leader_revoked event
+                logger.info(f"Leader revoked: {self.instance_id} at {time.time()}")
             except Exception as e:
                 logger.error(f"Error releasing leader lock: {e}")
         self._is_leader = False

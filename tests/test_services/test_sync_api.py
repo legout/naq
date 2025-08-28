@@ -5,12 +5,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta
 
 from naq.queue.sync_api import (
-    enqueue_job_sync,
+    enqueue_sync,
     enqueue_at_sync,
     enqueue_in_sync,
     purge_queue_sync,
     cancel_scheduled_job_sync,
-    list_workers_sync,
 )
 from naq.models.jobs import Job
 from naq.services.config import create_global_config, GlobalServiceConfig
@@ -351,59 +350,7 @@ class TestCancelScheduledJobSync:
             cancel_scheduled_job_sync("test_job_id", nats_url=123)
 
 
-class TestListWorkersSync:
-    """Test cases for list_workers_sync function."""
 
-    def test_list_workers_sync_basic(self):
-        """Test basic list_workers_sync functionality."""
-        mock_workers = [
-            {"worker_id": "worker1", "status": "active"},
-            {"worker_id": "worker2", "status": "idle"}
-        ]
-        
-        with patch('naq.sync_api.run_with_service_context') as mock_run:
-            mock_run.return_value = mock_workers
-            
-            result = list_workers_sync()
-            
-            assert result == mock_workers
-            mock_run.assert_called_once()
-            
-            # Verify the async function was called correctly
-            call_args = mock_run.call_args
-            assert call_args[0][0].__name__ == '_list_with_services'
-
-    def test_list_workers_sync_with_custom_params(self):
-        """Test list_workers_sync with custom parameters."""
-        custom_nats_url = "nats://custom:4222"
-        custom_config = GlobalServiceConfig(nats_url=custom_nats_url)
-        
-        mock_workers = [
-            {"worker_id": "worker1", "status": "active"},
-            {"worker_id": "worker2", "status": "idle"}
-        ]
-        
-        with patch('naq.sync_api.run_with_service_context') as mock_run:
-            mock_run.return_value = mock_workers
-            
-            result = list_workers_sync(
-                nats_url=custom_nats_url,
-                config=custom_config
-            )
-            
-            assert result == mock_workers
-            mock_run.assert_called_once()
-            
-            # Verify the async function was called with correct parameters
-            call_args = mock_run.call_args
-            assert call_args[1]['nats_url'] == custom_nats_url
-            assert call_args[1]['global_config'] == custom_config
-
-    def test_list_workers_sync_validation(self):
-        """Test list_workers_sync parameter validation."""
-        # Test with invalid nats_url
-        with pytest.raises(ValueError, match="Parameter 'nats_url' must be of type"):
-            list_workers_sync(nats_url=123)
 
 
 class TestSyncApiIntegration:

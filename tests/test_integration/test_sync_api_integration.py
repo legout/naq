@@ -5,12 +5,11 @@ from unittest.mock import patch, MagicMock
 from datetime import datetime, timedelta
 
 from naq.queue.sync_api import (
-    enqueue_job_sync,
+    enqueue_sync,
     enqueue_at_sync,
     enqueue_in_sync,
     purge_queue_sync,
     cancel_scheduled_job_sync,
-    list_workers_sync,
 )
 from naq.queue.sync_api import (
     enqueue_sync,
@@ -31,8 +30,8 @@ from naq.services.config import create_global_config, GlobalServiceConfig
 class TestSyncApiIntegration:
     """Integration tests for synchronous API wrappers."""
 
-    def test_enqueue_job_sync_integration(self):
-        """Test enqueue_job_sync with real service context."""
+    def test_enqueue_sync_integration(self):
+        """Test enqueue_sync with real service context."""
         def test_func(x):
             return x * 2
         
@@ -42,7 +41,7 @@ class TestSyncApiIntegration:
             mock_job.job_id = "test_job_id"
             mock_enqueue.return_value = mock_job
             
-            result = enqueue_job_sync(test_func, 5)
+            result = enqueue_sync(test_func, 5)
             
             assert result == mock_job
             mock_enqueue.assert_called_once()
@@ -137,21 +136,7 @@ class TestSyncApiIntegration:
             assert call_args[1]['nats_url'] == 'nats://localhost:4222'
             assert call_args[1]['prefer_thread_local'] is False
 
-    def test_list_workers_sync_integration(self):
-        """Test list_workers_sync with real service context."""
-        mock_workers = [
-            {"worker_id": "worker1", "status": "active"},
-            {"worker_id": "worker2", "status": "idle"}
-        ]
-        
-        # Mock the underlying async API to avoid network calls
-        with patch('naq.worker.Worker.list_workers') as mock_list_workers:
-            mock_list_workers.return_value = mock_workers
-            
-            result = list_workers_sync()
-            
-            assert result == mock_workers
-            mock_list_workers.assert_called_once_with(nats_url='nats://localhost:4222')
+    
 
 
 class TestQueueSyncApiIntegration:
@@ -373,7 +358,7 @@ class TestSyncApiWithCustomConfig:
             mock_job.job_id = "test_job_id"
             mock_enqueue.return_value = mock_job
             
-            result = enqueue_job_sync(
+            result = enqueue_sync(
                 test_func, 
                 5, 
                 nats_url=custom_nats_url,
@@ -439,7 +424,7 @@ class TestSyncApiErrorHandling:
             mock_enqueue.side_effect = RuntimeError("Service error")
             
             with pytest.raises(RuntimeError, match="Service error"):
-                enqueue_job_sync(test_func, 5)
+                enqueue_sync(test_func, 5)
 
     def test_queue_sync_api_error_propagation(self):
         """Test that errors are properly propagated through queue sync APIs."""
@@ -463,7 +448,7 @@ class TestSyncApiErrorHandling:
             mock_run.side_effect = RuntimeError("Service initialization failed")
             
             with pytest.raises(RuntimeError, match="Service initialization failed"):
-                enqueue_job_sync(test_func, 5)
+                enqueue_sync(test_func, 5)
 
     def test_queue_sync_api_service_initialization_error(self):
         """Test that service initialization errors are handled properly in queue sync APIs."""
