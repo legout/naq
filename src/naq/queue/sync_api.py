@@ -68,87 +68,29 @@ def enqueue_sync(
       - Services are created and managed by the ServiceManager, providing a
         consistent and reliable way to handle resources.
     """
-    with _sync_logger.operation_context(
-        "enqueue_sync",
+    return _execute_sync_operation(
+        operation_name="enqueue_sync",
+        func=func,
+        args=args,
+        kwargs=kwargs,
         queue_name=queue_name,
         nats_url=nats_url,
-        func_name=getattr(func, "__name__", str(func)),
-        max_retries=max_retries,
-        timeout=timeout,
-    ):
-        validate_parameter(func, "func", Callable)
-        validate_parameter(queue_name, "queue_name", str)
-        validate_parameter(nats_url, "nats_url", str)
-
-        _sync_logger.debug(
-            message="enqueue_sync_start",
+        async_operation=lambda: enqueue(
+            func,
+            *args,
             queue_name=queue_name,
-            func_name=getattr(func, "__name__", str(func)),
-        )
-
-        async def _enqueue_with_services(service_manager):
-            try:
-                # DEBUG: Log kwargs before passing to enqueue
-                import asyncio
-                _sync_logger.debug(
-                    "Before enqueue call",
-                    kwargs_keys=list(kwargs.keys()),
-                    kwargs_types={k: type(v).__name__ for k, v in kwargs.items()},
-                    service_manager_type=type(service_manager).__name__
-                )
-                
-                # Check for asyncio.Task objects in kwargs
-                task_objects = []
-                for key, value in kwargs.items():
-                    if isinstance(value, asyncio.Task):
-                        task_objects.append({
-                            "key": key,
-                            "task_id": id(value),
-                            "task_state": value._state if hasattr(value, '_state') else 'unknown',
-                            "task_done": value.done() if hasattr(value, 'done') else 'unknown'
-                        })
-                
-                if task_objects:
-                    _sync_logger.error("Found asyncio.Task objects in kwargs before enqueue", task_objects=task_objects)
-                
-                # Filter out service_manager from kwargs to prevent it from being serialized with the job
-                filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'service_manager'}
-                
-                job = await enqueue(
-                    func,
-                    *args,
-                    queue_name=queue_name,
-                    nats_url=nats_url,
-                    max_retries=max_retries,
-                    retry_delay=retry_delay,
-                    depends_on=depends_on,
-                    timeout=timeout,
-                    prefer_thread_local=False,  # Use service context instead
-                    config=config or create_global_config(),
-                    **filtered_kwargs,
-                )
-                _sync_logger.info(
-                    "enqueue_sync_success",
-                    queue_name=queue_name,
-                    job_id=job.job_id,
-                    func_name=getattr(func, "__name__", str(func)),
-                )
-                return job
-            except Exception as e:
-                _sync_logger.error(
-                    "enqueue_sync_failed",
-                    queue_name=queue_name,
-                    func_name=getattr(func, "__name__", str(func)),
-                    error=str(e),
-                )
-                raise wrap_naq_exception(e, f"Failed to enqueue job synchronously: {e}")
-
-        return run_with_service_context(
-            _enqueue_with_services,
             nats_url=nats_url,
-            global_config=config,
-            logger_name="naq.queue.sync_api.enqueue_sync",
-        )
+            max_retries=max_retries,
+            retry_delay=retry_delay,
+            depends_on=depends_on,
+            timeout=timeout,
+            prefer_thread_local=False,  # Use service context instead
+            config=config or create_global_config(),
+            **{k: v for k, v in kwargs.items() if k != 'service_manager'},
+        ),
+        config=config,
+        logger_name="naq.queue.sync_api.enqueue_sync",
+    )
 
 
 def enqueue_at_sync(

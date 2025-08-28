@@ -195,56 +195,15 @@ class ScheduledJobManager:
             JobNotFoundError: If job doesn't exist
             NaqException: For other errors
         """
-        with self._logger.operation_context(
-            "update_job_status",
+        validate_parameter(job_id, "job_id", str)
+        validate_parameter(status, "status", str)
+
+        return await self._update_job_data(
             job_id=job_id,
-            status=status,
-            queue_name=self.queue_name,
-        ):
-            validate_parameter(job_id, "job_id", str)
-            validate_parameter(status, "status", str)
-
-            try:
-                # Use the KV store service
-                _, kv_store_service = await self._get_services()
-                # Get the current job data
-                entry = await kv_store_service.get(SCHEDULED_JOBS_KV_NAME, job_id)
-                schedule_data = cloudpickle.loads(entry.value)
-
-                if schedule_data.get("status") == status:
-                    self._logger.info(
-                        "status_already_set", job_id=job_id, status=status
-                    )
-                    return True  # No change needed
-
-                # Update the status
-                schedule_data["status"] = status
-
-                # Put the updated data
-                await kv_store_service.put(
-                    SCHEDULED_JOBS_KV_NAME, job_id, schedule_data
-                )
-
-                self._logger.info("status_updated", job_id=job_id, status=status)
-                return True
-            except KeyNotFoundError:
-                self._logger.error("job_not_found", job_id=job_id)
-                raise JobNotFoundError(f"Scheduled job '{job_id}' not found.")
-            except APIError as e:
-                # Handle potential revision mismatch (another process updated it)
-                if "wrong last sequence" in str(e).lower():
-                    self._logger.warning("concurrent_modification", job_id=job_id)
-                    return False  # Indicate update failed due to concurrency
-                else:
-                    error_msg = f"Failed to update job status: {e}"
-                    self._logger.error(
-                        "status_update_failed", error=str(e), job_id=job_id
-                    )
-                    raise wrap_naq_exception(e, error_msg) from e
-            except Exception as e:
-                error_msg = f"Failed to update job status: {e}"
-                self._logger.error("status_update_failed", error=str(e), job_id=job_id)
-                raise wrap_naq_exception(e, error_msg) from e
+            update_func=lambda data: self._update_status_in_data(data, status),
+            operation_name="update_job_status",
+            log_context={"status": status},
+        )
 
     async def modify_job(self, job_id: str, **updates: Any) -> bool:
         """

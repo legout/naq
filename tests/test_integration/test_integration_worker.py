@@ -7,10 +7,10 @@ from typing import Any, Dict
 import nats
 from nats.js.api import ConsumerConfig
 
-from naq.job import Job
+from naq.models.jobs import Job
 from naq.queue.core import Queue
 from naq.worker import Worker
-from naq.models import JOB_STATUS
+from naq.models.enums import JOB_STATUS
 from naq.settings import (
     RESULT_KV_NAME,
     FAILED_JOB_STREAM_NAME,

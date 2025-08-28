@@ -38,50 +38,24 @@ async def enqueue(
     **kwargs: Any,
 ) -> Job:
     """Helper to enqueue a job onto a specific queue (async)."""
-    # Validate parameters
-    validate_parameter(queue_name, "queue_name", not_none=True)
-    validate_parameter(nats_url, "nats_url", not_none=True)
-
-    structured_logger = StructuredLogger("naq.queue.async_api")
-
-    with structured_logger.operation_context(
-        "enqueue_job",
+    return await _execute_queue_operation(
+        operation_name="enqueue_job",
         queue_name=queue_name,
-        function_name=func.__name__,
-        job_id=None,  # Will be set after job creation
-    ):
-        try:
-            # Use service context for short-lived operation
-            async with service_context(
-                nats_url=nats_url,
-                config=config,
-                logger_name="naq.queue.async_api.enqueue",
-            ) as service_manager:
-                q = Queue(
-                    name=queue_name,
-                    nats_url=nats_url,
-                    prefer_thread_local=prefer_thread_local,
-                    config=config or create_global_config(),
-                    service_manager=service_manager,
-                )
-                job = await q.enqueue(
-                    func,
-                    *args,
-                    max_retries=max_retries,
-                    retry_delay=retry_delay,
-                    depends_on=depends_on,
-                    timeout=timeout,
-                    **kwargs,
-                )
-                return job
-        except Exception as e:
-            error_handler = ErrorHandler()
-            wrapped_error = wrap_naq_exception(e, context="enqueue operation")
-            error_handler.handle_error(
-                wrapped_error,
-                context={"queue_name": queue_name, "function": func.__name__},
-            )
-            raise
+        nats_url=nats_url,
+        func=func,
+        operation=lambda q: q.enqueue(
+            func,
+            *args,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
+            depends_on=depends_on,
+            timeout=timeout,
+            **kwargs,
+        ),
+        prefer_thread_local=prefer_thread_local,
+        config=config,
+        logger_name="naq.queue.async_api.enqueue",
+    )
 
 
 @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
@@ -99,50 +73,27 @@ async def enqueue_at(
     **kwargs: Any,
 ) -> Job:
     """Helper to schedule a job for a specific time (async)."""
-    # Validate parameters
-    validate_parameter(queue_name, "queue_name", not_none=True)
-    validate_parameter(nats_url, "nats_url", not_none=True)
     validate_parameter(dt, "dt", not_none=True)
-
-    structured_logger = StructuredLogger("naq.queue.async_api")
-
-    with structured_logger.operation_context(
-        "enqueue_at",
+    
+    return await _execute_queue_operation(
+        operation_name="enqueue_at",
         queue_name=queue_name,
-        function_name=func.__name__,
+        nats_url=nats_url,
+        func=func,
+        operation=lambda q: q.enqueue_at(
+            dt,
+            func,
+            *args,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
+            timeout=timeout,
+            **kwargs,
+        ),
+        prefer_thread_local=prefer_thread_local,
+        config=config,
+        logger_name="naq.queue.async_api.enqueue_at",
         scheduled_time=dt.isoformat(),
-    ):
-        try:
-            # Use service context for short-lived operation
-            async with service_context(
-                nats_url=nats_url,
-                config=config,
-                logger_name="naq.queue.async_api.enqueue_at",
-            ) as service_manager:
-                q = Queue(
-                    name=queue_name,
-                    nats_url=nats_url,
-                    prefer_thread_local=prefer_thread_local,
-                    config=config or create_global_config(),
-                    service_manager=service_manager,
-                )
-                return await q.enqueue_at(
-                    dt,
-                    func,
-                    *args,
-                    max_retries=max_retries,
-                    retry_delay=retry_delay,
-                    timeout=timeout,
-                    **kwargs,
-                )
-        except Exception as e:
-            error_handler = ErrorHandler()
-            wrapped_error = wrap_naq_exception(e, context="enqueue_at operation")
-            error_handler.handle_error(
-                wrapped_error,
-                context={"queue_name": queue_name, "function": func.__name__},
-            )
-            raise
+    )
 
 
 @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))

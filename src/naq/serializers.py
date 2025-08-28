@@ -67,59 +67,6 @@ class PickleSerializer:
     def serialize_job(job: Job) -> bytes:
         """Serialize a job to bytes using cloudpickle."""
         try:
-            # DEBUG: Log job kwargs contents to identify unpicklable objects
-            import loguru
-            logger = loguru.logger.bind(job_id=job.job_id)
-            
-            # Log all kwargs for debugging - make this more visible
-            logger.error("=== DEBUG: Job kwargs analysis ===")
-            logger.error(f"Job kwargs keys: {list(job.kwargs.keys())}")
-            logger.error(f"Job kwargs types: {[(k, type(v).__name__) for k, v in job.kwargs.items()]}")
-            logger.error(f"Job kwargs values: {[(k, repr(v)) for k, v in job.kwargs.items()]}")
-            
-            # Check for unpicklable objects in kwargs
-            unpicklable_objects = []
-            for key, value in job.kwargs.items():
-                logger.error(f"Testing picklability of key '{key}' with value type {type(value).__name__}")
-                try:
-                    # Test pickling each value
-                    cloudpickle.dumps(value)
-                    logger.error(f"✓ Key '{key}' is picklable")
-                except Exception as pickle_error:
-                    logger.error(f"✗ Key '{key}' is NOT picklable: {pickle_error}")
-                    unpicklable_objects.append({
-                        "key": key,
-                        "type": type(value).__name__,
-                        "repr": repr(value),
-                        "error": str(pickle_error)
-                    })
-            
-            if unpicklable_objects:
-                logger.error("Found unpicklable objects in job kwargs", unpicklable_objects=unpicklable_objects)
-            
-            # Check for asyncio.Task objects specifically
-            import asyncio
-            task_objects = []
-            for key, value in job.kwargs.items():
-                if isinstance(value, asyncio.Task):
-                    logger.error(f"Found asyncio.Task object in kwargs with key: {key}")
-                    logger.error(f"Task object details: {value}")
-                    logger.error(f"Task state: {value._state if hasattr(value, '_state') else 'Unknown'}")
-                    logger.error(f"Task done: {value.done() if hasattr(value, 'done') else 'Unknown'}")
-                    if hasattr(value, '_coro'):
-                        logger.error(f"Task coroutine: {value._coro}")
-                    task_objects.append({
-                        "key": key,
-                        "task_id": id(value),
-                        "task_state": value._state if hasattr(value, '_state') else 'unknown',
-                        "task_done": value.done() if hasattr(value, 'done') else 'unknown'
-                    })
-            
-            if task_objects:
-                logger.error("Found asyncio.Task objects in job kwargs", task_objects=task_objects)
-            
-            logger.error("=== END DEBUG: Job kwargs analysis ===")
-            
             payload = {
                 "job_id": job.job_id,
                 "enqueue_time": job.enqueue_time,
@@ -144,7 +91,53 @@ class PickleSerializer:
             }
             return cloudpickle.dumps(payload)
         except Exception as e:
+            # Log detailed error information for debugging
+            PickleSerializer._log_serialization_debug_info(job, e)
             raise SerializationError(f"Failed to pickle job: {e}") from e
+    
+    @staticmethod
+    def _log_serialization_debug_info(job: Job, error: Exception) -> None:
+        """Log detailed debug information for serialization failures."""
+        import loguru
+        import asyncio
+        logger = loguru.logger.bind(job_id=job.job_id)
+        
+        logger.error("=== DEBUG: Job kwargs analysis ===")
+        logger.error(f"Job kwargs keys: {list(job.kwargs.keys())}")
+        logger.error(f"Job kwargs types: {[(k, type(v).__name__) for k, v in job.kwargs.items()]}")
+        
+        # Check for unpicklable objects in kwargs
+        unpicklable_objects = []
+        for key, value in job.kwargs.items():
+            try:
+                cloudpickle.dumps(value)
+            except Exception as pickle_error:
+                unpicklable_objects.append({
+                    "key": key,
+                    "type": type(value).__name__,
+                    "repr": repr(value),
+                    "error": str(pickle_error)
+                })
+        
+        if unpicklable_objects:
+            logger.error("Found unpicklable objects in job kwargs", unpicklable_objects=unpicklable_objects)
+        
+        # Check for asyncio.Task objects specifically
+        task_objects = [
+            {
+                "key": key,
+                "task_id": id(value),
+                "task_state": value._state if hasattr(value, '_state') else 'unknown',
+                "task_done": value.done() if hasattr(value, 'done') else 'unknown'
+            }
+            for key, value in job.kwargs.items()
+            if isinstance(value, asyncio.Task)
+        ]
+        
+        if task_objects:
+            logger.error("Found asyncio.Task objects in job kwargs", task_objects=task_objects)
+        
+        logger.error("=== END DEBUG: Job kwargs analysis ===")
 
     @staticmethod
     def deserialize_job(data: bytes) -> Job:
@@ -312,19 +305,17 @@ class JsonSerializer:
 
     @staticmethod
     def _get_json_hooks():
-        # Resolve encoder/decoder classes from settings; fallback to stdlib
-        try:
-            enc = JsonSerializer._resolve_dotted_path(JSON_ENCODER)
-        except Exception:
-            import json as _json
-
-            enc = _json.JSONEncoder
-        try:
-            dec = JsonSerializer._resolve_dotted_path(JSON_DECODER)
-        except Exception:
-            import json as _json
-
-            dec = _json.JSONDecoder
+        """Resolve encoder/decoder classes from settings; fallback to stdlib."""
+        import json as _json
+        
+        def resolve_hook(hook_path, default_hook):
+            try:
+                return JsonSerializer._resolve_dotted_path(hook_path)
+            except Exception:
+                return default_hook
+        
+        enc = resolve_hook(JSON_ENCODER, _json.JSONEncoder)
+        dec = resolve_hook(JSON_DECODER, _json.JSONDecoder)
         return enc, dec
 
     @staticmethod
@@ -337,9 +328,7 @@ class JsonSerializer:
                 f"JSON serializer requires importable function: {e}"
             ) from e
 
-        args_json, kwargs_json = JsonSerializer._encode_args_kwargs(
-            job.args, job.kwargs
-        )
+        args_json, kwargs_json = JsonSerializer._encode_args_kwargs(job.args, job.kwargs)
 
         payload = {
             "job_id": job.job_id,
@@ -358,55 +347,27 @@ class JsonSerializer:
             "ignore_on": JsonSerializer._encode_exceptions(job.ignore_on),
         }
 
-        Encoder, _Decoder = JsonSerializer._get_json_hooks()
-        try:
-            return json.dumps(payload, cls=Encoder).encode("utf-8")
-        except (TypeError, ValueError) as e:
-            raise SerializationError(f"Failed to JSON-serialize job: {e}") from e
-        except Exception as e:
-            raise SerializationError(
-                f"Unexpected error during JSON serialization: {e}"
-            ) from e
+        return JsonSerializer._json_encode(payload)
 
     @staticmethod
     def deserialize_job(data: bytes) -> Job:
-        _Encoder, Decoder = JsonSerializer._get_json_hooks()
-        try:
-            payload = json.loads(data.decode("utf-8"), cls=Decoder)
-        except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            raise SerializationError(f"Failed to parse JSON job: {e}") from e
-        except Exception as e:
-            raise SerializationError(
-                f"Unexpected error during JSON parsing: {e}"
-            ) from e
-
-        try:
-            function = JsonSerializer._resolve_dotted_path(payload["function"])
-        except KeyError:
-            raise SerializationError(
-                "Job data missing required 'function' field"
-            ) from None
-        except Exception as e:
-            raise SerializationError(f"Failed to resolve function: {e}") from e
-
+        payload = JsonSerializer._json_decode(data)
+        
+        function = JsonSerializer._resolve_dotted_path(payload["function"])
         args = tuple(payload.get("args", []) or [])
         kwargs = payload.get("kwargs", {}) or {}
-
         retry_on = JsonSerializer._decode_exceptions(payload.get("retry_on"))
         ignore_on = JsonSerializer._decode_exceptions(payload.get("ignore_on"))
-
-        # depends_on is a list of job IDs (strings)
         depends_on = payload.get("depends_on")
 
         from .settings import RETRY_STRATEGY  # local import to avoid cycles
-
         retry_strategy = _normalize_retry_strategy(
             payload.get("retry_strategy", RETRY_STRATEGY.LINEAR)
         )
 
         from .models.jobs import Job  # Import here to avoid circular imports
 
-        job = Job(
+        return Job(
             function=function,
             args=args,
             kwargs=kwargs,
@@ -420,9 +381,8 @@ class JsonSerializer:
             depends_on=depends_on,
             result_ttl=payload.get("result_ttl"),
             timeout=payload.get("timeout"),
-            enqueue_time=payload.get("enqueue_time", time.time()),  # Added enqueue_time
+            enqueue_time=payload.get("enqueue_time", time.time()),
         )
-        return job
 
     @staticmethod
     def serialize_failed_job(job: Job) -> bytes:
@@ -438,15 +398,7 @@ class JsonSerializer:
             "error": job.error,
             "traceback": job.traceback,
         }
-        Encoder, _Decoder = JsonSerializer._get_json_hooks()
-        try:
-            return json.dumps(payload, cls=Encoder).encode("utf-8")
-        except (TypeError, ValueError) as e:
-            raise SerializationError(f"Failed to JSON-serialize failed job: {e}") from e
-        except Exception as e:
-            raise SerializationError(
-                f"Unexpected error during JSON failed job serialization: {e}"
-            ) from e
+        return JsonSerializer._json_encode(payload)
 
     @staticmethod
     def serialize_result(

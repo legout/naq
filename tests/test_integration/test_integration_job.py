@@ -3,7 +3,7 @@ from datetime import datetime
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from naq.job import Job
+from naq.models.jobs import Job
 from naq.exceptions import SerializationError
 from naq.models.enums import RETRY_STRATEGY
 

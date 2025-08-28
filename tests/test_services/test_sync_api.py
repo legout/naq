@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timedelta
 
-from naq.sync_api import (
+from naq.queue.sync_api import (
     enqueue_job_sync,
     enqueue_at_sync,
     enqueue_in_sync,

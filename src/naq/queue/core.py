@@ -66,20 +66,7 @@ class Queue:
             ValueError: If queue name is empty or contains invalid characters
         """
         # Validate parameters
-        try:
-            validate_parameter(
-                name, "name", not_none=True, pattern=self._VALID_QUEUE_NAME
-            )
-        except ValueError as e:
-            if "does not match required pattern" in str(e):
-                if not name:
-                    raise ValueError("Queue name cannot be empty")
-                else:
-                    raise ValueError(
-                        f"Queue name contains invalid characters: '{name}'"
-                    )
-            raise
-
+        self._validate_queue_name(name)
         validate_parameter(nats_url, "nats_url", not_none=True)
         if default_timeout is not None:
             validate_parameter(default_timeout, "default_timeout", min_value=0)
@@ -207,17 +194,7 @@ class Queue:
             NaqException: If enqueuing fails
         """
         # Validate parameters
-        validate_parameter(func, "func", not_none=True)
-        if max_retries is not None:
-            validate_parameter(max_retries, "max_retries", min_value=0)
-        ensure_type(retry_delay, (int, float, list, tuple), "retry_delay")
-
-        # Validate retry_delay is non-negative for numeric types
-        if isinstance(retry_delay, (int, float)) and retry_delay < 0:
-            raise ValueError("retry_delay cannot be negative")
-
-        if timeout is not None:
-            validate_parameter(timeout, "timeout", min_value=0)
+        self._validate_job_parameters(func, max_retries, retry_delay, timeout)
 
         structured_logger = StructuredLogger("naq.queue.core")
 
@@ -314,12 +291,7 @@ class Queue:
         """
         # Validate parameters
         validate_parameter(dt, "dt", not_none=True)
-        validate_parameter(func, "func", not_none=True)
-        if max_retries is not None:
-            validate_parameter(max_retries, "max_retries", min_value=0)
-        ensure_type(retry_delay, (int, float, list, tuple), "retry_delay")
-        if timeout is not None:
-            validate_parameter(timeout, "timeout", min_value=0)
+        self._validate_job_parameters(func, max_retries, retry_delay, timeout)
 
         structured_logger = StructuredLogger("naq.queue.core")
 
@@ -437,17 +409,7 @@ class Queue:
             NaqException: If scheduling fails
         """
         # Validate parameters
-        validate_parameter(func, "func", not_none=True)
-        if max_retries is not None:
-            validate_parameter(max_retries, "max_retries", min_value=0)
-        ensure_type(retry_delay, (int, float, list, tuple), "retry_delay")
-
-        # Validate retry_delay is non-negative for numeric types
-        if isinstance(retry_delay, (int, float)) and retry_delay < 0:
-            raise ValueError("retry_delay cannot be negative")
-
-        if timeout is not None:
-            validate_parameter(timeout, "timeout", min_value=0)
+        self._validate_job_parameters(func, max_retries, retry_delay, timeout)
         if repeat is not None:
             validate_parameter(repeat, "repeat", min_value=1)
 
@@ -638,8 +600,7 @@ class Queue:
             JobNotFoundError: If job doesn't exist
             NaqException: For other errors
         """
-        # Validate parameters
-        validate_parameter(job_id, "job_id", not_none=True)
+        self._validate_job_id(job_id)
 
         structured_logger = StructuredLogger("naq.queue.core")
 
@@ -676,8 +637,7 @@ class Queue:
             JobNotFoundError: If job doesn't exist
             NaqException: For other errors
         """
-        # Validate parameters
-        validate_parameter(job_id, "job_id", not_none=True)
+        self._validate_job_id(job_id)
 
         structured_logger = StructuredLogger("naq.queue.core")
 
@@ -716,8 +676,7 @@ class Queue:
             ConfigurationError: If invalid parameters are provided
             NaqException: For other errors
         """
-        # Validate parameters
-        validate_parameter(job_id, "job_id", not_none=True)
+        self._validate_job_id(job_id)
 
         structured_logger = StructuredLogger("naq.queue.core")
 

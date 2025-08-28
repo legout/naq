@@ -1,5 +1,5 @@
 
-from naq.job import Job
+from naq.models.jobs import Job
 from naq.models.enums import JOB_STATUS
 
 def test_basic_job_instantiation():

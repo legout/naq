@@ -96,12 +96,7 @@ class Worker:
                 creates a default one.
         """
         # Validate parameters
-        validate_parameter(concurrency, "concurrency", not_none=True, min_value=1)
-        validate_parameter(
-            heartbeat_interval, "heartbeat_interval", not_none=True, min_value=1
-        )
-        validate_parameter(worker_ttl, "worker_ttl", not_none=True, min_value=1)
-        validate_parameter(nats_url, "nats_url", not_none=True)
+        self._validate_init_parameters(concurrency, heartbeat_interval, worker_ttl, nats_url)
 
         # Process queues parameter
         if isinstance(queues, str):
@@ -154,7 +149,7 @@ class Worker:
         self._shutdown_event = asyncio.Event()
         self._semaphore = asyncio.Semaphore(concurrency)
         self._consumers: Dict[
-            QueueName, nats.js.api.PullSubscribe
+            QueueName, Any
         ] = {}  # Track queue consumers
 
         # JetStream stream name
@@ -495,64 +490,7 @@ class Worker:
                 )
 
                 while self._running:
-                    if self._semaphore.locked():  # Check semaphore before fetching
-                        await asyncio.sleep(0.1)  # Wait if concurrency limit reached
-                        continue
-
-                    try:
-                        # Calculate how many messages we can fetch based on available concurrency slots
-                        available_slots = self._concurrency - (
-                            self._concurrency - self._semaphore._value
-                        )
-                        if available_slots <= 0:
-                            await asyncio.sleep(0.1)  # Wait if no slots free
-                            continue
-
-                        # Fetch up to the number of available slots, with a timeout
-                        msgs = await psub.fetch(batch=available_slots, timeout=1)
-                        if msgs:
-                            self._logger.debug(
-                                "Fetched messages from consumer",
-                                durable_name=durable_name,
-                                message_count=len(msgs),
-                            )
-
-                        for msg in msgs:
-                            # Acquire semaphore before starting processing task
-                            await self._semaphore.acquire()
-                            # Create task to process the message
-                            task = asyncio.create_task(
-                                self.job_processor.process_message(msg)
-                            )
-                            # Add a callback to release the semaphore when the task completes (success or failure)
-                            task.add_done_callback(lambda t: self._semaphore.release())
-                            # Keep track of tasks (optional, for clean shutdown)
-                            self._tasks.append(task)
-                            self._tasks = [
-                                t for t in self._tasks if not t.done()
-                            ]  # Basic cleanup
-
-                    except nats.errors.TimeoutError:
-                        # No messages available, or timeout hit, loop continues
-                        await asyncio.sleep(0.1)  # Small sleep to prevent busy-wait
-                        continue
-                    except Exception:
-                        # ConsumerNotFoundError may not exist in all NATS versions
-                        # We'll catch any exception and check if it's consumer-related
-                        self._logger.warning(
-                            "Consumer not found or error, stopping fetch loop",
-                            durable_name=durable_name,
-                        )
-                        break
-                    except Exception as e:
-                        wrapped_error = wrap_naq_exception(
-                            e, "Error fetching from consumer"
-                        )
-                        self._error_handler.handle_error(
-                            wrapped_error,
-                            {"durable_name": durable_name, "queue_name": queue_name},
-                        )
-                        await asyncio.sleep(1)  # Wait before retrying fetch
+                    await self._process_messages_loop(psub, durable_name, queue_name)
 
             except Exception as e:
                 wrapped_error = wrap_naq_exception(e, "Failed to subscribe to queue")
@@ -560,6 +498,49 @@ class Worker:
                     wrapped_error, {"queue_name": queue_name}
                 )
                 raise
+
+    async def _process_messages_loop(
+        self, psub: Any, durable_name: str, queue_name: QueueName
+    ) -> None:
+        """Process messages in a loop for a given queue consumer.
+        
+        Args:
+            psub: The pull subscription for the queue
+            durable_name: The durable consumer name
+            queue_name: The name of the queue being processed
+        """
+        try:
+            # Fetch messages with timeout
+            msgs = await psub.fetch(batch=1, timeout=1.0)
+            for msg in msgs:
+                # Acquire semaphore to respect concurrency limits
+                await self._semaphore.acquire()
+                
+                # Create a callback to release the semaphore when processing is done
+                def release_semaphore(_):
+                    self._semaphore.release()
+                
+                try:
+                    # Process the message asynchronously
+                    task = asyncio.create_task(
+                        self.job_processor.process_message(msg, queue_name, durable_name)
+                    )
+                    # Add callback to release semaphore when task completes
+                    task.add_done_callback(release_semaphore)
+                except Exception as e:
+                    self._semaphore.release()
+                    wrapped_error = wrap_naq_exception(e, "Error processing message")
+                    self._error_handler.handle_error(
+                        wrapped_error, {"queue_name": queue_name, "durable_name": durable_name}
+                    )
+        except asyncio.TimeoutError:
+            # Timeout is expected when no messages are available, continue loop
+            pass
+        except Exception as e:
+            wrapped_error = wrap_naq_exception(e, "Error fetching messages")
+            self._error_handler.handle_error(
+                wrapped_error, {"queue_name": queue_name, "durable_name": durable_name}
+            )
 
     @timing(threshold_ms=1000)
     async def run(self) -> None:
@@ -583,10 +564,11 @@ class Worker:
                     stream_name=self.stream_name,
                     subjects=[f"{NAQ_PREFIX}.queue.*"],
                 )
-                await self._stream_service.ensure_stream(
-                    stream_name=self.stream_name,
-                    subjects=[f"{NAQ_PREFIX}.queue.*"],
-                )
+                if self._stream_service:
+                    await self._stream_service.ensure_stream(
+                        stream_name=self.stream_name,
+                        subjects=[f"{NAQ_PREFIX}.queue.*"],
+                    )
                 self._logger.info("Stream ensured successfully", stream_name=self.stream_name)
 
                 # Start subscription tasks for each queue
@@ -659,12 +641,7 @@ class Worker:
             except asyncio.CancelledError:
                 self._logger.info("Run task cancelled")
             except Exception as e:
-                wrapped_error = wrap_naq_exception(
-                    e, "Worker run loop encountered an error"
-                )
-                self._error_handler.handle_error(
-                    wrapped_error, {"worker_id": self.worker_id}
-                )
+                await self._handle_worker_error(e, "Worker run loop encountered an error", {"worker_id": self.worker_id})
                 await self.status_manager.update_status(status=WORKER_STATUS.STOPPING)
             finally:
                 self._logger.info("Worker shutting down")
@@ -808,79 +785,30 @@ class Worker:
     @timing(threshold_ms=1000)
     async def list_workers(nats_url: str = DEFAULT_NATS_URL) -> List[Dict[str, Any]]:
         """Lists active workers by querying the worker status KV store."""
-        from ..services import ServiceConfig, ServiceManager
-        from ..utils.error_handling import ErrorHandler, wrap_naq_exception
-        from ..utils.logging import StructuredLogger
-
-        # Create a temporary WorkerMonitor with ServiceManager
-        config = ServiceConfig(nats_url=nats_url)
-        service_manager = ServiceManager(config)
-        monitor = WorkerMonitor(service_manager=service_manager, nats_url=nats_url)
-
-        # Initialize logger and error handler for this static method
-        logger = StructuredLogger("worker_list")
-        error_handler = ErrorHandler(logger)
-
-        try:
-            with logger.operation_context("list_workers", nats_url=nats_url):
-                return await monitor.list_workers(nats_url)
-        except Exception as e:
-            wrapped_error = wrap_naq_exception(e, "Error listing workers")
-            error_handler.handle_error(wrapped_error, {"nats_url": nats_url})
-            raise
-        finally:
-            # Clean up the service manager
-            try:
-                await service_manager.cleanup_all()
-            except Exception as e:
-                wrapped_error = wrap_naq_exception(
-                    e, "Error cleaning up service manager"
-                )
-                error_handler.handle_error(wrapped_error)
+        return await Worker._list_workers_internal(nats_url, async_mode=True)  # type: ignore
 
     @staticmethod
     @timing(threshold_ms=1000)
     def list_workers_sync(nats_url: str = DEFAULT_NATS_URL) -> List[Dict[str, Any]]:
         """Synchronous version of list_workers."""
-        from ..services import ServiceConfig, ServiceManager
-        from ..utils.error_handling import ErrorHandler, wrap_naq_exception
-        from ..utils.logging import StructuredLogger
-
-        # Create a temporary WorkerMonitor with ServiceManager
-        config = ServiceConfig(nats_url=nats_url)
-        service_manager = ServiceManager(config)
-        monitor = WorkerMonitor(service_manager=service_manager, nats_url=nats_url)
-
-        # Initialize logger and error handler for this static method
-        logger = StructuredLogger("worker_list_sync")
-        error_handler = ErrorHandler(logger)
-
-        try:
-            with logger.operation_context("list_workers_sync", nats_url=nats_url):
-                return monitor.list_workers_sync(nats_url)
-        except Exception as e:
-            wrapped_error = wrap_naq_exception(e, "Error listing workers synchronously")
-            error_handler.handle_error(wrapped_error, {"nats_url": nats_url})
-            raise
-        finally:
-            # Clean up the service manager
-            import asyncio
-
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # Create a task for cleanup if loop is running
-                    asyncio.create_task(service_manager.cleanup_all())
-                else:
-                    # Run cleanup directly if loop is not running
-                    loop.run_until_complete(service_manager.cleanup_all())
-            except Exception as e:
-                wrapped_error = wrap_naq_exception(
-                    e, "Error cleaning up service manager"
-                )
-                error_handler.handle_error(wrapped_error)
+        return Worker._list_workers_internal(nats_url, async_mode=False)  # type: ignore
 
     # --- Sync interface for long-running worker using anyio.BlockingPortal ---
+    def _validate_init_parameters(
+        self,
+        concurrency: int,
+        heartbeat_interval: int,
+        worker_ttl: int,
+        nats_url: str
+    ) -> None:
+        """Validate initialization parameters."""
+        validate_parameter(concurrency, "concurrency", not_none=True, min_value=1)
+        validate_parameter(
+            heartbeat_interval, "heartbeat_interval", not_none=True, min_value=1
+        )
+        validate_parameter(worker_ttl, "worker_ttl", not_none=True, min_value=1)
+        validate_parameter(nats_url, "nats_url", not_none=True)
+
     def run_sync(self) -> None:
         """Start the async worker in a clean AnyIO event loop using a BlockingPortal."""
         return self.sync_interface.run_sync()
@@ -893,3 +821,57 @@ class Worker:
     def stop_sync(self) -> None:
         """Convenience synchronous stop for a worker that was started via start_sync()."""
         return self.sync_interface.stop_sync()
+    
+    async def _handle_worker_error(self, exception: Exception, context: str, error_context: Optional[Dict[str, Any]] = None) -> None:
+        """Handle worker errors with consistent logging and error wrapping."""
+        wrapped_error = wrap_naq_exception(exception, context)
+        self._error_handler.handle_error(wrapped_error, error_context or {})
+    
+    @staticmethod
+    async def _list_workers_internal(nats_url: str, async_mode: bool) -> List[Dict[str, Any]]:
+        """Internal method to list workers, supporting both async and sync modes."""
+        from ..services import ServiceConfig, ServiceManager
+        from ..utils.error_handling import ErrorHandler, wrap_naq_exception
+        from ..utils.logging import StructuredLogger
+
+        # Create a temporary WorkerMonitor with ServiceManager
+        config = ServiceConfig(nats_url=nats_url)
+        service_manager = ServiceManager(config)
+        monitor = WorkerMonitor(service_manager=service_manager, nats_url=nats_url)
+
+        # Initialize logger and error handler for this static method
+        logger_name = "worker_list" if async_mode else "worker_list_sync"
+        logger = StructuredLogger(logger_name)
+        error_handler = ErrorHandler(logger)
+        operation_name = "list_workers" if async_mode else "list_workers_sync"
+
+        try:
+            with logger.operation_context(operation_name, nats_url=nats_url):
+                if async_mode:
+                    return await monitor.list_workers(nats_url)
+                else:
+                    return monitor.list_workers_sync(nats_url)
+        except Exception as e:
+            error_msg = "Error listing workers" if async_mode else "Error listing workers synchronously"
+            wrapped_error = wrap_naq_exception(e, error_msg)
+            error_handler.handle_error(wrapped_error, {"nats_url": nats_url})
+            raise
+        finally:
+            # Clean up the service manager
+            try:
+                if async_mode:
+                    await service_manager.cleanup_all()
+                else:
+                    import asyncio
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Create a task for cleanup if loop is running
+                        asyncio.create_task(service_manager.cleanup_all())
+                    else:
+                        # Run cleanup directly if loop is not running
+                        loop.run_until_complete(service_manager.cleanup_all())
+            except Exception as e:
+                wrapped_error = wrap_naq_exception(
+                    e, "Error cleaning up service manager"
+                )
+                error_handler.handle_error(wrapped_error)

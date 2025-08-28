@@ -1,7 +1,7 @@
 """Scenario tests for the Job module."""
 from freezegun import freeze_time
 
-from naq.job import Job
+from naq.models.jobs import Job
 from naq.models.enums import RETRY_STRATEGY
 from naq.models.enums import JOB_STATUS
 

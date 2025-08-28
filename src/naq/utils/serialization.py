@@ -214,9 +214,28 @@ def deserialize_with_metadata(
         >>> metadata
         {}
     """
+    # Try to deserialize with pickle first, fallback to json
+    deserialized = _try_deserialize(bytes_data)
+    
+    # Extract data and metadata from deserialized payload
+    return _extract_data_and_metadata(deserialized)
+
+
+def _try_deserialize(bytes_data: Union[bytes, str]) -> Any:
+    """Try to deserialize data with pickle first, fallback to json.
+    
+    Args:
+        bytes_data: Data to deserialize (bytes or string)
+        
+    Returns:
+        Deserialized data
+        
+    Raises:
+        SerializationError: If both pickle and json deserialization fail
+    """
     # Try to deserialize with pickle first
     try:
-        deserialized = pickle.loads(bytes_data)
+        return pickle.loads(bytes_data)
     except (pickle.UnpicklingError, TypeError, ValueError, EOFError) as pickle_error:
         # If pickle fails, try with json
         try:
@@ -225,7 +244,7 @@ def deserialize_with_metadata(
                 json_str = bytes_data.decode("utf-8")
             else:
                 json_str = bytes_data
-            deserialized = json.loads(json_str)
+            return json.loads(json_str)
         except (
             json.JSONDecodeError,
             UnicodeDecodeError,
@@ -238,6 +257,16 @@ def deserialize_with_metadata(
                 f"Pickle error: {str(pickle_error)}. JSON error: {str(json_error)}"
             ) from json_error
 
+
+def _extract_data_and_metadata(deserialized: Any) -> tuple[Any, Dict[str, Any]]:
+    """Extract data and metadata from deserialized payload.
+    
+    Args:
+        deserialized: The deserialized data
+        
+    Returns:
+        Tuple of (data, metadata)
+    """
     # Check if the deserialized data has a 'metadata' key
     if isinstance(deserialized, dict) and "metadata" in deserialized:
         metadata = deserialized["metadata"]

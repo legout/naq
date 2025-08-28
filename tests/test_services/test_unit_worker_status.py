@@ -9,7 +9,7 @@ import time
 from datetime import datetime, timezone
 
 from naq.worker.status import WorkerStatusManager
-from naq.models import WORKER_STATUS
+from naq.models.enums import WORKER_STATUS
 from naq.settings import (
     DEFAULT_NATS_URL,
     DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,

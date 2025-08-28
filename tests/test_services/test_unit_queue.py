@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, AsyncMock
 from datetime import datetime, timedelta, timezone
 import cloudpickle
 from naq.queue.core import Queue
-from naq.models import SCHEDULED_JOB_STATUS
+from naq.models.enums import SCHEDULED_JOB_STATUS
 from naq.settings import (
     NAQ_PREFIX,
     SCHEDULED_JOBS_KV_NAME

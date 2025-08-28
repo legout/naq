@@ -8,7 +8,7 @@ from rich.console import Console
 import typer
 
 from naq import __version__
-from naq.utils import setup_logging
+from naq.utils.logging import setup_logging
 from naq.utils.decorators import timing, log_errors
 from naq.utils.logging import StructuredLogger
 from naq.utils.serialization import SerializationHelper

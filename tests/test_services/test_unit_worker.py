@@ -10,7 +10,7 @@ import os
 from naq.worker import Worker
 from naq.models.jobs import Job
 from naq.models.enums import JOB_STATUS
-from naq.models import WORKER_STATUS
+from naq.models.enums import WORKER_STATUS
 from naq.settings import (
     NAQ_PREFIX,
     WORKER_KV_NAME,
