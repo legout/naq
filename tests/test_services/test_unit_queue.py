@@ -15,25 +15,82 @@ class TestQueue:
     """Test cases for the Queue class."""
     
     @pytest_asyncio.fixture
-    async def queue(self, mock_nats, mocker):
-        """Setup a test queue with mocked NATS."""
-        mock_nc, mock_js = mock_nats
+    async def queue(self, service_aware_nats_mock, service_test_config, mocker):
+        """Setup a test queue with ServiceManager and mocked NATS."""
+        mock_nc, mock_js = service_aware_nats_mock
         
-        # Mock the nats_jetstream context manager
-        mock_nats_jetstream = mocker.AsyncMock()
-        mock_nats_jetstream.__aenter__.return_value = (mock_nc, mock_js)
-        mock_nats_jetstream.__aexit__.return_value = None
-        mocker.patch('naq.connection.context_managers.nats_jetstream', return_value=mock_nats_jetstream)
+        # Create service config from service_test_config
+        from naq.services.config import GlobalServiceConfig
+        from naq.services.base import ServiceConfig, ServiceManager
+        from naq.services.connection import ConnectionService
+        from naq.services.streams import StreamService
+        from naq.services.jobs import JobService
+        from naq.services.events import EventService
+        from naq.services.kv_stores import KVStoreService
+        
+        # Create service config
+        service_config = ServiceConfig(**service_test_config["service_config"])
+        service_manager = ServiceManager(service_config)
+        
+        # Register connection service with mocked NATS
+        connection_service = ConnectionService(config=service_config)
+        connection_service._nc = mock_nc
+        connection_service._js = mock_js
+        connection_service._is_initialized = True
+        
+        # Register stream service with mocked NATS and connection service
+        stream_service = StreamService(config=service_config, connection_service=connection_service)
+        stream_service._nc = mock_nc
+        stream_service._js = mock_js
+        stream_service._is_initialized = True
+        
+        # Register kv_store service with mocked NATS and connection service
+        kv_store_service = KVStoreService(config=service_config, connection_service=connection_service)
+        kv_store_service._nc = mock_nc
+        kv_store_service._js = mock_js
+        kv_store_service._is_initialized = True
+        
+        # Register job service with mocked NATS and connection service
+        job_service = JobService(config=service_config, connection_service=connection_service)
+        job_service._nc = mock_nc
+        job_service._js = mock_js
+        job_service._is_initialized = True
+        
+        # Register event service with mocked NATS and connection service
+        event_service = EventService(config=service_config, connection_service=connection_service)
+        event_service._nc = mock_nc
+        event_service._js = mock_js
+        event_service._is_initialized = True
+        
+        # Manually register all services
+        service_manager._services["connection"] = connection_service
+        service_manager._service_configs["connection"] = service_config
+        service_manager._services["stream"] = stream_service
+        service_manager._service_configs["stream"] = service_config
+        service_manager._services["kv_store"] = kv_store_service
+        service_manager._service_configs["kv_store"] = service_config
+        service_manager._services["jobs"] = job_service
+        service_manager._service_configs["jobs"] = service_config
+        service_manager._services["events"] = event_service
+        service_manager._service_configs["events"] = service_config
         
         # Mock stream info to simulate existing stream
         mock_js.stream_info = AsyncMock()
         
-        q = Queue(name="test")
+        # Create global config for Queue
+        global_config = GlobalServiceConfig(
+            nats_url=service_test_config["nats_url"],
+            queue_name="test",
+            **service_test_config["service_config"]["custom_settings"]
+        )
+        
+        # Create Queue with service manager and config
+        q = Queue(name="test", service_manager=service_manager, config=global_config)
         return q
 
-    async def test_purge_queue(self, queue, mock_nats):
+    async def test_purge_queue(self, queue, service_aware_nats_mock):
         """Test purging all jobs from the queue."""
-        mock_nc, mock_js = mock_nats
+        mock_nc, mock_js = service_aware_nats_mock
         
         purged_count = await queue.purge()
         assert purged_count == 5
@@ -57,7 +114,7 @@ class TestQueue:
         with pytest.raises(ValueError, match=r"max_retries .* negative"):
             await queue.enqueue(sample_func, max_retries=-1)
 
-    async def test_invalid_queue_name(self, mock_nats):
+    async def test_invalid_queue_name(self, service_aware_nats_mock, service_test_config):
         """Test queue creation with invalid name raises error."""
         with pytest.raises(ValueError, match=r"Queue name .* empty"):
             Queue(name="")
@@ -65,9 +122,9 @@ class TestQueue:
         with pytest.raises(ValueError, match=r"Queue name .* invalid"):
             Queue(name="invalid/name")
 
-    async def test_enqueue_with_retries(self, queue, mock_nats):
+    async def test_enqueue_with_retries(self, queue, service_aware_nats_mock):
         """Test enqueueing a job with retry configuration."""
-        mock_nc, mock_js = mock_nats
+        mock_nc, mock_js = service_aware_nats_mock
         
         def sample_func():
             pass
@@ -84,9 +141,9 @@ class TestQueue:
         assert isinstance(published_payload, bytes)
         # Further payload inspection could be done here if needed
 
-    async def test_enqueue_at(self, queue, mock_nats):
+    async def test_enqueue_at(self, queue, service_aware_nats_mock):
         """Test scheduling a job for a specific time using enqueue_at."""
-        mock_nc, mock_js = mock_nats
+        mock_nc, mock_js = service_aware_nats_mock
         
         def sample_func():
             pass
@@ -114,9 +171,9 @@ class TestQueue:
         assert schedule_data["queue_name"] == queue.name
         assert abs(schedule_data["scheduled_timestamp_utc"] - run_at_datetime.timestamp()) < 1 # Check timestamp within a second
 
-    async def test_enqueue_in(self, queue, mock_nats):
+    async def test_enqueue_in(self, queue, service_aware_nats_mock):
         """Test scheduling a job with a delay using enqueue_in."""
-        mock_nc, mock_js = mock_nats
+        mock_nc, mock_js = service_aware_nats_mock
         
         def sample_func():
             pass
@@ -142,9 +199,9 @@ class TestQueue:
         # Check that the scheduled time is approximately correct
         assert abs(schedule_data["scheduled_timestamp_utc"] - expected_run_time.timestamp()) < 5 # Allow 5s diff for processing
 
-    async def test_cancel_scheduled_job(self, queue, mock_nats):
+    async def test_cancel_scheduled_job(self, queue, service_aware_nats_mock):
         """Test canceling a scheduled job."""
-        mock_nc, mock_js = mock_nats
+        mock_nc, mock_js = service_aware_nats_mock
         
         def sample_func(): pass
         run_at_datetime = datetime.now(timezone.utc) + timedelta(hours=1)
@@ -173,9 +230,9 @@ class TestQueue:
             purge=True
         )
 
-    async def test_pause_scheduled_job(self, queue, mock_nats):
+    async def test_pause_scheduled_job(self, queue, service_aware_nats_mock):
         """Test pausing a scheduled job."""
-        mock_nc, mock_js = mock_nats
+        mock_nc, mock_js = service_aware_nats_mock
 
         def sample_func(): pass
         run_at_datetime = datetime.now(timezone.utc) + timedelta(hours=1)
@@ -206,9 +263,9 @@ class TestQueue:
         assert updated_schedule_data["status"] == SCHEDULED_JOB_STATUS.PAUSED
         assert update_args.kwargs.get("last") == mock_kv_entry.revision # revision check
 
-    async def test_resume_scheduled_job(self, queue, mock_nats):
+    async def test_resume_scheduled_job(self, queue, service_aware_nats_mock):
         """Test resuming a paused scheduled job."""
-        mock_nc, mock_js = mock_nats
+        mock_nc, mock_js = service_aware_nats_mock
 
         def sample_func(): pass
         run_at_datetime = datetime.now(timezone.utc) + timedelta(hours=1)
@@ -239,9 +296,9 @@ class TestQueue:
         assert updated_schedule_data["status"] == SCHEDULED_JOB_STATUS.ACTIVE
         assert update_args.kwargs.get("last") == mock_kv_entry.revision # revision check
 
-    async def test_overlapping_schedules(self, queue, mock_nats):
+    async def test_overlapping_schedules(self, queue, service_aware_nats_mock):
         """Test scheduling multiple jobs that overlap in time."""
-        mock_nc, mock_js = mock_nats
+        mock_nc, mock_js = service_aware_nats_mock
         
         def task1(): pass
         def task2(): pass
@@ -295,9 +352,9 @@ class TestQueue:
         # Verify jobs were not published immediately
         mock_js.publish.assert_not_awaited()
 
-    async def test_retry_configuration_validation(self, queue, mock_nats):
+    async def test_retry_configuration_validation(self, queue, service_aware_nats_mock):
         """Test validation of retry configuration."""
-        mock_nc, mock_js = mock_nats
+        mock_nc, mock_js = service_aware_nats_mock
         
         def sample_func(): pass
         
@@ -317,9 +374,9 @@ class TestQueue:
         assert job.max_retries == 3
         assert job.retry_delay == 30
 
-    async def test_retry_strategy_exponential_backoff(self, queue, mock_nats):
+    async def test_retry_strategy_exponential_backoff(self, queue, service_aware_nats_mock):
         """Test exponential backoff retry strategy."""
-        mock_nc, mock_js = mock_nats
+        mock_nc, mock_js = service_aware_nats_mock
         
         def sample_func(): pass
         
@@ -341,9 +398,9 @@ class TestQueue:
         assert job_data["retry_strategy"] == "exponential"
         assert job_data["retry_delay"] == base_delay
 
-    async def test_retry_strategy_linear_backoff(self, queue, mock_nats):
+    async def test_retry_strategy_linear_backoff(self, queue, service_aware_nats_mock):
         """Test linear backoff retry strategy."""
-        mock_nc, mock_js = mock_nats
+        mock_nc, mock_js = service_aware_nats_mock
         
         def sample_func(): pass
         
@@ -365,9 +422,9 @@ class TestQueue:
         assert job_data["retry_strategy"] == "linear"
         assert job_data["retry_delay"] == base_delay
 
-    async def test_invalid_retry_strategy(self, queue, mock_nats):
+    async def test_invalid_retry_strategy(self, queue, service_aware_nats_mock):
         """Test invalid retry strategy handling."""
-        mock_nc, mock_js = mock_nats
+        mock_nc, mock_js = service_aware_nats_mock
         
         def sample_func(): pass
         
@@ -380,9 +437,9 @@ class TestQueue:
                 retry_strategy="invalid_strategy"
             )
 
-    async def test_retry_with_custom_exception_handling(self, queue, mock_nats):
+    async def test_retry_with_custom_exception_handling(self, queue, service_aware_nats_mock):
         """Test retry configuration with custom exception handling."""
-        mock_nc, mock_js = mock_nats
+        mock_nc, mock_js = service_aware_nats_mock
         
         def sample_func(): pass
         

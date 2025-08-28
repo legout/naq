@@ -19,7 +19,13 @@ from naq import (
     enqueue_in, enqueue_in_sync,
     schedule, schedule_sync,
     purge_queue, purge_queue_sync,
+    cancel_scheduled_job, cancel_scheduled_job_sync,
+    pause_scheduled_job, pause_scheduled_job_sync,
+    resume_scheduled_job, resume_scheduled_job_sync,
+    modify_scheduled_job, modify_scheduled_job_sync,
     list_workers, list_workers_sync,
+    nats_jetstream, nats_kv_store,
+    get_config, load_config,
     NAQError, NaqException,
     JOB_STATUS, JobEvent, WorkerEvent
 )
@@ -644,3 +650,112 @@ class TestBackwardCompatibilityIntegration:
         assert sync_job.job_id is not None
         assert async_job.job_id is not None
         assert sync_job.job_id != async_job.job_id  # Should be different
+
+
+class TestConnectionManagementWorkflows:
+    """Test connection management workflows."""
+
+    def test_nats_jetstream_function_exists(self):
+        """Test that nats_jetstream function exists and is callable."""
+        # Test that the function exists and is callable
+        assert callable(nats_jetstream)
+        
+        # Test that it has the expected parameters
+        import inspect
+        sig = inspect.signature(nats_jetstream)
+        assert 'config' in sig.parameters
+
+    def test_nats_kv_store_function_exists(self):
+        """Test that nats_kv_store function exists and is callable."""
+        # Test that the function exists and is callable
+        assert callable(nats_kv_store)
+        
+        # Test that it has the expected parameters
+        import inspect
+        sig = inspect.signature(nats_kv_store)
+        assert 'bucket_name' in sig.parameters
+        assert 'config' in sig.parameters
+
+
+class TestConfigurationWorkflows:
+    """Test configuration workflows."""
+
+    def test_get_config_function_exists(self):
+        """Test that get_config function exists and is callable."""
+        # Test that the function exists and is callable
+        assert callable(get_config)
+        
+        # Test that it has the expected parameters
+        import inspect
+        sig = inspect.signature(get_config)
+        # get_config should have no required parameters
+
+    def test_load_config_function_exists(self):
+        """Test that load_config function exists and is callable."""
+        # Test that the function exists and is callable
+        assert callable(load_config)
+        
+        # Test that it has the expected parameters
+        import inspect
+        sig = inspect.signature(load_config)
+        assert 'config_path' in sig.parameters
+
+
+class TestQueueManagementWorkflows:
+    """Test queue management workflows."""
+
+    def test_cancel_scheduled_job_functions_exist(self):
+        """Test that cancel_scheduled_job functions exist and are callable."""
+        # Test that the functions exist and are callable
+        assert callable(cancel_scheduled_job)
+        assert callable(cancel_scheduled_job_sync)
+        
+        # Test that they have the expected parameters
+        import inspect
+        sig = inspect.signature(cancel_scheduled_job)
+        assert 'job_id' in sig.parameters
+        
+        sig = inspect.signature(cancel_scheduled_job_sync)
+        assert 'job_id' in sig.parameters
+
+    def test_pause_scheduled_job_functions_exist(self):
+        """Test that pause_scheduled_job functions exist and are callable."""
+        # Test that the functions exist and are callable
+        assert callable(pause_scheduled_job)
+        assert callable(pause_scheduled_job_sync)
+        
+        # Test that they have the expected parameters
+        import inspect
+        sig = inspect.signature(pause_scheduled_job)
+        assert 'job_id' in sig.parameters
+        
+        sig = inspect.signature(pause_scheduled_job_sync)
+        assert 'job_id' in sig.parameters
+
+    def test_resume_scheduled_job_functions_exist(self):
+        """Test that resume_scheduled_job functions exist and are callable."""
+        # Test that the functions exist and are callable
+        assert callable(resume_scheduled_job)
+        assert callable(resume_scheduled_job_sync)
+        
+        # Test that they have the expected parameters
+        import inspect
+        sig = inspect.signature(resume_scheduled_job)
+        assert 'job_id' in sig.parameters
+        
+        sig = inspect.signature(resume_scheduled_job_sync)
+        assert 'job_id' in sig.parameters
+
+    def test_modify_scheduled_job_functions_exist(self):
+        """Test that modify_scheduled_job functions exist and are callable."""
+        # Test that the functions exist and are callable
+        assert callable(modify_scheduled_job)
+        assert callable(modify_scheduled_job_sync)
+        
+        # Test that they have the expected parameters
+        import inspect
+        sig = inspect.signature(modify_scheduled_job)
+        assert 'job_id' in sig.parameters
+        
+        sig = inspect.signature(modify_scheduled_job_sync)
+        assert 'job_id' in sig.parameters

@@ -16,6 +16,9 @@ from naq.settings import (
     FAILED_JOB_STREAM_NAME,
     FAILED_JOB_SUBJECT_PREFIX,
 )
+from naq.services.jobs import JobService
+from naq.services.events import EventService
+from naq.services.kv_stores import KVStoreService
 
 
 # Test helper functions
@@ -40,10 +43,14 @@ async def wait_for(condition_func, timeout=5.0, interval=0.1):
 
 
 @pytest_asyncio.fixture
-async def queue(nats_server) -> Queue:
-    """Create a test queue instance."""
-    print("[DEBUG] Creating Queue with nats_url:", nats_server)
-    queue = Queue(name="test-queue", nats_url=nats_server)
+async def queue(service_manager) -> Queue:
+    """Create a test queue instance using ServiceManager."""
+    print("[DEBUG] Creating Queue with ServiceManager")
+    # Get the JobService from the ServiceManager
+    job_service = await service_manager.get_service("jobs", JobService)
+    
+    # Create queue with service_manager parameter
+    queue = Queue(name="test-queue", service_manager=service_manager)
     try:
         yield queue
     finally:
@@ -53,12 +60,16 @@ async def queue(nats_server) -> Queue:
 
 
 @pytest_asyncio.fixture
-async def worker(nats_server) -> Worker:
-    """Create a test worker instance."""
-    print("[DEBUG] Creating Worker with nats_url:", nats_server)
+async def worker(service_manager) -> Worker:
+    """Create a test worker instance using ServiceManager."""
+    print("[DEBUG] Creating Worker with ServiceManager")
+    # Get service configuration
+    service_config = service_manager.config
+    
+    # Create worker with service_manager parameter
     worker = Worker(
         queues="test-queue",
-        nats_url=nats_server,
+        service_manager=service_manager,
         concurrency=1,  # Single worker for predictable testing
         worker_name="test-worker",
     )
@@ -69,18 +80,19 @@ async def worker(nats_server) -> Worker:
         await worker._close()
 
 
-async def fetch_job_result(job: Job, nats_client) -> Dict[str, Any]:
-    """Helper to fetch a job's result from the NATS KV store."""
+async def fetch_job_result(job: Job, service_manager) -> Dict[str, Any]:
+    """Helper to fetch a job's result from the NATS KV store using ServiceManager."""
     print(f"[DEBUG] Fetching job result for job_id={job.job_id}")
-    js = nats_client.jetstream()
-    kv = await js.key_value(bucket=RESULT_KV_NAME)
+    # Get KVStoreService from ServiceManager
+    kv_store_service = await service_manager.get_service("kv_store", KVStoreService)
+    kv = await kv_store_service.get_kv_store(RESULT_KV_NAME)
     entry = await kv.get(job.job_id.encode())
     print(f"[DEBUG] Job result fetched for job_id={job.job_id}")
     return Job.deserialize_result(entry.value)
 
 
 @pytest.mark.asyncio
-async def test_basic_fetch_process_ack(queue: Queue, worker: Worker, nats_client):
+async def test_basic_fetch_process_ack(queue: Queue, worker: Worker, service_manager):
     """Test 1: Basic Fetch/Process/ACK via NATS"""
     # Enqueue a test job
     job = await queue.enqueue(test_function)
@@ -91,7 +103,7 @@ async def test_basic_fetch_process_ack(queue: Queue, worker: Worker, nats_client
         # Wait for job completion
         async def check_result():
             try:
-                result = await fetch_job_result(job, nats_client)
+                result = await fetch_job_result(job, service_manager)
                 return result["status"] == JOB_STATUS.COMPLETED.value
             except Exception:
                 return False
@@ -100,7 +112,7 @@ async def test_basic_fetch_process_ack(queue: Queue, worker: Worker, nats_client
         assert await wait_for(check_result, timeout=5.0)
 
         # Verify the result
-        result_data = await fetch_job_result(job, nats_client)
+        result_data = await fetch_job_result(job, service_manager)
         assert result_data["status"] == JOB_STATUS.COMPLETED.value
         assert result_data["result"] == "test result"
 
@@ -110,7 +122,7 @@ async def test_basic_fetch_process_ack(queue: Queue, worker: Worker, nats_client
 
 
 @pytest.mark.asyncio
-async def test_nats_ack_prevents_redelivery(queue: Queue, worker: Worker, nats_client):
+async def test_nats_ack_prevents_redelivery(queue: Queue, worker: Worker, service_manager):
     """Test 2: NATS ACK Prevents Redelivery"""
     # Enqueue a test job
     job = await queue.enqueue(test_function)
@@ -122,7 +134,7 @@ async def test_nats_ack_prevents_redelivery(queue: Queue, worker: Worker, nats_c
         # Wait for job completion
         async def check_result():
             try:
-                result = await fetch_job_result(job, nats_client)
+                result = await fetch_job_result(job, service_manager)
                 return result["status"] == JOB_STATUS.COMPLETED.value
             except Exception as e:
                 print("[DEBUG] Exception in check_result:", e)
@@ -137,7 +149,9 @@ async def test_nats_ack_prevents_redelivery(queue: Queue, worker: Worker, nats_c
 
         async def check_no_redelivery():
             print("[DEBUG] Checking for redelivery")
-            js = nats_client.jetstream()
+            # Get ConnectionService from ServiceManager
+            connection_service = await service_manager.get_service("connection")
+            js = await connection_service.get_jetstream()
 
             try:
                 # Attempt to pull message with timeout
@@ -163,7 +177,7 @@ async def test_nats_ack_prevents_redelivery(queue: Queue, worker: Worker, nats_c
 
 @pytest.mark.asyncio
 async def test_simulated_missing_ack_leads_to_redelivery(
-    queue: Queue, worker: Worker, nats_client
+    queue: Queue, worker: Worker, service_manager
 ):
     """Test 3: Missing NATS ACK Leads to Redelivery"""
     # Create a failing job to prevent ACK
@@ -194,7 +208,7 @@ async def test_simulated_missing_ack_leads_to_redelivery(
 
 @pytest.mark.asyncio
 async def test_dead_letter_queue_after_max_retries(
-    queue: Queue, worker: Worker, nats_client
+    queue: Queue, worker: Worker, service_manager
 ):
     """Test 4: NATS Dead-Letter Queue (DLQ) after Max Retries"""
     # Create a job that will fail consistently
@@ -205,7 +219,9 @@ async def test_dead_letter_queue_after_max_retries(
     try:
         # Wait for job to exhaust retries and move to failed queue
         async def check_failed_queue():
-            js = nats_client.jetstream()
+            # Get ConnectionService from ServiceManager
+            connection_service = await service_manager.get_service("connection")
+            js = await connection_service.get_jetstream()
 
             try:
                 # Check if message is in failed job stream
@@ -221,7 +237,7 @@ async def test_dead_letter_queue_after_max_retries(
         assert await wait_for(check_failed_queue, timeout=15.0)
 
         # Verify job state shows final failure
-        result_data = await fetch_job_result(job, nats_client)
+        result_data = await fetch_job_result(job, service_manager)
         assert result_data["status"] == JOB_STATUS.FAILED.value
         assert "Simulated failure" in result_data["error"]
 
@@ -231,7 +247,7 @@ async def test_dead_letter_queue_after_max_retries(
 
 
 @pytest.mark.asyncio
-async def test_job_state_persistence(queue: Queue, worker: Worker, nats_client):
+async def test_job_state_persistence(queue: Queue, worker: Worker, service_manager):
     """Test 5: Job State Persistence via NATS"""
     # Enqueue a test job
     job = await queue.enqueue(test_function)
@@ -243,7 +259,7 @@ async def test_job_state_persistence(queue: Queue, worker: Worker, nats_client):
         async def check_state():
             try:
                 # Check both completion status and result
-                result = await fetch_job_result(job, nats_client)
+                result = await fetch_job_result(job, service_manager)
                 return (
                     result["status"] == JOB_STATUS.COMPLETED.value
                     and result["result"] == "test result"
@@ -254,7 +270,7 @@ async def test_job_state_persistence(queue: Queue, worker: Worker, nats_client):
         assert await wait_for(check_state, timeout=5.0)
 
         # Verify the persisted state details
-        result_data = await fetch_job_result(job, nats_client)
+        result_data = await fetch_job_result(job, service_manager)
         assert result_data["status"] == JOB_STATUS.COMPLETED.value
         assert result_data["result"] == "test result"
         assert "error" not in result_data or result_data["error"] is None
@@ -265,12 +281,12 @@ async def test_job_state_persistence(queue: Queue, worker: Worker, nats_client):
 
 
 @pytest.mark.asyncio
-async def test_custom_nats_configuration(nats_server: str, nats_client):
+async def test_custom_nats_configuration(service_manager):
     """Test 6: Custom NATS Configuration Variations"""
-    custom_queue = Queue(name="custom-queue", nats_url=nats_server)
+    custom_queue = Queue(name="custom-queue", service_manager=service_manager)
     custom_worker = Worker(
         queues="custom-queue",
-        nats_url=nats_server,
+        service_manager=service_manager,
         concurrency=2,
         worker_name="custom-worker",
     )
@@ -284,7 +300,7 @@ async def test_custom_nats_configuration(nats_server: str, nats_client):
         # Wait for job completion
         async def check_completion():
             try:
-                result = await fetch_job_result(job, nats_client)
+                result = await fetch_job_result(job, service_manager)
                 return result["status"] == JOB_STATUS.COMPLETED.value
             except Exception:
                 return False
@@ -292,7 +308,7 @@ async def test_custom_nats_configuration(nats_server: str, nats_client):
         assert await wait_for(check_completion, timeout=5.0)
 
         # Verify the job was processed
-        result_data = await fetch_job_result(job, nats_client)
+        result_data = await fetch_job_result(job, service_manager)
         assert result_data["status"] == JOB_STATUS.COMPLETED.value
         assert result_data["result"] == "test result"
 
@@ -304,12 +320,30 @@ async def test_custom_nats_configuration(nats_server: str, nats_client):
 
 
 @pytest.mark.asyncio
-async def test_handling_nats_connection_error(queue: Queue, nats_server: str):
+async def test_handling_nats_connection_error(queue: Queue, service_manager):
     """Test 7: Handling NATS Connection Errors"""
     # Create worker with invalid NATS URL to simulate connection error
+    # Create a separate service config with invalid URL
+    from naq.services.base import ServiceConfig
+    bad_service_config = ServiceConfig(
+        nats_url="nats://nonexistent:4222",
+        log_level="DEBUG",
+        custom_settings={"test_mode": True}
+    )
+    
+    # Create a temporary service manager with bad config
+    from naq.services.base import ServiceManager
+    bad_service_manager = ServiceManager(config=bad_service_config)
+    
+    # Register required services
+    await bad_service_manager.register_service("connection", ConnectionService, initialize=False)
+    await bad_service_manager.register_service("kv_store", KVStoreService, initialize=False)
+    await bad_service_manager.register_service("events", EventService, initialize=False)
+    await bad_service_manager.register_service("jobs", JobService, initialize=False)
+    
     bad_worker = Worker(
         queues="test-queue",
-        nats_url="nats://nonexistent:4222",
+        service_manager=bad_service_manager,
         worker_name="bad-worker",
     )
 
@@ -319,10 +353,13 @@ async def test_handling_nats_connection_error(queue: Queue, nats_server: str):
     # Run bad worker - should handle connection error gracefully
     with pytest.raises(Exception):
         await bad_worker.run()
+    
+    # Cleanup
+    await bad_service_manager.cleanup_all()
 
 
 @pytest.mark.asyncio
-async def test_handling_nats_ack_failure(queue: Queue, worker: Worker, nats_client):
+async def test_handling_nats_ack_failure(queue: Queue, worker: Worker, service_manager):
     """Test 8: NATS ACK Failures/Timeouts"""
     # Enqueue a job that will succeed but encounter ACK issues
     job = await queue.enqueue(failing_function, max_retries=2)
@@ -333,7 +370,7 @@ async def test_handling_nats_ack_failure(queue: Queue, worker: Worker, nats_clie
         # Wait for retries due to ACK failure
         async def check_retries():
             try:
-                result = await fetch_job_result(job, nats_client)
+                result = await fetch_job_result(job, service_manager)
                 return result["status"] == JOB_STATUS.FAILED.value
             except Exception:
                 return False
@@ -341,7 +378,7 @@ async def test_handling_nats_ack_failure(queue: Queue, worker: Worker, nats_clie
         assert await wait_for(check_retries, timeout=10.0)
 
         # Verify the job eventually failed after retries
-        result_data = await fetch_job_result(job, nats_client)
+        result_data = await fetch_job_result(job, service_manager)
         assert result_data["status"] == JOB_STATUS.FAILED.value
         assert "Simulated failure" in result_data["error"]
 
@@ -351,12 +388,12 @@ async def test_handling_nats_ack_failure(queue: Queue, worker: Worker, nats_clie
 
 
 @pytest.mark.asyncio
-async def test_concurrent_processing(queue: Queue, nats_server: str, nats_client):
+async def test_concurrent_processing(queue: Queue, service_manager):
     """Test 9: Concurrent Processing with NATS"""
     # Create a worker with concurrency > 1
     concurrent_worker = Worker(
         queues="test-queue",
-        nats_url=nats_server,
+        service_manager=service_manager,
         concurrency=3,
         worker_name="concurrent-worker",
     )
@@ -375,7 +412,7 @@ async def test_concurrent_processing(queue: Queue, nats_server: str, nats_client
             try:
                 completed = 0
                 for job in jobs:
-                    result = await fetch_job_result(job, nats_client)
+                    result = await fetch_job_result(job, service_manager)
                     if result["status"] == JOB_STATUS.COMPLETED.value:
                         completed += 1
                 return completed == len(jobs)
@@ -386,7 +423,7 @@ async def test_concurrent_processing(queue: Queue, nats_server: str, nats_client
 
         # Verify all jobs completed successfully
         for job in jobs:
-            result_data = await fetch_job_result(job, nats_client)
+            result_data = await fetch_job_result(job, service_manager)
             assert result_data["status"] == JOB_STATUS.COMPLETED.value
             assert result_data["result"] == "test result"
 

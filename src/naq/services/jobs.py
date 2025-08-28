@@ -99,6 +99,10 @@ class JobService(BaseService):
         self._connection_service = connection_service
         self._kv_store_service = kv_store_service
         self._event_service = event_service
+        
+        # Track which services were created by this service
+        self._created_kv_store_service = False
+        self._created_event_service = False
 
     def _extract_job_config(self) -> JobServiceConfig:
         """
@@ -226,6 +230,7 @@ class JobService(BaseService):
                 )
                 
                 await self._kv_store_service.initialize()
+                self._created_kv_store_service = True
 
             # Create event service if not provided
             if self._event_service is None and self._job_config.enable_event_logging:
@@ -251,6 +256,7 @@ class JobService(BaseService):
                     )
                 
                 await self._event_service.initialize()
+                self._created_event_service = True
 
             self._logger.info("JobService initialized successfully")
 
@@ -270,13 +276,10 @@ class JobService(BaseService):
 
             # Note: We don't clean up externally provided services
             # Only clean up if we created the services
-            if self._event_service is not None and self._connection_service is not None:
+            if self._event_service is not None and self._created_event_service:
                 await self._event_service.cleanup()
 
-            if (
-                self._kv_store_service is not None
-                and self._connection_service is not None
-            ):
+            if self._kv_store_service is not None and self._created_kv_store_service:
                 await self._kv_store_service.cleanup()
 
             self._logger.info("JobService cleaned up successfully")

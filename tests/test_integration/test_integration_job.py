@@ -29,9 +29,7 @@ class TestJobIntegration:
     """Integration tests for the Job module."""
 
     # Persistence & Retrieval Tests
-    # @pytest.mark.asyncio
-    # async
-    def test_round_trip_serialization(self, mock_nats):
+    def test_round_trip_serialization(self):
         """Test round-trip serialization of a Job with simple args/kwargs."""
 
         def sample_function(x: int, text: str = "default") -> str:
@@ -67,9 +65,7 @@ class TestJobIntegration:
             == "42: test"
         )
 
-    # @pytest.mark.asyncio
-    # async
-    def test_complex_data_types(self, mock_nats):
+    def test_complex_data_types(self):
         """Test serialization with complex data types."""
         nested_data = {
             "list": [1, 2, {"nested": True}],
@@ -99,9 +95,7 @@ class TestJobIntegration:
         assert retrieved_job.args[1].value == custom_obj.value
         assert retrieved_job.args[1].timestamp == custom_obj.timestamp
 
-    # @pytest.mark.asyncio
-    # async
-    def test_timestamp_integrity(self, mock_nats, monkeypatch):
+    def test_timestamp_integrity(self, monkeypatch):
         """Test preservation of timestamp fields during serialization."""
         fixed_time = 1746972733.636187  # Fixed timestamp for testing
         monkeypatch.setattr("time.time", lambda: fixed_time)
@@ -138,9 +132,7 @@ class TestJobIntegration:
         assert retrieved_job.function() == "test"
         assert retrieved_job.function.__name__ == test_func.__name__
 
-    # @pytest.mark.asyncio
-    # async
-    def test_serialization_with_custom_types(self, mock_nats):
+    def test_serialization_with_custom_types(self):
         """Test serialization handling of custom types."""
         current_time = datetime.now()
 
@@ -215,9 +207,7 @@ class TestJobIntegration:
         with pytest.raises(SerializationError):
             Job.deserialize(corrupted)
 
-    # @pytest.mark.asyncio
-    # async
-    def test_missing_required_fields(self, mock_nats):
+    def test_missing_required_fields(self):
         """Test handling of incomplete job data."""
 
         def sample_func():

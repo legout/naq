@@ -159,6 +159,60 @@ def test_naq_exceptions_imports():
     assert issubclass(JobExecutionError, NaqException)
 
 
+def test_naq_connection_management_imports():
+    """Test importing connection management functions from naq package."""
+    # Test importing connection management functions
+    from naq import nats_jetstream, nats_kv_store
+    
+    # Verify imported objects are callable
+    assert callable(nats_jetstream)
+    assert callable(nats_kv_store)
+
+
+def test_naq_config_functions_imports():
+    """Test importing configuration functions from naq package."""
+    # Test importing configuration functions
+    from naq import get_config, load_config
+    
+    # Verify imported objects are callable
+    assert callable(get_config)
+    assert callable(load_config)
+
+
+def test_naq_queue_management_functions_imports():
+    """Test importing queue management functions from naq package."""
+    # Test importing async queue management functions
+    from naq import (
+        cancel_scheduled_job, pause_scheduled_job, resume_scheduled_job, modify_scheduled_job,
+        cancel_scheduled_job_sync, pause_scheduled_job_sync, resume_scheduled_job_sync, modify_scheduled_job_sync
+    )
+    
+    # Verify imported objects are callable
+    assert callable(cancel_scheduled_job)
+    assert callable(pause_scheduled_job)
+    assert callable(resume_scheduled_job)
+    assert callable(modify_scheduled_job)
+    assert callable(cancel_scheduled_job_sync)
+    assert callable(pause_scheduled_job_sync)
+    assert callable(resume_scheduled_job_sync)
+    assert callable(modify_scheduled_job_sync)
+
+
+def test_naq_additional_exceptions_imports():
+    """Test importing additional exception types from naq package."""
+    # Test importing additional exception types
+    from naq import exceptions
+    from naq.exceptions import ValidationError, TypeConversionError
+    
+    # Verify imported objects are exception classes
+    assert issubclass(ValidationError, Exception)
+    assert issubclass(TypeConversionError, Exception)
+    
+    # Verify they're accessible through the exceptions module
+    assert hasattr(exceptions, 'ValidationError')
+    assert hasattr(exceptions, 'TypeConversionError')
+
+
 def test_naq_models_core_imports():
     """Test importing core models from naq.models package."""
     # Test importing core models from naq.models
