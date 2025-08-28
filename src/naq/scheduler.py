@@ -1,12 +1,10 @@
 # src/naq/scheduler.py
 import asyncio
-import datetime
 import signal
 import socket
 import time
 import uuid
-from datetime import timezone
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from loguru import logger
 
@@ -17,6 +15,13 @@ try:
     from croniter import croniter
 except ImportError:
     croniter = None  # type: ignore
+
+# Check if croniter is available and log a warning if it's not
+if croniter is None:
+    logger.warning(
+        "croniter library not installed. Cron-based scheduling will not work. "
+        "Install croniter to enable cron-based scheduling: pip install croniter"
+    )
 
 from .exceptions import NaqConnectionError
 from .settings import (
@@ -218,134 +223,6 @@ class LeaderElection:
         return self._is_leader
 
 
-class ScheduledJobProcessor:
-    """
-    Handles the processing of scheduled jobs using context managers.
-    """
-
-    def __init__(
-        self,
-        connection_service: Optional[ConnectionService] = None,
-        kv_store_service: Optional[KVStoreService] = None,
-        event_service: Optional[EventService] = None,
-    ):
-        # Services are kept for compatibility but not used in context manager approach
-        self._connection_service = connection_service
-        self._kv_store_service = kv_store_service
-        self._event_service = event_service
-
-    async def _enqueue_job(self, queue_name: str, subject: str, payload: bytes) -> bool:
-        """
-        Enqueue a job payload to the specified queue subject.
-
-        Returns:
-            True if enqueuing was successful, False otherwise
-        """
-        if not self._connection_service:
-            logger.error("ConnectionService not available for enqueuing job")
-            return False
-
-        try:
-            # Use the connection service to publish the job
-            js = self._connection_service.js
-            if not js:
-                logger.error("JetStream not available for enqueuing job")
-                return False
-
-            ack = await js.publish(subject=subject, payload=payload)
-            logger.debug(
-                f"Enqueued job to {subject}. Stream: {ack.stream}, Seq: {ack.seq}"
-            )
-            return True
-        except Exception as e:
-            logger.error(f"Failed to enqueue job payload to subject '{subject}': {e}")
-            return False
-
-    def _calculate_next_runtime(
-        self, schedule_data: Dict[str, Any], scheduled_ts: float
-    ) -> Optional[float]:
-        """
-        Calculate the next runtime for a recurring job.
-
-        Args:
-            schedule_data: The job schedule data
-            scheduled_ts: The previous scheduled timestamp
-
-        Returns:
-            Next runtime timestamp or None if not recurring
-        """
-        cron = schedule_data.get("cron")
-        interval_seconds = schedule_data.get("interval_seconds")
-        next_scheduled_ts = None
-
-        if cron:
-            if croniter is None:
-                logger.error(
-                    "Cannot reschedule cron job: 'croniter' library not installed."
-                )
-                return None
-
-            # Calculate next run time based on the previous scheduled time
-            base_dt = datetime.datetime.fromtimestamp(scheduled_ts, timezone.utc)
-            cron_iter = croniter(cron, base_dt)
-            next_scheduled_ts = cron_iter.get_next(datetime.datetime).timestamp()
-
-        elif interval_seconds:
-            # Calculate next run time based on the previous scheduled time + interval
-            next_scheduled_ts = scheduled_ts + interval_seconds
-
-        return next_scheduled_ts
-
-    async def process_jobs(self, is_leader: bool) -> tuple[int, int]:
-        """
-        Check the KV store for jobs ready to run and process them.
-
-        Args:
-            is_leader: Whether this instance is the leader
-
-        Returns:
-            Tuple of (processed_count, error_count)
-        """
-        if not is_leader:
-            return 0, 0
-
-        processed_count = 0
-        error_count = 0
-
-        try:
-            # Note: KVStoreService doesn't have a direct keys() method,
-            # so we'll need to handle this differently
-            # For now, we'll rely on the SchedulerService to handle this
-            logger.debug("Scheduled job processing delegated to SchedulerService")
-            return 0, 0
-
-        except Exception as e:
-            logger.exception(f"Unexpected error during scheduler check: {e}")
-            error_count += 1
-
-        return processed_count, error_count
-
-    async def _process_single_job(
-        self, key_bytes: bytes, now_ts: float
-    ) -> tuple[int, int]:
-        """
-        Process a single scheduled job.
-
-        Note: This method is now simplified as most processing is handled by
-        SchedulerService.
-
-        Args:
-            key_bytes: The KV store key
-            now_ts: Current timestamp
-
-        Returns:
-            Tuple of (processed_count, error_count)
-        """
-        # This method is now a no-op as processing is delegated to SchedulerService
-        # The SchedulerService.trigger_due_jobs() method handles all the logic
-        return 0, 0
-
-
 class Scheduler:
     """
     Scheduler for NAQ jobs. Polls the scheduled jobs KV store and enqueues jobs
@@ -393,7 +270,6 @@ class Scheduler:
             lock_renew_interval=SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS,
             kv_store_service=None,  # Will be set during _connect()
         )
-        self._job_processor: Optional[ScheduledJobProcessor] = None
 
         # Services will be initialized during _connect()
         self._connection_service: Optional[ConnectionService] = None
@@ -451,11 +327,6 @@ class Scheduler:
             # Set the KV store service for leader election
             self._leader_election._kv_store_service = self._kv_store_service
             await self._leader_election.initialize()
-
-        # Create job processor
-        self._job_processor = ScheduledJobProcessor(
-            self._connection_service, self._kv_store_service, self._event_service
-        )
 
     async def run(self) -> None:
         """Starts the scheduler loop with leader election."""
@@ -551,7 +422,6 @@ class Scheduler:
         self._kv_store_service = None
         self._event_service = None
         self._scheduler_service = None
-        self._job_processor = None
 
     def signal_handler(self, sig, frame) -> None:
         """Handles termination signals."""
