@@ -155,25 +155,29 @@ CONFIG_SCHEMA = {
             "description": "Queue configuration",
             "properties": {
                 "default_name": {"type": "string", "description": "Default queue name"},
-                "ack_wait": {"type": "integer", "description": "Default ack wait time"}
-            }
+                "ack_wait": {"type": "integer", "description": "Default ack wait time"},
+            },
         },
         "scheduler": {
             "type": ["object", "null"],
             "description": "Scheduler configuration",
             "properties": {
                 "lock_ttl": {"type": "number", "description": "Scheduler lock TTL"},
-                "lock_renew_interval": {"type": "number", "description": "Lock renew interval"},
+                "lock_renew_interval": {
+                    "type": "number",
+                    "description": "Lock renew interval",
+                },
                 "job_status_ttl": {"type": "number", "description": "Job status TTL"},
-                "max_failures": {"type": "integer", "description": "Max schedule failures"}
-            }
+                "max_failures": {
+                    "type": "integer",
+                    "description": "Max schedule failures",
+                },
+            },
         },
         "results": {
             "type": ["object", "null"],
             "description": "Results configuration",
-            "properties": {
-                "ttl": {"type": "integer", "description": "Result TTL"}
-            }
+            "properties": {"ttl": {"type": "integer", "description": "Result TTL"}},
         },
         "serialization": {
             "type": ["object", "null"],
@@ -181,21 +185,24 @@ CONFIG_SCHEMA = {
             "properties": {
                 "method": {"type": "string", "description": "Serialization method"},
                 "json_encoder": {"type": "string", "description": "JSON encoder class"},
-                "json_decoder": {"type": "string", "description": "JSON decoder class"}
-            }
+                "json_decoder": {"type": "string", "description": "JSON decoder class"},
+            },
         },
         "logging": {
             "type": ["object", "null"],
             "description": "Logging configuration",
             "properties": {
                 "level": {"type": "string", "description": "Log level"},
-                "to_file_enabled": {"type": "boolean", "description": "Enable file logging"},
-                "file_path": {"type": "string", "description": "Log file path"}
-            }
+                "to_file_enabled": {
+                    "type": "boolean",
+                    "description": "Enable file logging",
+                },
+                "file_path": {"type": "string", "description": "Log file path"},
+            },
         },
         "database": {
             "type": ["object", "null"],
-            "description": "Database configuration"
+            "description": "Database configuration",
         },
     },
     "required": ["nats", "workers", "events"],

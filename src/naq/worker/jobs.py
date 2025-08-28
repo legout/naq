@@ -13,10 +13,8 @@ from nats.js.kv import KeyValue
 
 from ..models import JOB_STATUS
 from ..models.jobs import Job
-from ..services import (ConnectionService, JobService, KVStoreService,
-                        ServiceManager)
-from ..settings import (DEFAULT_RESULT_TTL_SECONDS, JOB_STATUS_KV_NAME,
-                        RESULT_KV_NAME)
+from ..services import ConnectionService, JobService, KVStoreService, ServiceManager
+from ..settings import DEFAULT_RESULT_TTL_SECONDS, JOB_STATUS_KV_NAME, RESULT_KV_NAME
 from ..utils.decorators import timing
 from ..utils.error_handling import ErrorHandler
 from ..utils.logging import StructuredLogger

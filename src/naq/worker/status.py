@@ -13,11 +13,12 @@ from typing import Any, Dict, List, Optional
 
 from ..exceptions import NaqException
 from ..models.enums import WORKER_STATUS
-from ..services import (ConnectionService, EventService, KVStoreService,
-                        ServiceManager)
-from ..settings import (DEFAULT_NATS_URL,
-                        DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
-                        WORKER_KV_NAME)
+from ..services import ConnectionService, EventService, KVStoreService, ServiceManager
+from ..settings import (
+    DEFAULT_NATS_URL,
+    DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
+    WORKER_KV_NAME,
+)
 from ..utils.decorators import retry, timing
 from ..utils.error_handling import ErrorHandler
 from ..utils.logging import StructuredLogger
@@ -280,8 +281,7 @@ class WorkerStatusManager:
 
         try:
             # Use ServiceManager and KVStoreService
-            from ..services import (KVStoreService, ServiceConfig,
-                                    ServiceManager)
+            from ..services import KVStoreService, ServiceConfig, ServiceManager
 
             # Create config with the provided URL
             config = ServiceConfig(nats_url=nats_url or DEFAULT_NATS_URL)

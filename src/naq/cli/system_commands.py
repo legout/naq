@@ -172,7 +172,7 @@ def health(
                 connection_service = await service_manager.register_service(
                     "connection", ConnectionService, initialize=True
                 )
-                
+
                 # Use the connection service to test connection
                 is_connected = await connection_service.test_connection()
                 if is_connected:

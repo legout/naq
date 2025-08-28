@@ -160,7 +160,9 @@ class ConfigLoader:
                 # Handle legacy flat format environment variables
                 if "__" not in config_key:
                     # Legacy format: convert to nested structure
-                    env_config = self._handle_legacy_env_var(config_key, value, env_config)
+                    env_config = self._handle_legacy_env_var(
+                        config_key, value, env_config
+                    )
                 else:
                     # New nested format
                     parts = config_key.split("__")
@@ -180,7 +182,9 @@ class ConfigLoader:
 
         return env_config
 
-    def _handle_legacy_env_var(self, key: str, value: str, env_config: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_legacy_env_var(
+        self, key: str, value: str, env_config: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Handle legacy flat format environment variables.
 
         Converts old format variables to new nested structure:
@@ -235,6 +239,7 @@ class ConfigLoader:
         # Try to parse as JSON first (for lists and complex objects)
         try:
             import json
+
             parsed = json.loads(value)
             return parsed
         except (json.JSONDecodeError, ValueError):

@@ -89,6 +89,7 @@ class StreamService(BaseService):
         super().__init__(config)
         # Store the NAQConfig instance
         from ..config import get_config
+
         self._naq_config = naq_config if naq_config is not None else get_config()
         # Extract stream-specific configuration
         self._stream_config = self._extract_stream_config()
@@ -108,35 +109,57 @@ class StreamService(BaseService):
         # Override with NAQ config streams settings if provided
         if self._naq_config and self._naq_config.streams:
             naq_stream_config = self._naq_config.streams
-            
+
             # Map NAQ config to stream service config
-            if hasattr(naq_stream_config, 'stream_name') and naq_stream_config.stream_name:
+            if (
+                hasattr(naq_stream_config, "stream_name")
+                and naq_stream_config.stream_name
+            ):
                 stream_config.stream_name = naq_stream_config.stream_name
-            
-            if hasattr(naq_stream_config, 'subjects') and naq_stream_config.subjects:
+
+            if hasattr(naq_stream_config, "subjects") and naq_stream_config.subjects:
                 stream_config.subjects = naq_stream_config.subjects
-            
-            if hasattr(naq_stream_config, 'storage') and naq_stream_config.storage:
+
+            if hasattr(naq_stream_config, "storage") and naq_stream_config.storage:
                 stream_config.default_storage = naq_stream_config.storage
-            
-            if hasattr(naq_stream_config, 'replicas') and naq_stream_config.replicas is not None:
+
+            if (
+                hasattr(naq_stream_config, "replicas")
+                and naq_stream_config.replicas is not None
+            ):
                 stream_config.default_replicas = naq_stream_config.replicas
-            
-            if hasattr(naq_stream_config, 'max_age') and naq_stream_config.max_age is not None:
+
+            if (
+                hasattr(naq_stream_config, "max_age")
+                and naq_stream_config.max_age is not None
+            ):
                 # Convert to int if it's a whole number, otherwise keep as string
-                if isinstance(naq_stream_config.max_age, float) and naq_stream_config.max_age.is_integer():
+                if (
+                    isinstance(naq_stream_config.max_age, float)
+                    and naq_stream_config.max_age.is_integer()
+                ):
                     stream_config.max_age = str(int(naq_stream_config.max_age))
                 else:
                     stream_config.max_age = str(naq_stream_config.max_age)
-            
-            if hasattr(naq_stream_config, 'max_msgs') and naq_stream_config.max_msgs is not None:
+
+            if (
+                hasattr(naq_stream_config, "max_msgs")
+                and naq_stream_config.max_msgs is not None
+            ):
                 stream_config.max_msgs = naq_stream_config.max_msgs
-            
-            if hasattr(naq_stream_config, 'max_bytes') and naq_stream_config.max_bytes is not None:
+
+            if (
+                hasattr(naq_stream_config, "max_bytes")
+                and naq_stream_config.max_bytes is not None
+            ):
                 stream_config.max_bytes = naq_stream_config.max_bytes
 
         # Override with service config if provided (for backward compatibility)
-        if self._config and hasattr(self._config, 'custom_settings') and self._config.custom_settings:
+        if (
+            self._config
+            and hasattr(self._config, "custom_settings")
+            and self._config.custom_settings
+        ):
             custom_settings = self._config.custom_settings
 
             if "default_storage" in custom_settings:

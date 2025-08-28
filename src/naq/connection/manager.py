@@ -78,7 +78,7 @@ class ConnectionManager:
         try:
             nc = await nats.connect(url, name="naq_client")
             logger.info(f"NATS connection established to {url}")
-            
+
             # Now acquire the lock only to store the connection
             async with self._lock:
                 # Double-check pattern to prevent race conditions
@@ -100,9 +100,7 @@ class ConnectionManager:
                     tls_conns[url] = nc
                 return nc
         except Exception as e:
-            raise NaqConnectionError(
-                f"Failed to connect to NATS at {url}: {e}"
-            ) from e
+            raise NaqConnectionError(f"Failed to connect to NATS at {url}: {e}") from e
 
     async def get_jetstream(
         self, url: str = DEFAULT_NATS_URL, *, prefer_thread_local: bool = False

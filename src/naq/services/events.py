@@ -97,13 +97,16 @@ class EventService(BaseService):
         super().__init__(config)
         # Store the NAQConfig instance
         from ..config import get_config
+
         self._naq_config = naq_config if naq_config is not None else get_config()
         # Extract event-specific configuration
         self._event_config = self._extract_event_config()
         self._connection_service = connection_service
         self._kv_store_service = kv_store_service
         # Initialize list for custom event processors
-        self._custom_processors: List[Callable[[Union[JobEvent, WorkerEvent]], Awaitable[None]]] = []
+        self._custom_processors: List[
+            Callable[[Union[JobEvent, WorkerEvent]], Awaitable[None]]
+        ] = []
 
     def _extract_event_config(self) -> EventServiceConfig:
         """
@@ -118,48 +121,65 @@ class EventService(BaseService):
         # Override with NAQ config events settings if provided
         if self._naq_config and self._naq_config.events:
             naq_events_config = self._naq_config.events
-            
+
             # Map NAQ config to event service config
             if naq_events_config.enabled is not None:
                 event_config.enable_event_logging = naq_events_config.enabled
                 event_config.enabled = naq_events_config.enabled
-            
+
             if naq_events_config.stream:
                 event_config.events_bucket_name = naq_events_config.stream
                 event_config.stream = naq_events_config.stream
-            
+
             if naq_events_config.batch_size is not None:
                 event_config.max_events_per_job = naq_events_config.batch_size
                 event_config.batch_size = naq_events_config.batch_size
-            
+
             if naq_events_config.flush_interval is not None:
-                event_config.event_retention_seconds = int(naq_events_config.flush_interval)
+                event_config.event_retention_seconds = int(
+                    naq_events_config.flush_interval
+                )
                 event_config.flush_interval = naq_events_config.flush_interval
-            
+
             if naq_events_config.max_buffer_size is not None:
                 # Use max_buffer_size as a factor for max_events_per_job
-                event_config.max_events_per_job = max(event_config.max_events_per_job, naq_events_config.max_buffer_size // 10)
+                event_config.max_events_per_job = max(
+                    event_config.max_events_per_job,
+                    naq_events_config.max_buffer_size // 10,
+                )
                 event_config.max_buffer_size = naq_events_config.max_buffer_size
-        
+
         # Override with NAQ config job_service settings if provided (for backward compatibility)
         # Only apply if not already set by events config
         if self._naq_config and self._naq_config.job_service:
             naq_job_config = self._naq_config.job_service
-            
+
             # Map NAQ config to event service config
-            if naq_job_config.enable_event_logging is not None and event_config.enabled is None:
+            if (
+                naq_job_config.enable_event_logging is not None
+                and event_config.enabled is None
+            ):
                 event_config.enable_event_logging = naq_job_config.enable_event_logging
                 event_config.enabled = naq_job_config.enable_event_logging
-            
-            if naq_job_config.results_bucket_name and event_config.events_bucket_name == "naq_events":
+
+            if (
+                naq_job_config.results_bucket_name
+                and event_config.events_bucket_name == "naq_events"
+            ):
                 # Use job results bucket name as events bucket name if not explicitly set
-                event_config.events_bucket_name = f"{naq_job_config.results_bucket_name}_events"
-            
+                event_config.events_bucket_name = (
+                    f"{naq_job_config.results_bucket_name}_events"
+                )
+
             if naq_job_config.auto_create_buckets is not None:
                 event_config.auto_create_bucket = naq_job_config.auto_create_buckets
 
         # Override with service config if provided (for backward compatibility)
-        if self._config and hasattr(self._config, 'custom_settings') and self._config.custom_settings:
+        if (
+            self._config
+            and hasattr(self._config, "custom_settings")
+            and self._config.custom_settings
+        ):
             custom_settings = self._config.custom_settings
 
             if "events_bucket_name" in custom_settings:
@@ -201,18 +221,20 @@ class EventService(BaseService):
             async def my_event_processor(event: Union[JobEvent, WorkerEvent]) -> None:
                 # Custom event processing logic
                 print(f"Processing event: {event.event_type.value}")
-                
+
             event_service.register_event_processor(my_event_processor)
             ```
         """
         if not callable(processor):
             raise ValueError("Event processor must be callable")
-        
+
         self._custom_processors.append(processor)
         self._logger.debug(f"Registered custom event processor: {processor.__name__}")
 
     async def _safe_process_event(
-        self, event: Union[JobEvent, WorkerEvent], processor: Callable[[Union[JobEvent, WorkerEvent]], Awaitable[None]]
+        self,
+        event: Union[JobEvent, WorkerEvent],
+        processor: Callable[[Union[JobEvent, WorkerEvent]], Awaitable[None]],
     ) -> None:
         """
         Safely execute a custom event processor.
@@ -232,7 +254,7 @@ class EventService(BaseService):
             self._logger.error(
                 f"Custom event processor {processor.__name__} failed for event "
                 f"{event.event_type.value}: {e}",
-                exc_info=True
+                exc_info=True,
             )
 
     async def _do_initialize(self) -> None:

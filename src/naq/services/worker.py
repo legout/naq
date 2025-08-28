@@ -121,25 +121,43 @@ class WorkerService(BaseService):
         # Override with NAQ config workers settings if provided
         if self._naq_config and self._naq_config.workers:
             workers_config = self._naq_config.workers
-            
+
             # Map fields from NAQ config to worker config
-            if hasattr(workers_config, 'concurrency') and workers_config.concurrency is not None:
+            if (
+                hasattr(workers_config, "concurrency")
+                and workers_config.concurrency is not None
+            ):
                 worker_config.concurrency = int(workers_config.concurrency)
-                
-            if hasattr(workers_config, 'heartbeat_interval') and workers_config.heartbeat_interval is not None:
-                worker_config.heartbeat_interval = float(workers_config.heartbeat_interval)
-                
-            if hasattr(workers_config, 'ttl') and workers_config.ttl is not None:
+
+            if (
+                hasattr(workers_config, "heartbeat_interval")
+                and workers_config.heartbeat_interval is not None
+            ):
+                worker_config.heartbeat_interval = float(
+                    workers_config.heartbeat_interval
+                )
+
+            if hasattr(workers_config, "ttl") and workers_config.ttl is not None:
                 worker_config.ttl = float(workers_config.ttl)
-                
-            if hasattr(workers_config, 'max_job_duration') and workers_config.max_job_duration is not None:
+
+            if (
+                hasattr(workers_config, "max_job_duration")
+                and workers_config.max_job_duration is not None
+            ):
                 worker_config.max_job_duration = float(workers_config.max_job_duration)
-                
-            if hasattr(workers_config, 'shutdown_timeout') and workers_config.shutdown_timeout is not None:
+
+            if (
+                hasattr(workers_config, "shutdown_timeout")
+                and workers_config.shutdown_timeout is not None
+            ):
                 worker_config.shutdown_timeout = float(workers_config.shutdown_timeout)
 
         # Override with service config if provided (for backward compatibility)
-        if self._config and hasattr(self._config, 'custom_settings') and self._config.custom_settings:
+        if (
+            self._config
+            and hasattr(self._config, "custom_settings")
+            and self._config.custom_settings
+        ):
             custom_settings = self._config.custom_settings
 
             if "workers_bucket_name" in custom_settings:

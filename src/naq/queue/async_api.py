@@ -23,11 +23,7 @@ from ..utils.logging import StructuredLogger
 from ..utils.validation import validate_parameter
 
 
-@retry(
-    max_attempts=3,
-    delay=1.0,
-    exceptions=(ConnectionError, TimeoutError)
-)
+@retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
 async def enqueue(
     func: Callable,
     *args: Any,
@@ -45,21 +41,21 @@ async def enqueue(
     # Validate parameters
     validate_parameter(queue_name, "queue_name", not_none=True)
     validate_parameter(nats_url, "nats_url", not_none=True)
-    
+
     structured_logger = StructuredLogger("naq.queue.async_api")
-    
+
     with structured_logger.operation_context(
         "enqueue_job",
         queue_name=queue_name,
         function_name=func.__name__,
-        job_id=None  # Will be set after job creation
+        job_id=None,  # Will be set after job creation
     ):
         try:
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
                 config=config,
-                logger_name="naq.queue.async_api.enqueue"
+                logger_name="naq.queue.async_api.enqueue",
             ) as service_manager:
                 q = Queue(
                     name=queue_name,
@@ -81,15 +77,14 @@ async def enqueue(
         except Exception as e:
             error_handler = ErrorHandler()
             wrapped_error = wrap_naq_exception(e, context="enqueue operation")
-            error_handler.handle_error(wrapped_error, context={"queue_name": queue_name, "function": func.__name__})
+            error_handler.handle_error(
+                wrapped_error,
+                context={"queue_name": queue_name, "function": func.__name__},
+            )
             raise
 
 
-@retry(
-    max_attempts=3,
-    delay=1.0,
-    exceptions=(ConnectionError, TimeoutError)
-)
+@retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
 async def enqueue_at(
     dt: datetime.datetime,
     func: Callable,
@@ -108,21 +103,21 @@ async def enqueue_at(
     validate_parameter(queue_name, "queue_name", not_none=True)
     validate_parameter(nats_url, "nats_url", not_none=True)
     validate_parameter(dt, "dt", not_none=True)
-    
+
     structured_logger = StructuredLogger("naq.queue.async_api")
-    
+
     with structured_logger.operation_context(
         "enqueue_at",
         queue_name=queue_name,
         function_name=func.__name__,
-        scheduled_time=dt.isoformat()
+        scheduled_time=dt.isoformat(),
     ):
         try:
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
                 config=config,
-                logger_name="naq.queue.async_api.enqueue_at"
+                logger_name="naq.queue.async_api.enqueue_at",
             ) as service_manager:
                 q = Queue(
                     name=queue_name,
@@ -143,15 +138,14 @@ async def enqueue_at(
         except Exception as e:
             error_handler = ErrorHandler()
             wrapped_error = wrap_naq_exception(e, context="enqueue_at operation")
-            error_handler.handle_error(wrapped_error, context={"queue_name": queue_name, "function": func.__name__})
+            error_handler.handle_error(
+                wrapped_error,
+                context={"queue_name": queue_name, "function": func.__name__},
+            )
             raise
 
 
-@retry(
-    max_attempts=3,
-    delay=1.0,
-    exceptions=(ConnectionError, TimeoutError)
-)
+@retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
 async def enqueue_in(
     delta: timedelta,
     func: Callable,
@@ -170,21 +164,21 @@ async def enqueue_in(
     validate_parameter(queue_name, "queue_name", not_none=True)
     validate_parameter(nats_url, "nats_url", not_none=True)
     validate_parameter(delta, "delta", not_none=True, min_value=0)
-    
+
     structured_logger = StructuredLogger("naq.queue.async_api")
-    
+
     with structured_logger.operation_context(
         "enqueue_in",
         queue_name=queue_name,
         function_name=func.__name__,
-        delay_seconds=delta.total_seconds()
+        delay_seconds=delta.total_seconds(),
     ):
         try:
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
                 config=config,
-                logger_name="naq.queue.async_api.enqueue_in"
+                logger_name="naq.queue.async_api.enqueue_in",
             ) as service_manager:
                 q = Queue(
                     name=queue_name,
@@ -205,15 +199,14 @@ async def enqueue_in(
         except Exception as e:
             error_handler = ErrorHandler()
             wrapped_error = wrap_naq_exception(e, context="enqueue_in operation")
-            error_handler.handle_error(wrapped_error, context={"queue_name": queue_name, "function": func.__name__})
+            error_handler.handle_error(
+                wrapped_error,
+                context={"queue_name": queue_name, "function": func.__name__},
+            )
             raise
 
 
-@retry(
-    max_attempts=3,
-    delay=1.0,
-    exceptions=(ConnectionError, TimeoutError)
-)
+@retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
 async def schedule(
     func: Callable,
     *args: Any,
@@ -233,23 +226,25 @@ async def schedule(
     # Validate parameters
     validate_parameter(queue_name, "queue_name", not_none=True)
     validate_parameter(nats_url, "nats_url", not_none=True)
-    
+
     structured_logger = StructuredLogger("naq.queue.async_api")
-    
+
     with structured_logger.operation_context(
         "schedule_job",
         queue_name=queue_name,
         function_name=func.__name__,
         cron=cron,
-        interval_seconds=interval.total_seconds() if isinstance(interval, timedelta) else interval,
-        repeat=repeat
+        interval_seconds=interval.total_seconds()
+        if isinstance(interval, timedelta)
+        else interval,
+        repeat=repeat,
     ):
         try:
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
                 config=config,
-                logger_name="naq.queue.async_api.schedule"
+                logger_name="naq.queue.async_api.schedule",
             ) as service_manager:
                 q = Queue(
                     name=queue_name,
@@ -272,15 +267,14 @@ async def schedule(
         except Exception as e:
             error_handler = ErrorHandler()
             wrapped_error = wrap_naq_exception(e, context="schedule operation")
-            error_handler.handle_error(wrapped_error, context={"queue_name": queue_name, "function": func.__name__})
+            error_handler.handle_error(
+                wrapped_error,
+                context={"queue_name": queue_name, "function": func.__name__},
+            )
             raise
 
 
-@retry(
-    max_attempts=3,
-    delay=1.0,
-    exceptions=(ConnectionError, TimeoutError)
-)
+@retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
 async def purge_queue(
     queue_name: str = DEFAULT_QUEUE_NAME,
     nats_url: str = DEFAULT_NATS_URL,
@@ -291,19 +285,16 @@ async def purge_queue(
     # Validate parameters
     validate_parameter(queue_name, "queue_name", not_none=True)
     validate_parameter(nats_url, "nats_url", not_none=True)
-    
+
     structured_logger = StructuredLogger("naq.queue.async_api")
-    
-    with structured_logger.operation_context(
-        "purge_queue",
-        queue_name=queue_name
-    ):
+
+    with structured_logger.operation_context("purge_queue", queue_name=queue_name):
         try:
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
                 config=config,
-                logger_name="naq.queue.async_api.purge_queue"
+                logger_name="naq.queue.async_api.purge_queue",
             ) as service_manager:
                 q = Queue(
                     name=queue_name,
@@ -316,15 +307,13 @@ async def purge_queue(
         except Exception as e:
             error_handler = ErrorHandler()
             wrapped_error = wrap_naq_exception(e, context="purge_queue operation")
-            error_handler.handle_error(wrapped_error, context={"queue_name": queue_name})
+            error_handler.handle_error(
+                wrapped_error, context={"queue_name": queue_name}
+            )
             raise
 
 
-@retry(
-    max_attempts=3,
-    delay=1.0,
-    exceptions=(ConnectionError, TimeoutError)
-)
+@retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
 async def cancel_scheduled_job(
     job_id: str,
     nats_url: str = DEFAULT_NATS_URL,
@@ -335,19 +324,16 @@ async def cancel_scheduled_job(
     # Validate parameters
     validate_parameter(job_id, "job_id", not_none=True)
     validate_parameter(nats_url, "nats_url", not_none=True)
-    
+
     structured_logger = StructuredLogger("naq.queue.async_api")
-    
-    with structured_logger.operation_context(
-        "cancel_scheduled_job",
-        job_id=job_id
-    ):
+
+    with structured_logger.operation_context("cancel_scheduled_job", job_id=job_id):
         try:
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
                 config=config,
-                logger_name="naq.queue.async_api.cancel_scheduled_job"
+                logger_name="naq.queue.async_api.cancel_scheduled_job",
             ) as service_manager:
                 q = Queue(
                     nats_url=nats_url,
@@ -358,16 +344,14 @@ async def cancel_scheduled_job(
                 return await q.cancel_scheduled_job(job_id)
         except Exception as e:
             error_handler = ErrorHandler()
-            wrapped_error = wrap_naq_exception(e, context="cancel_scheduled_job operation")
+            wrapped_error = wrap_naq_exception(
+                e, context="cancel_scheduled_job operation"
+            )
             error_handler.handle_error(wrapped_error, context={"job_id": job_id})
             raise
 
 
-@retry(
-    max_attempts=3,
-    delay=1.0,
-    exceptions=(ConnectionError, TimeoutError)
-)
+@retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
 async def pause_scheduled_job(
     job_id: str,
     nats_url: str = DEFAULT_NATS_URL,
@@ -378,19 +362,16 @@ async def pause_scheduled_job(
     # Validate parameters
     validate_parameter(job_id, "job_id", not_none=True)
     validate_parameter(nats_url, "nats_url", not_none=True)
-    
+
     structured_logger = StructuredLogger("naq.queue.async_api")
-    
-    with structured_logger.operation_context(
-        "pause_scheduled_job",
-        job_id=job_id
-    ):
+
+    with structured_logger.operation_context("pause_scheduled_job", job_id=job_id):
         try:
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
                 config=config,
-                logger_name="naq.queue.async_api.pause_scheduled_job"
+                logger_name="naq.queue.async_api.pause_scheduled_job",
             ) as service_manager:
                 q = Queue(
                     nats_url=nats_url,
@@ -401,16 +382,14 @@ async def pause_scheduled_job(
                 return await q.pause_scheduled_job(job_id)
         except Exception as e:
             error_handler = ErrorHandler()
-            wrapped_error = wrap_naq_exception(e, context="pause_scheduled_job operation")
+            wrapped_error = wrap_naq_exception(
+                e, context="pause_scheduled_job operation"
+            )
             error_handler.handle_error(wrapped_error, context={"job_id": job_id})
             raise
 
 
-@retry(
-    max_attempts=3,
-    delay=1.0,
-    exceptions=(ConnectionError, TimeoutError)
-)
+@retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
 async def resume_scheduled_job(
     job_id: str,
     nats_url: str = DEFAULT_NATS_URL,
@@ -421,19 +400,16 @@ async def resume_scheduled_job(
     # Validate parameters
     validate_parameter(job_id, "job_id", not_none=True)
     validate_parameter(nats_url, "nats_url", not_none=True)
-    
+
     structured_logger = StructuredLogger("naq.queue.async_api")
-    
-    with structured_logger.operation_context(
-        "resume_scheduled_job",
-        job_id=job_id
-    ):
+
+    with structured_logger.operation_context("resume_scheduled_job", job_id=job_id):
         try:
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
                 config=config,
-                logger_name="naq.queue.async_api.resume_scheduled_job"
+                logger_name="naq.queue.async_api.resume_scheduled_job",
             ) as service_manager:
                 q = Queue(
                     nats_url=nats_url,
@@ -444,16 +420,14 @@ async def resume_scheduled_job(
                 return await q.resume_scheduled_job(job_id)
         except Exception as e:
             error_handler = ErrorHandler()
-            wrapped_error = wrap_naq_exception(e, context="resume_scheduled_job operation")
+            wrapped_error = wrap_naq_exception(
+                e, context="resume_scheduled_job operation"
+            )
             error_handler.handle_error(wrapped_error, context={"job_id": job_id})
             raise
 
 
-@retry(
-    max_attempts=3,
-    delay=1.0,
-    exceptions=(ConnectionError, TimeoutError)
-)
+@retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
 async def modify_scheduled_job(
     job_id: str,
     nats_url: str = DEFAULT_NATS_URL,
@@ -465,20 +439,18 @@ async def modify_scheduled_job(
     # Validate parameters
     validate_parameter(job_id, "job_id", not_none=True)
     validate_parameter(nats_url, "nats_url", not_none=True)
-    
+
     structured_logger = StructuredLogger("naq.queue.async_api")
-    
+
     with structured_logger.operation_context(
-        "modify_scheduled_job",
-        job_id=job_id,
-        update_keys=list(updates.keys())
+        "modify_scheduled_job", job_id=job_id, update_keys=list(updates.keys())
     ):
         try:
             # Use service context for short-lived operation
             async with service_context(
                 nats_url=nats_url,
                 config=config,
-                logger_name="naq.queue.async_api.modify_scheduled_job"
+                logger_name="naq.queue.async_api.modify_scheduled_job",
             ) as service_manager:
                 q = Queue(
                     nats_url=nats_url,
@@ -489,6 +461,10 @@ async def modify_scheduled_job(
                 return await q.modify_scheduled_job(job_id, **updates)
         except Exception as e:
             error_handler = ErrorHandler()
-            wrapped_error = wrap_naq_exception(e, context="modify_scheduled_job operation")
-            error_handler.handle_error(wrapped_error, context={"job_id": job_id, "updates": updates})
+            wrapped_error = wrap_naq_exception(
+                e, context="modify_scheduled_job operation"
+            )
+            error_handler.handle_error(
+                wrapped_error, context={"job_id": job_id, "updates": updates}
+            )
             raise

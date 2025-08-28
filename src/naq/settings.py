@@ -194,7 +194,11 @@ LOG_LEVEL = _get_env_or_config(
 _log_to_file_enabled = _get_env_or_config(
     "NAQ_LOG_TO_FILE_ENABLED", ["logging", "to_file_enabled"], "False"
 )
-LOG_TO_FILE_ENABLED = _log_to_file_enabled.lower() == "true" if isinstance(_log_to_file_enabled, str) else _log_to_file_enabled
+LOG_TO_FILE_ENABLED = (
+    _log_to_file_enabled.lower() == "true"
+    if isinstance(_log_to_file_enabled, str)
+    else _log_to_file_enabled
+)
 
 # Path for the log file. Can include placeholders like {time}.
 LOG_FILE_PATH = _get_env_or_config(
@@ -208,7 +212,11 @@ LOG_FILE_PATH = _get_env_or_config(
 _events_enabled = _get_env_or_config(
     "NAQ_EVENTS_ENABLED", ["events", "enabled"], "False"
 )
-EVENTS_ENABLED = _events_enabled.lower() == "true" if isinstance(_events_enabled, str) else _events_enabled
+EVENTS_ENABLED = (
+    _events_enabled.lower() == "true"
+    if isinstance(_events_enabled, str)
+    else _events_enabled
+)
 
 EVENTS_BATCH_SIZE = int(
     _get_env_or_config("NAQ_EVENTS_BATCH_SIZE", ["events", "batch_size"], "100")
@@ -219,7 +227,9 @@ EVENTS_FLUSH_INTERVAL = float(
 )
 
 EVENTS_MAX_BUFFER_SIZE = int(
-    _get_env_or_config("NAQ_EVENTS_MAX_BUFFER_SIZE", ["events", "max_buffer_size"], "1000")
+    _get_env_or_config(
+        "NAQ_EVENTS_MAX_BUFFER_SIZE", ["events", "max_buffer_size"], "1000"
+    )
 )
 
 EVENTS_STREAM_NAME = _get_env_or_config(
@@ -294,11 +304,16 @@ class NATSConnectionConfig(msgspec.Struct):
                 "NAQ_PREFER_THREAD_LOCAL", ["nats", "prefer_thread_local"], "false"
             ).lower()
             == "true"
-        ) if isinstance(_get_env_or_config(
+        )
+        if isinstance(
+            _get_env_or_config(
                 "NAQ_PREFER_THREAD_LOCAL", ["nats", "prefer_thread_local"], "false"
-            ), str) else _get_env_or_config(
-                "NAQ_PREFER_THREAD_LOCAL", ["nats", "prefer_thread_local"], "false"
-            )
+            ),
+            str,
+        )
+        else _get_env_or_config(
+            "NAQ_PREFER_THREAD_LOCAL", ["nats", "prefer_thread_local"], "false"
+        )
     )
     name: str = msgspec.field(
         default_factory=lambda: _get_env_or_config(
@@ -311,11 +326,12 @@ class NATSConnectionConfig(msgspec.Struct):
                 "NAQ_NO_RANDOMIZE", ["nats", "no_randomize"], "false"
             ).lower()
             == "true"
-        ) if isinstance(_get_env_or_config(
-                "NAQ_NO_RANDOMIZE", ["nats", "no_randomize"], "false"
-            ), str) else _get_env_or_config(
-                "NAQ_NO_RANDOMIZE", ["nats", "no_randomize"], "false"
-            )
+        )
+        if isinstance(
+            _get_env_or_config("NAQ_NO_RANDOMIZE", ["nats", "no_randomize"], "false"),
+            str,
+        )
+        else _get_env_or_config("NAQ_NO_RANDOMIZE", ["nats", "no_randomize"], "false")
     )
     tls: Optional[dict[str, Any]] = None
     user: Optional[str] = msgspec.field(
@@ -600,11 +616,16 @@ class Config:
                     "NAQ_LOG_TO_FILE_ENABLED", ["logging", "to_file_enabled"], "false"
                 ).lower()
                 == "true"
-            ) if isinstance(_get_env_or_config(
-                    "NAQ_LOG_TO_FILE_ENABLED", ["logging", "to_file_enabled"], "false"
-                ), str) else _get_env_or_config(
+            )
+            if isinstance(
+                _get_env_or_config(
                     "NAQ_LOG_TO_FILE_ENABLED", ["logging", "to_file_enabled"], "false"
                 ),
+                str,
+            )
+            else _get_env_or_config(
+                "NAQ_LOG_TO_FILE_ENABLED", ["logging", "to_file_enabled"], "false"
+            ),
             log_file_path=_get_env_or_config(
                 "NAQ_LOG_FILE_PATH", ["logging", "file_path"], LOG_FILE_PATH
             ),
@@ -613,11 +634,16 @@ class Config:
                     "NAQ_EVENTS_ENABLED", ["events", "enabled"], "False"
                 ).lower()
                 == "true"
-            ) if isinstance(_get_env_or_config(
-                    "NAQ_EVENTS_ENABLED", ["events", "enabled"], "False"
-                ), str) else _get_env_or_config(
+            )
+            if isinstance(
+                _get_env_or_config(
                     "NAQ_EVENTS_ENABLED", ["events", "enabled"], "False"
                 ),
+                str,
+            )
+            else _get_env_or_config(
+                "NAQ_EVENTS_ENABLED", ["events", "enabled"], "False"
+            ),
             events_batch_size=int(
                 _get_env_or_config(
                     "NAQ_EVENTS_BATCH_SIZE",

@@ -71,12 +71,16 @@ def purge(
             async with service_context(
                 nats_url=nats_url,
                 custom_settings={"log_level": log_level},
-                logger_name="naq.cli.job_commands.purge"
+                logger_name="naq.cli.job_commands.purge",
             ) as service_manager:
                 # Get required services
                 await service_manager.get_service("job", JobService)
-                stream_service = await service_manager.get_service("stream", StreamService)
-                connection_service = await service_manager.get_service("connection", ConnectionService)
+                stream_service = await service_manager.get_service(
+                    "stream", StreamService
+                )
+                connection_service = await service_manager.get_service(
+                    "connection", ConnectionService
+                )
 
             structured_logger.info(
                 f"Attempting to purge queues: {queues}",
@@ -300,10 +304,12 @@ def job_control(
             async with service_context(
                 nats_url=nats_url,
                 custom_settings={"log_level": log_level},
-                logger_name="naq.cli.job_commands.control"
+                logger_name="naq.cli.job_commands.control",
             ) as service_manager:
                 # Get required services
-                scheduler_service = await service_manager.get_service("scheduler", SchedulerService)
+                scheduler_service = await service_manager.get_service(
+                    "scheduler", SchedulerService
+                )
 
             # Validate job_id
             validate_parameter(

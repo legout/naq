@@ -89,9 +89,16 @@ def start_worker(
     nats_url = ensure_type(nats_url, str, "nats_url")
     concurrency = ensure_type(concurrency, int, "concurrency")
     name = ensure_type(name, str, "name", convert=True) if name is not None else None
-    module_paths = ensure_type(module_paths, (list, type(None)), "module_paths", convert=True) or []
-    log_level = ensure_type(log_level, str, "log_level", convert=True) if log_level is not None else None
-    
+    module_paths = (
+        ensure_type(module_paths, (list, type(None)), "module_paths", convert=True)
+        or []
+    )
+    log_level = (
+        ensure_type(log_level, str, "log_level", convert=True)
+        if log_level is not None
+        else None
+    )
+
     # Validate parameter constraints
     validate_parameter(concurrency, "concurrency", not_none=True, min_value=1)
     validate_parameter(nats_url, "nats_url", not_none=True)
@@ -99,22 +106,22 @@ def start_worker(
     # Use structured logging
     worker_logger.info(
         "Starting worker",
-        worker_name=name or 'default',
+        worker_name=name or "default",
         queues=queues if queues else [DEFAULT_QUEUE_NAME],
         nats_url=nats_url,
-        concurrency=concurrency
+        concurrency=concurrency,
     )
-    
+
     # Serialize worker configuration with metadata
     worker_config = {
-        "worker_name": name or 'default',
+        "worker_name": name or "default",
         "queues": queues if queues else [DEFAULT_QUEUE_NAME],
         "nats_url": nats_url,
         "concurrency": concurrency,
         "module_paths": module_paths,
-        "log_level": log_level
+        "log_level": log_level,
     }
-    
+
     # Serialize configuration with metadata for potential persistence or transmission
     serialized_config = serialize_with_metadata(
         worker_config,
@@ -122,11 +129,13 @@ def start_worker(
         metadata={
             "component": "worker_commands",
             "action": "start_worker",
-            "timestamp": None  # Will be set in async context
-        }
+            "timestamp": None,  # Will be set in async context
+        },
     )
-    
-    worker_logger.debug("Worker configuration serialized", config_size=len(str(serialized_config)))
+
+    worker_logger.debug(
+        "Worker configuration serialized", config_size=len(str(serialized_config))
+    )
 
     async def _run_worker():
         # Create global config with NATS URL and custom settings
@@ -151,24 +160,32 @@ def start_worker(
                     "worker_name": name,
                     "module_paths": module_paths,
                 },
-                logger_name="naq.cli.worker_commands.start"
+                logger_name="naq.cli.worker_commands.start",
             ) as service_manager:
                 # Get required services
-                worker_service = await service_manager.get_service("worker", WorkerService)
-                connection_service = await service_manager.get_service("connection", ConnectionService)
-            
+                worker_service = await service_manager.get_service(
+                    "worker", WorkerService
+                )
+                connection_service = await service_manager.get_service(
+                    "connection", ConnectionService
+                )
+
             # Test NATS connection before proceeding
             is_connected = await connection_service.test_connection()
             if not is_connected:
-                worker_logger.error("Failed to establish NATS connection", nats_url=nats_url)
+                worker_logger.error(
+                    "Failed to establish NATS connection", nats_url=nats_url
+                )
                 raise typer.Exit(code=1)
-                
+
             # Check if the required stream exists
             stream_name = "naq_jobs"
             js = await connection_service.get_jetstream()
             stream_available = await stream_exists(js=js, stream_name=stream_name)
             if not stream_available:
-                worker_logger.error("Required JetStream stream not found", stream_name=stream_name)
+                worker_logger.error(
+                    "Required JetStream stream not found", stream_name=stream_name
+                )
                 raise typer.Exit(code=1)
 
             # Create and run worker
@@ -189,14 +206,11 @@ def start_worker(
 
         except KeyboardInterrupt:
             worker_logger.info(
-                "Worker interrupted by user. Shutting down.",
-                reason="KeyboardInterrupt"
+                "Worker interrupted by user. Shutting down.", reason="KeyboardInterrupt"
             )
         except Exception as e:
             worker_logger.error(
-                "Worker failed unexpectedly",
-                error=str(e),
-                error_type=type(e).__name__
+                "Worker failed unexpectedly", error=str(e), error_type=type(e).__name__
             )
             raise typer.Exit(code=1)
         finally:
@@ -238,25 +252,25 @@ def list_workers(
     from rich.table import Table
 
     from ..settings import DEFAULT_WORKER_TTL_SECONDS
-    from ..models.enums import WORKER_STATUS
 
     setup_logging(log_level if log_level else "CRITICAL")
-    
+
     # Validate and convert parameters
     nats_url = ensure_type(nats_url, str, "nats_url")
-    log_level = ensure_type(log_level, str, "log_level", convert=True) if log_level is not None else None
-    
+    log_level = (
+        ensure_type(log_level, str, "log_level", convert=True)
+        if log_level is not None
+        else None
+    )
+
     # Validate parameter constraints
     validate_parameter(nats_url, "nats_url", not_none=True)
-    
+
     worker_logger.info("Listing active workers", nats_url=nats_url)
-    
+
     # Serialize list request with metadata
-    list_request = {
-        "nats_url": nats_url,
-        "log_level": log_level
-    }
-    
+    list_request = {"nats_url": nats_url, "log_level": log_level}
+
     # Serialize request with metadata for potential persistence or transmission
     serialized_request = serialize_with_metadata(
         list_request,
@@ -264,11 +278,13 @@ def list_workers(
         metadata={
             "component": "worker_commands",
             "action": "list_workers",
-            "timestamp": None  # Will be set in async context
-        }
+            "timestamp": None,  # Will be set in async context
+        },
     )
-    
-    worker_logger.debug("List workers request serialized", request_size=len(str(serialized_request)))
+
+    worker_logger.debug(
+        "List workers request serialized", request_size=len(str(serialized_request))
+    )
 
     console = Console()
 
@@ -283,24 +299,32 @@ def list_workers(
             async with service_context(
                 nats_url=nats_url,
                 custom_settings={"log_level": log_level},
-                logger_name="naq.cli.worker_commands.list"
+                logger_name="naq.cli.worker_commands.list",
             ) as service_manager:
                 # Get required services
-                worker_service = await service_manager.get_service("worker", WorkerService)
-                connection_service = await service_manager.get_service("connection", ConnectionService)
-            
+                worker_service = await service_manager.get_service(
+                    "worker", WorkerService
+                )
+                connection_service = await service_manager.get_service(
+                    "connection", ConnectionService
+                )
+
             # Test NATS connection before proceeding
             is_connected = await connection_service.test_connection()
             if not is_connected:
-                worker_logger.error("Failed to establish NATS connection", nats_url=nats_url)
+                worker_logger.error(
+                    "Failed to establish NATS connection", nats_url=nats_url
+                )
                 raise typer.Exit(code=1)
-                
+
             # Check if the required stream exists
             stream_name = "naq_jobs"
             js = await connection_service.get_jetstream()
             stream_available = await stream_exists(js=js, stream_name=stream_name)
             if not stream_available:
-                worker_logger.error("Required JetStream stream not found", stream_name=stream_name)
+                worker_logger.error(
+                    "Required JetStream stream not found", stream_name=stream_name
+                )
                 raise typer.Exit(code=1)
 
             # Use worker service to list workers
@@ -328,9 +352,9 @@ def list_workers(
             for worker in workers:
                 worker_id = worker.get("worker_id", "unknown")
                 status = worker.get("status", "?")
-                
+
                 # Convert status to string if it's an enum
-                if hasattr(status, 'value'):
+                if hasattr(status, "value"):
                     status = status.value
 
                 # Determine status style
@@ -342,9 +366,7 @@ def list_workers(
 
                 queues = ", ".join(worker.get("queues", []))
                 current_job = (
-                    worker.get("current_job_id", "-")
-                    if status == "busy"
-                    else "-"
+                    worker.get("current_job_id", "-") if status == "busy" else "-"
                 )
 
                 # Format last heartbeat
@@ -374,9 +396,7 @@ def list_workers(
 
         except Exception as e:
             worker_logger.error(
-                "Error listing workers",
-                error=str(e),
-                error_type=type(e).__name__
+                "Error listing workers", error=str(e), error_type=type(e).__name__
             )
             console.print(f"[red]Error listing workers: {str(e)}[/red]")
         # Service context automatically handles cleanup

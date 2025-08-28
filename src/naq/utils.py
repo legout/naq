@@ -61,7 +61,7 @@ def setup_logging(level: str = None):
     effective_level = LOG_LEVEL
     if level is not None:
         effective_level = level.upper()
-    
+
     # Ensure effective_level is not None
     if effective_level is None:
         effective_level = "CRITICAL"

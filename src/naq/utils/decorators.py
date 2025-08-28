@@ -464,5 +464,5 @@ def timing(
         func = logger_instance
         logger_instance = None
         return decorator(func)
-    
+
     return decorator

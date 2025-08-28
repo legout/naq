@@ -99,7 +99,7 @@ class JobService(BaseService):
         self._connection_service = connection_service
         self._kv_store_service = kv_store_service
         self._event_service = event_service
-        
+
         # Track which services were created by this service
         self._created_kv_store_service = False
         self._created_event_service = False
@@ -117,31 +117,37 @@ class JobService(BaseService):
         # Override with NAQ config job_service settings if provided
         if self._naq_config and self._naq_config.job_service:
             naq_job_config = self._naq_config.job_service
-            
+
             # Map NAQ config to job service config
             if naq_job_config.enable_job_execution is not None:
                 job_config.enable_job_execution = naq_job_config.enable_job_execution
-            
+
             if naq_job_config.enable_result_storage is not None:
                 job_config.enable_result_storage = naq_job_config.enable_result_storage
-            
+
             if naq_job_config.enable_event_logging is not None:
                 job_config.enable_event_logging = naq_job_config.enable_event_logging
-            
+
             if naq_job_config.max_job_execution_time is not None:
-                job_config.max_job_execution_time = int(naq_job_config.max_job_execution_time)
-            
+                job_config.max_job_execution_time = int(
+                    naq_job_config.max_job_execution_time
+                )
+
             if naq_job_config.default_result_ttl is not None:
                 job_config.default_result_ttl = int(naq_job_config.default_result_ttl)
-            
+
             if naq_job_config.results_bucket_name:
                 job_config.results_bucket_name = naq_job_config.results_bucket_name
-            
+
             if naq_job_config.auto_create_buckets is not None:
                 job_config.auto_create_buckets = naq_job_config.auto_create_buckets
 
         # Override with service config if provided (for backward compatibility)
-        if self._config and hasattr(self._config, 'custom_settings') and self._config.custom_settings:
+        if (
+            self._config
+            and hasattr(self._config, "custom_settings")
+            and self._config.custom_settings
+        ):
             custom_settings = self._config.custom_settings
 
             if "results_bucket_name" in custom_settings:
@@ -228,7 +234,7 @@ class JobService(BaseService):
                     config=ServiceConfig(custom_settings=kv_config.as_dict()),
                     connection_service=self._connection_service,
                 )
-                
+
                 await self._kv_store_service.initialize()
                 self._created_kv_store_service = True
 
@@ -254,7 +260,7 @@ class JobService(BaseService):
                         connection_service=self._connection_service,
                         kv_store_service=self._kv_store_service,
                     )
-                
+
                 await self._event_service.initialize()
                 self._created_event_service = True
 
@@ -307,13 +313,13 @@ class JobService(BaseService):
             # Get JetStream context from connection service
             if self._connection_service is None:
                 raise JobExecutionError("ConnectionService is not available")
-            
+
             js = await self._connection_service.get_jetstream()
-            
+
             # Publish the job to NATS
             job_data = job.serialize()
             ack = await js.publish(subject, job_data)
-            
+
             # Log job enqueued event
             if self._event_service and self._job_config.enable_event_logging:
                 enqueued_event = JobEvent.enqueued(
@@ -324,8 +330,10 @@ class JobService(BaseService):
                 )
                 await self._event_service.log_job_event(enqueued_event)
 
-            self._logger.info(f"Job {job.job_id} enqueued successfully to subject {subject}")
-            
+            self._logger.info(
+                f"Job {job.job_id} enqueued successfully to subject {subject}"
+            )
+
         except Exception as e:
             error_msg = f"Failed to enqueue job {job.job_id}: {e}"
             self._logger.error(error_msg)
@@ -393,7 +401,7 @@ class JobService(BaseService):
                     worker_id=worker_id,
                     duration_ms=duration_ms,
                     queue_name=job.queue_name,
-                    details={"result_size": result_size}
+                    details={"result_size": result_size},
                 )
                 await self._event_service.log_job_event(completed_event)
 
@@ -426,7 +434,7 @@ class JobService(BaseService):
             # Store the result with TTL
             if self._kv_store_service is None:
                 raise NaqException("KVStoreService is not available")
-            
+
             await self._kv_store_service.put(
                 self._job_config.results_bucket_name,
                 result_key,
@@ -462,7 +470,7 @@ class JobService(BaseService):
             # Get the result
             if self._kv_store_service is None:
                 raise NaqException("KVStoreService is not available")
-                
+
             try:
                 result = await self._kv_store_service.get(
                     self._job_config.results_bucket_name, result_key, deserialize=True
@@ -523,7 +531,7 @@ class JobService(BaseService):
                         worker_id=worker_id,
                         delay_seconds=retry_delay,
                         queue_name=job.queue_name,
-                        details={"retry_count": job.retry_count}
+                        details={"retry_count": job.retry_count},
                     )
                     await self._event_service.log_job_event(retry_event)
 
@@ -568,7 +576,7 @@ class JobService(BaseService):
 
             if self._kv_store_service is None:
                 raise NaqException("KVStoreService is not available")
-                
+
             # Delete the result
             deleted = await self._kv_store_service.delete(
                 self._job_config.results_bucket_name, result_key

@@ -21,12 +21,22 @@ from nats.js.api import ConsumerConfig
 from ..exceptions import NaqException
 from ..models.enums import WORKER_STATUS
 from ..service_context import long_lived_service_context
-from ..services import (ConnectionService, EventService, KVStoreService,
-                        ServiceManager, StreamService)
-from ..settings import (ACK_WAIT_PER_QUEUE, DEFAULT_ACK_WAIT_SECONDS,
-                        DEFAULT_NATS_URL, DEFAULT_QUEUE_NAME,
-                        DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
-                        DEFAULT_WORKER_TTL_SECONDS, NAQ_PREFIX)
+from ..services import (
+    ConnectionService,
+    EventService,
+    KVStoreService,
+    ServiceManager,
+    StreamService,
+)
+from ..settings import (
+    ACK_WAIT_PER_QUEUE,
+    DEFAULT_ACK_WAIT_SECONDS,
+    DEFAULT_NATS_URL,
+    DEFAULT_QUEUE_NAME,
+    DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
+    DEFAULT_WORKER_TTL_SECONDS,
+    NAQ_PREFIX,
+)
 from ..utils import setup_logging
 from ..utils.decorators import retry, timing
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception
@@ -43,9 +53,7 @@ from .sync_interface import WorkerSyncInterface
 
 if TYPE_CHECKING:
     # Import here to avoid circular imports
-    from ..models.events import JobEvent, WorkerEvent
-    from ..models.jobs import Job
-    from ..queue.core import Queue
+    pass
 
 
 class Worker:

@@ -56,7 +56,12 @@ class ConnectionService(BaseService):
     - Connection health monitoring and statistics
     """
 
-    def __init__(self, config: Optional[ServiceConfig] = None, *, naq_config: Optional[NAQConfig] = None) -> None:
+    def __init__(
+        self,
+        config: Optional[ServiceConfig] = None,
+        *,
+        naq_config: Optional[NAQConfig] = None,
+    ) -> None:
         """
         Initialize the connection service.
 
@@ -93,50 +98,64 @@ class ConnectionService(BaseService):
         if self._naq_config:
             self._logger.debug(f"NAQ config found: {self._naq_config}")
             self._logger.debug(f"NAQ config nats section: {self._naq_config.nats}")
-            self._logger.debug(f"NAQ config connection section: {self._naq_config.connection}")
-            
+            self._logger.debug(
+                f"NAQ config connection section: {self._naq_config.connection}"
+            )
+
             # First try the nats section (prioritize it over connection section)
             if self._naq_config.nats:
                 self._logger.debug("Using nats section from NAQ config")
                 naq_conn_config = self._naq_config.nats
-                
+
                 # Map NAQ config to connection service config
                 if naq_conn_config.servers:
                     connection_config.nats_url = naq_conn_config.servers[0]
                     self._logger.debug(f"Set nats_url to: {connection_config.nats_url}")
-                
+
                 if naq_conn_config.max_reconnect_attempts is not None:
-                    connection_config.max_reconnect_attempts = naq_conn_config.max_reconnect_attempts
-                
+                    connection_config.max_reconnect_attempts = (
+                        naq_conn_config.max_reconnect_attempts
+                    )
+
                 if naq_conn_config.reconnect_time_wait is not None:
-                    connection_config.reconnect_time_wait = naq_conn_config.reconnect_time_wait
-                
+                    connection_config.reconnect_time_wait = (
+                        naq_conn_config.reconnect_time_wait
+                    )
+
                 if naq_conn_config.connection_timeout is not None:
-                    connection_config.connection_timeout = naq_conn_config.connection_timeout
-                
+                    connection_config.connection_timeout = (
+                        naq_conn_config.connection_timeout
+                    )
+
                 if naq_conn_config.drain_timeout is not None:
                     # Use drain_timeout as ping_interval if not explicitly set
                     connection_config.ping_interval = naq_conn_config.drain_timeout
-            
+
             # If nats section is not available, try the connection section
             elif self._naq_config.connection:
                 self._logger.debug("Using connection section from NAQ config")
                 naq_conn_config = self._naq_config.connection
-                
+
                 # Map NAQ config to connection service config
                 if naq_conn_config.servers:
                     connection_config.nats_url = naq_conn_config.servers[0]
                     self._logger.debug(f"Set nats_url to: {connection_config.nats_url}")
-                
+
                 if naq_conn_config.max_reconnect_attempts is not None:
-                    connection_config.max_reconnect_attempts = naq_conn_config.max_reconnect_attempts
-                
+                    connection_config.max_reconnect_attempts = (
+                        naq_conn_config.max_reconnect_attempts
+                    )
+
                 if naq_conn_config.reconnect_time_wait is not None:
-                    connection_config.reconnect_time_wait = naq_conn_config.reconnect_time_wait
-                
+                    connection_config.reconnect_time_wait = (
+                        naq_conn_config.reconnect_time_wait
+                    )
+
                 if naq_conn_config.connection_timeout is not None:
-                    connection_config.connection_timeout = naq_conn_config.connection_timeout
-                
+                    connection_config.connection_timeout = (
+                        naq_conn_config.connection_timeout
+                    )
+
                 if naq_conn_config.drain_timeout is not None:
                     # Use drain_timeout as ping_interval if not explicitly set
                     connection_config.ping_interval = naq_conn_config.drain_timeout
@@ -146,7 +165,11 @@ class ConnectionService(BaseService):
             self._logger.debug("No NAQ config provided")
 
         # Override with service config custom settings if provided (for backward compatibility)
-        if self._config and hasattr(self._config, 'custom_settings') and self._config.custom_settings:
+        if (
+            self._config
+            and hasattr(self._config, "custom_settings")
+            and self._config.custom_settings
+        ):
             custom_settings = self._config.custom_settings
 
             if "max_reconnect_attempts" in custom_settings:
@@ -195,7 +218,11 @@ class ConnectionService(BaseService):
             # Validate configuration
             if not self._connection_config.nats_url:
                 # Use the first server from the config, or fallback to default
-                if self._naq_config and self._naq_config.nats and self._naq_config.nats.servers:
+                if (
+                    self._naq_config
+                    and self._naq_config.nats
+                    and self._naq_config.nats.servers
+                ):
                     self._connection_config.nats_url = self._naq_config.nats.servers[0]
                 else:
                     self._connection_config.nats_url = "nats://localhost:4222"
@@ -298,7 +325,11 @@ class ConnectionService(BaseService):
             NaqConnectionError: If connection fails.
         """
         if url is None:
-            url = self._connection_config.nats_url or (self._naq_config.nats.servers[0] if self._naq_config.nats.servers else "nats://localhost:4222")
+            url = self._connection_config.nats_url or (
+                self._naq_config.nats.servers[0]
+                if self._naq_config.nats.servers
+                else "nats://localhost:4222"
+            )
 
         # Initialize connection stats if not exists
         if url not in self._connection_stats:
@@ -308,7 +339,7 @@ class ConnectionService(BaseService):
                 "connection_errors": 0,
                 "last_used": 0,
             }
-        
+
         # Initialize connection lock if not exists (for thread safety)
         if url not in self._connection_locks:
             self._connection_locks[url] = asyncio.Lock()
@@ -325,14 +356,17 @@ class ConnectionService(BaseService):
             # Double-check pattern in case another coroutine created the connection while we waited
             if url in self._connections and self._connections[url].is_connected:
                 self._connection_stats[url]["cache_hits"] += 1
-                self._connection_stats[url]["last_used"] = asyncio.get_event_loop().time()
+                self._connection_stats[url]["last_used"] = (
+                    asyncio.get_event_loop().time()
+                )
                 self._logger.debug(f"Connection cache hit after lock for {url}")
                 return self._connections[url]
 
             try:
                 import time
+
                 start_time = time.perf_counter()
-                
+
                 # Get connection from the underlying connection manager
                 nc = await self._connection_manager.get_connection(
                     url, prefer_thread_local=self._connection_config.prefer_thread_local
@@ -340,12 +374,16 @@ class ConnectionService(BaseService):
 
                 # Cache the connection
                 self._connections[url] = nc
-                
+
                 # Update connection stats
                 connection_time = time.perf_counter() - start_time
                 self._connection_stats[url]["created_count"] += 1
-                self._connection_stats[url]["last_used"] = asyncio.get_event_loop().time()
-                self._logger.debug(f"Created new NATS connection to {url} in {connection_time:.3f}s")
+                self._connection_stats[url]["last_used"] = (
+                    asyncio.get_event_loop().time()
+                )
+                self._logger.debug(
+                    f"Created new NATS connection to {url} in {connection_time:.3f}s"
+                )
 
                 # Set up connection monitoring for reconnection
                 self._monitor_connection(url, nc)
@@ -375,7 +413,11 @@ class ConnectionService(BaseService):
             NaqConnectionError: If getting JetStream context fails.
         """
         if url is None:
-            url = self._connection_config.nats_url or (self._naq_config.nats.servers[0] if self._naq_config.nats.servers else "nats://localhost:4222")
+            url = self._connection_config.nats_url or (
+                self._naq_config.nats.servers[0]
+                if self._naq_config.nats.servers
+                else "nats://localhost:4222"
+            )
 
         # Check if we already have a cached JetStream context
         if url in self._jetstream_contexts:
@@ -419,7 +461,11 @@ class ConnectionService(BaseService):
             NaqConnectionError: If connection fails.
         """
         if url is None:
-            url = self._connection_config.nats_url or (self._naq_config.nats.servers[0] if self._naq_config.nats.servers else "nats://localhost:4222")
+            url = self._connection_config.nats_url or (
+                self._naq_config.nats.servers[0]
+                if self._naq_config.nats.servers
+                else "nats://localhost:4222"
+            )
 
         nc = None
         try:
@@ -557,7 +603,11 @@ class ConnectionService(BaseService):
             url: Optional NATS server URL. If not provided, uses the configured URL.
         """
         if url is None:
-            url = self._connection_config.nats_url or (self._naq_config.nats.servers[0] if self._naq_config.nats.servers else "nats://localhost:4222")
+            url = self._connection_config.nats_url or (
+                self._naq_config.nats.servers[0]
+                if self._naq_config.nats.servers
+                else "nats://localhost:4222"
+            )
 
         try:
             # Cancel any reconnection task for this URL

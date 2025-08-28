@@ -82,7 +82,7 @@ def start_scheduler(
     validate_parameter(poll_interval, "poll_interval", min_value=0.1)
     ensure_type(log_level, (str, type(None)), "log_level", convert=False)
     ensure_type(instance_id, (str, type(None)), "instance_id", convert=False)
-    
+
     setup_logging(log_level if log_level else "CRITICAL")
     enable_ha = not disable_ha
 
@@ -93,7 +93,7 @@ def start_scheduler(
         nats_url=nats_url,
         poll_interval=poll_interval,
         high_availability_enabled=enable_ha,
-        instance_id=instance_id
+        instance_id=instance_id,
     )
 
     async def _run_scheduler():
@@ -102,12 +102,12 @@ def start_scheduler(
             nats_url=nats_url,
             poll_interval=poll_interval,
             instance_id=instance_id,
-            enable_ha=enable_ha
+            enable_ha=enable_ha,
         ):
             # Create global config with NATS URL and custom settings
             config = GlobalServiceConfig()
             config.nats_url = nats_url
-            
+
             # Use serialize_with_metadata for configuration data
             config_data = {
                 "log_level": log_level,
@@ -115,25 +115,25 @@ def start_scheduler(
                 "instance_id": instance_id,
                 "enable_ha": enable_ha,
             }
-            
+
             try:
                 # Serialize configuration with metadata
                 serialized_config = SerializationHelper.serialize_with_metadata(
                     config_data,
                     serializer="json",
-                    metadata={"source": "scheduler_cli", "version": "1.0"}
+                    metadata={"source": "scheduler_cli", "version": "1.0"},
                 )
                 structured_logger.debug(
                     "Configuration serialized with metadata",
                     operation="scheduler_run",
-                    status="config_serialized"
+                    status="config_serialized",
                 )
             except Exception as e:
                 structured_logger.warning(
                     f"Failed to serialize configuration with metadata: {e}",
                     operation="scheduler_run",
                     status="config_serialization_warning",
-                    error=str(e)
+                    error=str(e),
                 )
                 # Fall back to direct assignment
                 config.custom_settings.update(config_data)
@@ -159,7 +159,7 @@ def start_scheduler(
                 scheduler_service = await service_manager.register_service(
                     "scheduler", SchedulerService, initialize=True
                 )
-                
+
                 # Get connection service for NATS operations
                 connection_service = await service_manager.register_service(
                     "connection", ConnectionService, initialize=True
@@ -172,21 +172,23 @@ def start_scheduler(
                     structured_logger.debug(
                         f"Stream '{stream_name}' exists",
                         operation="scheduler_run",
-                        status="stream_check"
+                        status="stream_check",
                     )
                 else:
                     structured_logger.warning(
                         f"Stream '{stream_name}' does not exist",
                         operation="scheduler_run",
-                        status="stream_check"
+                        status="stream_check",
                     )
-                
+
                 # Build subject for scheduler operations
-                scheduler_subject = build_subject("naq", "scheduler", instance_id or "default")
+                scheduler_subject = build_subject(
+                    "naq", "scheduler", instance_id or "default"
+                )
                 structured_logger.debug(
                     f"Using scheduler subject: {scheduler_subject}",
                     operation="scheduler_run",
-                    status="subject_built"
+                    status="subject_built",
                 )
 
                 # Create and run scheduler with services
@@ -204,21 +206,21 @@ def start_scheduler(
                 structured_logger.info(
                     "Scheduler interrupted by user (KeyboardInterrupt). Shutting down.",
                     operation="scheduler_run",
-                    status="interrupted"
+                    status="interrupted",
                 )
             except Exception as e:
                 structured_logger.error(
                     f"Scheduler failed unexpectedly: {e}",
                     operation="scheduler_run",
                     status="failed",
-                    error=str(e)
+                    error=str(e),
                 )
                 raise typer.Exit(code=1)
             finally:
                 structured_logger.info(
                     "Scheduler process finished.",
                     operation="scheduler_run",
-                    status="finished"
+                    status="finished",
                 )
                 if "service_manager" in locals():
                     await service_manager.cleanup_all()
@@ -285,9 +287,9 @@ def list_scheduled_jobs(
     ensure_type(job_id, (str, type(None)), "job_id", convert=False)
     ensure_type(detailed, bool, "detailed", convert=False)
     ensure_type(log_level, (str, type(None)), "log_level", convert=False)
-    
+
     setup_logging(log_level if log_level else "CRITICAL")
-    
+
     # Use structured logger
     structured_logger = StructuredLogger("scheduler_jobs")
     structured_logger.info(
@@ -296,7 +298,7 @@ def list_scheduled_jobs(
         status_filter=status,
         job_id_filter=job_id,
         queue_filter=queue,
-        detailed_view=detailed
+        detailed_view=detailed,
     )
     console = Console()
 
@@ -307,7 +309,7 @@ def list_scheduled_jobs(
             status_filter=status,
             job_id_filter=job_id,
             queue_filter=queue,
-            detailed_view=detailed
+            detailed_view=detailed,
         ):
             # Create global config with NATS URL and custom settings
             config = GlobalServiceConfig()
@@ -326,7 +328,7 @@ def list_scheduled_jobs(
                 scheduler_service = await service_manager.register_service(
                     "scheduler", SchedulerService, initialize=True
                 )
-                
+
                 # Get connection service for NATS operations
                 connection_service = await service_manager.register_service(
                     "connection", ConnectionService, initialize=True
@@ -339,21 +341,21 @@ def list_scheduled_jobs(
                     structured_logger.debug(
                         f"Stream '{stream_name}' exists",
                         operation="list_scheduled_jobs",
-                        status="stream_check"
+                        status="stream_check",
                     )
                 else:
                     structured_logger.warning(
                         f"Stream '{stream_name}' does not exist",
                         operation="list_scheduled_jobs",
-                        status="stream_check"
+                        status="stream_check",
                     )
-                
+
                 # Build subject for scheduler operations
                 scheduler_subject = build_subject("naq", "scheduler", "jobs")
                 structured_logger.debug(
                     f"Using scheduler subject: {scheduler_subject}",
                     operation="list_scheduled_jobs",
-                    status="subject_built"
+                    status="subject_built",
                 )
 
                 # Parse status filter
@@ -364,7 +366,7 @@ def list_scheduled_jobs(
                         valid_statuses = [
                             SCHEDULED_JOB_STATUS.ACTIVE,
                             SCHEDULED_JOB_STATUS.PAUSED,
-                            SCHEDULED_JOB_STATUS.FAILED
+                            SCHEDULED_JOB_STATUS.FAILED,
                         ]
                         if status not in valid_statuses:
                             raise ValueError(f"Invalid status: {status}")
@@ -375,10 +377,10 @@ def list_scheduled_jobs(
                             operation="list_scheduled_jobs",
                             status="validation_error",
                             invalid_status=status,
-                            error=str(e)
+                            error=str(e),
                         )
                         console.print(f"[red]Invalid status: {status}[/red]")
-                        console.print(f"[red]Invalid status[/red]")
+                        console.print("[red]Invalid status[/red]")
                         raise typer.Exit(code=2)
 
                 # Get scheduled jobs using the service
@@ -413,13 +415,11 @@ def list_scheduled_jobs(
                             serialized_job = SerializationHelper.safe_serialize(
                                 job_data,
                                 serializer="json",
-                                fallback_serializer="pickle"
+                                fallback_serializer="pickle",
                             )
                             # Deserialize to get the original data back
                             deserialized_job = SerializationHelper.safe_deserialize(
-                                serialized_job,
-                                serializer="json",
-                                expected_type=dict
+                                serialized_job, serializer="json", expected_type=dict
                             )
                             jobs_data.append(deserialized_job)
                         except Exception as e:
@@ -428,7 +428,7 @@ def list_scheduled_jobs(
                                 operation="list_scheduled_jobs",
                                 status="serialization_warning",
                                 job_id=schedule.job_id,
-                                error=str(e)
+                                error=str(e),
                             )
                             # Fall back to using the original job data
                             jobs_data.append(job_data)
@@ -438,7 +438,7 @@ def list_scheduled_jobs(
                         f"Failed to list scheduled jobs: {e}",
                         operation="list_scheduled_jobs",
                         status="error",
-                        error=str(e)
+                        error=str(e),
                     )
                     console.print(
                         "[yellow]No scheduled jobs found or cannot access "
@@ -511,7 +511,9 @@ def list_scheduled_jobs(
                         if job.get("interval_seconds"):
                             details.append(f"interval={job.get('interval_seconds')}s")
                         if job.get("schedule_failure_count", 0) > 0:
-                            details.append(f"failures={job.get('schedule_failure_count')}")
+                            details.append(
+                                f"failures={job.get('schedule_failure_count')}"
+                            )
                         if job.get("last_enqueued_utc"):
                             last_run = datetime.datetime.fromtimestamp(
                                 job.get("last_enqueued_utc"), timezone.utc
@@ -538,7 +540,9 @@ def list_scheduled_jobs(
                         )
 
                 console.print(table)
-                console.print(f"\n[bold]Total:[/bold] {len(jobs_data)} scheduled job(s)")
+                console.print(
+                    f"\n[bold]Total:[/bold] {len(jobs_data)} scheduled job(s)"
+                )
             except typer.Exit:
                 # Re-raise typer.Exit exceptions to ensure proper exit code
                 raise
@@ -547,7 +551,7 @@ def list_scheduled_jobs(
                     f"Error listing scheduled jobs: {e}",
                     operation="list_scheduled_jobs",
                     status="error",
-                    error=str(e)
+                    error=str(e),
                 )
                 console.print(f"[red]Error listing scheduled jobs: {str(e)}[/red]")
             finally:

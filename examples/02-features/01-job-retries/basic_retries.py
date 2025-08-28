@@ -18,7 +18,7 @@ Before running:
 import os
 import random
 import time
-from typing import str
+from typing import Dict, Any
 
 from naq import SyncClient, setup_logging
 

@@ -46,6 +46,9 @@ from .queue.sync_api import (
     modify_scheduled_job_sync,
 )
 
+# Client
+from .client import SyncClient
+
 # Configuration
 from .config import get_config, load_config
 
@@ -61,23 +64,18 @@ from .exceptions import (
 # Job results management
 from .results import Results
 
+# Utilities
+from .utils import setup_logging
+
 # Create deprecated versions of core classes
-Job = create_deprecated_class(
-    _Job,
-    old_path="naq.Job",
-    new_path="naq.models.jobs.Job"
-)
+Job = create_deprecated_class(_Job, old_path="naq.Job", new_path="naq.models.jobs.Job")
 
 Queue = create_deprecated_class(
-    _Queue,
-    old_path="naq.Queue",
-    new_path="naq.queue.core.Queue"
+    _Queue, old_path="naq.Queue", new_path="naq.queue.core.Queue"
 )
 
 Worker = create_deprecated_class(
-    _Worker,
-    old_path="naq.Worker",
-    new_path="naq.worker.core.Worker"
+    _Worker, old_path="naq.Worker", new_path="naq.worker.core.Worker"
 )
 
 # Worker monitoring
@@ -128,6 +126,8 @@ __all__ = [
     "pause_scheduled_job_sync",
     "resume_scheduled_job_sync",
     "modify_scheduled_job_sync",
+    # Client
+    "SyncClient",
     # Worker monitoring
     "list_workers",
     "list_workers_sync",
@@ -144,4 +144,6 @@ __all__ = [
     "NAQError",
     # Job results management
     "Results",
+    # Utilities
+    "setup_logging",
 ]

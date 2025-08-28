@@ -14,7 +14,13 @@ from ..exceptions import ConfigurationError
 from ..models.jobs import Job, RetryDelayType
 from .scheduled import ScheduledJobManager
 from ..models.enums import SCHEDULED_JOB_STATUS
-from ..services import ConnectionService, StreamService, JobService, EventService, KVStoreService
+from ..services import (
+    ConnectionService,
+    StreamService,
+    JobService,
+    EventService,
+    KVStoreService,
+)
 from ..services.config import create_global_config, GlobalServiceConfig
 from ..settings import DEFAULT_QUEUE_NAME, DEFAULT_NATS_URL, NAQ_PREFIX
 from ..utils import setup_logging
@@ -61,15 +67,19 @@ class Queue:
         """
         # Validate parameters
         try:
-            validate_parameter(name, "name", not_none=True, pattern=self._VALID_QUEUE_NAME)
+            validate_parameter(
+                name, "name", not_none=True, pattern=self._VALID_QUEUE_NAME
+            )
         except ValueError as e:
             if "does not match required pattern" in str(e):
                 if not name:
                     raise ValueError("Queue name cannot be empty")
                 else:
-                    raise ValueError(f"Queue name contains invalid characters: '{name}'")
+                    raise ValueError(
+                        f"Queue name contains invalid characters: '{name}'"
+                    )
             raise
-            
+
         validate_parameter(nats_url, "nats_url", not_none=True)
         if default_timeout is not None:
             validate_parameter(default_timeout, "default_timeout", min_value=0)
@@ -87,27 +97,27 @@ class Queue:
         self._event_service: Optional[EventService] = None
         self._kv_store_service: Optional[KVStoreService] = None
         self._config = config or create_global_config()
-        self._scheduled_job_manager = ScheduledJobManager(name, nats_url, service_manager=self._service_manager, config=self._config)
+        self._scheduled_job_manager = ScheduledJobManager(
+            name, nats_url, service_manager=self._service_manager, config=self._config
+        )
 
         setup_logging()  # Ensure logging is set up
 
-    @retry(
-        max_attempts=3,
-        delay=1.0,
-        exceptions=(ConnectionError, TimeoutError)
-    )
+    @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
     async def _ensure_services(self) -> None:
         """Ensure that all required services are available."""
         structured_logger = StructuredLogger("naq.queue.core")
-        
+
         with structured_logger.operation_context(
             "ensure_services",
             queue_name=self.name,
-            has_service_manager=self._service_manager is not None
+            has_service_manager=self._service_manager is not None,
         ):
             try:
                 if not self._service_manager:
-                    raise RuntimeError("ServiceManager is required for Queue operations.")
+                    raise RuntimeError(
+                        "ServiceManager is required for Queue operations."
+                    )
 
                 if self._connection_service is None:
                     self._connection_service = await self._service_manager.get_service(
@@ -131,8 +141,12 @@ class Queue:
                     )
             except Exception as e:
                 error_handler = ErrorHandler()
-                wrapped_error = wrap_naq_exception(e, context="ensure_services operation")
-                error_handler.handle_error(wrapped_error, context={"queue_name": self.name})
+                wrapped_error = wrap_naq_exception(
+                    e, context="ensure_services operation"
+                )
+                error_handler.handle_error(
+                    wrapped_error, context={"queue_name": self.name}
+                )
                 raise
 
     async def __aenter__(self):
@@ -140,24 +154,18 @@ class Queue:
         # Use long-lived service context for queue lifecycle
         if self._service_manager:
             self._service_context = long_lived_service_context(
-                self._service_manager,
-                logger_name=f"naq.queue.core.{self.name}"
+                self._service_manager, logger_name=f"naq.queue.core.{self.name}"
             )
             await self._service_context.__aenter__()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
-        if hasattr(self, '_service_context'):
+        if hasattr(self, "_service_context"):
             await self._service_context.__aexit__(exc_type, exc_val, exc_tb)
         await self.close()
 
-
-    @retry(
-        max_attempts=3,
-        delay=1.0,
-        exceptions=(ConnectionError, TimeoutError)
-    )
+    @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
     async def enqueue(
         self,
         func: Callable,
@@ -191,21 +199,21 @@ class Queue:
         if max_retries is not None:
             validate_parameter(max_retries, "max_retries", min_value=0)
         ensure_type(retry_delay, (int, float, list, tuple), "retry_delay")
-        
+
         # Validate retry_delay is non-negative for numeric types
         if isinstance(retry_delay, (int, float)) and retry_delay < 0:
             raise ValueError("retry_delay cannot be negative")
-            
+
         if timeout is not None:
             validate_parameter(timeout, "timeout", min_value=0)
-        
+
         structured_logger = StructuredLogger("naq.queue.core")
-        
+
         with structured_logger.operation_context(
             "enqueue_job",
             queue_name=self.name,
             function_name=func.__name__,
-            job_id=None  # Will be set after job creation
+            job_id=None,  # Will be set after job creation
         ):
             try:
                 await self._ensure_services()
@@ -232,21 +240,18 @@ class Queue:
                     logger.info(f"Job {job.job_id} depends on: {job.dependency_ids}")
 
                 await self._job_service.enqueue(job, self.subject)
-                logger.info(
-                    f"Job {job.job_id} published successfully."
-                )
+                logger.info(f"Job {job.job_id} published successfully.")
                 return job
             except Exception as e:
                 error_handler = ErrorHandler()
                 wrapped_error = wrap_naq_exception(e, context="enqueue operation")
-                error_handler.handle_error(wrapped_error, context={"queue_name": self.name, "function": func.__name__})
+                error_handler.handle_error(
+                    wrapped_error,
+                    context={"queue_name": self.name, "function": func.__name__},
+                )
                 raise
 
-    @retry(
-        max_attempts=3,
-        delay=1.0,
-        exceptions=(ConnectionError, TimeoutError)
-    )
+    @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
     async def enqueue_at(
         self,
         dt: datetime.datetime,
@@ -282,14 +287,14 @@ class Queue:
         ensure_type(retry_delay, (int, float, list, tuple), "retry_delay")
         if timeout is not None:
             validate_parameter(timeout, "timeout", min_value=0)
-        
+
         structured_logger = StructuredLogger("naq.queue.core")
-        
+
         with structured_logger.operation_context(
             "enqueue_at",
             queue_name=self.name,
             function_name=func.__name__,
-            scheduled_time=dt.isoformat()
+            scheduled_time=dt.isoformat(),
         ):
             try:
                 # Convert datetime to UTC timestamp
@@ -321,7 +326,10 @@ class Queue:
             except Exception as e:
                 error_handler = ErrorHandler()
                 wrapped_error = wrap_naq_exception(e, context="enqueue_at operation")
-                error_handler.handle_error(wrapped_error, context={"queue_name": self.name, "function": func.__name__})
+                error_handler.handle_error(
+                    wrapped_error,
+                    context={"queue_name": self.name, "function": func.__name__},
+                )
                 raise
 
     async def enqueue_in(
@@ -362,11 +370,7 @@ class Queue:
             **kwargs,
         )
 
-    @retry(
-        max_attempts=3,
-        delay=1.0,
-        exceptions=(ConnectionError, TimeoutError)
-    )
+    @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
     async def schedule(
         self,
         func: Callable,
@@ -404,25 +408,27 @@ class Queue:
         if max_retries is not None:
             validate_parameter(max_retries, "max_retries", min_value=0)
         ensure_type(retry_delay, (int, float, list, tuple), "retry_delay")
-        
+
         # Validate retry_delay is non-negative for numeric types
         if isinstance(retry_delay, (int, float)) and retry_delay < 0:
             raise ValueError("retry_delay cannot be negative")
-            
+
         if timeout is not None:
             validate_parameter(timeout, "timeout", min_value=0)
         if repeat is not None:
             validate_parameter(repeat, "repeat", min_value=1)
-        
+
         structured_logger = StructuredLogger("naq.queue.core")
-        
+
         with structured_logger.operation_context(
             "schedule_job",
             queue_name=self.name,
             function_name=func.__name__,
             cron=cron,
-            interval_seconds=interval.total_seconds() if isinstance(interval, timedelta) else interval,
-            repeat=repeat
+            interval_seconds=interval.total_seconds()
+            if isinstance(interval, timedelta)
+            else interval,
+            repeat=repeat,
         ):
             try:
                 # Validate schedule parameters
@@ -431,7 +437,9 @@ class Queue:
                         "Either 'cron' or 'interval' must be provided for schedule()"
                     )
                 if cron and interval:
-                    raise ConfigurationError("Provide either 'cron' or 'interval', not both.")
+                    raise ConfigurationError(
+                        "Provide either 'cron' or 'interval', not both."
+                    )
 
                 # Check for croniter if cron is used
                 if cron:
@@ -473,7 +481,9 @@ class Queue:
 
                 # Extract interval seconds if interval was provided
                 interval_seconds = (
-                    interval.total_seconds() if isinstance(interval, timedelta) else None
+                    interval.total_seconds()
+                    if isinstance(interval, timedelta)
+                    else None
                 )
                 if isinstance(interval, (int, float)):
                     interval_seconds = float(interval)
@@ -495,14 +505,13 @@ class Queue:
             except Exception as e:
                 error_handler = ErrorHandler()
                 wrapped_error = wrap_naq_exception(e, context="schedule operation")
-                error_handler.handle_error(wrapped_error, context={"queue_name": self.name, "function": func.__name__})
+                error_handler.handle_error(
+                    wrapped_error,
+                    context={"queue_name": self.name, "function": func.__name__},
+                )
                 raise
 
-    @retry(
-        max_attempts=3,
-        delay=1.0,
-        exceptions=(ConnectionError, TimeoutError)
-    )
+    @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
     async def purge(self) -> int:
         """
         Removes all jobs from this queue by purging messages.
@@ -515,12 +524,12 @@ class Queue:
             NaqException: For other errors during purging.
         """
         structured_logger = StructuredLogger("naq.queue.core")
-        
+
         with structured_logger.operation_context(
             "purge_queue",
             queue_name=self.name,
             subject=self.subject,
-            stream_name=self.stream_name
+            stream_name=self.stream_name,
         ):
             try:
                 await self._ensure_services()
@@ -529,7 +538,9 @@ class Queue:
                 )
                 # Purge messages for this queue's stream
                 try:
-                    await self._stream_service.purge_stream(self.stream_name, self.subject)
+                    await self._stream_service.purge_stream(
+                        self.stream_name, self.subject
+                    )
                     logger.info(f"Purge successful for queue '{self.name}'.")
                     return 1
                 except Exception as purge_error:
@@ -540,14 +551,12 @@ class Queue:
             except Exception as e:
                 error_handler = ErrorHandler()
                 wrapped_error = wrap_naq_exception(e, context="purge operation")
-                error_handler.handle_error(wrapped_error, context={"queue_name": self.name})
+                error_handler.handle_error(
+                    wrapped_error, context={"queue_name": self.name}
+                )
                 raise
 
-    @retry(
-        max_attempts=3,
-        delay=1.0,
-        exceptions=(ConnectionError, TimeoutError)
-    )
+    @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
     async def cancel_scheduled_job(self, job_id: str) -> bool:
         """
         Cancels a scheduled job by deleting it from the KV store.
@@ -563,27 +572,25 @@ class Queue:
         """
         # Validate parameters
         validate_parameter(job_id, "job_id", not_none=True)
-        
+
         structured_logger = StructuredLogger("naq.queue.core")
-        
+
         with structured_logger.operation_context(
-            "cancel_scheduled_job",
-            queue_name=self.name,
-            job_id=job_id
+            "cancel_scheduled_job", queue_name=self.name, job_id=job_id
         ):
             try:
                 return await self._scheduled_job_manager.cancel_job(job_id)
             except Exception as e:
                 error_handler = ErrorHandler()
-                wrapped_error = wrap_naq_exception(e, context="cancel_scheduled_job operation")
-                error_handler.handle_error(wrapped_error, context={"queue_name": self.name, "job_id": job_id})
+                wrapped_error = wrap_naq_exception(
+                    e, context="cancel_scheduled_job operation"
+                )
+                error_handler.handle_error(
+                    wrapped_error, context={"queue_name": self.name, "job_id": job_id}
+                )
                 raise
 
-    @retry(
-        max_attempts=3,
-        delay=1.0,
-        exceptions=(ConnectionError, TimeoutError)
-    )
+    @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
     async def pause_scheduled_job(self, job_id: str) -> bool:
         """
         Pauses a scheduled job.
@@ -600,13 +607,11 @@ class Queue:
         """
         # Validate parameters
         validate_parameter(job_id, "job_id", not_none=True)
-        
+
         structured_logger = StructuredLogger("naq.queue.core")
-        
+
         with structured_logger.operation_context(
-            "pause_scheduled_job",
-            queue_name=self.name,
-            job_id=job_id
+            "pause_scheduled_job", queue_name=self.name, job_id=job_id
         ):
             try:
                 logger.info(f"Attempting to pause scheduled job '{job_id}'")
@@ -615,15 +620,15 @@ class Queue:
                 )
             except Exception as e:
                 error_handler = ErrorHandler()
-                wrapped_error = wrap_naq_exception(e, context="pause_scheduled_job operation")
-                error_handler.handle_error(wrapped_error, context={"queue_name": self.name, "job_id": job_id})
+                wrapped_error = wrap_naq_exception(
+                    e, context="pause_scheduled_job operation"
+                )
+                error_handler.handle_error(
+                    wrapped_error, context={"queue_name": self.name, "job_id": job_id}
+                )
                 raise
 
-    @retry(
-        max_attempts=3,
-        delay=1.0,
-        exceptions=(ConnectionError, TimeoutError)
-    )
+    @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
     async def resume_scheduled_job(self, job_id: str) -> bool:
         """
         Resumes a paused scheduled job.
@@ -640,13 +645,11 @@ class Queue:
         """
         # Validate parameters
         validate_parameter(job_id, "job_id", not_none=True)
-        
+
         structured_logger = StructuredLogger("naq.queue.core")
-        
+
         with structured_logger.operation_context(
-            "resume_scheduled_job",
-            queue_name=self.name,
-            job_id=job_id
+            "resume_scheduled_job", queue_name=self.name, job_id=job_id
         ):
             try:
                 logger.info(f"Attempting to resume scheduled job '{job_id}'")
@@ -655,15 +658,15 @@ class Queue:
                 )
             except Exception as e:
                 error_handler = ErrorHandler()
-                wrapped_error = wrap_naq_exception(e, context="resume_scheduled_job operation")
-                error_handler.handle_error(wrapped_error, context={"queue_name": self.name, "job_id": job_id})
+                wrapped_error = wrap_naq_exception(
+                    e, context="resume_scheduled_job operation"
+                )
+                error_handler.handle_error(
+                    wrapped_error, context={"queue_name": self.name, "job_id": job_id}
+                )
                 raise
 
-    @retry(
-        max_attempts=3,
-        delay=1.0,
-        exceptions=(ConnectionError, TimeoutError)
-    )
+    @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
     async def modify_scheduled_job(self, job_id: str, **updates: Any) -> bool:
         """
         Modifies parameters of a scheduled job.
@@ -682,21 +685,30 @@ class Queue:
         """
         # Validate parameters
         validate_parameter(job_id, "job_id", not_none=True)
-        
+
         structured_logger = StructuredLogger("naq.queue.core")
-        
+
         with structured_logger.operation_context(
             "modify_scheduled_job",
             queue_name=self.name,
             job_id=job_id,
-            update_keys=list(updates.keys())
+            update_keys=list(updates.keys()),
         ):
             try:
                 return await self._scheduled_job_manager.modify_job(job_id, **updates)
             except Exception as e:
                 error_handler = ErrorHandler()
-                wrapped_error = wrap_naq_exception(e, context="modify_scheduled_job operation")
-                error_handler.handle_error(wrapped_error, context={"queue_name": self.name, "job_id": job_id, "updates": updates})
+                wrapped_error = wrap_naq_exception(
+                    e, context="modify_scheduled_job operation"
+                )
+                error_handler.handle_error(
+                    wrapped_error,
+                    context={
+                        "queue_name": self.name,
+                        "job_id": job_id,
+                        "updates": updates,
+                    },
+                )
                 raise
 
     async def close(self) -> None:

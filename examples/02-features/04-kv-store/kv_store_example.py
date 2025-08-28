@@ -10,11 +10,7 @@ This example shows:
 """
 
 import asyncio
-import sys
 from typing import Dict, Any
-
-# Add the src directory to the path so we can import naq
-sys.path.insert(0, "src")
 
 from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
 from naq.exceptions import NaqException
@@ -188,6 +184,7 @@ async def main():
     except Exception as e:
         print(f"Error running examples: {e}")
         print("Make sure NATS server is running on nats://localhost:4222")
+        print("Also ensure the NAQ library is properly installed and accessible.")
 
 
 if __name__ == "__main__":

@@ -9,8 +9,7 @@ from typing import Optional
 from ..exceptions import SerializationError
 from ..models.events import JobEvent
 from ..models.jobs import Job
-from ..services import (ConnectionService, EventService, ServiceManager,
-                        StreamService)
+from ..services import ConnectionService, EventService, ServiceManager, StreamService
 from ..settings import FAILED_JOB_STREAM_NAME, FAILED_JOB_SUBJECT_PREFIX
 from ..utils.decorators import timing
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception

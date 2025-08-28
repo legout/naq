@@ -122,27 +122,33 @@ class KVStoreService(BaseService):
         # Override with NAQ config kv_store settings if provided
         if self._naq_config and self._naq_config.kv_store:
             naq_kv_config = self._naq_config.kv_store
-            
+
             # Map NAQ config to KV store service config
             if naq_kv_config.bucket_name:
                 kv_config.bucket_name = naq_kv_config.bucket_name
-            
+
             if naq_kv_config.ttl is not None:
                 kv_config.ttl = int(naq_kv_config.ttl)
                 kv_config.default_bucket_ttl = int(naq_kv_config.ttl)
-            
+
             if naq_kv_config.history is not None:
                 kv_config.history = naq_kv_config.history
                 # Use history as max_pool_size if not explicitly set
                 kv_config.max_pool_size = naq_kv_config.history
-            
+
             if naq_kv_config.replicas is not None:
                 kv_config.replicas = naq_kv_config.replicas
                 # Use replicas as a factor for pool size
-                kv_config.max_pool_size = max(kv_config.max_pool_size, naq_kv_config.replicas * 2)
+                kv_config.max_pool_size = max(
+                    kv_config.max_pool_size, naq_kv_config.replicas * 2
+                )
 
         # Override with service config if provided (for backward compatibility)
-        if self._config and hasattr(self._config, 'custom_settings') and self._config.custom_settings:
+        if (
+            self._config
+            and hasattr(self._config, "custom_settings")
+            and self._config.custom_settings
+        ):
             custom_settings = self._config.custom_settings
 
             if "default_bucket_ttl" in custom_settings:
@@ -218,7 +224,9 @@ class KVStoreService(BaseService):
                 self._kv_stores.clear()
                 self._lock.release()
             except asyncio.TimeoutError:
-                self._logger.warning("Timeout acquiring lock during cleanup, clearing without lock")
+                self._logger.warning(
+                    "Timeout acquiring lock during cleanup, clearing without lock"
+                )
                 # If we can't get the lock, just clear the dictionary directly
                 # This is safe because we're in cleanup and no new operations should start
                 self._kv_stores.clear()

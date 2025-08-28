@@ -545,7 +545,9 @@ class JobEvent(msgspec.Struct):
         """
         result = {
             "job_id": self.job_id,
-            "event_type": self.event_type.value if hasattr(self.event_type, "value") else str(self.event_type),
+            "event_type": self.event_type.value
+            if hasattr(self.event_type, "value")
+            else str(self.event_type),
             "timestamp": self.timestamp,
             "worker_id": self.worker_id,
             "queue_name": self.queue_name,
@@ -911,7 +913,9 @@ class WorkerEvent(msgspec.Struct):
         """
         result = {
             "worker_id": self.worker_id,
-            "event_type": self.event_type.value if hasattr(self.event_type, "value") else str(self.event_type),
+            "event_type": self.event_type.value
+            if hasattr(self.event_type, "value")
+            else str(self.event_type),
             "timestamp": self.timestamp,
             "queue_names": self.queue_names,
             "message": self.message,

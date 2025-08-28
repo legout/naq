@@ -117,19 +117,17 @@ class LeaderElection:
                 f"Acquired scheduler leader lock. This instance ({self.instance_id}) "
                 f"is now the leader."
             )
-            
+
             # Log leader_elected event
             if self._kv_store_service:
                 try:
                     # Try to get event service from the KV store service
                     # This is a bit of a hack since we don't have direct access to event service
                     # but we need to log the leader election event
-                    logger.info(
-                        f"Leader elected: {self.instance_id} at {time.time()}"
-                    )
+                    logger.info(f"Leader elected: {self.instance_id} at {time.time()}")
                 except Exception as e:
                     logger.debug(f"Could not log leader_elected event: {e}")
-            
+
             return True
 
         except Exception as e:
@@ -186,13 +184,11 @@ class LeaderElection:
                 break
 
         logger.info("Leader lock renewal task exiting")
-        
+
         # Log leader_revoked event if we were previously the leader
         if self._is_leader:
-            logger.info(
-                f"Leader revoked: {self.instance_id} at {time.time()}"
-            )
-        
+            logger.info(f"Leader revoked: {self.instance_id} at {time.time()}")
+
         self._is_leader = False
 
     async def stop_renewal_task(self) -> None:
@@ -216,9 +212,7 @@ class LeaderElection:
                     )
                     logger.info("Released scheduler leader lock")
                     # Log leader_revoked event
-                    logger.info(
-                        f"Leader revoked: {self.instance_id} at {time.time()}"
-                    )
+                    logger.info(f"Leader revoked: {self.instance_id} at {time.time()}")
             except Exception as e:
                 logger.error(f"Error releasing leader lock: {e}")
         self._is_leader = False
@@ -371,7 +365,9 @@ class Scheduler:
         poll_interval: float = 1.0,  # Check for jobs every second
         instance_id: Optional[str] = None,  # For HA leader election
         enable_ha: bool = True,  # Whether to enable HA leader election
-        config: Optional[object] = None,  # GlobalServiceConfig for backward compatibility
+        config: Optional[
+            object
+        ] = None,  # GlobalServiceConfig for backward compatibility
     ):
         # For backward compatibility, support both nats_url and service_manager
         if nats_url is not None:
@@ -384,7 +380,7 @@ class Scheduler:
             self._config = None
         else:
             raise ValueError("Either nats_url or service_manager must be provided")
-            
+
         self._poll_interval = poll_interval
         self._running = False
         self._shutdown_event = asyncio.Event()
@@ -421,7 +417,7 @@ class Scheduler:
                 async with long_lived_service_context(
                     nats_url=self._nats_url,
                     global_config=self._config,
-                    logger_name=f"naq.scheduler.{self._instance_id}"
+                    logger_name=f"naq.scheduler.{self._instance_id}",
                 ) as service_manager:
                     self._service_manager = service_manager
                     await self._initialize_services(service_manager)
@@ -429,7 +425,7 @@ class Scheduler:
                 # Use provided service manager
                 async with long_lived_service_context(
                     self._service_manager,
-                    logger_name=f"naq.scheduler.{self._instance_id}"
+                    logger_name=f"naq.scheduler.{self._instance_id}",
                 ) as service_manager:
                     await self._initialize_services(service_manager)
 
@@ -446,16 +442,13 @@ class Scheduler:
         self._kv_store_service = await service_manager.get_service(
             "kv_store", KVStoreService
         )
-        self._event_service = await service_manager.get_service(
-            "event", EventService
-        )
+        self._event_service = await service_manager.get_service("event", EventService)
         self._scheduler_service = await service_manager.get_service(
             "scheduler", SchedulerService
         )
 
         logger.info(
-            f"Scheduler connected to services and KV store "
-            f"'{SCHEDULED_JOBS_KV_NAME}'."
+            f"Scheduler connected to services and KV store '{SCHEDULED_JOBS_KV_NAME}'."
         )
 
         # Initialize components
@@ -592,7 +585,7 @@ class Scheduler:
             self._service_manager = await long_lived_service_context(
                 nats_url=self._nats_url,
                 global_config=self._config,
-                logger_name=f"naq.scheduler.{self._instance_id}"
+                logger_name=f"naq.scheduler.{self._instance_id}",
             ).__aenter__()
         return self
 

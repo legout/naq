@@ -274,7 +274,12 @@ class ServiceManager:
         ```
     """
 
-    def __init__(self, config: Optional[ServiceConfig] = None, *, naq_config: Optional[NAQConfig] = None) -> None:
+    def __init__(
+        self,
+        config: Optional[ServiceConfig] = None,
+        *,
+        naq_config: Optional[NAQConfig] = None,
+    ) -> None:
         """
         Initialize the service manager.
 
@@ -284,7 +289,7 @@ class ServiceManager:
             naq_config: Optional NAQ configuration instance. If not provided, uses global config.
         """
         from ..config import get_config
-        
+
         self._default_config = config or ServiceConfig()
         self._naq_config = naq_config if naq_config is not None else get_config()
         self._services: Dict[str, BaseService] = {}
@@ -334,9 +339,12 @@ class ServiceManager:
             try:
                 # Check if the service constructor accepts naq_config parameter
                 import inspect
+
                 sig = inspect.signature(service_class.__init__)
-                if 'naq_config' in sig.parameters:
-                    service = service_class(config=service_config, naq_config=self._naq_config)
+                if "naq_config" in sig.parameters:
+                    service = service_class(
+                        config=service_config, naq_config=self._naq_config
+                    )
                 else:
                     service = service_class(config=service_config)
             except Exception:
@@ -402,17 +410,18 @@ class ServiceManager:
         # Initialize if not already initialized (lazy initialization)
         if not service.is_initialized:
             import time
+
             start_time = time.perf_counter()
-            
+
             try:
                 self._logger.info(f"Initializing service on demand: {name}")
                 await service.initialize()
-                
+
                 # Track initialization time for performance monitoring
                 init_time = time.perf_counter() - start_time
                 self._service_creation_times[name] = init_time
                 self._logger.debug(f"Service '{name}' initialized in {init_time:.3f}s")
-                
+
             except Exception as e:
                 error_msg = f"Failed to initialize service '{name}': {e}"
                 self._logger.error(error_msg)
@@ -539,16 +548,16 @@ class ServiceManager:
             A string representation including the number of registered services.
         """
         return f"<ServiceManager services={len(self._services)}>"
-    
+
     @property
     def config(self) -> NAQConfig:
         """Get the NAQ configuration instance."""
         return self._naq_config
-    
+
     def get_service_performance_stats(self) -> Dict[str, Dict[str, Any]]:
         """
         Get performance statistics for all services.
-        
+
         Returns:
             Dictionary with performance metrics for each service including:
             - initialization_time: Time taken to initialize the service
@@ -563,18 +572,19 @@ class ServiceManager:
                 "is_initialized": self._services[name].is_initialized,
             }
         return stats
-    
+
     def get_hot_services(self, threshold: int = 10) -> list[str]:
         """
         Get list of frequently accessed services (hot services).
-        
+
         Args:
             threshold: Minimum access count to be considered a hot service.
-            
+
         Returns:
             List of service names that are frequently accessed.
         """
         return [
-            name for name, count in self._service_access_counts.items()
+            name
+            for name, count in self._service_access_counts.items()
             if count >= threshold
         ]
