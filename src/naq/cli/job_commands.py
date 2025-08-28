@@ -4,7 +4,6 @@ import asyncio
 from typing import List, Optional
 
 import typer
-from rich.console import Console
 from rich.panel import Panel
 
 from ..settings import DEFAULT_NATS_URL
@@ -16,12 +15,21 @@ from ..services.config import GlobalServiceConfig
 from ..service_context import service_context
 from ..utils import setup_logging
 from ..utils.decorators import log_errors, timing
-from ..utils.logging import StructuredLogger
 from ..utils.validation import validate_parameter
 from ..utils.serialization import SerializationHelper
 from ..utils.nats_helpers import build_subject, stream_exists
 from ..exceptions import ValidationError, SerializationError
 from ..models.jobs import Job
+from .cli_base import BaseCLICommand
+
+
+class JobCommandHandler(BaseCLICommand):
+    """Base class for job command handlers with common functionality."""
+
+    def __init__(self) -> None:
+        """Initialize the JobCommandHandler."""
+        super().__init__("naq.cli.job")
+
 
 # Create a Typer instance for job commands
 job_app = typer.Typer(
@@ -54,9 +62,8 @@ def purge(
     """
     Removes all jobs from the specified queues.
     """
-    setup_logging(log_level if log_level else "INFO")
-    console = Console()
-    structured_logger = StructuredLogger("naq.cli.job_commands")
+    handler = JobCommandHandler()
+    handler.setup_logging(log_level if log_level else "INFO")
 
     @log_errors()
     @timing()
@@ -82,7 +89,7 @@ def purge(
                     "connection", ConnectionService
                 )
 
-            structured_logger.info(
+            handler.structured_logger.info(
                 f"Attempting to purge queues: {queues}",
                 operation="purge_queues",
                 queues=queues,
@@ -120,7 +127,7 @@ def purge(
                         }
                         total_purged += purged_count
 
-                        structured_logger.info(
+                        handler.structured_logger.info(
                             f"Successfully purged queue: {queue_name}",
                             operation="purge_queue",
                             queue_name=queue_name,
@@ -132,7 +139,7 @@ def purge(
                             "status": "error",
                             "error": f"Stream '{stream_name}' does not exist",
                         }
-                        structured_logger.warning(
+                        handler.structured_logger.warning(
                             f"Stream does not exist for queue: {queue_name}",
                             operation="purge_queue",
                             queue_name=queue_name,
@@ -141,7 +148,7 @@ def purge(
                         )
                 except Exception as e:
                     results[queue_name] = {"status": "error", "error": str(e)}
-                    structured_logger.error(
+                    handler.structured_logger.error(
                         f"Failed to purge queue '{queue_name}': {e}",
                         operation="purge_queue",
                         queue_name=queue_name,
@@ -153,15 +160,15 @@ def purge(
             success_count = sum(1 for r in results.values() if r["status"] == "success")
             error_count = len(results) - success_count
 
-            console.print("\n[bold]Purge Results:[/bold]")
+            handler.console.print("\n[bold]Purge Results:[/bold]")
             for name, result in results.items():
                 if result["status"] == "success":
-                    console.print(
+                    handler.console.print(
                         f"  - [green]Queue '{name}': "
                         f"Purged {result['count']} jobs.[/green]"
                     )
                 else:
-                    console.print(
+                    handler.console.print(
                         f"  - [red]Queue '{name}': Failed - {result['error']}[/red]"
                     )
 
@@ -177,7 +184,7 @@ def purge(
                 f"Successful purges: {success_count}\n"
                 f"Failed purges: {error_count}"
             )
-            console.print(
+            handler.console.print(
                 Panel(
                     summary_text,
                     title="Purge Summary",
@@ -188,13 +195,13 @@ def purge(
             # --- End Reporting ---
 
         except Exception as e:
-            structured_logger.error(
+            handler.structured_logger.error(
                 f"Failed to purge queues: {e}",
                 operation="purge_queues",
                 error=str(e),
                 error_type=type(e).__name__,
             )
-            console.print(f"[red]Error: {str(e)}[/red]")
+            handler.console.print(f"[red]Error: {str(e)}[/red]")
         # Service context automatically handles cleanup
 
     # Run the async function
@@ -253,14 +260,13 @@ def job_control(
     import datetime
     from rich.text import Text
 
-    setup_logging(log_level if log_level else "INFO")
-    console = Console()
-    structured_logger = StructuredLogger("naq.cli.job_commands")
+    handler = JobCommandHandler()
+    handler.setup_logging(log_level if log_level else "INFO")
 
     # Validate action
     if action not in ["cancel", "pause", "resume", "reschedule"]:
         error_msg = f"Invalid action '{action}'. Must be one of: cancel, pause, resume, reschedule"
-        structured_logger.error(
+        handler.structured_logger.error(
             error_msg,
             operation="job_control",
             action=action,
@@ -273,7 +279,7 @@ def job_control(
     if action == "reschedule":
         if not any([cron, interval, repeat, next_run]):
             error_msg = "Reschedule action requires at least one scheduling parameter: --cron, --interval, --repeat, or --next-run"
-            structured_logger.error(
+            handler.structured_logger.error(
                 error_msg,
                 operation="job_control",
                 action=action,
@@ -282,7 +288,7 @@ def job_control(
             typer.echo(f"Error: {error_msg}", err=True)
             raise typer.Exit(code=1)
         if cron and interval:
-            structured_logger.error(
+            handler.structured_logger.error(
                 "Cannot specify both --cron and --interval. "
                 "Choose one scheduling method.",
                 operation="job_control",
@@ -316,7 +322,7 @@ def job_control(
                 job_id, "job_id", not_none=True, regex_pattern=r"^[a-zA-Z0-9_-]+$"
             )
 
-            structured_logger.info(
+            handler.structured_logger.info(
                 f"Performing {action} on job {job_id}",
                 operation="job_control",
                 action=action,
@@ -327,10 +333,10 @@ def job_control(
                 if action == "cancel":
                     result = await scheduler_service.cancel_scheduled_job(job_id)
                     if result:
-                        console.print(
+                        handler.console.print(
                             f"[green]Job {job_id} cancelled successfully.[/green]"
                         )
-                        structured_logger.info(
+                        handler.structured_logger.info(
                             f"Job {job_id} cancelled successfully",
                             operation="job_control",
                             action=action,
@@ -338,11 +344,11 @@ def job_control(
                             status="success",
                         )
                     else:
-                        console.print(
+                        handler.console.print(
                             f"[yellow]Job {job_id} not found or "
                             "already cancelled.[/yellow]"
                         )
-                        structured_logger.warning(
+                        handler.structured_logger.warning(
                             f"Job {job_id} not found or already cancelled",
                             operation="job_control",
                             action=action,
@@ -353,10 +359,10 @@ def job_control(
                 elif action == "pause":
                     result = await scheduler_service.pause_scheduled_job(job_id)
                     if result:
-                        console.print(
+                        handler.console.print(
                             f"[green]Job {job_id} paused successfully.[/green]"
                         )
-                        structured_logger.info(
+                        handler.structured_logger.info(
                             f"Job {job_id} paused successfully",
                             operation="job_control",
                             action=action,
@@ -364,11 +370,11 @@ def job_control(
                             status="success",
                         )
                     else:
-                        console.print(
+                        handler.console.print(
                             f"[yellow]Failed to pause job {job_id}. "
                             "Job might not exist or was already paused.[/yellow]"
                         )
-                        structured_logger.warning(
+                        handler.structured_logger.warning(
                             f"Failed to pause job {job_id}",
                             operation="job_control",
                             action=action,
@@ -379,10 +385,10 @@ def job_control(
                 elif action == "resume":
                     result = await scheduler_service.resume_scheduled_job(job_id)
                     if result:
-                        console.print(
+                        handler.console.print(
                             f"[green]Job {job_id} resumed successfully.[/green]"
                         )
-                        structured_logger.info(
+                        handler.structured_logger.info(
                             f"Job {job_id} resumed successfully",
                             operation="job_control",
                             action=action,
@@ -390,11 +396,11 @@ def job_control(
                             status="success",
                         )
                     else:
-                        console.print(
+                        handler.console.print(
                             f"[yellow]Failed to resume job {job_id}. "
                             "Job might not exist or was not paused.[/yellow]"
                         )
-                        structured_logger.warning(
+                        handler.structured_logger.warning(
                             f"Failed to resume job {job_id}",
                             operation="job_control",
                             action=action,
@@ -407,8 +413,8 @@ def job_control(
                     # and reschedule
                     current_job = await scheduler_service.get_scheduled_job(job_id)
                     if current_job is None:
-                        console.print(f"[yellow]Job {job_id} not found.[/yellow]")
-                        structured_logger.warning(
+                        handler.console.print(f"[yellow]Job {job_id} not found.[/yellow]")
+                        handler.structured_logger.warning(
                             f"Job {job_id} not found for reschedule",
                             operation="job_control",
                             action=action,
@@ -428,7 +434,7 @@ def job_control(
                         )
                         new_job = Job.deserialize(original_job_data)
                     except SerializationError as e:
-                        structured_logger.error(
+                        handler.structured_logger.error(
                             f"Failed to deserialize job {job_id}: {e}",
                             operation="job_control",
                             action=action,
@@ -436,7 +442,7 @@ def job_control(
                             error=str(e),
                             error_type="deserialization_error",
                         )
-                        console.print(f"[red]Error deserializing job: {str(e)}[/red]")
+                        handler.console.print(f"[red]Error deserializing job: {str(e)}[/red]")
                         return
 
                     # Calculate new scheduled timestamp
@@ -456,7 +462,7 @@ def job_control(
                             )
                             scheduled_timestamp = next_run_dt.timestamp()
                         except (ValueError, ValidationError) as e:
-                            structured_logger.error(
+                            handler.structured_logger.error(
                                 f"Invalid next_run format: {e}. Use ISO format "
                                 "(e.g., '2023-01-01T12:00:00Z')",
                                 operation="job_control",
@@ -477,17 +483,17 @@ def job_control(
                         repeat=repeat or current_job.repeat,
                     )
 
-                    console.print(
+                    
+                    handler.console.print(
                         f"[green]Job {job_id} rescheduled successfully.[/green]"
                     )
-                    structured_logger.info(
+                    handler.structured_logger.info(
                         f"Job {job_id} rescheduled successfully",
                         operation="job_control",
                         action=action,
                         job_id=job_id,
                         status="success",
                     )
-
                     change_summary = []
                     if cron:
                         change_summary.append(f"cron='{cron}'")
@@ -499,7 +505,7 @@ def job_control(
                         change_summary.append(f"next_run={next_run}")
 
                     if change_summary:
-                        console.print(
+                        handler.console.print(
                             Panel(
                                 Text(
                                     "\n".join(
@@ -511,7 +517,7 @@ def job_control(
                             )
                         )
             except Exception as e:
-                structured_logger.error(
+                handler.structured_logger.error(
                     f"Error controlling job {job_id}: {e}",
                     operation="job_control",
                     action=action,
@@ -519,10 +525,10 @@ def job_control(
                     error=str(e),
                     error_type=type(e).__name__,
                 )
-                console.print(f"[red]Error: {str(e)}[/red]")
+                handler.console.print(f"[red]Error: {str(e)}[/red]")
 
         except Exception as e:
-            structured_logger.error(
+            handler.structured_logger.error(
                 f"Failed to control job: {e}",
                 operation="job_control",
                 action=action,
@@ -530,7 +536,7 @@ def job_control(
                 error=str(e),
                 error_type=type(e).__name__,
             )
-            console.print(f"[red]Error: {str(e)}[/red]")
+            handler.console.print(f"[red]Error: {str(e)}[/red]")
         # Service context automatically handles cleanup
 
     # Run the async function

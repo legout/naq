@@ -2,8 +2,7 @@
 title: "Usage Examples"
 ---
 
-This page provides practical examples for some of `naq`'s key features.
-
+This page provides practical examples for some of `naq`'s key features. For a full step-by-step guide, please see the [**NAQ Tutorial**](tutorial.qmd).
 ## Example 1: Scheduled and Recurring Jobs
 
 `naq` allows you to schedule jobs to run at a specific time in the future or on a recurring basis using cron expressions.
@@ -22,6 +21,22 @@ naq worker scheduled_queue
 
 You can enqueue a job to run after a specific delay or at a precise time.
 
+## Example 1: Scheduled and Recurring Jobs
+
+`naq` allows you to schedule jobs to run at a specific time or on a recurring basis using cron expressions.
+
+To run these examples, you need both a worker and the scheduler process running:
+
+```bash
+# Terminal 1: Start the scheduler
+naq scheduler
+
+# Terminal 2: Start a worker for the queue
+naq worker scheduled_queue
+```
+
+### One-Time Scheduled Job
+
 ```python
 # schedule_task.py
 import asyncio
@@ -30,34 +45,181 @@ from naq import enqueue_at, enqueue_in
 
 async def send_reminder(user_id, message):
     print(f"Sending reminder to {user_id}: {message}")
-    # Add logic to send an email or push notification
     return f"Reminder sent to {user_id}"
 
 async def main():
     # Schedule a job to run in 5 minutes
-    run_in_5_min = await enqueue_in(
+    await enqueue_in(
         send_reminder,
-        delay=timedelta(minutes=5),
         user_id="user123",
         message="Your meeting starts in 5 minutes.",
+        timedelta\(minutes=5\),
         queue_name="scheduled_queue"
     )
-    print(f"Job {run_in_5_min.job_id} scheduled to run in 5 minutes.")
 
     # Schedule a job to run at a specific time (UTC)
     run_at_time = datetime.utcnow() + timedelta(hours=1)
-    run_at = await enqueue_at(
-        send_reminder,
-        run_at=run_at_time,
+    await enqueue_at\(\n        run_at_time,\n        send_reminder,
+        
         user_id="user456",
         message="Don't forget your 1-hour follow-up.",
         queue_name="scheduled_queue"
     )
-    print(f"Job {run_at.job_id} scheduled to run at {run_at_time.isoformat()}.")
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+
+### Recurring Job (Cron)
+
+```python
+# recurring_task.py
+import asyncio
+from naq import schedule
+
+async def generate_nightly_report():
+    print("Generating the nightly sales report...")
+    return "Report generated successfully."
+
+async def main():
+    # Schedule the report to run every day at 2:00 AM UTC
+    await schedule(
+        generate_nightly_report,
+        cron="0 2 * * *",
+                queue_name="scheduled_queue"
+    )
+    print("Cron job 'nightly-sales-report' is now active.")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Example 2: Automatic Job Retries
+
+`naq` can automatically retry failed jobs. This is useful for tasks that might fail due to transient issues, like network hiccups.
+
+```python
+# retry_task.py
+import asyncio
+import random
+from naq import enqueue
+
+async def flaky_api_call(request_id):
+    print(f"Attempting to call API for request {request_id}...")
+    if random.random() > 0.5:
+        print("API call successful!")
+        return "Success"
+    else:
+        print("API call failed. Will retry...")
+        raise ConnectionError("Could not connect to the API")
+
+async def main():
+    await enqueue(
+        flaky_api_call,
+        request_id="abc-123",
+        max_retries=3,
+        retry_delay=5, # Wait 5 seconds between retries
+        retry_strategy="linear"
+    )
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Example 3: Job Dependencies
+
+You can create workflows by making jobs dependent on the successful completion of others.
+
+```python
+# dependency_workflow.py
+import asyncio
+from naq import enqueue
+
+async def download_data(source_url):
+    print(f"Downloading data from {source_url}...")
+    await asyncio.sleep(2)
+    file_path = f"/tmp/data.csv"
+    print(f"Data downloaded to {file_path}")
+    return file_path
+
+async def process_data(file_path):
+    print(f"Processing data from {file_path}...")
+    await asyncio.sleep(3)
+    result_path = f"{file_path}.processed"
+    print(f"Data processed and saved to {result_path}")
+    return result_path
+
+async def main():
+    # Step 1: Download data
+    download_job = await enqueue(download_data, source_url="http://example.com/data")
+
+    # Step 2: Process data (depends on download)
+    # The download_job object will be passed as the first argument to process_data
+    process_job = await enqueue(
+        process_data,
+        download_job, # Pass the job object as an argument
+        depends_on=download_job
+    )
+
+    print(f"Workflow started. Final job: {process_job.job_id}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Example 4: Using the Service Layer
+
+The `ServiceManager` provides a unified way to manage all services with automatic dependency injection and lifecycle management. This is the recommended approach for building applications with `naq`.
+
+```python
+# service_manager_example.py
+import asyncio
+from naq.services.manager import ServiceManager
+from naq.models.jobs import Job
+
+
+async def process_data(data: str) -> str:
+    return f"Processed: {data}"
+
+async def main\(\):
+    # The ServiceManager handles all service initialization and cleanup
+    service_manager = ServiceManager\(\)
+    await service_manager.initialize_all\(\)
+
+    try:
+        # Get the services you need
+        job_service = service_manager.get_service\("jobs"\)
+        event_service = service_manager.get_service\("events"\)
+
+        # Create a job
+        job = Job\(
+            function=process_data,
+            args=\("Using the service layer is powerful and flexible.",\),
+            queue_name="service_queue",
+            max_retries=2,
+            retry_delay=1.0
+        \)
+
+        # Execute the job directly (useful for testing or specific integrations)
+        print("Executing job directly via JobService...")
+        result = await job_service.execute_job(job, "manual-worker-1")
+        print(f"Job completed with result: {result.result}")
+
+        # Retrieve events for the job
+        job_events = await event_service.get_job_events(job.job_id)
+        print(f"
+Found {len(job_events)} events for job {job.job_id}:")
+        for event in job_events:
+            print(f"  - {event.event_type.value} at {event.timestamp}")
+
+    finally:
+        # Clean up all services
+        await service_manager.cleanup_all()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
 
 ### Recurring Job (Cron)
 
@@ -137,10 +299,10 @@ from naq.services.manager import ServiceManager
 from naq.models.jobs import Job
 from naq.config import get_config
 
-async def process_data(data_id):
+async def process_data\(data_id\):
     """Example job function that processes data."""
-    print(f"Processing data with ID: {data_id}")
-    await asyncio.sleep(1)  # Simulate processing time
+    print\(f"Processing data with ID: {data_id}"\)
+    await asyncio.sleep\(1\)  # Simulate processing time
     return f"Processed data {data_id}"
 
 async def main():
@@ -197,7 +359,7 @@ For more fine-grained control, you can still initialize services individually:
 import asyncio
 from naq.services.jobs import JobService
 from naq.services.connection import ConnectionService
-from naq.services.kvstore import KVStoreService
+from naq.services.kv_stores import KVStoreService
 from naq.services.events import EventService
 from naq.models.jobs import Job
 from naq.config import get_config
@@ -536,7 +698,7 @@ async def main():
     # Step 2: Process data (depends on download)
     process_job = await enqueue(
         process_data,
-        file_path=download_job, # Pass the result of the dependency
+        file_path=download_job, # Pass the job object as an argument
         depends_on=[download_job]
     )
 
@@ -714,7 +876,7 @@ The `KVStoreService` provides a key-value store interface using NATS KV. It can 
 ```python
 # kv_store_example.py
 import asyncio
-from naq.services.kvstore import KVStoreService
+from naq.services.kv_stores import KVStoreService
 from naq.config import get_config
 
 async def main():
@@ -781,7 +943,7 @@ You can also override the centralized configuration with custom settings:
 # kv_store_custom_example.py
 import asyncio
 from naq.services.base import ServiceConfig
-from naq.services.kvstore import KVStoreService, KVStoreServiceConfig
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
 from naq.config import get_config
 
 async def main():
@@ -829,7 +991,7 @@ The `EventService` provides a structured way to log and retrieve events. It can 
 # event_service_example.py
 import asyncio
 from datetime import datetime
-from naq.services.kvstore import KVStoreService
+from naq.services.kv_stores import KVStoreService
 from naq.services.events import EventService
 from naq.models.events import Event, EventType
 from naq.config import get_config
@@ -881,15 +1043,17 @@ async def main():
     for event in job_events:
         print(f"  - {event.event_type.value}: {event.message} at {event.timestamp}")
     
-    # Get events by type
-    completed_events = await event_service.get_events_by_type(EventType.completed)
-    print(f"Completed events: {len(completed_events)}")
+    # Get events by type for a specific job
+    # Note: EventService only supports getting events for a specific job
+    # completed_events = await event_service.get_job_events("some-job-id", event_type=EventType.completed)
+    # print(f"Completed events for job some-job-id: {len(completed_events)}")
     
-    # Get events within a time range
-    start_time = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    end_time = datetime.utcnow()
-    time_range_events = await event_service.get_events_in_range(start_time, end_time)
-    print(f"Events today: {len(time_range_events)}")
+    # Get events within a time range for a specific job
+    # Note: EventService only supports getting events for a specific job
+    # start_time = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    # end_time = datetime.utcnow()
+    # time_range_events = await event_service.get_job_events("some-job-id")  # Then filter by time in your code
+    # print(f"Events today for job some-job-id: {len(time_range_events)}")
     
     # Cleanup
     await event_service.cleanup()
@@ -909,7 +1073,7 @@ You can also override the centralized configuration with custom settings:
 import asyncio
 from datetime import datetime
 from naq.services.base import ServiceConfig
-from naq.services.kvstore import KVStoreService, KVStoreServiceConfig
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
 from naq.services.events import EventService, EventServiceConfig
 from naq.models.events import Event, EventType
 from naq.config import get_config
@@ -1112,7 +1276,7 @@ The `WorkerService` provides a way to manage workers for processing jobs. It can
 # worker_service_example.py
 import asyncio
 from naq.services.connection import ConnectionService
-from naq.services.kvstore import KVStoreService
+from naq.services.kv_stores import KVStoreService
 from naq.services.events import EventService
 from naq.services.worker import WorkerService
 from naq.models.jobs import Job
@@ -1188,7 +1352,7 @@ You can also override the centralized configuration with custom settings:
 import asyncio
 from naq.services.base import ServiceConfig
 from naq.services.connection import ConnectionService, ConnectionServiceConfig
-from naq.services.kvstore import KVStoreService, KVStoreServiceConfig
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
 from naq.services.events import EventService, EventServiceConfig
 from naq.services.worker import WorkerService, WorkerServiceConfig
 from naq.models.jobs import Job
@@ -1283,7 +1447,7 @@ The `SchedulerService` provides a way to manage scheduled jobs. It can now use t
 import asyncio
 from datetime import datetime, timedelta
 from naq.services.connection import ConnectionService
-from naq.services.kvstore import KVStoreService
+from naq.services.kv_stores import KVStoreService
 from naq.services.events import EventService
 from naq.services.scheduler import SchedulerService
 from naq.models.schedules import Schedule, ScheduleType
@@ -1391,7 +1555,7 @@ import asyncio
 from datetime import datetime, timedelta
 from naq.services.base import ServiceConfig
 from naq.services.connection import ConnectionService, ConnectionServiceConfig
-from naq.services.kvstore import KVStoreService, KVStoreServiceConfig
+from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
 from naq.services.events import EventService, EventServiceConfig
 from naq.services.scheduler import SchedulerService, SchedulerServiceConfig
 from naq.models.schedules import Schedule, ScheduleType
@@ -1624,7 +1788,7 @@ Here's an example of how to compose multiple services to create a complete workf
 import asyncio
 from datetime import datetime
 from naq.services.connection import ConnectionService
-from naq.services.kvstore import KVStoreService
+from naq.services.kv_stores import KVStoreService
 from naq.services.events import EventService
 from naq.services.jobs import JobService
 from naq.models.jobs import Job
@@ -1897,14 +2061,17 @@ async def main():
     for event in job_events:
         print(f"- {event.event_type.value}: {event.message} (Worker: {event.worker_id or 'N/A'})")
         
-    # Get all 'HEARTBEAT' worker events
-    heartbeats = await event_service.get_events_by_type(WorkerEventType.HEARTBEAT)
-    print(f"\nFound {len(heartbeats)} worker heartbeats.")
+    # Get all 'HEARTBEAT' worker events for a specific worker
+    # Note: EventService only supports getting events for a specific worker
+    # heartbeats = await event_service.get_worker_events("some-worker-id")  # Then filter by event type in your code
+    # print(f"\nFound {len(heartbeats)} worker heartbeats for worker some-worker-id.")
     
     # Get all events within the last hour
-    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
-    recent_events = await event_service.get_events_in_range(one_hour_ago, datetime.utcnow())
-    print(f"\nFound {len(recent_events)} events in the last hour.")
+    # Get events within a time range for a specific worker
+    # Note: EventService only supports getting events for a specific worker
+    # one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    # recent_events = await event_service.get_worker_events("some-worker-id")  # Then filter by time in your code
+    # print(f"\nFound {len(recent_events)} events in the last hour for worker some-worker-id.")
     
     await service_manager.cleanup_all()
 

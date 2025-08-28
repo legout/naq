@@ -8,9 +8,11 @@ editor: visual
 
 ## Overview
 
-This document outlines the comprehensive testing strategy for the OmniQ project, including current status, challenges, and roadmap for improving test coverage and reliability.
+This document outlines the comprehensive testing strategy for the naq project, including current status, challenges, and roadmap for improving test coverage and reliability.
 
 ## Current Test Status
+
+*Note: The following test status information is static and not automatically updated. Please refer to the latest test reports for current status.*
 
 ### Test Suite Summary
 
@@ -31,15 +33,15 @@ This document outlines the comprehensive testing strategy for the OmniQ project,
 ### Unit Tests
 
 -   **Purpose**: Test individual components in isolation
--   **Location**: `tests/unit/`
--   **Count**: \~600 tests
+-   **Location**: Various directories (e.g., `test_config/`, `test_models/`, `test_cli/`)
+-   **Count**: ~600 tests
 -   **Status**: Mixed, with ServiceManager dependency issues
 
 ### Integration Tests
 
 -   **Purpose**: Test component interactions
--   **Location**: `tests/integration/` and `tests/test_services/`
--   **Count**: \~200 tests + comprehensive ServiceManager integration tests
+-   **Location**: `tests/test_services/` (Note: `tests/integration/` directory does not exist)
+-   **Count**: ~200 tests + comprehensive ServiceManager integration tests
 -   **Status**: Heavily impacted by service architecture changes, now enhanced with ServiceManager integration tests
 
 ### ServiceManager Integration Tests
@@ -80,15 +82,15 @@ async def test_automatic_dependency_injection(self, service_manager_with_real_se
 ### Smoke Tests
 
 -   **Purpose**: Verify basic functionality
--   **Location**: `tests/smoke/`
--   **Count**: \~20 tests
+-   **Location**: Not applicable (no dedicated smoke test directory)
+-   **Count**: ~20 tests
 -   **Status**: Generally stable
 
 ### Performance Tests
 
 -   **Purpose**: Benchmark performance characteristics
 -   **Location**: `tests/performance/`
--   **Count**: \~50 tests
+-   **Count**: ~50 tests
 -   **Status**: Needs development
 
 ## Current Challenges
@@ -125,113 +127,37 @@ The primary challenge affecting test stability is the ServiceManager dependency 
 
 ## Test Architecture
 
-### Recommended Test Structure
+### Actual Test Structure
 
-```         
+The project's tests are organized by module rather than by test type. This structure aligns with the source code organization and makes it easier to find tests for specific components.
+
+```
 tests/
-├── unit/                    # Unit tests
-│   ├── test_queue.py       # Queue functionality
-│   ├── test_worker.py      # Worker functionality
-│   ├── test_connection.py  # Connection functionality
-│   └── test_services.py    # Service functionality
-├── integration/            # Integration tests
-│   ├── test_queue_worker.py # Queue-worker integration
-│   ├── test_service_chains.py # Service interaction tests
-│   └── test_end_to_end.py  # End-to-end workflows
-├── performance/            # Performance tests
-│   ├── test_queue_perf.py  # Queue performance
-│   ├── test_worker_perf.py # Worker performance
-│   └── test_system_perf.py # System performance
-├── fixtures/              # Test fixtures
-│   ├── conftest.py        # Common fixtures
-│   ├── service_fixtures.py # Service-specific fixtures
-│   └── mock_fixtures.py   # Mock objects and utilities
-└── conftest.py            # Root configuration
+├── test_cli/              # Tests for the command-line interface
+├── test_config/           # Tests for configuration loading and validation
+├── test_integration/      # General integration tests
+├── test_models/           # Tests for data models
+├── test_performance/      # Performance benchmarks
+├── test_services/         # Tests for individual services and ServiceManager integration
+├── conftest.py            # Root configuration and common fixtures
+└── fixtures/              # Additional test fixtures (if any)
 ```
 
 ### Test Fixtures
 
-#### ServiceManager Fixture
+Test fixtures are essential for setting up the necessary environment and dependencies for tests. They help in creating reusable test setups, reducing code duplication, and improving test readability.
 
-``` python
-@pytest.fixture
-def service_manager():
-    """Provide a ServiceManager instance for tests."""
-    from naq.services.base import ServiceManager
-    manager = ServiceManager()
-    yield manager
-    # Cleanup
-```
+The project uses `pytest` and `pytest_asyncio` fixtures extensively. These fixtures are defined in `tests/conftest.py` and are automatically available to all tests within the `tests` directory.
 
-#### ServiceManager Integration Test Fixtures
+Commonly used fixtures include:
+- `nats_server`: Ensures a NATS server is running.
+- `nats_client`: Provides a properly managed NATS client.
+- `service_manager`: Provides a real or mock ServiceManager instance.
+- `mock_service_manager`: Provides a mock ServiceManager with all services mocked.
+- `service_test_config`: Provides service test configuration.
+- `service_aware_nats_mock`: Provides a mock NATS client with full JetStream support for service-aware testing.
 
-``` python
-@pytest_asyncio.fixture
-async def service_manager_with_real_services(service_manager_config: ServiceConfig) -> ServiceManager:
-    """Fixture providing a ServiceManager instance with real services."""
-    manager = ServiceManager(config=service_manager_config)
-    
-    # Register all services
-    manager.register_service("connection", ConnectionService)
-    manager.register_service("kv_store", KVStoreService)
-    manager.register_service("events", EventService)
-    manager.register_service("stream", StreamService)
-    manager.register_service("scheduler", SchedulerService)
-    manager.register_service("jobs", JobService)
-    manager.register_service("worker", WorkerService)
-    
-    try:
-        await manager.initialize_all()
-        yield manager
-    finally:
-        await manager.cleanup_all()
-
-@pytest_asyncio.fixture
-async def service_manager_with_mixed_services(service_manager_config: ServiceConfig) -> ServiceManager:
-    """Fixture providing a ServiceManager instance with a mix of real and mock services."""
-    manager = ServiceManager(config=service_manager_config)
-    
-    # Register real connection service
-    manager.register_service("connection", ConnectionService)
-    
-    # Register mock services for others
-    manager.register_service("kv_store", create_mock_service(KVStoreService))
-    manager.register_service("events", create_mock_service(EventService))
-    manager.register_service("stream", create_mock_service(StreamService))
-    manager.register_service("scheduler", create_mock_service(SchedulerService))
-    manager.register_service("jobs", create_mock_service(JobService))
-    manager.register_service("worker", create_mock_service(WorkerService))
-    
-    try:
-        await manager.initialize_all()
-        yield manager
-    finally:
-        await manager.cleanup_all()
-```
-
-#### Queue Service Fixture
-
-``` python
-@pytest.fixture
-def queue_service(service_manager):
-    """Provide a QueueService instance."""
-    from naq.services.queue import QueueService
-    service = QueueService(service_manager)
-    service_manager.register_service("queue", service)
-    yield service
-```
-
-#### Worker Service Fixture
-
-``` python
-@pytest.fixture
-def worker_service(service_manager):
-    """Provide a WorkerService instance."""
-    from naq.services.worker import WorkerService
-    service = WorkerService(service_manager)
-    service_manager.register_service("worker", service)
-    yield service
-```
+For a complete list and implementation details of available fixtures, please refer to the `tests/conftest.py` file.
 
 ## Testing Guidelines
 
@@ -247,19 +173,29 @@ def worker_service(service_manager):
 #### Best Practices
 
 ``` python
-def test_queue_enqueue_with_service_manager(queue_service, service_manager):
-    """Test queue enqueue operation with proper service setup."""
+async def test_job_service_enqueue_job(service_manager):
+    """Test JobService enqueue_job operation with proper service setup."""
     # Arrange
-    queue_name = "test-queue"
-    test_data = {"message": "test"}
+    job_service = service_manager.get_service("jobs", JobService)
+    test_job = Job(
+        job_id="test-job-123",
+        queue_name="default",
+        func=lambda: "test result",
+        args=(),
+        kwargs={},
+        status=JOB_STATUS.PENDING.value,
+        retry_count=0,
+        max_retries=3,
+        timeout=30,
+    )
     
     # Act
-    result = queue_service.enqueue(queue_name, test_data)
+    result = await job_service.enqueue_job(test_job)
     
     # Assert
     assert result is not None
-    assert result.queue_name == queue_name
-    assert result.data == test_data
+    assert result.job_id == test_job.job_id
+    assert result.queue_name == test_job.queue_name
 ```
 
 ### Writing Integration Tests
@@ -274,19 +210,29 @@ def test_queue_enqueue_with_service_manager(queue_service, service_manager):
 #### Best Practices
 
 ``` python
-def test_queue_worker_integration(service_manager):
-    """Test integration between queue and worker services."""
+async def test_job_worker_integration(service_manager):
+    """Test integration between job and worker services."""
     # Arrange
-    queue_service = QueueService(service_manager)
-    worker_service = WorkerService(service_manager)
+    job_service = service_manager.get_service("jobs", JobService)
+    test_job = Job(
+        job_id="test-job-123",
+        queue_name="default",
+        func=lambda: "test result",
+        args=(),
+        kwargs={},
+        status=JOB_STATUS.PENDING.value,
+        retry_count=0,
+        max_retries=3,
+        timeout=30,
+    )
     
     # Act
-    job = queue_service.enqueue("test-queue", {"task": "test"})
-    result = worker_service.process_job(job)
+    await job_service.enqueue_job(test_job)
+    result = await job_service.execute_job(test_job.job_id)
     
     # Assert
-    assert result.status == "completed"
-    assert result.job_id == job.id
+    assert result.status == JOB_STATUS.COMPLETED.value
+    assert result.job_id == test_job.job_id
 ```
 
 #### ServiceManager Integration Test Best Practices
@@ -405,70 +351,121 @@ class QueueTestFactory:
 #### Service Mocks
 
 ``` python
-class MockServiceManager:
-    """Mock ServiceManager for testing."""
+@pytest.fixture
+def mock_service_manager():
+    """Fixture for a mock ServiceManager with all services mocked."""
+    # Create mock service manager
+    manager = AsyncMock(spec=ServiceManager)
+    manager._services = {}
+    manager._service_configs = {}
+    manager.has_service = MagicMock(return_value=True)
+    manager.get_service = AsyncMock()
     
-    def __init__(self):
-        self.services = {}
+    # Create mock services
+    mock_connection_service = AsyncMock(spec=ConnectionService)
+    mock_connection_service._is_initialized = True
+    mock_connection_service.get_connection = AsyncMock()
+    mock_connection_service.get_jetstream = AsyncMock()
     
-    def register_service(self, name, service):
-        self.services[name] = service
+    mock_job_service = AsyncMock(spec=JobService)
+    mock_job_service._is_initialized = True
+    mock_job_service.enqueue_job = AsyncMock()
+    mock_job_service.execute_job = AsyncMock()
+    mock_job_service.store_result = AsyncMock()
+    mock_job_service.get_result = AsyncMock()
     
-    def get_service(self, name):
-        if name not in self.services:
-            raise ValueError(f"Service {name} not registered")
-        return self.services[name]
+    mock_event_service = AsyncMock(spec=EventService)
+    mock_event_service._is_initialized = True
+    mock_event_service.log_job_event = AsyncMock()
+    mock_event_service.log_worker_event = AsyncMock()
+    mock_event_service.get_job_events = AsyncMock(return_value=[])
+    mock_event_service.get_worker_events = AsyncMock(return_value=[])
+    
+    mock_stream_service = AsyncMock(spec=StreamService)
+    mock_stream_service._is_initialized = True
+    mock_stream_service.ensure_stream = AsyncMock()
+    mock_stream_service.get_stream_info = AsyncMock()
+    
+    mock_kv_store_service = AsyncMock(spec=KVStoreService)
+    mock_kv_store_service._is_initialized = True
+    mock_kv_store_service.put = AsyncMock()
+    mock_kv_store_service.get = AsyncMock()
+    mock_kv_store_service.delete = AsyncMock()
+    mock_kv_store_service.get_kv_store = AsyncMock()
+    
+    # Configure service manager to return mock services
+    async def mock_get_service(name: str, service_class: Optional[type] = None):
+        """Mock get_service method."""
+        if name == "connection" and (service_class is None or issubclass(service_class, ConnectionService)):
+            return mock_connection_service
+        elif name == "jobs" and (service_class is None or issubclass(service_class, JobService)):
+            return mock_job_service
+        elif name == "events" and (service_class is None or issubclass(service_class, EventService)):
+            return mock_event_service
+        elif name == "stream" and (service_class is None or issubclass(service_class, StreamService)):
+            return mock_stream_service
+        elif name == "kv_store" and (service_class is None or issubclass(service_class, KVStoreService)):
+            return mock_kv_store_service
+        else:
+            raise ValueError(f"Unknown service: {name}")
+    
+    manager.get_service.side_effect = mock_get_service
+    
+    # Store mock services for direct access
+    manager._mock_connection_service = mock_connection_service
+    manager._mock_job_service = mock_job_service
+    manager._mock_event_service = mock_event_service
+    manager._mock_stream_service = mock_stream_service
+    manager._mock_kv_store_service = mock_kv_store_service
+    
+    return manager
 ```
 
 ## Test Configuration
-
-### pytest.ini
-
-``` ini
-[tool:pytest]
-testpaths = tests
-python_files = test_*.py
-python_classes = Test*
-python_functions = test_*
-addopts = 
-    --verbose
-    --tb=short
-    --cov=src
-    --cov-report=html
-    --cov-report=term-missing
-    --cov-fail-under=80
-markers =
-    unit: Unit tests
-    integration: Integration tests
-    performance: Performance tests
-    slow: Slow running tests
-```
 
 ### pyproject.toml Test Configuration
 
 ``` toml
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = [
-    "--verbose",
-    "--tb=short",
-    "--cov=src",
-    "--cov-report=html",
-    "--cov-report=term-missing",
-    "--cov-fail-under=80"
+pythonpath = "src"
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "--cov=src --cov-report=term-missing --cov-report=html --cov-report=xml"
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/.*",
 ]
-markers = [
-    "unit: Unit tests",
-    "integration: Integration tests",
-    "performance: Performance tests",
-    "slow: Slow running tests"
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
 ]
+fail_under = 80
+show_missing = true
+precision = 2
+
+[tool.coverage.html]
+directory = "htmlcov"
 ```
 
 ## Continuous Integration
+
+*Note: The following GitHub Actions workflow is documented for reference, but no workflow files are currently present in the `.github/workflows` directory. This discrepancy should be addressed by either adding the workflow file or updating this documentation.*
 
 ### GitHub Actions Workflow
 
@@ -511,15 +508,17 @@ jobs:
 
 ## Test Reporting
 
+*Note: XML coverage reports and JUnit XML test results are configured to be generated, but no `.xml` files were found in the project directory. This suggests that these reports are not being generated locally or are stored elsewhere.*
+
 ### Coverage Reports
 
 -   **HTML Coverage**: Generated in `htmlcov/` directory
--   **XML Coverage**: For CI integration
+-   **XML Coverage**: For CI integration (not found locally)
 -   **Terminal Coverage**: Summary in test output
 
 ### Test Results
 
--   **JUnit XML**: For CI integration
+-   **JUnit XML**: For CI integration (not found locally)
 -   **Console Output**: Detailed test results
 -   **Failure Analysis**: Automated categorization of failures
 

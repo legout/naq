@@ -8,9 +8,9 @@ NAQ offers a flexible configuration system that allows you to manage settings us
 
 NAQ loads configuration from multiple sources with a clear priority order:
 
-1.  **Explicit Config File**: A configuration file path provided directly to the `ConfigLoader`.
-2.  **Default Config Files**: The first file found in a series of default locations (e.g., `./naq.yaml`, `~/.naq.yaml`).
-3.  **Environment Variables**: `NAQ_*` variables override file settings.
+1.  **Environment Variables**: `NAQ_*` variables override all other settings.
+2.  **Explicit Config File**: A configuration file path provided directly to the `ConfigLoader`.
+3.  **Default Config Files**: The first file found in a series of default locations (e.g., `./naq.yaml`, `~/.naq.yaml`).
 4.  **Default Values**: Built-in defaults are used as a final fallback.
 
 ## Centralized Configuration System
@@ -41,44 +41,44 @@ The following table details all the available configuration options in the `naq.
 | **nats** | `object` | NATS connection settings. | | Yes |
 | &nbsp;&nbsp;`servers` | `array` | List of NATS server URLs. Must contain at least one URL. | `["nats://localhost:4222"]` | Yes |
 | &nbsp;&nbsp;`client_name` | `string` | Name to identify this client connection. | `naq_client` | Yes |
-| &nbsp;&nbsp;`max_reconnect_attempts` | `integer` | Maximum number of reconnection attempts (`-1` for infinite). | `60` | Yes |
-| &nbsp;&nbsp;`reconnect_time_wait` | `number` | Time to wait between reconnection attempts (in seconds). | `2` | Yes |
-| &nbsp;&nbsp;`connection_timeout` | `number` | Timeout for establishing a connection (in seconds). | `5` | Yes |
-| &nbsp;&nbsp;`drain_timeout` | `number` | Timeout for draining connections (in seconds). | `30` | Yes |
+| &nbsp;&nbsp;`max_reconnect_attempts` | `integer` | Maximum number of reconnection attempts (`-1` for infinite). | `-1` | Yes |
+| &nbsp;&nbsp;`reconnect_time_wait` | `number` | Time to wait between reconnection attempts (in seconds). | `2.0` | Yes |
+| &nbsp;&nbsp;`connection_timeout` | `number` | Timeout for establishing a connection (in seconds). | `10.0` | Yes |
+| &nbsp;&nbsp;`drain_timeout` | `number` | Timeout for draining connections (in seconds). | `30.0` | Yes |
 | &nbsp;&nbsp;`auth` | `object` | Authentication configuration (e.g., token, user/pass). | `null` | No |
 | &nbsp;&nbsp;`tls` | `object` | TLS configuration for secure connections. | `null` | No |
 | **workers** | `object` | Worker settings. | | Yes |
-| &nbsp;&nbsp;`concurrency` | `integer` | Maximum number of concurrent jobs to process (must be >= 1). | `10` | Yes |
-| &nbsp;&nbsp;`heartbeat_interval` | `number` | Interval for sending heartbeat messages (in seconds). | `5` | Yes |
-| &nbsp;&nbsp;`ttl` | `number` | Time-to-live for worker entries (in seconds). | `15` | Yes |
-| &nbsp;&nbsp;`max_job_duration` | `number` | Maximum duration for a single job (in seconds). | `300` | Yes |
-| &nbsp;&nbsp;`shutdown_timeout` | `number` | Timeout for graceful shutdown (in seconds). | `30` | Yes |
+| &nbsp;&nbsp;`concurrency` | `integer` | Maximum number of concurrent jobs to process (must be >= 1). | `1` | Yes |
+| &nbsp;&nbsp;`heartbeat_interval` | `number` | Interval for sending heartbeat messages (in seconds). | `30.0` | Yes |
+| &nbsp;&nbsp;`ttl` | `number` | Time-to-live for worker entries (in seconds). | `60.0` | Yes |
+| &nbsp;&nbsp;`max_job_duration` | `number` | Maximum duration for a single job (in seconds). | `3600.0` | Yes |
+| &nbsp;&nbsp;`shutdown_timeout` | `number` | Timeout for graceful shutdown (in seconds). | `10.0` | Yes |
 | &nbsp;&nbsp;`pools` | `object` | Worker pool configuration. | `null` | No |
 | **events** | `object` | Event processing settings. | | Yes |
-| &nbsp;&nbsp;`enabled` | `boolean` | Whether event processing is enabled. | `true` | Yes |
+| &nbsp;&nbsp;`enabled` | `boolean` | Whether event processing is enabled. | `false` | Yes |
 | &nbsp;&nbsp;`batch_size` | `integer` | Number of events to batch together (must be >= 1). | `100` | Yes |
-| &nbsp;&nbsp;`flush_interval` | `number` | Interval for flushing events (in seconds). | `0.5` | Yes |
+| &nbsp;&nbsp;`flush_interval` | `number` | Interval for flushing events (in seconds). | `5.0` | Yes |
 | &nbsp;&nbsp;`max_buffer_size` | `integer` | Maximum size of the event buffer (must be >= 1). | `1000` | Yes |
 | &nbsp;&nbsp;`stream` | `string` | Name of the event stream. | `naq_events` | Yes |
 | &nbsp;&nbsp;`filters` | `array` | List of event filters to apply (e.g., `job.completed`). | `null` | No |
 | **queues** | `object` | Queue configuration. | | No |
 | &nbsp;&nbsp;`default_name` | `string` | Default queue name. | `naq_default_queue` | No |
-| &nbsp;&nbsp;`ack_wait` | `integer` | Default ack wait time (in seconds). | `30` | No |
+| &nbsp;&nbsp;`ack_wait` | `integer` | Default ack wait time (in seconds). | `60` | No |
 | **scheduler** | `object` | Scheduler configuration. | | No |
-| &nbsp;&nbsp;`lock_ttl` | `integer` | Scheduler lock TTL (in seconds). | `10` | No |
-| &nbsp;&nbsp;`lock_renew_interval` | `integer` | Lock renew interval (in seconds). | `5` | No |
-| &nbsp;&nbsp;`job_status_ttl` | `integer` | Job status TTL (in seconds). | `3600` | No |
-| &nbsp;&nbsp;`max_failures` | `integer` | Max schedule failures before a job is disabled. | `3` | No |
+| &nbsp;&nbsp;`lock_ttl` | `number` | Scheduler lock TTL (in seconds). | `30` | No |
+| &nbsp;&nbsp;`lock_renew_interval` | `integer` | Lock renew interval (in seconds). | `15` | No |
+| &nbsp;&nbsp;`job_status_ttl` | `integer` | Job status TTL (in seconds). | `86400` | No |
+| &nbsp;&nbsp;`max_failures` | `integer` | Max schedule failures before a job is disabled. | `5` | No |
 | **results** | `object` | Results configuration. | | No |
-| &nbsp;&nbsp;`ttl` | `integer` | Result TTL (in seconds). | `3600` | No |
+| &nbsp;&nbsp;`ttl` | `integer` | Result TTL (in seconds). | `604800` | No |
 | **serialization** | `object` | Serialization configuration. | | No |
-| &nbsp;&nbsp;`method` | `string` | Serialization method (`cloudpickle` or `json`). | `cloudpickle` | No |
-| &nbsp;&nbsp;`json_encoder` | `string` | Dotted import path to a custom JSON encoder class. | `null` | No |
-| &nbsp;&nbsp;`json_decoder` | `string` | Dotted import path to a custom JSON decoder class. | `null` | No |
+| &nbsp;&nbsp;`method` | `string` | Serialization method (`cloudpickle` or `json`). | `pickle` | No |
+| &nbsp;&nbsp;`json_encoder` | `string` | Dotted import path to a custom JSON encoder class. | `json.JSONEncoder` | No |
+| &nbsp;&nbsp;`json_decoder` | `string` | Dotted import path to a custom JSON decoder class. | `json.JSONDecoder` | No |
 | **logging** | `object` | Logging configuration. | | No |
-| &nbsp;&nbsp;`level` | `string` | Log level (e.g., `DEBUG`, `INFO`, `WARNING`). | `INFO` | No |
+| &nbsp;&nbsp;`level` | `string` | Log level (e.g., `DEBUG`, `INFO`, `WARNING`). | `CRITICAL` | No |
 | &nbsp;&nbsp;`to_file_enabled` | `boolean` | Enable file logging. | `false` | No |
-| &nbsp;&nbsp;`file_path` | `string` | Log file path. | `null` | No |
+| &nbsp;&nbsp;`file_path` | `string` | Log file path. | `naq_{time}.log` | No |
 | **database** | `object` | Database configuration (reserved for future use). | `null` | No |
 | **connection** | `object` | Connection service configuration. | | No |
 | &nbsp;&nbsp;`servers` | `array` | List of NATS server URLs. | `["nats://localhost:4222"]` | Yes |
@@ -94,45 +94,45 @@ The following table details all the available configuration options in the `naq.
 | &nbsp;&nbsp;`history` | `integer` | Number of historical values to keep. | `10` | No |
 | &nbsp;&nbsp;`stream_name` | `string` | Name of the underlying stream. | `null` | No |
 | &nbsp;&nbsp;`ttl` | `number` | Time-to-live for keys in seconds. | `null` | No |
-| &nbsp;&nbsp;`replicas` | `integer` | Number of replicas for the bucket. | `1` | No |
+| &nbsp;&nbsp;`replicas` | `integer` | Number of replicas for the bucket. | `null` | No |
 | **streams** | `object` | Stream service configuration. | | No |
-| &nbsp;&nbsp;`stream_name` | `string` | Name of the stream. | | Yes |
-| &nbsp;&nbsp;`subjects` | `array` | List of subjects for the stream. | | Yes |
+| &nbsp;&nbsp;`stream_name` | `string` | Name of the stream. | `naq_stream` | Yes |
+| &nbsp;&nbsp;`subjects` | `array` | List of subjects for the stream. | `["naq.>"]` | Yes |
 | &nbsp;&nbsp;`retention_limit` | `integer` | Maximum number of messages to retain. | `null` | No |
 | &nbsp;&nbsp;`max_age` | `number` | Maximum age of messages in seconds. | `null` | No |
 | &nbsp;&nbsp;`max_msgs` | `integer` | Maximum number of messages. | `null` | No |
 | &nbsp;&nbsp;`max_bytes` | `integer` | Maximum size of messages in bytes. | `null` | No |
-| &nbsp;&nbsp;`replicas` | `integer` | Number of replicas for the stream. | `1` | No |
-| &nbsp;&nbsp;`storage` | `string` | Storage type for the stream. | `file` | No |
+| &nbsp;&nbsp;`replicas` | `integer` | Number of replicas for the stream. | `null` | No |
+| &nbsp;&nbsp;`storage` | `string` | Storage type for the stream. | `null` | No |
 | **job_service** | `object` | Job service configuration. | | No |
 | &nbsp;&nbsp;`enable_job_execution` | `boolean` | Whether job execution is enabled. | `true` | Yes |
 | &nbsp;&nbsp;`enable_result_storage` | `boolean` | Whether result storage is enabled. | `true` | Yes |
 | &nbsp;&nbsp;`enable_event_logging` | `boolean` | Whether event logging is enabled. | `true` | Yes |
 | &nbsp;&nbsp;`max_job_execution_time` | `number` | Maximum time for job execution in seconds. | `3600.0` | Yes |
-| &nbsp;&nbsp;`default_result_ttl` | `number` | Default TTL for job results in seconds. | `86400.0` | Yes |
-| &nbsp;&nbsp;`results_bucket_name` | `string` | Name of the results bucket. | `naq_results` | Yes |
+| &nbsp;&nbsp;`default_result_ttl` | `number` | Default TTL for job results in seconds. | `3600.0` | Yes |
+| &nbsp;&nbsp;`results_bucket_name` | `string` | Name of the results bucket. | `job_results` | Yes |
 | &nbsp;&nbsp;`auto_create_buckets` | `boolean` | Whether to automatically create buckets. | `true` | Yes |
 | &nbsp;&nbsp;`default_queue` | `string` | Default queue name. | `default` | Yes |
 | &nbsp;&nbsp;`default_max_retries` | `integer` | Default maximum number of retries. | `3` | Yes |
-| &nbsp;&nbsp;`default_retry_delay` | `number` | Default retry delay in seconds. | `60.0` | Yes |
+| &nbsp;&nbsp;`default_retry_delay` | `number` | Default retry delay in seconds. | `5.0` | Yes |
 | **worker_service** | `object` | Worker service configuration. | | No |
-| &nbsp;&nbsp;`worker_name` | `string` | Name of the worker. | | Yes |
-| &nbsp;&nbsp;`queues` | `array` | List of queues the worker processes. | | Yes |
-| &nbsp;&nbsp;`max_concurrent_jobs` | `integer` | Maximum number of concurrent jobs. | | Yes |
-| &nbsp;&nbsp;`heartbeat_interval` | `number` | Heartbeat interval in seconds. | | Yes |
-| &nbsp;&nbsp;`ttl` | `number` | Time-to-live for worker status in seconds. | | Yes |
-| &nbsp;&nbsp;`max_job_duration` | `number` | Maximum job duration in seconds. | | Yes |
-| &nbsp;&nbsp;`shutdown_timeout` | `number` | Shutdown timeout in seconds. | | Yes |
-| &nbsp;&nbsp;`status_bucket_name` | `string` | Name of the status bucket. | | Yes |
+| &nbsp;&nbsp;`worker_name` | `string` | Name of the worker. | `naq-worker` | Yes |
+| &nbsp;&nbsp;`queues` | `array` | List of queues the worker processes. | `["default"]` | Yes |
+| &nbsp;&nbsp;`max_concurrent_jobs` | `integer` | Maximum number of concurrent jobs. | `1` | Yes |
+| &nbsp;&nbsp;`heartbeat_interval` | `number` | Heartbeat interval in seconds. | `30.0` | Yes |
+| &nbsp;&nbsp;`ttl` | `number` | Time-to-live for worker status in seconds. | `60.0` | Yes |
+| &nbsp;&nbsp;`max_job_duration` | `number` | Maximum job duration in seconds. | `3600.0` | Yes |
+| &nbsp;&nbsp;`shutdown_timeout` | `number` | Shutdown timeout in seconds. | `10.0` | Yes |
+| &nbsp;&nbsp;`status_bucket_name` | `string` | Name of the status bucket. | `worker_status` | Yes |
 | &nbsp;&nbsp;`auto_create_buckets` | `boolean` | Whether to automatically create buckets. | `true` | Yes |
 | **scheduler_service** | `object` | Scheduler service configuration. | | No |
-| &nbsp;&nbsp;`scheduler_name` | `string` | Name of the scheduler. | | Yes |
-| &nbsp;&nbsp;`check_interval` | `number` | Interval for checking scheduled jobs in seconds. | | Yes |
-| &nbsp;&nbsp;`max_concurrent_schedules` | `integer` | Maximum number of concurrent schedules. | | Yes |
-| &nbsp;&nbsp;`schedules_bucket_name` | `string` | Name of the schedules bucket. | | Yes |
-| &nbsp;&nbsp;`lock_bucket_name` | `string` | Name of the locks bucket. | | Yes |
-| &nbsp;&nbsp;`lock_ttl` | `number` | Time-to-live for locks in seconds. | | Yes |
-| &nbsp;&nbsp;`lock_renew_interval` | `number` | Interval for renewing locks in seconds. | | Yes |
+| &nbsp;&nbsp;`scheduler_name` | `string` | Name of the scheduler. | `naq-scheduler` | Yes |
+| &nbsp;&nbsp;`check_interval` | `number` | Interval for checking scheduled jobs in seconds. | `5.0` | Yes |
+| &nbsp;&nbsp;`max_concurrent_schedules` | `integer` | Maximum number of concurrent schedules. | `10` | Yes |
+| &nbsp;&nbsp;`schedules_bucket_name` | `string` | Name of the schedules bucket. | `scheduled_jobs` | Yes |
+| &nbsp;&nbsp;`lock_bucket_name` | `string` | Name of the locks bucket. | `scheduler_locks` | Yes |
+| &nbsp;&nbsp;`lock_ttl` | `number` | Time-to-live for locks in seconds. | `30.0` | Yes |
+| &nbsp;&nbsp;`lock_renew_interval` | `number` | Interval for renewing locks in seconds. | `10.0` | Yes |
 | &nbsp;&nbsp;`auto_create_buckets` | `boolean` | Whether to automatically create buckets. | `true` | Yes |
 ## Configuration Examples
 
@@ -259,14 +259,14 @@ nats:
   drain_timeout: 30.0
 
 workers:
-  concurrency: 4
+  concurrency: 1
   heartbeat_interval: 30.0
-  ttl: 300.0
+  ttl: 60.0
   max_job_duration: 3600.0
-  shutdown_timeout: 60.0
+  shutdown_timeout: 10.0
 
 events:
-  enabled: true
+  enabled: false
   batch_size: 100
   flush_interval: 5.0
   max_buffer_size: 1000
@@ -285,7 +285,7 @@ connection:
 kv_store:
   bucket_name: naq_kv_store
   history: 10
-  replicas: 1
+  replicas: null
   stream_name: null
   ttl: null
 
@@ -297,39 +297,39 @@ streams:
   max_age: null
   max_msgs: null
   max_bytes: null
-  replicas: 1
-  storage: file
+  replicas: null
+  storage: null
 
 job_service:
   enable_job_execution: true
   enable_result_storage: true
   enable_event_logging: true
   max_job_execution_time: 3600.0
-  default_result_ttl: 86400.0
-  results_bucket_name: naq_results
+  default_result_ttl: 3600.0
+  results_bucket_name: job_results
   auto_create_buckets: true
   default_queue: default
   default_max_retries: 3
-  default_retry_delay: 60.0
+  default_retry_delay: 5.0
 
 worker_service:
-  worker_name: test_worker
+  worker_name: naq-worker
   queues:
     - default
-  max_concurrent_jobs: 4
+  max_concurrent_jobs: 1
   heartbeat_interval: 30.0
-  ttl: 300.0
+  ttl: 60.0
   max_job_duration: 3600.0
-  shutdown_timeout: 60.0
-  status_bucket_name: naq_worker_status
+  shutdown_timeout: 10.0
+  status_bucket_name: worker_status
   auto_create_buckets: true
 
 scheduler_service:
-  scheduler_name: test_scheduler
-  check_interval: 1.0
-  max_concurrent_schedules: 100
-  schedules_bucket_name: naq_schedules
-  lock_bucket_name: naq_locks
+  scheduler_name: naq-scheduler
+  check_interval: 5.0
+  max_concurrent_schedules: 10
+  schedules_bucket_name: scheduled_jobs
+  lock_bucket_name: scheduler_locks
   lock_ttl: 30.0
   lock_renew_interval: 10.0
   auto_create_buckets: true
@@ -337,24 +337,24 @@ scheduler_service:
 # Additional configuration
 queues:
   default_name: default
-  ack_wait: 30
+  ack_wait: 60
 
 scheduler:
   lock_ttl: 30
-  lock_renew_interval: 10
-  job_status_ttl: 3600
-  max_failures: 3
+  lock_renew_interval: 15
+  job_status_ttl: 86400
+  max_failures: 5
 
 results:
-  ttl: 3600
+  ttl: 604800
 
 serialization:
-  method: cloudpickle
+  method: pickle
 
 logging:
-  level: INFO
+  level: CRITICAL
   to_file_enabled: false
-  file_path: naq.log
+  file_path: naq_{time}.log
 ```
 ## Migrating from Environment Variables
 

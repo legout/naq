@@ -109,19 +109,20 @@ All services should inherit from the base [`Service`](src/naq/services/base.py:1
 109|
 110| Services use [`msgspec.Struct`](src/naq/services/base.py:1) for configuration. Configuration classes should:
 111|
-112| - Inherit from [`ServiceConfigBase`](src/naq/services/base.py:1)
+112| 
 113| - Provide default values for all settings
 114| - Validate settings in the `__post_init__` method
 115| - Use type hints for all configuration parameters
 116|
+Service-specific configuration classes should be standalone `msgspec.Struct`s that define the settings for that particular service. These service-specific configurations are then passed to the base service via the `custom_settings` attribute of the `ServiceConfig` object.
 117| Example:
 118|
 119| ```python
 120| # src/naq/services/my_service.py
 121| from msgspec import Struct
-122| from naq.services.base import ServiceConfigBase
+122| 
 123|
-124| class MyServiceConfig(ServiceConfigBase):
+124| class MyServiceConfig(Struct):
 125|     timeout: int = 30
 126|     max_retries: int = 3
 127|

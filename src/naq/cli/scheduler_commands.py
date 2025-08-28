@@ -6,7 +6,6 @@ from datetime import timezone
 from typing import Optional
 
 import typer
-from rich.console import Console
 from rich.table import Table
 
 from ..settings import DEFAULT_NATS_URL
@@ -18,10 +17,19 @@ from ..services.connection import ConnectionService
 from ..services.config import GlobalServiceConfig
 from ..utils import setup_logging
 from ..utils.decorators import timing, log_errors
-from ..utils.logging import StructuredLogger
 from ..utils.nats_helpers import build_subject, stream_exists
 from ..utils.serialization import SerializationHelper
 from ..utils.validation import ensure_type, validate_parameter
+from .cli_base import BaseCLICommand
+
+
+class SchedulerCommandHandler(BaseCLICommand):
+    """Base class for scheduler command handlers with common functionality."""
+
+    def __init__(self) -> None:
+        """Initialize the SchedulerCommandHandler."""
+        super().__init__("naq.cli.scheduler")
+
 
 # Create a Typer instance for scheduler commands
 scheduler_app = typer.Typer(
@@ -83,12 +91,12 @@ def start_scheduler(
     ensure_type(log_level, (str, type(None)), "log_level", convert=False)
     ensure_type(instance_id, (str, type(None)), "instance_id", convert=False)
 
-    setup_logging(log_level if log_level else "CRITICAL")
+    handler = SchedulerCommandHandler()
+    handler.setup_logging(log_level if log_level else "CRITICAL")
     enable_ha = not disable_ha
 
     # Use structured logger
-    structured_logger = StructuredLogger("scheduler")
-    structured_logger.info(
+    handler.structured_logger.info(
         f"Starting scheduler{f' instance {instance_id}' if instance_id else ''}",
         nats_url=nats_url,
         poll_interval=poll_interval,
@@ -97,7 +105,7 @@ def start_scheduler(
     )
 
     async def _run_scheduler():
-        with structured_logger.operation_context(
+        with handler.structured_logger.operation_context(
             "scheduler_run",
             nats_url=nats_url,
             poll_interval=poll_interval,
@@ -123,13 +131,13 @@ def start_scheduler(
                     serializer="json",
                     metadata={"source": "scheduler_cli", "version": "1.0"},
                 )
-                structured_logger.debug(
+                handler.structured_logger.debug(
                     "Configuration serialized with metadata",
                     operation="scheduler_run",
                     status="config_serialized",
                 )
             except Exception as e:
-                structured_logger.warning(
+                handler.structured_logger.warning(
                     f"Failed to serialize configuration with metadata: {e}",
                     operation="scheduler_run",
                     status="config_serialization_warning",
@@ -169,13 +177,13 @@ def start_scheduler(
                 js = await connection_service.get_jetstream()
                 stream_name = "naq_jobs"
                 if await stream_exists(js=js, stream_name=stream_name):
-                    structured_logger.debug(
+                    handler.structured_logger.debug(
                         f"Stream '{stream_name}' exists",
                         operation="scheduler_run",
                         status="stream_check",
                     )
                 else:
-                    structured_logger.warning(
+                    handler.structured_logger.warning(
                         f"Stream '{stream_name}' does not exist",
                         operation="scheduler_run",
                         status="stream_check",
@@ -185,7 +193,7 @@ def start_scheduler(
                 scheduler_subject = build_subject(
                     "naq", "scheduler", instance_id or "default"
                 )
-                structured_logger.debug(
+                handler.structured_logger.debug(
                     f"Using scheduler subject: {scheduler_subject}",
                     operation="scheduler_run",
                     status="subject_built",
@@ -203,13 +211,13 @@ def start_scheduler(
                 await s.run()
 
             except KeyboardInterrupt:
-                structured_logger.info(
+                handler.structured_logger.info(
                     "Scheduler interrupted by user (KeyboardInterrupt). Shutting down.",
                     operation="scheduler_run",
                     status="interrupted",
                 )
             except Exception as e:
-                structured_logger.error(
+                handler.structured_logger.error(
                     f"Scheduler failed unexpectedly: {e}",
                     operation="scheduler_run",
                     status="failed",
@@ -217,7 +225,7 @@ def start_scheduler(
                 )
                 raise typer.Exit(code=1)
             finally:
-                structured_logger.info(
+                handler.structured_logger.info(
                     "Scheduler process finished.",
                     operation="scheduler_run",
                     status="finished",
@@ -288,11 +296,11 @@ def list_scheduled_jobs(
     ensure_type(detailed, bool, "detailed", convert=False)
     ensure_type(log_level, (str, type(None)), "log_level", convert=False)
 
-    setup_logging(log_level if log_level else "CRITICAL")
+    handler = SchedulerCommandHandler()
+    handler.setup_logging(log_level if log_level else "CRITICAL")
 
     # Use structured logger
-    structured_logger = StructuredLogger("scheduler_jobs")
-    structured_logger.info(
+    handler.structured_logger.info(
         f"Listing scheduled jobs from NATS at {nats_url}",
         nats_url=nats_url,
         status_filter=status,
@@ -300,10 +308,9 @@ def list_scheduled_jobs(
         queue_filter=queue,
         detailed_view=detailed,
     )
-    console = Console()
 
     async def _list_scheduled_jobs_async():
-        with structured_logger.operation_context(
+        with handler.structured_logger.operation_context(
             "list_scheduled_jobs",
             nats_url=nats_url,
             status_filter=status,
@@ -338,13 +345,13 @@ def list_scheduled_jobs(
                 js = await connection_service.get_jetstream()
                 stream_name = "naq_jobs"
                 if await stream_exists(js=js, stream_name=stream_name):
-                    structured_logger.debug(
+                    handler.structured_logger.debug(
                         f"Stream '{stream_name}' exists",
                         operation="list_scheduled_jobs",
                         status="stream_check",
                     )
                 else:
-                    structured_logger.warning(
+                    handler.structured_logger.warning(
                         f"Stream '{stream_name}' does not exist",
                         operation="list_scheduled_jobs",
                         status="stream_check",
@@ -352,7 +359,7 @@ def list_scheduled_jobs(
 
                 # Build subject for scheduler operations
                 scheduler_subject = build_subject("naq", "scheduler", "jobs")
-                structured_logger.debug(
+                handler.structured_logger.debug(
                     f"Using scheduler subject: {scheduler_subject}",
                     operation="list_scheduled_jobs",
                     status="subject_built",
@@ -372,15 +379,15 @@ def list_scheduled_jobs(
                             raise ValueError(f"Invalid status: {status}")
                         status_filter = SCHEDULED_JOB_STATUS(status)
                     except ValueError as e:
-                        structured_logger.error(
+                        handler.structured_logger.error(
                             f"Invalid status filter: {status}",
                             operation="list_scheduled_jobs",
                             status="validation_error",
                             invalid_status=status,
                             error=str(e),
                         )
-                        console.print(f"[red]Invalid status: {status}[/red]")
-                        console.print("[red]Invalid status[/red]")
+                        handler.console.print(f"[red]Invalid status: {status}[/red]")
+                        handler.console.print("[red]Invalid status[/red]")
                         raise typer.Exit(code=2)
 
                 # Get scheduled jobs using the service
@@ -423,7 +430,7 @@ def list_scheduled_jobs(
                             )
                             jobs_data.append(deserialized_job)
                         except Exception as e:
-                            structured_logger.warning(
+                            handler.structured_logger.warning(
                                 f"Failed to serialize/deserialize job data: {e}",
                                 operation="list_scheduled_jobs",
                                 status="serialization_warning",
@@ -434,13 +441,13 @@ def list_scheduled_jobs(
                             jobs_data.append(job_data)
 
                 except Exception as e:
-                    structured_logger.error(
+                    handler.structured_logger.error(
                         f"Failed to list scheduled jobs: {e}",
                         operation="list_scheduled_jobs",
                         status="error",
                         error=str(e),
                     )
-                    console.print(
+                    handler.console.print(
                         "[yellow]No scheduled jobs found or cannot access "
                         "job store.[/yellow]"
                     )
@@ -539,21 +546,21 @@ def list_scheduled_jobs(
                             schedule_type,
                         )
 
-                console.print(table)
-                console.print(
+                handler.console.print(table)
+                handler.console.print(
                     f"\n[bold]Total:[/bold] {len(jobs_data)} scheduled job(s)"
                 )
             except typer.Exit:
                 # Re-raise typer.Exit exceptions to ensure proper exit code
                 raise
             except Exception as e:
-                structured_logger.error(
+                handler.structured_logger.error(
                     f"Error listing scheduled jobs: {e}",
                     operation="list_scheduled_jobs",
                     status="error",
                     error=str(e),
                 )
-                console.print(f"[red]Error listing scheduled jobs: {str(e)}[/red]")
+                handler.console.print(f"[red]Error listing scheduled jobs: {str(e)}[/red]")
             finally:
                 if "service_manager" in locals():
                     await service_manager.cleanup_all()

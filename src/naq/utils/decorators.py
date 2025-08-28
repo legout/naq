@@ -11,6 +11,7 @@ import time
 import traceback
 from typing import Any, Callable, Optional, Tuple, Type, Union
 
+import typer
 from loguru import logger
 from ..exceptions import NaqException
 
@@ -277,6 +278,10 @@ def log_errors(
             try:
                 return func(*args, **kwargs)
             except exceptions as exc:
+                # Don't log typer.Exit as an error since it's used for normal CLI flow
+                if isinstance(exc, typer.Exit):
+                    raise
+                
                 # Get the traceback as a string
                 exc_type, exc_value, exc_traceback = sys.exc_info()
                 tb_str = "".join(
@@ -305,6 +310,10 @@ def log_errors(
             try:
                 return await func(*args, **kwargs)
             except exceptions as exc:
+                # Don't log typer.Exit as an error since it's used for normal CLI flow
+                if isinstance(exc, typer.Exit):
+                    raise
+                
                 # Get the traceback as a string
                 exc_type, exc_value, exc_traceback = sys.exc_info()
                 tb_str = "".join(

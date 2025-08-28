@@ -8,7 +8,6 @@ import typer
 from ..settings import DEFAULT_NATS_URL, DEFAULT_QUEUE_NAME
 from ..utils import setup_logging
 from ..utils.decorators import timing, log_errors
-from ..utils.logging import StructuredLogger
 from ..utils.validation import validate_parameter, ensure_type
 from ..utils.nats_helpers import stream_exists
 from ..utils.serialization import serialize_with_metadata
@@ -17,9 +16,16 @@ from ..services.worker import WorkerService
 from ..services.connection import ConnectionService
 from ..services.config import GlobalServiceConfig
 from ..service_context import service_context
+from .cli_base import BaseCLICommand
 
-# Create module-level structured logger for worker commands
-worker_logger = StructuredLogger("naq.worker_commands")
+
+class WorkerCommandHandler(BaseCLICommand):
+    """Base class for worker command handlers with common functionality."""
+
+    def __init__(self) -> None:
+        """Initialize the WorkerCommandHandler."""
+        super().__init__("naq.cli.worker")
+
 
 # Create a Typer instance for worker commands
 worker_app = typer.Typer(
@@ -82,7 +88,8 @@ def start_worker(
     """
     Starts a naq worker process to listen for and execute jobs on the specified queues.
     """
-    setup_logging(log_level if log_level else "CRITICAL")
+    handler = WorkerCommandHandler()
+    handler.setup_logging(log_level if log_level else "CRITICAL")
 
     # Validate and convert parameters
     queues = ensure_type(queues, list, "queues", convert=True) or []
@@ -104,7 +111,7 @@ def start_worker(
     validate_parameter(nats_url, "nats_url", not_none=True)
 
     # Use structured logging
-    worker_logger.info(
+    handler.structured_logger.info(
         "Starting worker",
         worker_name=name or "default",
         queues=queues if queues else [DEFAULT_QUEUE_NAME],
@@ -133,7 +140,7 @@ def start_worker(
         },
     )
 
-    worker_logger.debug(
+    handler.structured_logger.debug(
         "Worker configuration serialized", config_size=len(str(serialized_config))
     )
 
@@ -173,7 +180,7 @@ def start_worker(
             # Test NATS connection before proceeding
             is_connected = await connection_service.test_connection()
             if not is_connected:
-                worker_logger.error(
+                handler.structured_logger.error(
                     "Failed to establish NATS connection", nats_url=nats_url
                 )
                 raise typer.Exit(code=1)
@@ -183,7 +190,7 @@ def start_worker(
             js = await connection_service.get_jetstream()
             stream_available = await stream_exists(js=js, stream_name=stream_name)
             if not stream_available:
-                worker_logger.error(
+                handler.structured_logger.error(
                     "Required JetStream stream not found", stream_name=stream_name
                 )
                 raise typer.Exit(code=1)
@@ -205,16 +212,16 @@ def start_worker(
             await w.run()
 
         except KeyboardInterrupt:
-            worker_logger.info(
+            handler.structured_logger.info(
                 "Worker interrupted by user. Shutting down.", reason="KeyboardInterrupt"
             )
         except Exception as e:
-            worker_logger.error(
+            handler.structured_logger.error(
                 "Worker failed unexpectedly", error=str(e), error_type=type(e).__name__
             )
             raise typer.Exit(code=1)
         finally:
-            worker_logger.info("Worker process finished.")
+            handler.structured_logger.info("Worker process finished.")
             # Service context automatically handles cleanup
 
     # Run the async function
@@ -248,12 +255,12 @@ def list_workers(
     import datetime
     import time
     from datetime import timezone
-    from rich.console import Console
     from rich.table import Table
 
     from ..settings import DEFAULT_WORKER_TTL_SECONDS
 
-    setup_logging(log_level if log_level else "CRITICAL")
+    handler = WorkerCommandHandler()
+    handler.setup_logging(log_level if log_level else "CRITICAL")
 
     # Validate and convert parameters
     nats_url = ensure_type(nats_url, str, "nats_url")
@@ -266,7 +273,7 @@ def list_workers(
     # Validate parameter constraints
     validate_parameter(nats_url, "nats_url", not_none=True)
 
-    worker_logger.info("Listing active workers", nats_url=nats_url)
+    handler.structured_logger.info("Listing active workers", nats_url=nats_url)
 
     # Serialize list request with metadata
     list_request = {"nats_url": nats_url, "log_level": log_level}
@@ -282,11 +289,10 @@ def list_workers(
         },
     )
 
-    worker_logger.debug(
+    handler.structured_logger.debug(
         "List workers request serialized", request_size=len(str(serialized_request))
     )
 
-    console = Console()
 
     async def _list_workers():
         # Create global config with NATS URL and custom settings
@@ -312,7 +318,7 @@ def list_workers(
             # Test NATS connection before proceeding
             is_connected = await connection_service.test_connection()
             if not is_connected:
-                worker_logger.error(
+                handler.structured_logger.error(
                     "Failed to establish NATS connection", nats_url=nats_url
                 )
                 raise typer.Exit(code=1)
@@ -322,7 +328,7 @@ def list_workers(
             js = await connection_service.get_jetstream()
             stream_available = await stream_exists(js=js, stream_name=stream_name)
             if not stream_available:
-                worker_logger.error(
+                handler.structured_logger.error(
                     "Required JetStream stream not found", stream_name=stream_name
                 )
                 raise typer.Exit(code=1)
@@ -330,7 +336,7 @@ def list_workers(
             # Use worker service to list workers
             workers = await worker_service.list_workers()
             if not workers:
-                console.print("[yellow]No active workers found.[/yellow]")
+                handler.console.print("[yellow]No active workers found.[/yellow]")
                 return
 
             # Sort workers by ID for consistent output
@@ -391,14 +397,14 @@ def list_workers(
                 )
 
             # Print the table
-            console.print(table)
-            console.print(f"\n[bold]Total:[/bold] {len(workers)} active worker(s)")
+            handler.console.print(table)
+            handler.console.print(f"\n[bold]Total:[/bold] {len(workers)} active worker(s)")
 
         except Exception as e:
-            worker_logger.error(
+            handler.structured_logger.error(
                 "Error listing workers", error=str(e), error_type=type(e).__name__
             )
-            console.print(f"[red]Error listing workers: {str(e)}[/red]")
+            handler.console.print(f"[red]Error listing workers: {str(e)}[/red]")
         # Service context automatically handles cleanup
 
     # Run the async function

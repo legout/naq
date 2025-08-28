@@ -21,13 +21,13 @@ The CI/CD pipeline is defined in [`.github/workflows/test.yml`](https://github.c
 - **Checkout**: Retrieves the source code
 - **Python Setup**: Sets up the required Python version (3.12, 3.13)
 - **Install uv**: Installs the uv package manager
-- **Install Dependencies**: Installs project dependencies using `uv pip install -e .[dev,test]`
+- **Install Dependencies**: Installs project dependencies using `uv pip install -e ".[dev,test]"`
 
 #### 2. Code Quality Checks
 
 - **Linting**: Runs `ruff check src/` to check for code style and potential issues
 - **Formatting**: Runs `ruff format --check src/` to verify code formatting
-- **Type Checking**: Runs `ruff check src/ --select E,F,W` for type validation
+- **Type Checking**: Runs `ruff check src/ --select E,F,W` (this is actually linting/error checking, not type checking)
 
 #### 3. Testing
 
@@ -88,7 +88,7 @@ services:
 The pipeline installs both development and testing dependencies:
 
 ```bash
-uv pip install -e .[dev,test]
+uv pip install -e ".[dev,test]"
 ```
 
 This includes:
@@ -110,7 +110,7 @@ This includes:
 
 2. **Install dependencies**:
    ```bash
-   uv pip install -e .[dev,test]
+   uv pip install -e ".[dev,test]"
    ```
 
 3. **Start NATS server** (for integration tests):
@@ -227,7 +227,6 @@ If tests fail locally:
 If code quality checks fail:
 1. Run formatting: `ruff format src/`
 2. Fix linting issues: `ruff check --fix src/`
-3. Check for type errors: `ruff check src/ --select E,F,W`
 
 ## Performance Considerations
 

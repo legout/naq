@@ -1,0 +1,284 @@
+---
+title: "NAQ Tutorial: A Step-by-Step Guide"
+---
+
+Welcome to the `naq` tutorial! This guide will walk you through the process of setting up a distributed task queue, from the basics to more advanced features.
+
+## 1. What is a Task Queue?
+
+A task queue is a system for distributing work across multiple processes or machines. It consists of three main parts:
+
+1.  **Producers (Clients)**: Applications that create tasks (jobs) and add them to a queue.
+2.  **Queue (Broker)**: A message broker that stores the jobs until a worker is ready to process them. `naq` uses NATS JetStream for this.
+3.  **Consumers (Workers)**: Processes that fetch jobs from the queue, execute them, and report the results.
+
+This architecture is perfect for offloading long-running tasks from a web application, processing large amounts of data in parallel, or running scheduled background jobs.
+
+## 2. Installation
+
+First, make sure you have `naq` and a NATS server installed.
+
+### Install `naq`
+
+```bash
+pip install naq
+```
+
+### Run NATS with Docker
+
+The easiest way to get a NATS server with JetStream running is to use the provided Docker Compose file:
+
+```bash
+# Navigate to the docker directory in the naq project
+cd /path/to/naq/docker
+# Start the server in the background
+docker-compose up -d
+```
+
+This will start a NATS server on `nats://localhost:4222`.
+
+## 3. Your First Task
+
+Let's create a simple task and run it with `naq`.
+
+### Step 1: Define the Task
+
+Create a file named `tasks.py`. This file will contain the functions you want to run in the background.
+
+```python
+# tasks.py
+import time
+import random
+
+def count_words(text: str):
+    """
+    A simple function that counts the words in a string.
+    Simulates some work by sleeping for a random interval.
+    """
+    print(f"Processing text: '{text[:30]}...'")
+    time.sleep(random.randint(1, 3))
+    word_count = len(text.split())
+    print(f"Found {word_count} words.")
+    return word_count
+
+def process_image(image_id: int):
+    """
+    A placeholder for a longer-running image processing task.
+    """
+    print(f"Processing image {image_id}...")
+    time.sleep(5)
+    print(f"Image {image_id} processed.")
+    return {"status": "success", "image_id": image_id}
+```
+
+### Step 2: Enqueue the Task
+
+Now, create another file `main.py` to add a job to the queue. We'll use `enqueue_sync`, a simple, blocking function for this.
+
+```python
+# main.py
+from naq import enqueue_sync
+from tasks import count_words
+
+long_text = (
+    "A journey of a thousand miles begins with a single step. "
+    "The best time to plant a tree was 20 years ago. "
+    "The second best time is now."
+)
+
+print("Enqueuing job to count words...")
+
+# This sends the job to the 'default' queue
+job = enqueue_sync(count_words, long_text)
+
+print(f"Successfully enqueued job {job.job_id}.")
+print("To process the job, run a worker with: naq worker default")
+```
+
+### Step 3: Run a Worker
+
+Open your terminal and start a worker to process jobs from the `default` queue:
+
+```bash
+naq worker default
+```
+
+You should see the worker start up, find the job, and execute it:
+
+```
+15:10:20.123 INFO     Worker listening on queue: default
+Processing text: 'A journey of a thousand miles...'
+Found 25 words.
+15:10:23.245 INFO     Job 1a2b3c4d completed. Result: 25
+```
+
+Congratulations! You've successfully run your first background job.
+
+## 4. Working with Multiple Queues
+
+You can use different queues to organize and prioritize your tasks. For example, you might have a `high_priority` queue for notifications and a `low_priority` queue for data processing.
+
+### Enqueuing to Specific Queues
+
+Modify `main.py` to send jobs to different queues:
+
+```python
+# main.py (updated)
+from naq import enqueue_sync
+from tasks import count_words, process_image
+
+# Enqueue a high-priority job
+enqueue_sync(
+    process_image,
+    image_id=123,
+    queue_name="image_processing" # Specify the queue name
+)
+print("Enqueued image processing job.")
+
+# Enqueue a low-priority job
+enqueue_sync(
+    count_words,
+    "Some text to count.",
+    queue_name="text_analysis"
+)
+print("Enqueued text analysis job.")
+```
+
+### Running Workers for Specific Queues
+
+Now, you need to start workers that listen to these specific queues. Open two separate terminals:
+
+```bash
+# Terminal 1: Worker for image processing
+naq worker image_processing
+
+# Terminal 2: Worker for text analysis
+naq worker text_analysis
+```
+
+Each worker will only pick up jobs from the queue(s) it's assigned to.
+
+## 5. Scheduling Jobs
+
+`naq` makes it easy to schedule jobs to run at a future time or on a recurring basis.
+
+### Running the Scheduler
+
+To handle scheduled jobs, you need to run the `naq scheduler` process alongside your workers.
+
+```bash
+# In a new terminal
+naq scheduler
+```
+
+### Scheduling Examples
+
+Update `main.py` to schedule some jobs:
+
+```python
+# main.py (updated for scheduling)
+import asyncio
+from datetime import datetime, timedelta
+from naq import enqueue_at, enqueue_in, schedule
+from tasks import count_words
+
+async def main():
+    # Schedule a job to run in 1 minute
+    await enqueue_in(
+        timedelta(minutes=1),
+        count_words,
+        "This job was delayed by 1 minute."
+    )
+    print("Job scheduled to run in 1 minute.")
+
+    # Schedule a job to run at a specific time (UTC)
+    run_at_time = datetime.utcnow() + timedelta(hours=1)
+    await enqueue_at(
+        run_at_time,
+        count_words,
+        "This job runs at a specific time."
+    )
+    print(f"Job scheduled to run at {run_at_time.isoformat()}.")
+
+    # Schedule a recurring job to run every 2 minutes
+    await schedule(
+        count_words,
+        "This is a recurring job.",
+        cron="*/2 * * * *", # Cron expression for every 2 minutes
+        schedule_id="recurring-word-count" # A unique ID for this schedule
+    )
+    print("Recurring job scheduled.")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+Run this script, and the `naq scheduler` will ensure the jobs are enqueued at the correct times for your workers to process.
+
+## 6. Using the Service Layer
+
+For more complex applications, `naq` provides a powerful service layer that gives you fine-grained control over connections, job execution, and other components.
+
+The `ServiceManager` is the central piece of this architecture.
+
+### Service Layer Example
+
+Here's how you can use the `ServiceManager` to enqueue and execute a job:
+
+```python
+# service_layer_example.py
+import asyncio
+from naq.services.manager import ServiceManager
+from naq.models.jobs import Job
+from tasks import count_words
+
+async def main():
+    # The ServiceManager handles all service initialization and cleanup
+    service_manager = ServiceManager()
+    await service_manager.initialize_all()
+
+    try:
+        # Get the services you need
+        job_service = service_manager.get_service("jobs")
+        event_service = service_manager.get_service("events")
+
+        # Create a job
+        job = Job(
+            function=count_words,
+            args=("Using the service layer is powerful and flexible.",),
+            queue_name="service_queue"
+        )
+
+        # Enqueue the job using the JobService
+        # Note: This requires a worker listening on 'service_queue'
+        await job_service.enqueue_job(job, subject=f"naq.queue.{job.queue_name}")
+        print(f"Enqueued job {job.job_id} via JobService.")
+
+        # You can also execute a job directly for testing or specific use cases
+        result = await job_service.execute_job(job, "manual-worker-1")
+        print(f"Directly executed job. Result: {result.result}")
+
+        # Retrieve events for the job
+        events = await event_service.get_job_events(job.job_id)
+        print(f"Found {len(events)} events for job {job.job_id}:")
+        for event in events:
+            print(f"  - {event.event_type.value} at {event.timestamp}")
+
+    finally:
+        # Clean up all services
+        await service_manager.cleanup_all()
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## What's Next?
+
+You've now seen the basics of `naq`! From here, you can explore:
+
+*   **Job Dependencies**: Create complex workflows where jobs depend on the completion of others.
+*   **Automatic Retries**: Configure jobs to automatically retry on failure.
+*   **Configuration**: Customize `naq`'s behavior with a `naq.yaml` file.
+*   **Advanced Features**: Dive deeper into the service layer, connection pooling, and performance tuning.
+
+Check out the **[Examples](examples.qmd)** and **[Advanced Usage](advanced.qmd)** sections for more details.

@@ -3,19 +3,27 @@
 import yaml
 from pathlib import Path
 from typing import Any, Dict, Optional
-from rich.console import Console
 
 import typer
 
 from naq import __version__
 from naq.utils.logging import setup_logging
 from naq.utils.decorators import timing, log_errors
-from naq.utils.logging import StructuredLogger
 from naq.utils.serialization import SerializationHelper
 from naq.services.base import ServiceManager, ServiceConfig
 from naq.services.connection import ConnectionService
 from naq.settings import DEFAULT_NATS_URL
 from naq.config import load_config, get_config, ConfigValidator
+from .cli_base import BaseCLICommand
+
+
+class SystemCommandHandler(BaseCLICommand):
+    """Base class for system command handlers with common functionality."""
+
+    def __init__(self) -> None:
+        """Initialize the SystemCommandHandler."""
+        super().__init__("naq.cli.system")
+
 
 # Create a Typer app for system commands
 system_app = typer.Typer(
@@ -28,14 +36,12 @@ system_app = typer.Typer(
 config_app = typer.Typer(name="config", help="Manage NAQ configuration.")
 system_app.add_typer(config_app)
 
-# Create a shared console instance for Rich output
-console = Console()
-
 
 def version_callback(value: bool):
     """Callback for the version option."""
     if value:
-        console.print(f"[cyan]naq[/cyan] version: [bold]{__version__}[/bold]")
+        handler = SystemCommandHandler()
+        handler.console.print(f"[cyan]naq[/cyan] version: [bold]{__version__}[/bold]")
         raise typer.Exit()
 
 
@@ -73,21 +79,20 @@ def dashboard(
     try:
         import uvicorn  # Use uvicorn to run Sanic
     except ImportError:
-        console.print("[red]Error:[/red] Dashboard dependencies not installed.")
-        console.print("Please run: [bold cyan]pip install naq[dashboard][/bold cyan]")
+        handler = SystemCommandHandler()
+        handler.console.print("[red]Error:[/red] Dashboard dependencies not installed.")
+        handler.console.print("Please run: [bold cyan]pip install naq[dashboard][/bold cyan]")
         raise typer.Exit(code=1)
 
-    # Create structured logger
-    structured_logger = StructuredLogger("naq.cli.system_commands")
-
-    setup_logging(log_level if log_level else None)  # Setup naq logging if needed
-    structured_logger.info(
+    handler = SystemCommandHandler()
+    handler.setup_logging(log_level if log_level else None)  # Setup naq logging if needed
+    handler.structured_logger.info(
         f"Starting NAQ Dashboard server on http://{host}:{port}",
         host=host,
         port=port,
         log_level=log_level,
     )
-    structured_logger.info(
+    handler.structured_logger.info(
         "Ensure NATS server is running and accessible.", operation="dashboard_startup"
     )
 
@@ -111,7 +116,8 @@ def version() -> None:
     """
     Show the application's version and exit.
     """
-    console.print(f"[cyan]naq[/cyan] version: [bold]{__version__}[/bold]")
+    handler = SystemCommandHandler()
+    handler.console.print(f"[cyan]naq[/cyan] version: [bold]{__version__}[/bold]")
 
 
 @system_app.command()
@@ -144,11 +150,9 @@ def health(
     """
     Check the health of the NATS connection and naq system.
     """
-    # Create structured logger
-    structured_logger = StructuredLogger("naq.cli.system_commands")
-
-    setup_logging(log_level if log_level else None)
-    structured_logger.info(
+    handler = SystemCommandHandler()
+    handler.setup_logging(log_level if log_level else None)
+    handler.structured_logger.info(
         f"Checking health of NATS at {nats_url}",
         nats_url=nats_url,
         timeout=timeout,
@@ -187,25 +191,25 @@ def health(
         is_healthy, message = asyncio.run(check_health())
 
         if is_healthy:
-            console.print(f"[green]✓[/green] [bold]System Health:[/bold] {message}")
-            structured_logger.info(
+            handler.console.print(f"[green]✓[/green] [bold]System Health:[/bold] {message}")
+            handler.structured_logger.info(
                 "System health check passed", status="healthy", message=message
             )
         else:
-            console.print(f"[red]✗[/red] [bold]System Health:[/bold] {message}")
-            structured_logger.error(
+            handler.console.print(f"[red]✗[/red] [bold]System Health:[/bold] {message}")
+            handler.structured_logger.error(
                 "System health check failed", status="unhealthy", message=message
             )
             raise typer.Exit(code=1)
 
     except Exception as e:
-        structured_logger.error(
+        handler.structured_logger.error(
             f"Health check failed: {e}",
             error=str(e),
             nats_url=nats_url,
             timeout=timeout,
         )
-        console.print(f"[red]✗[/red] [bold]System Health:[/bold] Error: {str(e)}")
+        handler.console.print(f"[red]✗[/red] [bold]System Health:[/bold] Error: {str(e)}")
         raise typer.Exit(code=1)
 
 
@@ -229,8 +233,7 @@ def config_show(
     """
     Displays the current effective NAQ configuration.
     """
-    # Create structured logger
-    structured_logger = StructuredLogger("naq.cli.system_commands")
+    handler = SystemCommandHandler()
 
     try:
         cfg = load_config(
@@ -239,19 +242,19 @@ def config_show(
         # Use SerializationHelper for JSON serialization
         config_dict = cfg.to_dict()
         serialized_config = SerializationHelper.safe_serialize(config_dict, "json")
-        console.print_json(serialized_config)
+        handler.console.print_json(serialized_config)
 
-        structured_logger.info(
+        handler.structured_logger.info(
             "Configuration displayed successfully",
             config_path=str(config_path) if config_path else "default",
         )
     except Exception as e:
-        structured_logger.error(
+        handler.structured_logger.error(
             f"Error loading configuration: {e}",
             config_path=str(config_path) if config_path else "default",
             error=str(e),
         )
-        console.print(f"[bold red]Error loading configuration:[/bold red] {e}")
+        handler.console.print(f"[bold red]Error loading configuration:[/bold red] {e}")
         raise typer.Exit(code=1)
 
 
@@ -275,8 +278,7 @@ def config_validate(
     """
     Validates the NAQ configuration against its schema.
     """
-    # Create structured logger
-    structured_logger = StructuredLogger("naq.cli.system_commands")
+    handler = SystemCommandHandler()
 
     try:
         # Use ConfigValidator directly for validation
@@ -292,17 +294,17 @@ def config_validate(
         # Validate using ConfigValidator
         validator.validate(config_dict)
 
-        console.print("[bold green]Configuration is valid![/bold green]")
-        structured_logger.info(
+        handler.console.print("[bold green]Configuration is valid![/bold green]")
+        handler.structured_logger.info(
             "Configuration validation passed", config_path=config_path_str or "default"
         )
     except Exception as e:
-        structured_logger.error(
+        handler.structured_logger.error(
             f"Configuration validation failed: {e}",
             config_path=str(config_path) if config_path else "default",
             error=str(e),
         )
-        console.print(f"[bold red]Configuration validation failed:[/bold red] {e}")
+        handler.console.print(f"[bold red]Configuration validation failed:[/bold red] {e}")
         raise typer.Exit(code=1)
 
 
@@ -334,8 +336,7 @@ def generate_config_cmd(
     """
     Generates an example NAQ configuration file.
     """
-    # Create structured logger
-    structured_logger = StructuredLogger("naq.cli.system_commands")
+    handler = SystemCommandHandler()
 
     try:
         # Get a default-filled NAQConfig and convert it to dict
@@ -355,20 +356,20 @@ def generate_config_cmd(
         with open(output, "w") as f:
             yaml.dump(cleaned_config, f, sort_keys=False, indent=2)
 
-        console.print(
+        handler.console.print(
             f"[bold green]Example configuration generated at:[/bold green] {output}"
         )
-        structured_logger.info(
+        handler.structured_logger.info(
             "Example configuration generated successfully",
             output_path=str(output),
             environment=environment,
         )
     except Exception as e:
-        structured_logger.error(
+        handler.structured_logger.error(
             f"Error generating configuration: {e}",
             output_path=str(output),
             environment=environment,
             error=str(e),
         )
-        console.print(f"[bold red]Error generating configuration:[/bold red] {e}")
+        handler.console.print(f"[bold red]Error generating configuration:[/bold red] {e}")
         raise typer.Exit(code=1)
