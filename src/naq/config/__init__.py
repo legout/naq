@@ -24,6 +24,18 @@ from .validation import (
 # Global configuration instance
 _config_instance: Optional[NAQConfig] = None
 
+
+def _dict_to_naq_config(config_dict: Dict[str, Any]) -> NAQConfig:
+    """Convert a dictionary to a NAQConfig instance.
+    
+    Args:
+        config_dict: Dictionary containing configuration data.
+        
+    Returns:
+        A NAQConfig instance.
+    """
+    return msgspec.json.decode(msgspec.json.encode(config_dict), type=NAQConfig)
+
 __all__ = [
     "DEFAULT_CONFIG",
     "ConfigLoader",
@@ -44,6 +56,7 @@ __all__ = [
     "validate_stream_service_config",
     "validate_kv_store_config",
     "validate_event_service_config",
+    "_dict_to_naq_config",
 ]
 
 
@@ -74,7 +87,7 @@ def load_config(config_path: Optional[str] = None, validate: bool = True) -> NAQ
         validator.validate(config_dict)
 
     # Convert to NAQConfig using msgspec
-    config = msgspec.json.decode(msgspec.json.encode(config_dict), type=NAQConfig)
+    config = _dict_to_naq_config(config_dict)
 
     # Store in global instance
     _config_instance = config
@@ -149,40 +162,10 @@ def temp_config(config_data: Optional[Dict[str, Any]] = None) -> Iterator[NAQCon
     try:
         if config_data is not None:
             # Convert provided config data to NAQConfig
-            temp_config_instance = msgspec.json.decode(
-                msgspec.json.encode(config_data), type=NAQConfig
-            )
-            _config_instance = temp_config_instance
+            _config_instance = _dict_to_naq_config(config_data)
         else:
             # Create a default configuration
-            default_config = {
-                "nats": {
-                    "servers": ["nats://localhost:4222"],
-                    "client_name": "naq-test",
-                    "max_reconnect_attempts": 5,
-                    "reconnect_time_wait": 2.0,
-                    "connection_timeout": 5.0,
-                    "drain_timeout": 30.0,
-                },
-                "workers": {
-                    "concurrency": 1,
-                    "heartbeat_interval": 30.0,
-                    "ttl": 60.0,
-                    "max_job_duration": 3600.0,
-                    "shutdown_timeout": 10.0,
-                },
-                "events": {
-                    "enabled": False,
-                    "batch_size": 100,
-                    "flush_interval": 5.0,
-                    "max_buffer_size": 1000,
-                    "stream": "naq_events",
-                },
-            }
-            temp_config_instance = msgspec.json.decode(
-                msgspec.json.encode(default_config), type=NAQConfig
-            )
-            _config_instance = temp_config_instance
+            _config_instance = _dict_to_naq_config(DEFAULT_CONFIG)
 
         yield _config_instance
     finally:

@@ -373,6 +373,28 @@ class StreamService(BaseService):
                         f"Stream '{stream_name}' subjects differ. "
                         f"Current: {current_config.subjects}, Requested: {subjects}"
                     )
+                    
+                    # Try to update the stream with merged subjects
+                    try:
+                        merged_subjects = list(set(current_config.subjects) | set(subjects))
+                        update_config = {
+                            "name": stream_name,
+                            "subjects": merged_subjects,
+                        }
+                        
+                        # Use update_stream to merge subjects
+                        updated_stream_info = await js.update_stream(**update_config)
+                        self._logger.info(
+                            f"Stream '{stream_name}' updated with merged subjects: {merged_subjects}"
+                        )
+                        return updated_stream_info
+                        
+                    except Exception as update_error:
+                        self._logger.warning(
+                            f"Failed to update stream '{stream_name}' subjects: {update_error}. "
+                            f"Continuing with existing subjects: {current_config.subjects}"
+                        )
+                        # Continue with existing stream if update fails
 
                 return stream_info
 

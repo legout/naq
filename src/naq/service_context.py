@@ -107,10 +107,13 @@ async def service_context(
                 )
 
                 # Manually register the already-created service
-                service_manager._services["jobs"] = job_service
-                service_manager._service_configs["jobs"] = (
+                service_manager._services["job"] = job_service
+                service_manager._service_configs["job"] = (
                     service_manager._default_config
                 )
+                
+                # DEBUG LOG: Add logging to track service registration
+                logger.debug("Registered job service with name 'job'", available_services=list(service_manager._services.keys()))
 
                 # Now initialize the job service
                 await job_service.initialize()
@@ -213,6 +216,7 @@ async def long_lived_service_context(
             for service_name, service_class_name in core_services:
                 try:
                     # Try to get the service - this will initialize it if needed
+                    logger.debug("Attempting to get core service", service=service_name, available_services=service_manager.get_service_names())
                     await service_manager.get_service(service_name)
                     logger.debug("Core service available", service=service_name)
                 except Exception as e:
@@ -220,6 +224,7 @@ async def long_lived_service_context(
                         "Failed to initialize core service",
                         service=service_name,
                         error=str(e),
+                        available_services=service_manager.get_service_names(),
                     )
 
             logger.info("Long-lived service context initialized")

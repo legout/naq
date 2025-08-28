@@ -172,6 +172,8 @@ class Worker:
 
             config = ServiceConfig(nats_url=self._nats_url)
             self._service_manager = ServiceManager(config)
+            self._logger.info("Created default ServiceManager", registered_services=self._service_manager.get_service_names())
+            # Note: Services will be registered asynchronously in _initialize_services method
 
         # Create component managers
         self.status_manager = WorkerStatusManager(
@@ -187,6 +189,166 @@ class Worker:
             "Worker initialized", worker_id=self.worker_id, queues=self.queue_names
         )
 
+    @classmethod
+    async def create(
+        cls,
+        queues: Optional[Sequence[QueueName] | QueueName] = None,
+        nats_url: str = DEFAULT_NATS_URL,
+        concurrency: int = 10,  # Max concurrent jobs
+        worker_name: Optional[str] = None,  # For durable consumer names
+        heartbeat_interval: int = DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
+        worker_ttl: int = DEFAULT_WORKER_TTL_SECONDS,
+        ack_wait: Optional[
+            int | Dict[QueueName, int]
+        ] = None,  # seconds; can be per-queue dict
+        module_paths: Optional[Sequence[str] | str] = None,
+        service_manager: Optional[ServiceManager] = None,
+    ) -> "Worker":
+        """Create and initialize a Worker instance with services.
+        
+        This is the recommended way to create Worker instances as it ensures
+        all services are properly initialized.
+        
+        Args:
+            queues: Optional sequence of queue names or single queue name to process.
+                If None or empty, defaults to DEFAULT_QUEUE_NAME.
+            nats_url: NATS server URL to connect to.
+            concurrency: Maximum number of concurrent jobs to process.
+            worker_name: Optional base name for the worker ID. If None, generates
+                a name based on hostname.
+            heartbeat_interval: Interval in seconds between worker heartbeats.
+            worker_ttl: Time-to-live in seconds for worker registration.
+            ack_wait: Acknowledgment wait time in seconds. Can be a single value
+                or a dictionary mapping queue names to their specific ack wait times.
+            module_paths: Optional sequence of paths or single path to add to sys.path
+                for job function imports.
+            service_manager: Optional ServiceManager instance to use. If None,
+                creates a default one.
+                
+        Returns:
+            A fully initialized Worker instance.
+        """
+        # Create the worker instance
+        worker = cls(
+            queues=queues,
+            nats_url=nats_url,
+            concurrency=concurrency,
+            worker_name=worker_name,
+            heartbeat_interval=heartbeat_interval,
+            worker_ttl=worker_ttl,
+            ack_wait=ack_wait,
+            module_paths=module_paths,
+            service_manager=service_manager,
+        )
+        
+        # Initialize services
+        await worker._initialize_services()
+        
+        return worker
+
+    async def _initialize_services(self) -> None:
+        """Initialize and register all core services with the service manager."""
+        if self._service_manager is None:
+            raise NaqException("ServiceManager is not initialized")
+            
+        # Check if services are already registered
+        if self._service_manager.has_service("connection"):
+            self._logger.info("Services already registered", available_services=self._service_manager.get_service_names())
+            return
+            
+        from ..services.connection import ConnectionService
+        from ..services.jobs import JobService
+        from ..services.kv_stores import KVStoreService
+        from ..services.streams import StreamService
+        from ..services.events import EventService
+
+        try:
+            # Register connection service first
+            self._logger.info("Registering connection service")
+            await self._service_manager.register_service(
+                "connection", ConnectionService, initialize=True
+            )
+
+            # Get the connection service to pass to other services
+            connection_service = await self._service_manager.get_service(
+                "connection", ConnectionService
+            )
+
+            # Create stream service with connection service directly
+            stream_service = StreamService(
+                config=self._service_manager._default_config,
+                naq_config=self._service_manager._naq_config,
+                connection_service=connection_service,
+            )
+
+            # Manually register the already-created service
+            self._service_manager._services["stream"] = stream_service
+            self._service_manager._service_configs["stream"] = (
+                self._service_manager._default_config
+            )
+
+            # Now initialize the stream service
+            await stream_service.initialize()
+
+            # Create job service with connection service directly
+            job_service = JobService(
+                config=self._service_manager._default_config,
+                naq_config=self._service_manager._naq_config,
+                connection_service=connection_service,
+            )
+
+            # Manually register the already-created service
+            self._service_manager._services["jobs"] = job_service
+            self._service_manager._service_configs["jobs"] = (
+                self._service_manager._default_config
+            )
+
+            # Now initialize the job service
+            await job_service.initialize()
+
+            # Create KV store service with connection service directly
+            kv_service = KVStoreService(
+                config=self._service_manager._default_config,
+                naq_config=self._service_manager._naq_config,
+                connection_service=connection_service,
+            )
+
+            # Manually register the already-created service
+            self._service_manager._services["kv"] = kv_service
+            self._service_manager._service_configs["kv"] = self._service_manager._default_config
+
+            # Now initialize the KV store service
+            await kv_service.initialize()
+
+            # Create event service with connection service directly
+            event_service = EventService(
+                config=self._service_manager._default_config,
+                naq_config=self._service_manager._naq_config,
+                connection_service=connection_service,
+            )
+
+            # Manually register the already-created service
+            self._service_manager._services["events"] = event_service
+            self._service_manager._service_configs["events"] = (
+                self._service_manager._default_config
+            )
+
+            # Now initialize the event service
+            await event_service.initialize()
+
+            # Also register with "kv_store" alias for backward compatibility
+            self._service_manager._services["kv_store"] = kv_service
+            self._service_manager._service_configs["kv_store"] = (
+                self._service_manager._default_config
+            )
+
+            self._logger.info("All core services registered successfully",
+                            registered_services=self._service_manager.get_service_names())
+
+        except Exception as e:
+            self._logger.error("Failed to register core services", error=str(e))
+            raise
+
     @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
     async def _connect(self) -> None:
         """Establish NATS connection, JetStream context, and initialize components."""
@@ -201,12 +363,17 @@ class Worker:
                         config = ServiceConfig(nats_url=self._nats_url)
                         self._service_manager = ServiceManager(config)
 
+                    # Initialize services if not already done
+                    await self._initialize_services()
+
                     # Use long-lived service context for worker lifecycle
+                    self._logger.info("Entering long_lived_service_context", available_services=self._service_manager.get_service_names())
                     async with long_lived_service_context(
                         self._service_manager,
                         logger_name=f"naq.worker.core.{self.worker_id}",
                     ) as service_manager:
                         # Get services from the service manager
+                        self._logger.info("Attempting to get connection service", available_services=service_manager.get_service_names())
                         self._connection_service = await service_manager.get_service(
                             "connection", ConnectionService
                         )
@@ -300,6 +467,8 @@ class Worker:
                     queue_name=queue_name,
                     subject=subject,
                     durable_name=durable_name,
+                    stream_name=self.stream_name,
+                    available_streams=await self._get_available_streams() if self._js else "No JS context",
                 )
 
                 # Resolve ack_wait seconds for this queue
@@ -367,9 +536,11 @@ class Worker:
                         # No messages available, or timeout hit, loop continues
                         await asyncio.sleep(0.1)  # Small sleep to prevent busy-wait
                         continue
-                    except nats.js.errors.ConsumerNotFoundError:
+                    except Exception:
+                        # ConsumerNotFoundError may not exist in all NATS versions
+                        # We'll catch any exception and check if it's consumer-related
                         self._logger.warning(
-                            "Consumer not found, stopping fetch loop",
+                            "Consumer not found or error, stopping fetch loop",
                             durable_name=durable_name,
                         )
                         break
@@ -407,12 +578,19 @@ class Worker:
                 await self.status_manager.start_heartbeat_loop()
 
                 # Ensure the main work stream exists
+                self._logger.info(
+                    "Ensuring stream exists",
+                    stream_name=self.stream_name,
+                    subjects=[f"{NAQ_PREFIX}.queue.*"],
+                )
                 await self._stream_service.ensure_stream(
                     stream_name=self.stream_name,
                     subjects=[f"{NAQ_PREFIX}.queue.*"],
                 )
+                self._logger.info("Stream ensured successfully", stream_name=self.stream_name)
 
                 # Start subscription tasks for each queue
+                self._logger.info("Starting subscription tasks", queue_names=self.queue_names)
                 subscription_tasks = [
                     asyncio.create_task(self._subscribe_to_queue(q_name))
                     for q_name in self.queue_names
@@ -522,10 +700,12 @@ class Worker:
                         "Unsubscribing consumer for queue", queue_name=queue_name
                     )
                     await consumer.unsubscribe()
-                    self._logger.debug(
-                        "Draining consumer for queue", queue_name=queue_name
-                    )
-                    await consumer.drain()
+                    # Note: drain() method may not exist on PullSubscription in all NATS versions
+                    if hasattr(consumer, 'drain'):
+                        self._logger.debug(
+                            "Draining consumer for queue", queue_name=queue_name
+                        )
+                        await consumer.drain()
                 except Exception as e:
                     wrapped_error = wrap_naq_exception(e, "Error cleaning up consumer")
                     self._error_handler.handle_error(
@@ -575,6 +755,18 @@ class Worker:
 
             self._nc = None
             self._js = None
+
+    async def _get_available_streams(self) -> List[str]:
+        """Get list of available JetStream streams for debugging."""
+        if not self._js:
+            return []
+        
+        try:
+            streams = await self._js.stream_names()
+            return list(streams)
+        except Exception as e:
+            self._logger.warning("Failed to get stream names", error=str(e))
+            return []
 
     def signal_handler(self, sig, frame) -> None:
         """Handles termination signals."""

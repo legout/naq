@@ -14,6 +14,27 @@ import msgspec
 
 from .enums import JobEventType, WorkerEventType
 
+
+def _event_to_dict(event_type: Any, timestamp: float, **kwargs: Any) -> Dict[str, Any]:
+    """
+    Convert event data to a dictionary representation.
+    
+    Args:
+        event_type: The event type (Enum)
+        timestamp: Unix timestamp when the event occurred
+        **kwargs: Additional event fields
+        
+    Returns:
+        Dict[str, Any]: A dictionary containing all event data with enum values converted to strings.
+    """
+    result = {
+        "event_type": event_type.value if hasattr(event_type, "value") else str(event_type),
+        "timestamp": timestamp,
+        **kwargs
+    }
+    # Remove None values to keep the dictionary clean
+    return {k: v for k, v in result.items() if v is not None}
+
 if TYPE_CHECKING:
     # Import here to avoid circular imports
     pass
@@ -543,24 +564,20 @@ class JobEvent(msgspec.Struct):
             print(event_dict["event_type"])  # "started"
             ```
         """
-        result = {
-            "job_id": self.job_id,
-            "event_type": self.event_type.value
-            if hasattr(self.event_type, "value")
-            else str(self.event_type),
-            "timestamp": self.timestamp,
-            "worker_id": self.worker_id,
-            "queue_name": self.queue_name,
-            "message": self.message,
-            "details": self.details,
-            "error_type": self.error_type,
-            "error_message": self.error_message,
-            "duration_ms": self.duration_ms,
-            "nats_subject": self.nats_subject,
-            "nats_sequence": self.nats_sequence,
-        }
-        # Remove None values to keep the dictionary clean
-        return {k: v for k, v in result.items() if v is not None}
+        return _event_to_dict(
+            self.event_type,
+            self.timestamp,
+            job_id=self.job_id,
+            worker_id=self.worker_id,
+            queue_name=self.queue_name,
+            message=self.message,
+            details=self.details,
+            error_type=self.error_type,
+            error_message=self.error_message,
+            duration_ms=self.duration_ms,
+            nats_subject=self.nats_subject,
+            nats_sequence=self.nats_sequence,
+        )
 
 
 class WorkerEvent(msgspec.Struct):
@@ -911,22 +928,18 @@ class WorkerEvent(msgspec.Struct):
             print(event_dict["event_type"])  # "started"
             ```
         """
-        result = {
-            "worker_id": self.worker_id,
-            "event_type": self.event_type.value
-            if hasattr(self.event_type, "value")
-            else str(self.event_type),
-            "timestamp": self.timestamp,
-            "queue_names": self.queue_names,
-            "message": self.message,
-            "details": self.details,
-            "job_id": self.job_id,
-            "duration_ms": self.duration_ms,
-            "cpu_usage": self.cpu_usage,
-            "memory_usage": self.memory_usage,
-        }
-        # Remove None values to keep the dictionary clean
-        return {k: v for k, v in result.items() if v is not None}
+        return _event_to_dict(
+            self.event_type,
+            self.timestamp,
+            worker_id=self.worker_id,
+            queue_names=self.queue_names,
+            message=self.message,
+            details=self.details,
+            job_id=self.job_id,
+            duration_ms=self.duration_ms,
+            cpu_usage=self.cpu_usage,
+            memory_usage=self.memory_usage,
+        )
 
     @classmethod
     def resumed(

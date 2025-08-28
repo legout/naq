@@ -326,7 +326,7 @@ class JobService(BaseService):
                     job_id=job.job_id,
                     queue_name=job.queue_name,
                     nats_subject=subject,
-                    nats_sequence=ack.sequence,
+                    nats_sequence=ack.seq,
                 )
                 await self._event_service.log_job_event(enqueued_event)
 

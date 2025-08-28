@@ -67,6 +67,59 @@ class PickleSerializer:
     def serialize_job(job: Job) -> bytes:
         """Serialize a job to bytes using cloudpickle."""
         try:
+            # DEBUG: Log job kwargs contents to identify unpicklable objects
+            import loguru
+            logger = loguru.logger.bind(job_id=job.job_id)
+            
+            # Log all kwargs for debugging - make this more visible
+            logger.error("=== DEBUG: Job kwargs analysis ===")
+            logger.error(f"Job kwargs keys: {list(job.kwargs.keys())}")
+            logger.error(f"Job kwargs types: {[(k, type(v).__name__) for k, v in job.kwargs.items()]}")
+            logger.error(f"Job kwargs values: {[(k, repr(v)) for k, v in job.kwargs.items()]}")
+            
+            # Check for unpicklable objects in kwargs
+            unpicklable_objects = []
+            for key, value in job.kwargs.items():
+                logger.error(f"Testing picklability of key '{key}' with value type {type(value).__name__}")
+                try:
+                    # Test pickling each value
+                    cloudpickle.dumps(value)
+                    logger.error(f"✓ Key '{key}' is picklable")
+                except Exception as pickle_error:
+                    logger.error(f"✗ Key '{key}' is NOT picklable: {pickle_error}")
+                    unpicklable_objects.append({
+                        "key": key,
+                        "type": type(value).__name__,
+                        "repr": repr(value),
+                        "error": str(pickle_error)
+                    })
+            
+            if unpicklable_objects:
+                logger.error("Found unpicklable objects in job kwargs", unpicklable_objects=unpicklable_objects)
+            
+            # Check for asyncio.Task objects specifically
+            import asyncio
+            task_objects = []
+            for key, value in job.kwargs.items():
+                if isinstance(value, asyncio.Task):
+                    logger.error(f"Found asyncio.Task object in kwargs with key: {key}")
+                    logger.error(f"Task object details: {value}")
+                    logger.error(f"Task state: {value._state if hasattr(value, '_state') else 'Unknown'}")
+                    logger.error(f"Task done: {value.done() if hasattr(value, 'done') else 'Unknown'}")
+                    if hasattr(value, '_coro'):
+                        logger.error(f"Task coroutine: {value._coro}")
+                    task_objects.append({
+                        "key": key,
+                        "task_id": id(value),
+                        "task_state": value._state if hasattr(value, '_state') else 'unknown',
+                        "task_done": value.done() if hasattr(value, 'done') else 'unknown'
+                    })
+            
+            if task_objects:
+                logger.error("Found asyncio.Task objects in job kwargs", task_objects=task_objects)
+            
+            logger.error("=== END DEBUG: Job kwargs analysis ===")
+            
             payload = {
                 "job_id": job.job_id,
                 "enqueue_time": job.enqueue_time,

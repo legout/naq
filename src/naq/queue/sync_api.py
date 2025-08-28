@@ -88,6 +88,32 @@ def enqueue_sync(
 
         async def _enqueue_with_services(service_manager):
             try:
+                # DEBUG: Log kwargs before passing to enqueue
+                import asyncio
+                _sync_logger.debug(
+                    "Before enqueue call",
+                    kwargs_keys=list(kwargs.keys()),
+                    kwargs_types={k: type(v).__name__ for k, v in kwargs.items()},
+                    service_manager_type=type(service_manager).__name__
+                )
+                
+                # Check for asyncio.Task objects in kwargs
+                task_objects = []
+                for key, value in kwargs.items():
+                    if isinstance(value, asyncio.Task):
+                        task_objects.append({
+                            "key": key,
+                            "task_id": id(value),
+                            "task_state": value._state if hasattr(value, '_state') else 'unknown',
+                            "task_done": value.done() if hasattr(value, 'done') else 'unknown'
+                        })
+                
+                if task_objects:
+                    _sync_logger.error("Found asyncio.Task objects in kwargs before enqueue", task_objects=task_objects)
+                
+                # Filter out service_manager from kwargs to prevent it from being serialized with the job
+                filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'service_manager'}
+                
                 job = await enqueue(
                     func,
                     *args,
@@ -99,16 +125,13 @@ def enqueue_sync(
                     timeout=timeout,
                     prefer_thread_local=False,  # Use service context instead
                     config=config or create_global_config(),
-                    service_manager=service_manager,
-                    **kwargs,
+                    **filtered_kwargs,
                 )
                 _sync_logger.info(
                     "enqueue_sync_success",
-                    {
-                        "queue_name": queue_name,
-                        "job_id": job.job_id,
-                        "func_name": getattr(func, "__name__", str(func)),
-                    },
+                    queue_name=queue_name,
+                    job_id=job.job_id,
+                    func_name=getattr(func, "__name__", str(func)),
                 )
                 return job
             except Exception as e:
@@ -169,6 +192,9 @@ def enqueue_at_sync(
 
         async def _enqueue_at_with_services(service_manager):
             try:
+                # Filter out service_manager from kwargs to prevent it from being serialized with the job
+                filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'service_manager'}
+                
                 job = await enqueue_at(
                     dt,
                     func,
@@ -180,28 +206,23 @@ def enqueue_at_sync(
                     timeout=timeout,
                     prefer_thread_local=False,  # Use service context instead
                     config=config or create_global_config(),
-                    service_manager=service_manager,
-                    **kwargs,
+                    **filtered_kwargs,
                 )
                 _sync_logger.info(
                     "enqueue_at_sync_success",
-                    {
-                        "queue_name": queue_name,
-                        "job_id": job.job_id,
-                        "func_name": getattr(func, "__name__", str(func)),
-                        "scheduled_time": dt.isoformat(),
-                    },
+                    queue_name=queue_name,
+                    job_id=job.job_id,
+                    func_name=getattr(func, "__name__", str(func)),
+                    scheduled_time=dt.isoformat(),
                 )
                 return job
             except Exception as e:
                 _sync_logger.error(
                     "enqueue_at_sync_failed",
-                    {
-                        "queue_name": queue_name,
-                        "func_name": getattr(func, "__name__", str(func)),
-                        "scheduled_time": dt.isoformat(),
-                        "error": str(e),
-                    },
+                    queue_name=queue_name,
+                    func_name=getattr(func, "__name__", str(func)),
+                    scheduled_time=dt.isoformat(),
+                    error=str(e),
                 )
                 raise wrap_naq_exception(
                     e, f"Failed to enqueue job at specific time synchronously: {e}"
@@ -255,6 +276,9 @@ def enqueue_in_sync(
 
         async def _enqueue_in_with_services(service_manager):
             try:
+                # Filter out service_manager from kwargs to prevent it from being serialized with the job
+                filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'service_manager'}
+                
                 job = await enqueue_in(
                     delta,
                     func,
@@ -266,28 +290,23 @@ def enqueue_in_sync(
                     timeout=timeout,
                     prefer_thread_local=False,  # Use service context instead
                     config=config or create_global_config(),
-                    service_manager=service_manager,
-                    **kwargs,
+                    **filtered_kwargs,
                 )
                 _sync_logger.info(
                     "enqueue_in_sync_success",
-                    {
-                        "queue_name": queue_name,
-                        "job_id": job.job_id,
-                        "func_name": getattr(func, "__name__", str(func)),
-                        "delay_seconds": delta.total_seconds(),
-                    },
+                    queue_name=queue_name,
+                    job_id=job.job_id,
+                    func_name=getattr(func, "__name__", str(func)),
+                    delay_seconds=delta.total_seconds(),
                 )
                 return job
             except Exception as e:
                 _sync_logger.error(
                     "enqueue_in_sync_failed",
-                    {
-                        "queue_name": queue_name,
-                        "func_name": getattr(func, "__name__", str(func)),
-                        "delay_seconds": delta.total_seconds(),
-                        "error": str(e),
-                    },
+                    queue_name=queue_name,
+                    func_name=getattr(func, "__name__", str(func)),
+                    delay_seconds=delta.total_seconds(),
+                    error=str(e),
                 )
                 raise wrap_naq_exception(
                     e, f"Failed to enqueue job with delay synchronously: {e}"
@@ -350,6 +369,9 @@ def schedule_sync(
 
         async def _schedule_with_services(service_manager):
             try:
+                # Filter out service_manager from kwargs to prevent it from being serialized with the job
+                filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'service_manager'}
+                
                 job = await schedule(
                     func,
                     *args,
@@ -363,36 +385,31 @@ def schedule_sync(
                     timeout=timeout,
                     prefer_thread_local=False,  # Use service context instead
                     config=config or create_global_config(),
-                    service_manager=service_manager,
-                    **kwargs,
+                    **filtered_kwargs,
                 )
                 _sync_logger.info(
                     "schedule_sync_success",
-                    {
-                        "queue_name": queue_name,
-                        "job_id": job.job_id,
-                        "func_name": getattr(func, "__name__", str(func)),
-                        "cron": cron,
-                        "interval": interval.total_seconds()
-                        if isinstance(interval, timedelta)
-                        else interval,
-                        "repeat": repeat,
-                    },
+                    queue_name=queue_name,
+                    job_id=job.job_id,
+                    func_name=getattr(func, "__name__", str(func)),
+                    cron=cron,
+                    interval=interval.total_seconds()
+                    if isinstance(interval, timedelta)
+                    else interval,
+                    repeat=repeat,
                 )
                 return job
             except Exception as e:
                 _sync_logger.error(
                     "schedule_sync_failed",
-                    {
-                        "queue_name": queue_name,
-                        "func_name": getattr(func, "__name__", str(func)),
-                        "cron": cron,
-                        "interval": interval.total_seconds()
-                        if isinstance(interval, timedelta)
-                        else interval,
-                        "repeat": repeat,
-                        "error": str(e),
-                    },
+                    queue_name=queue_name,
+                    func_name=getattr(func, "__name__", str(func)),
+                    cron=cron,
+                    interval=interval.total_seconds()
+                    if isinstance(interval, timedelta)
+                    else interval,
+                    repeat=repeat,
+                    error=str(e),
                 )
                 raise wrap_naq_exception(
                     e, f"Failed to schedule recurring job synchronously: {e}"
@@ -431,17 +448,18 @@ def purge_queue_sync(
                     nats_url=nats_url,
                     prefer_thread_local=False,  # Use service context instead
                     config=config or create_global_config(),
-                    service_manager=service_manager,
                 )
                 _sync_logger.info(
                     "purge_queue_sync_success",
-                    {"queue_name": queue_name, "purged_count": count},
+                    queue_name=queue_name,
+                    purged_count=count,
                 )
                 return count
             except Exception as e:
                 _sync_logger.error(
                     "purge_queue_sync_failed",
-                    {"queue_name": queue_name, "error": str(e)},
+                    queue_name=queue_name,
+                    error=str(e),
                 )
                 raise wrap_naq_exception(e, f"Failed to purge queue synchronously: {e}")
 
@@ -478,17 +496,18 @@ def cancel_scheduled_job_sync(
                     nats_url=nats_url,
                     prefer_thread_local=False,  # Use service context instead
                     config=config or create_global_config(),
-                    service_manager=service_manager,
                 )
                 _sync_logger.info(
                     "cancel_scheduled_job_sync_success",
-                    {"job_id": job_id, "result": res},
+                    job_id=job_id,
+                    result=res,
                 )
                 return res
             except Exception as e:
                 _sync_logger.error(
                     "cancel_scheduled_job_sync_failed",
-                    {"job_id": job_id, "error": str(e)},
+                    job_id=job_id,
+                    error=str(e),
                 )
                 raise wrap_naq_exception(
                     e, f"Failed to cancel scheduled job synchronously: {e}"
@@ -527,17 +546,18 @@ def pause_scheduled_job_sync(
                     nats_url=nats_url,
                     prefer_thread_local=False,  # Use service context instead
                     config=config or create_global_config(),
-                    service_manager=service_manager,
                 )
                 _sync_logger.info(
                     "pause_scheduled_job_sync_success",
-                    {"job_id": job_id, "result": res},
+                    job_id=job_id,
+                    result=res,
                 )
                 return res
             except Exception as e:
                 _sync_logger.error(
                     "pause_scheduled_job_sync_failed",
-                    {"job_id": job_id, "error": str(e)},
+                    job_id=job_id,
+                    error=str(e),
                 )
                 raise wrap_naq_exception(
                     e, f"Failed to pause scheduled job synchronously: {e}"
@@ -576,17 +596,18 @@ def resume_scheduled_job_sync(
                     nats_url=nats_url,
                     prefer_thread_local=False,  # Use service context instead
                     config=config or create_global_config(),
-                    service_manager=service_manager,
                 )
                 _sync_logger.info(
                     "resume_scheduled_job_sync_success",
-                    {"job_id": job_id, "result": res},
+                    job_id=job_id,
+                    result=res,
                 )
                 return res
             except Exception as e:
                 _sync_logger.error(
                     "resume_scheduled_job_sync_failed",
-                    {"job_id": job_id, "error": str(e)},
+                    job_id=job_id,
+                    error=str(e),
                 )
                 raise wrap_naq_exception(
                     e, f"Failed to resume scheduled job synchronously: {e}"
@@ -628,27 +649,29 @@ def modify_scheduled_job_sync(
 
         async def _modify_with_services(service_manager):
             try:
+                # Filter out service_manager from updates to prevent it from being serialized with the job
+                filtered_updates = {k: v for k, v in updates.items() if k != 'service_manager'}
+                
                 res = await modify_scheduled_job(
                     job_id,
                     nats_url=nats_url,
                     prefer_thread_local=False,  # Use service context instead
                     config=config or create_global_config(),
-                    service_manager=service_manager,
-                    **updates,
+                    **filtered_updates,
                 )
                 _sync_logger.info(
                     "modify_scheduled_job_sync_success",
-                    {"job_id": job_id, "result": res, "updates": list(updates.keys())},
+                    job_id=job_id,
+                    result=res,
+                    updates=list(updates.keys()),
                 )
                 return res
             except Exception as e:
                 _sync_logger.error(
                     "modify_scheduled_job_sync_failed",
-                    {
-                        "job_id": job_id,
-                        "updates": list(updates.keys()),
-                        "error": str(e),
-                    },
+                    job_id=job_id,
+                    updates=list(updates.keys()),
+                    error=str(e),
                 )
                 raise wrap_naq_exception(
                     e, f"Failed to modify scheduled job synchronously: {e}"
@@ -682,7 +705,7 @@ def close_sync_connections(nats_url: str = DEFAULT_NATS_URL) -> None:
                 _sync_logger.info("close_sync_connections_success")
                 pass
             except Exception as e:
-                _sync_logger.error("close_sync_connections_failed", {"error": str(e)})
+                _sync_logger.error("close_sync_connections_failed", error=str(e))
                 raise wrap_naq_exception(e, f"Failed to close sync connections: {e}")
 
         return run_with_service_context(

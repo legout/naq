@@ -25,7 +25,7 @@ from typing import (
 
 import msgspec
 
-from .enums import JOB_STATUS
+from .enums import JOB_STATUS, VALID_RETRY_STRATEGIES
 from ..settings import (
     DEFAULT_QUEUE_NAME,
 )
@@ -38,8 +38,7 @@ if TYPE_CHECKING:
 # Define retry strategies
 # RETRY_STRATEGY is now defined in enums.py to avoid circular imports
 
-# Normalize valid strategies to string values for consistent comparison and error messages
-VALID_RETRY_STRATEGIES = {"linear", "exponential"}
+# VALID_RETRY_STRATEGIES is imported from enums.py to avoid duplication
 
 # Define a type hint for retry delays
 RetryDelayType = Union[int, float, Sequence[Union[int, float]]]

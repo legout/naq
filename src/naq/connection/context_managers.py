@@ -93,19 +93,18 @@ async def nats_connection(config: Optional[GlobalServiceConfig] = None):
         ```
     """
     # Get configuration if not provided
-    if config is None:
-        config = create_global_config()
+    config = config or create_global_config()
 
     # Extract NATS connection parameters from config
-    servers = config.nats_url if config.nats_url else DEFAULT_NATS_URL
-    client_name = config.custom_settings.get("client_name", "naq_client")
-    max_reconnect_attempts = config.custom_settings.get("max_reconnect_attempts", 5)
-    reconnect_time_wait = config.custom_settings.get("reconnect_time_wait", 2)
-
-    # Additional connection options from config
-    connect_timeout = config.custom_settings.get("connect_timeout", 5)
-    ping_interval = config.custom_settings.get("ping_interval", 60)
-    max_outstanding_pings = config.custom_settings.get("max_outstanding_pings", 2)
+    servers = config.nats_url or DEFAULT_NATS_URL
+    custom_settings = config.custom_settings or {}
+    
+    client_name = custom_settings.get("client_name", "naq_client")
+    max_reconnect_attempts = custom_settings.get("max_reconnect_attempts", 5)
+    reconnect_time_wait = custom_settings.get("reconnect_time_wait", 2)
+    connect_timeout = custom_settings.get("connect_timeout", 5)
+    ping_interval = custom_settings.get("ping_interval", 60)
+    max_outstanding_pings = custom_settings.get("max_outstanding_pings", 2)
 
     conn = None
     try:
@@ -217,8 +216,7 @@ async def nats_jetstream(config: Optional[GlobalServiceConfig] = None):
         ```
     """
     # Get configuration if not provided
-    if config is None:
-        config = create_global_config()
+    config = config or create_global_config()
 
     try:
         logger.debug("Establishing NATS connection and JetStream context")
@@ -278,8 +276,7 @@ async def nats_kv_store(bucket_name: str, config: Optional[GlobalServiceConfig] 
         ```
     """
     # Get configuration if not provided
-    if config is None:
-        config = create_global_config()
+    config = config or create_global_config()
 
     try:
         logger.debug(

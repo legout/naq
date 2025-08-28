@@ -119,18 +119,30 @@ class Queue:
                         "ServiceManager is required for Queue operations."
                     )
 
+                # DEBUG LOG: Log available services before requesting
+                available_services = self._service_manager.get_service_names()
+                logger.debug("Available services in ServiceManager", available_services=available_services)
+                logger.debug("Service manager details", service_manager=repr(self._service_manager), service_count=len(available_services))
+
                 if self._connection_service is None:
+                    logger.debug("Attempting to get 'connection' service")
                     self._connection_service = await self._service_manager.get_service(
                         "connection", ConnectionService
                     )
+                    logger.debug("Successfully got 'connection' service")
                 if self._stream_service is None:
+                    logger.debug("Attempting to get 'stream' service")
                     self._stream_service = await self._service_manager.get_service(
                         "stream", StreamService
                     )
+                    logger.debug("Successfully got 'stream' service")
                 if self._job_service is None:
+                    logger.debug("Attempting to get 'job' service")
+                    logger.debug("Available services before job request", available_services=self._service_manager.get_service_names())
                     self._job_service = await self._service_manager.get_service(
                         "job", JobService
                     )
+                    logger.debug("Successfully got 'job' service")
                 if self._event_service is None:
                     self._event_service = await self._service_manager.get_service(
                         "event", EventService
@@ -217,6 +229,24 @@ class Queue:
         ):
             try:
                 await self._ensure_services()
+                # DEBUG: Log kwargs before job creation
+                import asyncio
+                logger.debug("Creating job with kwargs", kwargs_keys=list(kwargs.keys()), kwargs_types={k: type(v).__name__ for k, v in kwargs.items()})
+                
+                # Check for asyncio.Task objects in kwargs
+                task_objects = []
+                for key, value in kwargs.items():
+                    if isinstance(value, asyncio.Task):
+                        task_objects.append({
+                            "key": key,
+                            "task_id": id(value),
+                            "task_state": value._state if hasattr(value, '_state') else 'unknown',
+                            "task_done": value.done() if hasattr(value, 'done') else 'unknown'
+                        })
+                
+                if task_objects:
+                    logger.error("Found asyncio.Task objects in kwargs before job creation", task_objects=task_objects)
+                
                 # Create the job object
                 job = Job(
                     function=func,
@@ -232,6 +262,9 @@ class Queue:
                     result_ttl=kwargs.get("result_ttl"),
                     timeout=timeout,
                 )
+                
+                # DEBUG: Log job object after creation
+                logger.debug("Job object created", job_id=job.job_id, job_kwargs_keys=list(job.kwargs.keys()), job_kwargs_types={k: type(v).__name__ for k, v in job.kwargs.items()})
 
                 logger.info(
                     f"Enqueueing job {job.job_id} ({func.__name__}) to queue '{self.name}' (subject: {self.subject})"
@@ -239,7 +272,7 @@ class Queue:
                 if job.dependency_ids:
                     logger.info(f"Job {job.job_id} depends on: {job.dependency_ids}")
 
-                await self._job_service.enqueue(job, self.subject)
+                await self._job_service.enqueue_job(job, self.subject)
                 logger.info(f"Job {job.job_id} published successfully.")
                 return job
             except Exception as e:
