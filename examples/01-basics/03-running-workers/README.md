@@ -84,11 +84,6 @@ Each Python script demonstrates a different worker pattern:
 # Basic single worker
 python basic_worker.py
 
-# Multiple specialized workers  
-python specialized_workers.py
-
-# High-performance worker setup
-python high_performance_workers.py
 
 # Worker monitoring
 python worker_monitoring.py
