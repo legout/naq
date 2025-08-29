@@ -90,6 +90,57 @@ class Queue:
 
         setup_logging()  # Ensure logging is set up
 
+    def _validate_queue_name(self, name: str) -> None:
+        """Validate that the queue name is valid.
+        
+        Args:
+            name: The queue name to validate
+            
+        Raises:
+            ValueError: If queue name is empty or contains invalid characters
+        """
+        if not name:
+            raise ValueError("Queue name cannot be empty")
+        if not self._VALID_QUEUE_NAME.match(name):
+            raise ValueError(
+                f"Invalid queue name '{name}'. Queue names must contain only "
+                f"alphanumeric characters, underscores, hyphens, or periods."
+            )
+
+    def _validate_job_parameters(
+        self,
+        func: Callable,
+        max_retries: Optional[int],
+        retry_delay: RetryDelayType,
+        timeout: Optional[int],
+    ) -> None:
+        """Validate job parameters.
+        
+        Args:
+            func: The function to validate
+            max_retries: Maximum number of retries
+            retry_delay: Delay between retries
+            timeout: Job timeout
+            
+        Raises:
+            ValueError: If parameters are invalid
+        """
+        # Validate function is callable
+        if not callable(func):
+            raise ValueError("Job function must be callable")
+            
+        # Validate max_retries
+        if max_retries is not None and max_retries < 0:
+            raise ValueError("max_retries must be non-negative")
+            
+        # Validate retry_delay
+        if isinstance(retry_delay, (int, float)) and retry_delay < 0:
+            raise ValueError("retry_delay must be non-negative")
+            
+        # Validate timeout
+        if timeout is not None and timeout < 0:
+            raise ValueError("timeout must be non-negative")
+
     @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
     async def _ensure_services(self) -> None:
         """Ensure that all required services are available."""

@@ -23,6 +23,53 @@ from ..utils.logging import StructuredLogger
 from ..utils.validation import validate_parameter
 
 
+async def _execute_queue_operation(
+    operation_name: str,
+    queue_name: str,
+    nats_url: str,
+    func: Callable,
+    operation: Callable,
+    prefer_thread_local: bool = False,
+    config: Optional[GlobalServiceConfig] = None,
+    logger_name: str = "naq.queue.async_api",
+    **context_args: Any,
+) -> Job:
+    """Helper to execute queue operations with proper service context management."""
+    structured_logger = StructuredLogger(logger_name)
+    
+    # Add function name to context
+    context_args["func_name"] = getattr(func, "__name__", str(func))
+    
+    with structured_logger.operation_context(
+        operation_name,
+        queue_name=queue_name,
+        nats_url=nats_url,
+        **context_args,
+    ):
+        try:
+            # Use service context for short-lived operation
+            async with service_context(
+                nats_url=nats_url,
+                config=config,
+                logger_name=f"{logger_name}.{operation_name}",
+            ) as service_manager:
+                q = Queue(
+                    name=queue_name,
+                    nats_url=nats_url,
+                    prefer_thread_local=prefer_thread_local,
+                    config=config or create_global_config(),
+                    service_manager=service_manager,
+                )
+                return await operation(q)
+        except Exception as e:
+            error_handler = ErrorHandler()
+            wrapped_error = wrap_naq_exception(e, context=f"{operation_name} operation")
+            error_handler.handle_error(
+                wrapped_error,
+                context={"queue_name": queue_name, "function": getattr(func, "__name__", str(func))},
+            )
+            raise
+        
 @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
 async def enqueue(
     func: Callable,
