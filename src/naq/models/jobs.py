@@ -499,10 +499,9 @@ class Job(msgspec.Struct):
             # Send job_data to NATS...
             ```
         """
-        from ..serializers import get_serializer
+        from ..utils.job_serialization import serialize_job
 
-        serializer = get_serializer()
-        return serializer.serialize_job(self)
+        return serialize_job(self)
 
     @classmethod
     def deserialize(cls, data: bytes) -> "Job":
@@ -525,11 +524,9 @@ class Job(msgspec.Struct):
             print(f"Deserialized job: {job.job_id}")
             ```
         """
-        from ..serializers import get_serializer
+        from ..utils.job_serialization import deserialize_job
 
-        serializer = get_serializer()
-        # Simplified per improvement plan: trust serializer to return a Job
-        return serializer.deserialize_job(data)
+        return deserialize_job(data)
 
     def serialize_failed_job(self) -> bytes:
         """
@@ -548,10 +545,9 @@ class Job(msgspec.Struct):
             # Send failed_data to failed job queue...
             ```
         """
-        from ..serializers import get_serializer
+        from ..utils.job_serialization import serialize_failed_job
 
-        serializer = get_serializer()
-        return serializer.serialize_failed_job(self)
+        return serialize_failed_job(self)
 
     @staticmethod
     def serialize_result(
@@ -585,10 +581,9 @@ class Job(msgspec.Struct):
             # Store result_data in result backend...
             ```
         """
-        from ..serializers import get_serializer
+        from ..utils.job_serialization import serialize_result
 
-        serializer = get_serializer()
-        return serializer.serialize_result(result, status.value, error, traceback_str)
+        return serialize_result(result, status, error, traceback_str)
 
     @staticmethod
     def deserialize_result(data: bytes) -> Dict[str, Any]:
@@ -612,10 +607,9 @@ class Job(msgspec.Struct):
             print(f"Job status: {result_info['status']}")
             ```
         """
-        from ..serializers import get_serializer
+        from ..utils.job_serialization import deserialize_result
 
-        serializer = get_serializer()
-        return serializer.deserialize_result(data)
+        return deserialize_result(data)
 
     def __repr__(self) -> str:
         """

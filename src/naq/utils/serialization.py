@@ -216,20 +216,20 @@ def deserialize_with_metadata(
     """
     # Try to deserialize with pickle first, fallback to json
     deserialized = _try_deserialize(bytes_data)
-    
+
     # Extract data and metadata from deserialized payload
     return _extract_data_and_metadata(deserialized)
 
 
 def _try_deserialize(bytes_data: Union[bytes, str]) -> Any:
     """Try to deserialize data with pickle first, fallback to json.
-    
+
     Args:
         bytes_data: Data to deserialize (bytes or string)
-        
+
     Returns:
         Deserialized data
-        
+
     Raises:
         SerializationError: If both pickle and json deserialization fail
     """
@@ -260,10 +260,10 @@ def _try_deserialize(bytes_data: Union[bytes, str]) -> Any:
 
 def _extract_data_and_metadata(deserialized: Any) -> tuple[Any, Dict[str, Any]]:
     """Extract data and metadata from deserialized payload.
-    
+
     Args:
         deserialized: The deserialized data
-        
+
     Returns:
         Tuple of (data, metadata)
     """

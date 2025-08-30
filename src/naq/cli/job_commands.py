@@ -413,7 +413,9 @@ def job_control(
                     # and reschedule
                     current_job = await scheduler_service.get_scheduled_job(job_id)
                     if current_job is None:
-                        handler.console.print(f"[yellow]Job {job_id} not found.[/yellow]")
+                        handler.console.print(
+                            f"[yellow]Job {job_id} not found.[/yellow]"
+                        )
                         handler.structured_logger.warning(
                             f"Job {job_id} not found for reschedule",
                             operation="job_control",
@@ -442,7 +444,9 @@ def job_control(
                             error=str(e),
                             error_type="deserialization_error",
                         )
-                        handler.console.print(f"[red]Error deserializing job: {str(e)}[/red]")
+                        handler.console.print(
+                            f"[red]Error deserializing job: {str(e)}[/red]"
+                        )
                         return
 
                     # Calculate new scheduled timestamp
@@ -483,7 +487,6 @@ def job_control(
                         repeat=repeat or current_job.repeat,
                     )
 
-                    
                     handler.console.print(
                         f"[green]Job {job_id} rescheduled successfully.[/green]"
                     )

@@ -30,7 +30,7 @@ from ..models.enums import JobEventType
 
 class BaseCLICommand:
     """Base class for NAQ CLI commands with common functionality.
-    
+
     This class provides standardized patterns for:
     - Service setup and management
     - Error handling and logging
@@ -40,7 +40,7 @@ class BaseCLICommand:
 
     def __init__(self, logger_name: str = "naq.cli") -> None:
         """Initialize the BaseCLICommand.
-        
+
         Args:
             logger_name: Name for the structured logger.
         """
@@ -50,7 +50,7 @@ class BaseCLICommand:
 
     def setup_logging(self, log_level: Optional[str] = None) -> None:
         """Set up logging for CLI commands.
-        
+
         Args:
             log_level: Logging level to use.
         """
@@ -63,12 +63,12 @@ class BaseCLICommand:
         **kwargs: Any,
     ) -> None:
         """Validate common parameters used across CLI commands.
-        
+
         Args:
             nats_url: URL of the NATS server.
             log_level: Logging level (e.g., DEBUG, INFO, WARNING, ERROR).
             **kwargs: Additional parameters to validate.
-            
+
         Raises:
             ValidationError: If any parameter validation fails.
         """
@@ -102,15 +102,15 @@ class BaseCLICommand:
         custom_settings: Optional[Dict[str, Any]] = None,
     ) -> ServiceManager:
         """Set up common services for CLI commands.
-        
+
         Args:
             nats_url: URL of the NATS server.
             log_level: Logging level (e.g., DEBUG, INFO, WARNING, ERROR).
             custom_settings: Additional custom settings for service configuration.
-            
+
         Returns:
             ServiceManager: Configured service manager.
-            
+
         Raises:
             NaqConnectionError: If connection to NATS fails.
         """
@@ -142,7 +142,9 @@ class BaseCLICommand:
 
             # Register required services
             await service_manager.register_service(
-                "connection", "naq.services.connection.ConnectionService", initialize=True
+                "connection",
+                "naq.services.connection.ConnectionService",
+                initialize=True,
             )
 
             self.structured_logger.info(
@@ -163,7 +165,7 @@ class BaseCLICommand:
 
     async def cleanup_services(self, service_manager: ServiceManager) -> None:
         """Clean up services.
-        
+
         Args:
             service_manager: Service manager to clean up.
         """
@@ -172,10 +174,10 @@ class BaseCLICommand:
 
     def handle_format_validation(self, format_type: str) -> None:
         """Validate output format parameter.
-        
+
         Args:
             format_type: Output format to validate.
-            
+
         Raises:
             typer.Exit: If format is invalid.
         """
@@ -186,10 +188,11 @@ class BaseCLICommand:
 
     def run_async_command(self, async_func) -> None:
         """Run an async CLI command with standardized error handling.
-        
+
         Args:
             async_func: Async function to run.
         """
+
         @timing
         @log_errors
         def _run():
@@ -263,6 +266,7 @@ def display_event(
     elif format_type == "raw":
         # Display event as raw text
         from datetime import datetime, timezone
+
         if isinstance(event, JobEvent):
             console.print(
                 f"[{datetime.fromtimestamp(event.timestamp, timezone.utc)}] "
@@ -289,6 +293,7 @@ def display_event(
 
     else:  # table format (default)
         from datetime import datetime, timezone
+
         if isinstance(event, JobEvent):
             console.print(
                 f"[{datetime.fromtimestamp(event.timestamp, timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}] "
@@ -346,6 +351,7 @@ def display_event_table(
 
     # Add rows
     from datetime import datetime, timezone
+
     for event in events:
         timestamp = datetime.fromtimestamp(event.timestamp, timezone.utc).strftime(
             "%Y-%m-%d %H:%M:%S"

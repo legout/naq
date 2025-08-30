@@ -6,12 +6,95 @@ usage patterns: short-lived operations (like CLI commands) and long-lived compon
 """
 
 import asyncio
+import time
 from contextlib import asynccontextmanager
 from typing import Optional, Dict, Any
 
-from .services.base import ServiceManager, ServiceConfig
+from .services.base import (
+    ServiceManager,
+    ServiceConfig,
+    ServiceInitializationError,
+    ServiceConfigurationError,
+    ServiceRuntimeError,
+)
+from .exceptions import NaqException
 from .services.config import create_global_config, GlobalServiceConfig
-from .utils.logging import StructuredLogger
+from .services.connection import ConnectionService
+from .services.events import EventService
+from .services.jobs import JobService
+from .services.kv_stores import KVStoreService
+from .services.streams import StreamService
+from loguru import logger
+
+
+async def _prepare_service_config(
+    config: Optional[ServiceConfig],
+    global_config: Optional[GlobalServiceConfig],
+    nats_url: Optional[str],
+    custom_settings: Optional[Dict[str, Any]],
+) -> ServiceConfig:
+    """Prepare service configuration.
+
+    Args:
+        config: Optional ServiceConfig instance.
+        global_config: Optional GlobalServiceConfig for additional configuration.
+        nats_url: Optional NATS server URL.
+        custom_settings: Optional custom settings to merge with service config.
+
+    Returns:
+        ServiceConfig: The prepared service configuration.
+    """
+    if config is None:
+        if global_config is None:
+            global_config = create_global_config()
+        config = ServiceConfig(
+            nats_url=nats_url or global_config.nats_url,
+            custom_settings=custom_settings or {},
+        )
+    elif custom_settings:
+        config.custom_settings.update(custom_settings)
+    return config
+
+
+async def _register_core_services(service_manager: ServiceManager, log):
+    """Register all core NAQ services with the service manager."""
+    # Register connection service first
+    await service_manager.register_service(
+        "connection", ConnectionService, initialize=True
+    )
+    log.debug("Registered and initialized service: connection")
+
+    # Get the connection service to pass to other services
+    connection_service = await service_manager.get_service(
+        "connection", ConnectionService
+    )
+
+    # Register stream service with connection service
+    await service_manager.register_service(
+        "stream", StreamService, initialize=True, connection_service=connection_service
+    )
+    log.debug("Registered and initialized service: stream")
+
+    # Register KV store service with connection service
+    await service_manager.register_service(
+        "kv", KVStoreService, initialize=True, connection_service=connection_service
+    )
+    log.debug("Registered and initialized service: kv")
+
+    # Register job service with connection service
+    await service_manager.register_service(
+        "job", JobService, initialize=True, connection_service=connection_service
+    )
+    log.debug("Registered and initialized service: job")
+
+    # Register event service with connection service
+    await service_manager.register_service(
+        "event", EventService, initialize=True, connection_service=connection_service
+    )
+    log.debug("Registered and initialized service: event")
+
+    # Register 'kv_store' alias for backward compatibility
+    service_manager.add_alias("kv_store", "kv")
 
 
 @asynccontextmanager
@@ -44,136 +127,123 @@ async def service_context(
             # Use the service...
             # Services are automatically cleaned up when exiting the context
     """
-    logger = StructuredLogger(logger_name)
+    log = logger.bind(name=logger_name)
     service_manager: Optional[ServiceManager] = None
 
     try:
-        with logger.operation_context("service_context_enter"):
-            # Create service config if not provided
-            if config is None:
-                if global_config is None:
-                    global_config = create_global_config()
+        start_time = time.perf_counter()
+        log.info(
+            "Starting operation: service_context_enter",
+            operation="service_context_enter",
+            status="started",
+        )
+        # Create service config using helper function
+        config = await _prepare_service_config(
+            config, global_config, nats_url, custom_settings
+        )
 
-                config = ServiceConfig(
-                    nats_url=nats_url or global_config.nats_url,
-                    custom_settings=custom_settings or {},
-                )
-            elif custom_settings:
-                # Merge custom settings with existing config
-                config.custom_settings.update(custom_settings)
+        # Create service manager
+        service_manager = ServiceManager(config)
 
-            # Create service manager
-            service_manager = ServiceManager(config)
+        # Register core services
 
-            # Register core services
-            from .services.connection import ConnectionService
-            from .services.jobs import JobService
-            from .services.kv_stores import KVStoreService
-            from .services.streams import StreamService
-            from .services.events import EventService
+        try:
+            # Register all core services
+            await _register_core_services(service_manager, log)
+        except (ServiceInitializationError, ServiceConfigurationError) as e:
+            log.error(
+                "Failed to register core services",
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            # If it's a ServiceInitializationError wrapping another exception, unwrap it
+            if isinstance(e, ServiceInitializationError) and e.__cause__ is not None:
+                raise e.__cause__
+            raise
 
-            try:
-                # Register connection service first
-                await service_manager.register_service(
-                    "connection", ConnectionService, initialize=True
-                )
-
-                # Get the connection service to pass to other services
-                connection_service = await service_manager.get_service(
-                    "connection", ConnectionService
-                )
-
-                # Create stream service with connection service directly
-                stream_service = StreamService(
-                    config=service_manager._default_config,
-                    naq_config=service_manager._naq_config,
-                    connection_service=connection_service,
-                )
-
-                # Manually register the already-created service
-                service_manager._services["stream"] = stream_service
-                service_manager._service_configs["stream"] = (
-                    service_manager._default_config
-                )
-
-                # Now initialize the stream service
-                await stream_service.initialize()
-
-                # Create job service with connection service directly
-                job_service = JobService(
-                    config=service_manager._default_config,
-                    naq_config=service_manager._naq_config,
-                    connection_service=connection_service,
-                )
-
-                # Manually register the already-created service
-                service_manager._services["job"] = job_service
-                service_manager._service_configs["job"] = (
-                    service_manager._default_config
-                )
-                
-                # DEBUG LOG: Add logging to track service registration
-                logger.debug("Registered job service with name 'job'", available_services=list(service_manager._services.keys()))
-
-                # Now initialize the job service
-                await job_service.initialize()
-
-                # Create KV store service with connection service directly
-                kv_service = KVStoreService(
-                    config=service_manager._default_config,
-                    naq_config=service_manager._naq_config,
-                    connection_service=connection_service,
-                )
-
-                # Manually register the already-created service
-                service_manager._services["kv"] = kv_service
-                service_manager._service_configs["kv"] = service_manager._default_config
-
-                # Now initialize the KV store service
-                await kv_service.initialize()
-
-                # Create event service with connection service directly
-                event_service = EventService(
-                    config=service_manager._default_config,
-                    naq_config=service_manager._naq_config,
-                    connection_service=connection_service,
-                )
-
-                # Manually register the already-created service
-                service_manager._services["event"] = event_service
-                service_manager._service_configs["event"] = (
-                    service_manager._default_config
-                )
-
-                # Now initialize the event service
-                await event_service.initialize()
-
-                # Also register with "kv_store" alias for backward compatibility
-                service_manager._services["kv_store"] = kv_service
-                service_manager._service_configs["kv_store"] = (
-                    service_manager._default_config
-                )
-
-            except Exception as e:
-                logger.error("Failed to register core services", error=str(e))
-                raise
-
-            logger.info(
+            log.info(
                 "Service context initialized",
                 nats_url=config.nats_url,
                 custom_settings=config.custom_settings,
             )
 
-            yield service_manager
+            # Log successful completion of enter operation
+            duration = time.perf_counter() - start_time
+            log.info(
+                "Completed operation: service_context_enter",
+                operation="service_context_enter",
+                status="completed",
+                duration_seconds=duration,
+            )
 
+        yield service_manager
+
+    except (
+        ServiceInitializationError,
+        ServiceConfigurationError,
+        ServiceRuntimeError,
+        NaqException,
+    ) as e:
+        log.error("Service context error", error=str(e), error_type=type(e).__name__)
+        # Log failure of enter operation
+        duration = time.perf_counter() - start_time
+        log.error(
+            "Failed operation: service_context_enter",
+            operation="service_context_enter",
+            status="failed",
+            duration_seconds=duration,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise
     except Exception as e:
-        logger.error("Service context error", error=str(e), error_type=type(e).__name__)
+        log.error(
+            "Unexpected error in service context",
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        # Log failure of enter operation
+        duration = time.perf_counter() - start_time
+        log.error(
+            "Failed operation: service_context_enter",
+            operation="service_context_enter",
+            status="failed",
+            duration_seconds=duration,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
         raise
     finally:
         if service_manager is not None:
-            with logger.operation_context("service_context_exit"):
+            start_time = time.perf_counter()
+            log.info(
+                "Starting operation: service_context_exit",
+                operation="service_context_exit",
+                status="started",
+            )
+            try:
                 await service_manager.cleanup_all()
-                logger.info("Service context cleaned up")
+                log.info("Service context cleaned up")
+                # Log successful completion of exit operation
+                duration = time.perf_counter() - start_time
+                log.info(
+                    "Completed operation: service_context_exit",
+                    operation="service_context_exit",
+                    status="completed",
+                    duration_seconds=duration,
+                )
+            except Exception as e:
+                # Log failure of exit operation
+                duration = time.perf_counter() - start_time
+                log.error(
+                    "Failed operation: service_context_exit",
+                    operation="service_context_exit",
+                    status="failed",
+                    duration_seconds=duration,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
+                raise
 
 
 @asynccontextmanager
@@ -200,48 +270,117 @@ async def long_lived_service_context(
             connection_service = await services.get_service("connection", ConnectionService)
             # Use services for the component's lifetime
     """
-    logger = StructuredLogger(logger_name)
+    log = logger.bind(name=logger_name)
 
     try:
-        with logger.operation_context("long_lived_service_context_enter"):
-            # Ensure all core services are initialized
-            core_services = [
-                ("connection", "ConnectionService"),
-                ("stream", "StreamService"),
-                ("kv_store", "KVStoreService"),
-                ("job", "JobService"),
-                ("event", "EventService"),
-            ]
+        start_time = time.perf_counter()
+        log.info(
+            "Starting operation: long_lived_service_context_enter",
+            operation="long_lived_service_context_enter",
+            status="started",
+        )
+        # Ensure all core services are initialized
+        core_services = [
+            ("connection", "ConnectionService"),
+            ("stream", "StreamService"),
+            (
+                "kv",
+                "KVStoreService",
+            ),  # Use 'kv' instead of 'kv_store' as that's the actual service name
+            ("job", "JobService"),
+            ("event", "EventService"),
+        ]
+        for service_name, service_class_name in core_services:
+            # Try to get the service - this will initialize it if needed
+            log.debug(
+                "Attempting to get core service",
+                service=service_name,
+                available_services=service_manager.get_service_names(),
+            )
+            await service_manager.get_service(service_name)
+            log.debug("Core service available", service=service_name)
 
-            for service_name, service_class_name in core_services:
-                try:
-                    # Try to get the service - this will initialize it if needed
-                    logger.debug("Attempting to get core service", service=service_name, available_services=service_manager.get_service_names())
-                    await service_manager.get_service(service_name)
-                    logger.debug("Core service available", service=service_name)
-                except Exception as e:
-                    logger.warning(
-                        "Failed to initialize core service",
-                        service=service_name,
-                        error=str(e),
-                        available_services=service_manager.get_service_names(),
-                    )
+            log.info("Long-lived service context initialized")
+            # Log successful completion of enter operation
+            duration = time.perf_counter() - start_time
+            log.info(
+                "Completed operation: long_lived_service_context_enter",
+                operation="long_lived_service_context_enter",
+                status="completed",
+                duration_seconds=duration,
+            )
+        yield service_manager
 
-            logger.info("Long-lived service context initialized")
-            yield service_manager
-
-    except Exception as e:
-        logger.error(
+    except (
+        ServiceInitializationError,
+        ServiceConfigurationError,
+        ServiceRuntimeError,
+        NaqException,
+    ) as e:
+        log.error(
             "Long-lived service context error",
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        # Log failure of enter operation
+        duration = time.perf_counter() - start_time
+        log.error(
+            "Failed operation: long_lived_service_context_enter",
+            operation="long_lived_service_context_enter",
+            status="failed",
+            duration_seconds=duration,
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        raise
+    except Exception as e:
+        log.error(
+            "Unexpected error in long-lived service context",
+            error=str(e),
+            error_type=type(e).__name__,
+        )
+        # Log failure of enter operation
+        duration = time.perf_counter() - start_time
+        log.error(
+            "Failed operation: long_lived_service_context_enter",
+            operation="long_lived_service_context_enter",
+            status="failed",
+            duration_seconds=duration,
             error=str(e),
             error_type=type(e).__name__,
         )
         raise
     finally:
-        with logger.operation_context("long_lived_service_context_exit"):
+        start_time = time.perf_counter()
+        log.info(
+            "Starting operation: long_lived_service_context_exit",
+            operation="long_lived_service_context_exit",
+            status="started",
+        )
+        try:
             # For long-lived contexts, we don't cleanup the service manager
             # as it's managed by the component lifecycle
-            logger.info("Long-lived service context exited")
+            log.info("Long-lived service context exited")
+            # Log successful completion of exit operation
+            duration = time.perf_counter() - start_time
+            log.info(
+                "Completed operation: long_lived_service_context_exit",
+                operation="long_lived_service_context_exit",
+                status="completed",
+                duration_seconds=duration,
+            )
+        except Exception as e:
+            # Log failure of exit operation
+            duration = time.perf_counter() - start_time
+            log.error(
+                "Failed operation: long_lived_service_context_exit",
+                operation="long_lived_service_context_exit",
+                status="failed",
+                duration_seconds=duration,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            raise
 
 
 def run_with_service_context(
@@ -295,7 +434,7 @@ def run_with_service_context(
             logger_name=logger_name,
         ) as service_manager:
             # Pass the service manager as the first argument
-            return await func(service_manager, *args, **kwargs)
+            return func(service_manager, *args, **kwargs)
 
     # Check if we're already in an event loop
     try:

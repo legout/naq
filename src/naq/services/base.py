@@ -294,6 +294,7 @@ class ServiceManager:
         self._naq_config = naq_config if naq_config is not None else get_config()
         self._services: Dict[str, BaseService] = {}
         self._service_configs: Dict[str, ServiceConfig] = {}
+        self._aliases: Dict[str, str] = {}
         self._service_creation_times: Dict[str, float] = {}
         self._service_access_counts: Dict[str, int] = {}
         self._logger = logger.bind(service="ServiceManager")
@@ -304,6 +305,7 @@ class ServiceManager:
         service_class: Type[T],
         config: Optional[ServiceConfig] = None,
         initialize: bool = True,
+        **kwargs,
     ) -> T:
         """
         Register and optionally initialize a service.
@@ -316,6 +318,7 @@ class ServiceManager:
             initialize: Whether to initialize the service immediately.
                        If False, the service will be initialized when first
                        retrieved via get_service.
+            **kwargs: Additional keyword arguments to pass to the service constructor.
 
         Returns:
             The created service instance.
@@ -336,20 +339,31 @@ class ServiceManager:
             service_config = config or self._default_config
 
             # Create service instance with NAQ config if the service supports it
+            service = None
             try:
                 # Check if the service constructor accepts naq_config parameter
                 import inspect
 
                 sig = inspect.signature(service_class.__init__)
+                service_kwargs = kwargs.copy()
+
                 if "naq_config" in sig.parameters:
-                    service = service_class(
-                        config=service_config, naq_config=self._naq_config
-                    )
+                    service_kwargs["naq_config"] = self._naq_config
+
+                if "config" in sig.parameters:
+                    service_kwargs["config"] = service_config
+                    service = service_class(**service_kwargs)
+                elif service_kwargs:
+                    service = service_class(config=service_config, **service_kwargs)
                 else:
-                    service = service_class(config=service_config)
+                    # If no kwargs and no config param, pass config as first arg
+                    service = service_class(service_config)
             except Exception:
                 # Fallback to regular initialization
-                service = service_class(config=service_config)
+                if kwargs:
+                    service = service_class(config=service_config, **kwargs)
+                else:
+                    service = service_class(config=service_config)
 
             # Store service and its config
             self._services[name] = service
@@ -399,6 +413,9 @@ class ServiceManager:
             TypeError: If service_class is provided and the service is not
                       an instance of that class.
         """
+        # Resolve alias to actual service name if needed
+        name = self._aliases.get(name, name)
+
         if name not in self._services:
             raise ServiceConfigurationError(f"Service '{name}' is not registered")
 
@@ -445,7 +462,36 @@ class ServiceManager:
         Returns:
             True if the service is registered, False otherwise.
         """
-        return name in self._services
+        return name in self._services or name in self._aliases
+
+    def add_alias(self, alias: str, service_name: str) -> None:
+        """
+        Register an alias for a service.
+
+        Args:
+            alias: The alias name.
+            service_name: The name of the service to alias.
+
+        Raises:
+            ServiceConfigurationError: If the alias conflicts with an existing
+                                     service name or the target service
+                                     does not exist.
+        """
+        if alias in self._services:
+            raise ServiceConfigurationError(
+                f"Alias '{alias}' conflicts with an existing service name"
+            )
+        if service_name not in self._services:
+            raise ServiceConfigurationError(
+                f"Cannot create alias '{alias}': service '{service_name}' not found"
+            )
+        if alias in self._aliases:
+            self._logger.warning(
+                f"Alias '{alias}' is already registered and will be overwritten."
+            )
+
+        self._aliases[alias] = service_name
+        self._logger.info(f"Registered alias '{alias}' for service '{service_name}'")
 
     async def remove_service(self, name: str, cleanup: bool = True) -> None:
         """
@@ -460,11 +506,27 @@ class ServiceManager:
             ServiceRuntimeError: If cleanup fails and cleanup is True.
         """
         if name not in self._services:
-            raise ServiceConfigurationError(f"Service '{name}' is not registered")
+            # Check if 'name' is an alias
+            actual_service_name = None
+            for alias, target_service in self._aliases.items():
+                if alias == name:
+                    actual_service_name = target_service
+                    break
 
-        try:
+            if actual_service_name is None:
+                raise ServiceConfigurationError(f"Service '{name}' is not registered")
+
+            # If it was an alias, remove the alias and use the actual service name
+            self._logger.info(
+                f"Removing alias: {name} (points to {actual_service_name})"
+            )
+            del self._aliases[name]
+            name = actual_service_name
+        else:
+            # It's a direct service name, proceed normally
             self._logger.info(f"Removing service: {name}")
 
+        try:
             service = self._services[name]
 
             # Cleanup if requested and service is initialized
@@ -474,6 +536,14 @@ class ServiceManager:
             # Remove service and config
             del self._services[name]
             del self._service_configs[name]
+
+            # Remove any aliases that pointed to this service
+            aliases_to_remove = [
+                alias for alias, target in self._aliases.items() if target == name
+            ]
+            for alias in aliases_to_remove:
+                del self._aliases[alias]
+                self._logger.debug(f"Removed dangling alias: {alias}")
 
             self._logger.info(f"Service '{name}' removed successfully")
 

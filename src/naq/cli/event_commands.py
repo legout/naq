@@ -27,7 +27,13 @@ from ..utils.serialization import SerializationHelper
 from ..exceptions import NaqConnectionError
 from ..models.events import JobEvent, WorkerEvent
 from ..models.enums import JobEventType
-from .cli_base import BaseCLICommand, display_event, display_event_table, display_stats_table, display_worker_table
+from .cli_base import (
+    BaseCLICommand,
+    display_event,
+    display_event_table,
+    display_stats_table,
+    display_worker_table,
+)
 
 
 class EventCommandHandler(BaseCLICommand):
@@ -70,6 +76,7 @@ class EventCommandHandler(BaseCLICommand):
                 not_none=True,
                 error_message="worker_id cannot be empty",
             )
+
 
 # Create a Typer instance for event commands
 event_app = typer.Typer(

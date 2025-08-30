@@ -108,7 +108,9 @@ def initialize_cli() -> None:
     try:
         handler.structured_logger.info("Initializing NAQ CLI", component="cli")
         _register_subcommands()
-        handler.structured_logger.info("NAQ CLI initialization completed", component="cli")
+        handler.structured_logger.info(
+            "NAQ CLI initialization completed", component="cli"
+        )
     except Exception as e:
         error_context = create_error_context("cli_initialization")
         handler.structured_logger.error(

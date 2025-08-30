@@ -36,10 +36,10 @@ async def _execute_queue_operation(
 ) -> Job:
     """Helper to execute queue operations with proper service context management."""
     structured_logger = StructuredLogger(logger_name)
-    
+
     # Add function name to context
     context_args["func_name"] = getattr(func, "__name__", str(func))
-    
+
     with structured_logger.operation_context(
         operation_name,
         queue_name=queue_name,
@@ -66,10 +66,14 @@ async def _execute_queue_operation(
             wrapped_error = wrap_naq_exception(e, context=f"{operation_name} operation")
             error_handler.handle_error(
                 wrapped_error,
-                context={"queue_name": queue_name, "function": getattr(func, "__name__", str(func))},
+                context={
+                    "queue_name": queue_name,
+                    "function": getattr(func, "__name__", str(func)),
+                },
             )
             raise
-        
+
+
 @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
 async def enqueue(
     func: Callable,
@@ -121,7 +125,7 @@ async def enqueue_at(
 ) -> Job:
     """Helper to schedule a job for a specific time (async)."""
     validate_parameter(dt, "dt", not_none=True)
-    
+
     return await _execute_queue_operation(
         operation_name="enqueue_at",
         queue_name=queue_name,

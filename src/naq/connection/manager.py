@@ -32,7 +32,7 @@ class ConnectionManager:
             self._tls.connections = {}
             self._tls.js_contexts = {}
         return self._tls.connections, self._tls.js_contexts
-    
+
     def _get_existing_connection(self, url: str, prefer_thread_local: bool):
         """Get an existing connection if available."""
         if prefer_thread_local:
@@ -45,7 +45,7 @@ class ConnectionManager:
             if url in self._connections and self._connections[url].is_connected:
                 return self._connections[url]
         return None
-    
+
     def _store_connection(self, url: str, nc: NATSClient, prefer_thread_local: bool):
         """Store a connection in the appropriate storage."""
         if prefer_thread_local:
@@ -53,7 +53,7 @@ class ConnectionManager:
             tls_conns[url] = nc
         else:
             self._connections[url] = nc
-    
+
     def _get_existing_jetstream(self, url: str, prefer_thread_local: bool):
         """Get an existing JetStream context if available."""
         if prefer_thread_local:
@@ -61,15 +61,17 @@ class ConnectionManager:
             return tls_js.get(url)
         else:
             return self._js_contexts.get(url)
-    
-    def _store_jetstream(self, url: str, js: JetStreamContext, prefer_thread_local: bool):
+
+    def _store_jetstream(
+        self, url: str, js: JetStreamContext, prefer_thread_local: bool
+    ):
         """Store a JetStream context in the appropriate storage."""
         if prefer_thread_local:
             _, tls_js = self._get_tls_maps()
             tls_js[url] = js
         else:
             self._js_contexts[url] = js
-    
+
     async def _close_thread_local_connection(self, url: str) -> None:
         """Close a thread-local connection and clean up references."""
         tls_conns, tls_js = self._get_tls_maps()
@@ -79,7 +81,7 @@ class ConnectionManager:
             logger.info(f"[TLS] NATS connection to {url} closed")
         tls_conns.pop(url, None)
         tls_js.pop(url, None)
-    
+
     async def _close_process_connection(self, url: str) -> None:
         """Close a process-wide connection and clean up references."""
         if url in self._connections and self._connections[url].is_connected:
@@ -89,43 +91,55 @@ class ConnectionManager:
             del self._connections[url]
             if url in self._js_contexts:
                 del self._js_contexts[url]
-    
+
     async def _close_all_process_connections(self) -> None:
         """Close all process-wide connections."""
         logger.debug("Starting close_all process-wide connections.")
-        
+
         for url, nc in list(self._connections.items()):
             await self._close_connection_with_logging(nc, url, "process-wide")
-        
+
         self._connections.clear()
         self._js_contexts.clear()
         logger.debug("Process-wide connection caches cleared.")
-    
+
     async def _close_all_thread_local_connections(self) -> None:
         """Close all thread-local connections."""
         logger.debug("Starting close_all thread-local connections.")
-        
+
         tls_conns, tls_js = self._get_tls_maps()
         for url, nc in list(tls_conns.items()):
-            await self._close_connection_with_logging(nc, url, "thread-local", is_tls=True)
-        
+            await self._close_connection_with_logging(
+                nc, url, "thread-local", is_tls=True
+            )
+
         tls_conns.clear()
         tls_js.clear()
         logger.debug("Thread-local connection caches cleared.")
-    
-    async def _close_connection_with_logging(self, nc: NATSClient, url: str, conn_type: str, is_tls: bool = False) -> None:
+
+    async def _close_connection_with_logging(
+        self, nc: NATSClient, url: str, conn_type: str, is_tls: bool = False
+    ) -> None:
         """Close a connection with appropriate logging."""
         if nc.is_connected:
-            logger.debug(f"Attempting to drain and close {conn_type} NATS connection to {url}")
+            logger.debug(
+                f"Attempting to drain and close {conn_type} NATS connection to {url}"
+            )
             try:
                 await nc.drain()
                 await nc.close()
-                logger.info(f"{'[TLS] ' if is_tls else ''}NATS connection to {url} closed")
+                logger.info(
+                    f"{'[TLS] ' if is_tls else ''}NATS connection to {url} closed"
+                )
             except Exception as e:
-                logger.warning(f"{'[TLS] ' if is_tls else ''}Flush timeout when draining NATS connection to {url}. Forcing close. Error: {e}")
+                logger.warning(
+                    f"{'[TLS] ' if is_tls else ''}Flush timeout when draining NATS connection to {url}. Forcing close. Error: {e}"
+                )
                 await nc.close()  # Attempt to force close
         else:
-            logger.debug(f"{conn_type} NATS connection to {url} already disconnected or not found.")
+            logger.debug(
+                f"{conn_type} NATS connection to {url} already disconnected or not found."
+            )
 
     async def get_connection(
         self, url: str = DEFAULT_NATS_URL, *, prefer_thread_local: bool = False
@@ -162,7 +176,7 @@ class ConnectionManager:
                 if existing_nc:
                     await nc.close()
                     return existing_nc
-                
+
                 self._store_connection(url, nc, prefer_thread_local)
                 return nc
         except Exception as e:

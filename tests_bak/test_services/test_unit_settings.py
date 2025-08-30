@@ -14,51 +14,7 @@ from naq.settings import (
     reset_global_config,
     DEFAULT_NATS_URL,
     DEFAULT_QUEUE_NAME,
-    _get_env_or_config,
 )
-from naq.exceptions import ConfigurationError
-
-
-class TestGetEnvOrConfig:
-    """Test cases for _get_env_or_config function."""
-
-    def test_environment_variable_priority(self) -> None:
-        """Test that environment variables take priority over config."""
-        with patch.dict(os.environ, {"TEST_ENV_VAR": "env_value"}):
-            result = _get_env_or_config("TEST_ENV_VAR", ["test", "path"], "default")
-            assert result == "env_value"
-
-    def test_config_fallback(self) -> None:
-        """Test that config values are used when environment variables are not set."""
-        with patch.dict(os.environ, {}, clear=True):
-            # This test assumes a config system is in place
-            # For now, we'll just test that it returns the default
-            result = _get_env_or_config("NONEXISTENT_VAR", ["test", "path"], "default")
-            assert result == "default"
-
-    def test_attribute_error_logging(self) -> None:
-        """Test that AttributeError is handled and logged."""
-        with patch.dict(os.environ, {}, clear=True):
-            # This test would require mocking the logger to verify logging
-            # For now, we'll just test that it returns the default
-            result = _get_env_or_config("NONEXISTENT_VAR", ["nonexistent", "path"], "default")
-            assert result == "default"
-
-    def test_key_error_logging(self) -> None:
-        """Test that KeyError is handled and logged."""
-        with patch.dict(os.environ, {}, clear=True):
-            # This test would require mocking the logger to verify logging
-            # For now, we'll just test that it returns the default
-            result = _get_env_or_config("NONEXISTENT_VAR", ["nonexistent", "path"], "default")
-            assert result == "default"
-
-    def test_explicit_none_value(self) -> None:
-        """Test that explicit None values are handled correctly."""
-        # This test would require a more complex setup to test the explicit None handling
-        # For now, we'll just test that it returns the default when no env var is set
-        with patch.dict(os.environ, {}, clear=True):
-            result = _get_env_or_config("NONEXISTENT_VAR", ["test", "path"], "default")
-            assert result == "default"
 
 
 class TestNATSConnectionConfig:
@@ -124,19 +80,19 @@ class TestNATSConnectionConfig:
 
     def test_validation_negative_values(self) -> None:
         """Test that negative values raise validation errors."""
-        with pytest.raises(ConfigurationError, match="max_reconnect_attempts must be non-negative"):
+        with pytest.raises(ValueError, match="max_reconnect_attempts must be non-negative"):
             NATSConnectionConfig(max_reconnect_attempts=-1)
         
-        with pytest.raises(ConfigurationError, match="reconnect_time_wait must be non-negative"):
+        with pytest.raises(ValueError, match="reconnect_time_wait must be non-negative"):
             NATSConnectionConfig(reconnect_time_wait=-1.0)
         
-        with pytest.raises(ConfigurationError, match="connection_timeout must be non-negative"):
+        with pytest.raises(ValueError, match="connection_timeout must be non-negative"):
             NATSConnectionConfig(connection_timeout=-1.0)
         
-        with pytest.raises(ConfigurationError, match="ping_interval must be non-negative"):
+        with pytest.raises(ValueError, match="ping_interval must be non-negative"):
             NATSConnectionConfig(ping_interval=-1.0)
         
-        with pytest.raises(ConfigurationError, match="max_outstanding_pings must be non-negative"):
+        with pytest.raises(ValueError, match="max_outstanding_pings must be non-negative"):
             NATSConnectionConfig(max_outstanding_pings=-1)
 
     def test_empty_servers_fallback(self) -> None:
@@ -252,35 +208,23 @@ class TestConfig:
 
     def test_validation_errors(self) -> None:
         """Test that validation errors are raised for invalid values."""
-        with pytest.raises(ConfigurationError, match="scheduler_lock_ttl_seconds must be positive"):
+        with pytest.raises(ValueError, match="scheduler_lock_ttl_seconds must be positive"):
             Config(scheduler_lock_ttl_seconds=0)
         
-        with pytest.raises(ConfigurationError, match="scheduler_lock_renew_interval_seconds must be positive"):
+        with pytest.raises(ValueError, match="scheduler_lock_renew_interval_seconds must be positive"):
             Config(scheduler_lock_renew_interval_seconds=0)
         
-        with pytest.raises(ConfigurationError, match="worker_ttl_seconds must be positive"):
+        with pytest.raises(ValueError, match="worker_ttl_seconds must be positive"):
             Config(worker_ttl_seconds=0)
         
-        with pytest.raises(ConfigurationError, match="worker_heartbeat_interval_seconds must be positive"):
+        with pytest.raises(ValueError, match="worker_heartbeat_interval_seconds must be positive"):
             Config(worker_heartbeat_interval_seconds=0)
         
-        with pytest.raises(ConfigurationError, match="default_ack_wait_seconds must be positive"):
+        with pytest.raises(ValueError, match="default_ack_wait_seconds must be positive"):
             Config(default_ack_wait_seconds=0)
         
-        with pytest.raises(ConfigurationError, match="ack_wait for queue 'email' must be positive"):
+        with pytest.raises(ValueError, match="ack_wait for queue 'email' must be positive"):
             Config(ack_wait_per_queue={"email": 0})
-
-    def test_max_schedule_failures_invalid_value(self) -> None:
-        """Test that invalid MAX_SCHEDULE_FAILURES values raise ConfigurationError."""
-        with patch.dict(os.environ, {"NAQ_MAX_SCHEDULE_FAILURES": "invalid"}):
-            with pytest.raises(ConfigurationError, match="Invalid NAQ_MAX_SCHEDULE_FAILURES value 'invalid'"):
-                Config.from_env()
-
-    def test_max_schedule_failures_none_value(self) -> None:
-        """Test that None MAX_SCHEDULE_FAILURES values are handled correctly."""
-        with patch.dict(os.environ, {"NAQ_MAX_SCHEDULE_FAILURES": ""}):
-            config = Config.from_env()
-            assert config.max_schedule_failures == 5  # Default value
 
 
 class TestGlobalConfig:

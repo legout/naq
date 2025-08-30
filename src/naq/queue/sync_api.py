@@ -89,8 +89,10 @@ def enqueue_sync(
         async def _enqueue_with_services(service_manager):
             try:
                 # Filter out service_manager from kwargs to prevent it from being serialized with the job
-                filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'service_manager'}
-                
+                filtered_kwargs = {
+                    k: v for k, v in kwargs.items() if k != "service_manager"
+                }
+
                 job = await enqueue(
                     func,
                     *args,
@@ -118,9 +120,7 @@ def enqueue_sync(
                     func_name=getattr(func, "__name__", str(func)),
                     error=str(e),
                 )
-                raise wrap_naq_exception(
-                    e, f"Failed to enqueue job synchronously: {e}"
-                )
+                raise wrap_naq_exception(e, f"Failed to enqueue job synchronously: {e}")
 
         return run_with_service_context(
             _enqueue_with_services,
@@ -172,8 +172,10 @@ def enqueue_at_sync(
         async def _enqueue_at_with_services(service_manager):
             try:
                 # Filter out service_manager from kwargs to prevent it from being serialized with the job
-                filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'service_manager'}
-                
+                filtered_kwargs = {
+                    k: v for k, v in kwargs.items() if k != "service_manager"
+                }
+
                 job = await enqueue_at(
                     dt,
                     func,
@@ -256,8 +258,10 @@ def enqueue_in_sync(
         async def _enqueue_in_with_services(service_manager):
             try:
                 # Filter out service_manager from kwargs to prevent it from being serialized with the job
-                filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'service_manager'}
-                
+                filtered_kwargs = {
+                    k: v for k, v in kwargs.items() if k != "service_manager"
+                }
+
                 job = await enqueue_in(
                     delta,
                     func,
@@ -349,8 +353,10 @@ def schedule_sync(
         async def _schedule_with_services(service_manager):
             try:
                 # Filter out service_manager from kwargs to prevent it from being serialized with the job
-                filtered_kwargs = {k: v for k, v in kwargs.items() if k != 'service_manager'}
-                
+                filtered_kwargs = {
+                    k: v for k, v in kwargs.items() if k != "service_manager"
+                }
+
                 job = await schedule(
                     func,
                     *args,
@@ -629,8 +635,10 @@ def modify_scheduled_job_sync(
         async def _modify_with_services(service_manager):
             try:
                 # Filter out service_manager from updates to prevent it from being serialized with the job
-                filtered_updates = {k: v for k, v in updates.items() if k != 'service_manager'}
-                
+                filtered_updates = {
+                    k: v for k, v in updates.items() if k != "service_manager"
+                }
+
                 res = await modify_scheduled_job(
                     job_id,
                     nats_url=nats_url,

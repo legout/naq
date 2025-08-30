@@ -506,6 +506,16 @@ SERVICE_CONFIG_SCHEMAS = {
                 "minimum": 0,
                 "description": "Interval for renewing locks in seconds",
             },
+            "max_failures": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Maximum number of schedule failures before giving up",
+            },
+            "job_status_ttl": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Time-to-live for job status entries in seconds",
+            },
             "auto_create_buckets": {
                 "type": "boolean",
                 "description": "Whether to automatically create buckets",
@@ -519,6 +529,8 @@ SERVICE_CONFIG_SCHEMAS = {
             "lock_bucket_name",
             "lock_ttl",
             "lock_renew_interval",
+            "max_failures",
+            "job_status_ttl",
             "auto_create_buckets",
         ],
         "additionalProperties": False,

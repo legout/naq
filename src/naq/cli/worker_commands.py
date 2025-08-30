@@ -293,7 +293,6 @@ def list_workers(
         "List workers request serialized", request_size=len(str(serialized_request))
     )
 
-
     async def _list_workers():
         # Create global config with NATS URL and custom settings
         config = GlobalServiceConfig()
@@ -398,7 +397,9 @@ def list_workers(
 
             # Print the table
             handler.console.print(table)
-            handler.console.print(f"\n[bold]Total:[/bold] {len(workers)} active worker(s)")
+            handler.console.print(
+                f"\n[bold]Total:[/bold] {len(workers)} active worker(s)"
+            )
 
         except Exception as e:
             handler.structured_logger.error(

@@ -81,11 +81,15 @@ def dashboard(
     except ImportError:
         handler = SystemCommandHandler()
         handler.console.print("[red]Error:[/red] Dashboard dependencies not installed.")
-        handler.console.print("Please run: [bold cyan]pip install naq[dashboard][/bold cyan]")
+        handler.console.print(
+            "Please run: [bold cyan]pip install naq[dashboard][/bold cyan]"
+        )
         raise typer.Exit(code=1)
 
     handler = SystemCommandHandler()
-    handler.setup_logging(log_level if log_level else None)  # Setup naq logging if needed
+    handler.setup_logging(
+        log_level if log_level else None
+    )  # Setup naq logging if needed
     handler.structured_logger.info(
         f"Starting NAQ Dashboard server on http://{host}:{port}",
         host=host,
@@ -191,7 +195,9 @@ def health(
         is_healthy, message = asyncio.run(check_health())
 
         if is_healthy:
-            handler.console.print(f"[green]✓[/green] [bold]System Health:[/bold] {message}")
+            handler.console.print(
+                f"[green]✓[/green] [bold]System Health:[/bold] {message}"
+            )
             handler.structured_logger.info(
                 "System health check passed", status="healthy", message=message
             )
@@ -209,7 +215,9 @@ def health(
             nats_url=nats_url,
             timeout=timeout,
         )
-        handler.console.print(f"[red]✗[/red] [bold]System Health:[/bold] Error: {str(e)}")
+        handler.console.print(
+            f"[red]✗[/red] [bold]System Health:[/bold] Error: {str(e)}"
+        )
         raise typer.Exit(code=1)
 
 
@@ -304,7 +312,9 @@ def config_validate(
             config_path=str(config_path) if config_path else "default",
             error=str(e),
         )
-        handler.console.print(f"[bold red]Configuration validation failed:[/bold red] {e}")
+        handler.console.print(
+            f"[bold red]Configuration validation failed:[/bold red] {e}"
+        )
         raise typer.Exit(code=1)
 
 
@@ -371,5 +381,7 @@ def generate_config_cmd(
             environment=environment,
             error=str(e),
         )
-        handler.console.print(f"[bold red]Error generating configuration:[/bold red] {e}")
+        handler.console.print(
+            f"[bold red]Error generating configuration:[/bold red] {e}"
+        )
         raise typer.Exit(code=1)

@@ -281,7 +281,7 @@ def log_errors(
                 # Don't log typer.Exit as an error since it's used for normal CLI flow
                 if isinstance(exc, typer.Exit):
                     raise
-                
+
                 # Get the traceback as a string
                 exc_type, exc_value, exc_traceback = sys.exc_info()
                 tb_str = "".join(
@@ -313,7 +313,7 @@ def log_errors(
                 # Don't log typer.Exit as an error since it's used for normal CLI flow
                 if isinstance(exc, typer.Exit):
                     raise
-                
+
                 # Get the traceback as a string
                 exc_type, exc_value, exc_traceback = sys.exc_info()
                 tb_str = "".join(

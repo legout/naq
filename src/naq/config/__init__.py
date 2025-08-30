@@ -27,14 +27,15 @@ _config_instance: Optional[NAQConfig] = None
 
 def _dict_to_naq_config(config_dict: Dict[str, Any]) -> NAQConfig:
     """Convert a dictionary to a NAQConfig instance.
-    
+
     Args:
         config_dict: Dictionary containing configuration data.
-        
+
     Returns:
         A NAQConfig instance.
     """
     return msgspec.json.decode(msgspec.json.encode(config_dict), type=NAQConfig)
+
 
 __all__ = [
     "DEFAULT_CONFIG",

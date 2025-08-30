@@ -92,10 +92,10 @@ class Queue:
 
     def _validate_queue_name(self, name: str) -> None:
         """Validate that the queue name is valid.
-        
+
         Args:
             name: The queue name to validate
-            
+
         Raises:
             ValueError: If queue name is empty or contains invalid characters
         """
@@ -115,28 +115,28 @@ class Queue:
         timeout: Optional[int],
     ) -> None:
         """Validate job parameters.
-        
+
         Args:
             func: The function to validate
             max_retries: Maximum number of retries
             retry_delay: Delay between retries
             timeout: Job timeout
-            
+
         Raises:
             ValueError: If parameters are invalid
         """
         # Validate function is callable
         if not callable(func):
             raise ValueError("Job function must be callable")
-            
+
         # Validate max_retries
         if max_retries is not None and max_retries < 0:
             raise ValueError("max_retries must be non-negative")
-            
+
         # Validate retry_delay
         if isinstance(retry_delay, (int, float)) and retry_delay < 0:
             raise ValueError("retry_delay must be non-negative")
-            
+
         # Validate timeout
         if timeout is not None and timeout < 0:
             raise ValueError("timeout must be non-negative")
@@ -159,8 +159,15 @@ class Queue:
 
                 # DEBUG LOG: Log available services before requesting
                 available_services = self._service_manager.get_service_names()
-                logger.debug("Available services in ServiceManager", available_services=available_services)
-                logger.debug("Service manager details", service_manager=repr(self._service_manager), service_count=len(available_services))
+                logger.debug(
+                    "Available services in ServiceManager",
+                    available_services=available_services,
+                )
+                logger.debug(
+                    "Service manager details",
+                    service_manager=repr(self._service_manager),
+                    service_count=len(available_services),
+                )
 
                 if self._connection_service is None:
                     logger.debug("Attempting to get 'connection' service")
@@ -176,7 +183,10 @@ class Queue:
                     logger.debug("Successfully got 'stream' service")
                 if self._job_service is None:
                     logger.debug("Attempting to get 'job' service")
-                    logger.debug("Available services before job request", available_services=self._service_manager.get_service_names())
+                    logger.debug(
+                        "Available services before job request",
+                        available_services=self._service_manager.get_service_names(),
+                    )
                     self._job_service = await self._service_manager.get_service(
                         "job", JobService
                     )
@@ -259,22 +269,36 @@ class Queue:
                 await self._ensure_services()
                 # DEBUG: Log kwargs before job creation
                 import asyncio
-                logger.debug("Creating job with kwargs", kwargs_keys=list(kwargs.keys()), kwargs_types={k: type(v).__name__ for k, v in kwargs.items()})
-                
+
+                logger.debug(
+                    "Creating job with kwargs",
+                    kwargs_keys=list(kwargs.keys()),
+                    kwargs_types={k: type(v).__name__ for k, v in kwargs.items()},
+                )
+
                 # Check for asyncio.Task objects in kwargs
                 task_objects = []
                 for key, value in kwargs.items():
                     if isinstance(value, asyncio.Task):
-                        task_objects.append({
-                            "key": key,
-                            "task_id": id(value),
-                            "task_state": value._state if hasattr(value, '_state') else 'unknown',
-                            "task_done": value.done() if hasattr(value, 'done') else 'unknown'
-                        })
-                
+                        task_objects.append(
+                            {
+                                "key": key,
+                                "task_id": id(value),
+                                "task_state": value._state
+                                if hasattr(value, "_state")
+                                else "unknown",
+                                "task_done": value.done()
+                                if hasattr(value, "done")
+                                else "unknown",
+                            }
+                        )
+
                 if task_objects:
-                    logger.error("Found asyncio.Task objects in kwargs before job creation", task_objects=task_objects)
-                
+                    logger.error(
+                        "Found asyncio.Task objects in kwargs before job creation",
+                        task_objects=task_objects,
+                    )
+
                 # Create the job object
                 job = Job(
                     function=func,
@@ -290,9 +314,16 @@ class Queue:
                     result_ttl=kwargs.get("result_ttl"),
                     timeout=timeout,
                 )
-                
+
                 # DEBUG: Log job object after creation
-                logger.debug("Job object created", job_id=job.job_id, job_kwargs_keys=list(job.kwargs.keys()), job_kwargs_types={k: type(v).__name__ for k, v in job.kwargs.items()})
+                logger.debug(
+                    "Job object created",
+                    job_id=job.job_id,
+                    job_kwargs_keys=list(job.kwargs.keys()),
+                    job_kwargs_types={
+                        k: type(v).__name__ for k, v in job.kwargs.items()
+                    },
+                )
 
                 logger.info(
                     f"Enqueueing job {job.job_id} ({func.__name__}) to queue '{self.name}' (subject: {self.subject})"

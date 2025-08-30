@@ -560,7 +560,9 @@ def list_scheduled_jobs(
                     status="error",
                     error=str(e),
                 )
-                handler.console.print(f"[red]Error listing scheduled jobs: {str(e)}[/red]")
+                handler.console.print(
+                    f"[red]Error listing scheduled jobs: {str(e)}[/red]"
+                )
             finally:
                 if "service_manager" in locals():
                     await service_manager.cleanup_all()

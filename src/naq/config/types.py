@@ -168,6 +168,8 @@ class SchedulerServiceConfig(Struct):
     lock_bucket_name: str = "scheduler_locks"
     lock_ttl: float = 30.0
     lock_renew_interval: float = 10.0
+    max_failures: int = 5
+    job_status_ttl: float = 86400.0
     auto_create_buckets: bool = True
 
 

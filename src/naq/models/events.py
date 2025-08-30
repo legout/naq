@@ -18,22 +18,25 @@ from .enums import JobEventType, WorkerEventType
 def _event_to_dict(event_type: Any, timestamp: float, **kwargs: Any) -> Dict[str, Any]:
     """
     Convert event data to a dictionary representation.
-    
+
     Args:
         event_type: The event type (Enum)
         timestamp: Unix timestamp when the event occurred
         **kwargs: Additional event fields
-        
+
     Returns:
         Dict[str, Any]: A dictionary containing all event data with enum values converted to strings.
     """
     result = {
-        "event_type": event_type.value if hasattr(event_type, "value") else str(event_type),
+        "event_type": event_type.value
+        if hasattr(event_type, "value")
+        else str(event_type),
         "timestamp": timestamp,
-        **kwargs
+        **kwargs,
     }
     # Remove None values to keep the dictionary clean
     return {k: v for k, v in result.items() if v is not None}
+
 
 if TYPE_CHECKING:
     # Import here to avoid circular imports

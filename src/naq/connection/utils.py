@@ -65,7 +65,9 @@ class ConnectionMonitor:
         """
         self.metrics.active_connections -= 1
         self._connection_durations.append(duration)
-        self.metrics.average_connection_time = sum(self._connection_durations) / len(self._connection_durations)
+        self.metrics.average_connection_time = sum(self._connection_durations) / len(
+            self._connection_durations
+        )
 
     def record_connection_failure(self) -> None:
         """Record a failed connection attempt.
@@ -140,7 +142,9 @@ async def wait_for_nats_connection(
         ```
     """
     start_time = asyncio.get_event_loop().time()
-    logger.debug(f"Waiting for NATS connection (timeout: {timeout}s, retry_delay: {retry_delay}s)")
+    logger.debug(
+        f"Waiting for NATS connection (timeout: {timeout}s, retry_delay: {retry_delay}s)"
+    )
 
     while True:
         if await test_nats_connection():

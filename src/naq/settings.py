@@ -4,8 +4,10 @@ import os
 from typing import Any, Dict, List, Optional
 
 import msgspec
+from loguru import logger
 
 from .config import get_config
+from .exceptions import ConfigurationError
 
 
 def _get_env_or_config(
@@ -40,17 +42,35 @@ def _get_env_or_config(
             if isinstance(current_value, dict):
                 current_value = current_value.get(key)
             else:  # Assume it's a msgspec.Struct or similar object
-                current_value = getattr(current_value, key)
-            if current_value is None:  # Path not found or value is None
-                return default
-    except AttributeError:  # Attribute not found on a struct
+                # Handle special case for scheduler -> scheduler_service mapping
+                if (
+                    key == "scheduler"
+                    and current_value is not None
+                    and hasattr(current_value, "scheduler_service")
+                ):
+                    current_value = getattr(current_value, "scheduler_service", default)
+                elif current_value is not None and hasattr(current_value, key):
+                    current_value = getattr(current_value, key)
+                else:
+                    logger.debug(f"Attribute '{key}' not found on config object")
+                    return default
+    except AttributeError as e:  # Attribute not found on a struct
+        logger.debug(f"AttributeError while traversing config path {config_path}: {e}")
         return default
-    except KeyError:  # Key not found in a dict
+    except KeyError as e:  # Key not found in a dict
+        logger.debug(f"KeyError while traversing config path {config_path}: {e}")
         return default
-    except Exception:  # Catch any other unexpected errors during traversal
+    except Exception as e:  # Catch any other unexpected errors during traversal
+        logger.warning(
+            f"Unexpected error while traversing config path {config_path}: {e}"
+        )
         return default
 
-    return current_value if current_value is not None else default
+    # Check if we found a value or should return the default
+    # Note: We don't check for None here to allow explicit None values
+    return (
+        current_value if current_value is not None or len(config_path) > 0 else default
+    )
 
 
 # Default NATS server URL
@@ -81,6 +101,95 @@ JSON_DECODER = _get_env_or_config(
     "NAQ_JSON_DECODER", ["serialization", "json_decoder"], "json.JSONDecoder"
 )
 
+# Data integrity settings
+# Whether to enable checksum/signature verification for serialized data
+SERIALIZATION_CHECKSUM_ENABLED = _get_env_or_config(
+    "NAQ_SERIALIZATION_CHECKSUM_ENABLED",
+    ["serialization", "checksum_enabled"],
+    "False"
+)
+
+# Algorithm to use for checksum calculation (e.g., "md5", "sha256", "sha512")
+SERIALIZATION_CHECKSUM_ALGORITHM = _get_env_or_config(
+    "NAQ_SERIALIZATION_CHECKSUM_ALGORITHM",
+    ["serialization", "checksum_algorithm"],
+    "sha256"
+)
+
+# Secret key for HMAC signature (if using HMAC for additional security)
+# If not provided, only checksums will be used
+SERIALIZATION_SIGNATURE_KEY = _get_env_or_config(
+    "NAQ_SERIALIZATION_SIGNATURE_KEY",
+    ["serialization", "signature_key"],
+    None
+)
+
+# Maximum size for serialized data in bytes (default: 10MB)
+# Set to 0 or None for no limit
+SERIALIZATION_MAX_SIZE_BYTES = _get_env_or_config(
+    "NAQ_SERIALIZATION_MAX_SIZE_BYTES",
+    ["serialization", "max_size_bytes"],
+    "10485760"  # 10MB
+)
+
+# Convert to integer if not None
+if SERIALIZATION_MAX_SIZE_BYTES is not None and SERIALIZATION_MAX_SIZE_BYTES != "":
+    try:
+        SERIALIZATION_MAX_SIZE_BYTES = int(SERIALIZATION_MAX_SIZE_BYTES)
+        if SERIALIZATION_MAX_SIZE_BYTES < 0:
+            SERIALIZATION_MAX_SIZE_BYTES = 0  # 0 means no limit
+    except ValueError:
+        raise ConfigurationError(
+            f"Invalid NAQ_SERIALIZATION_MAX_SIZE_BYTES value '{SERIALIZATION_MAX_SIZE_BYTES}'. Must be a non-negative integer."
+        )
+else:
+    SERIALIZATION_MAX_SIZE_BYTES = 10485760  # Default to 10MB
+
+# Convert string boolean values to actual booleans
+SERIALIZATION_CHECKSUM_ENABLED = (
+    SERIALIZATION_CHECKSUM_ENABLED.lower() == "true"
+    if isinstance(SERIALIZATION_CHECKSUM_ENABLED, str)
+    else SERIALIZATION_CHECKSUM_ENABLED
+)
+
+# Debug logging configuration for PickleSerializer
+PICKLE_DEBUG_LOGGING_ENABLED = _get_env_or_config(
+    "NAQ_PICKLE_DEBUG_LOGGING_ENABLED",
+    ["serialization", "pickle_debug_logging_enabled"],
+    "False"
+)
+
+PICKLE_DEBUG_LOGGING_LEVEL = _get_env_or_config(
+    "NAQ_PICKLE_DEBUG_LOGGING_LEVEL",
+    ["serialization", "pickle_debug_logging_level"],
+    "DEBUG"
+)
+
+# Convert to uppercase if not None
+if PICKLE_DEBUG_LOGGING_LEVEL is not None:
+    PICKLE_DEBUG_LOGGING_LEVEL = PICKLE_DEBUG_LOGGING_LEVEL.upper()
+else:
+    PICKLE_DEBUG_LOGGING_LEVEL = "DEBUG"  # Default value
+
+PICKLE_DEBUG_LOGGING_INCLUDE_OBJECTS = _get_env_or_config(
+    "NAQ_PICKLE_DEBUG_LOGGING_INCLUDE_OBJECTS",
+    ["serialization", "pickle_debug_logging_include_objects"],
+    "True"
+)
+
+# Convert string boolean values to actual booleans
+PICKLE_DEBUG_LOGGING_ENABLED = (
+    PICKLE_DEBUG_LOGGING_ENABLED.lower() == "true"
+    if isinstance(PICKLE_DEBUG_LOGGING_ENABLED, str)
+    else PICKLE_DEBUG_LOGGING_ENABLED
+)
+
+PICKLE_DEBUG_LOGGING_INCLUDE_OBJECTS = (
+    PICKLE_DEBUG_LOGGING_INCLUDE_OBJECTS.lower() == "true"
+    if isinstance(PICKLE_DEBUG_LOGGING_INCLUDE_OBJECTS, str)
+    else PICKLE_DEBUG_LOGGING_INCLUDE_OBJECTS
+)
+
 # --- Scheduler Settings ---
 # KV bucket name for scheduled jobs
 SCHEDULED_JOBS_KV_NAME = f"{NAQ_PREFIX}_scheduled_jobs"
@@ -90,27 +199,31 @@ SCHEDULER_LOCK_KV_NAME = f"{NAQ_PREFIX}_scheduler_lock"
 SCHEDULER_LOCK_KEY = "leader_lock"
 # TTL (in seconds) for the leader lock. A scheduler renews the lock periodically.
 SCHEDULER_LOCK_TTL_SECONDS = int(
-    _get_env_or_config("NAQ_SCHEDULER_LOCK_TTL", ["scheduler", "lock_ttl"], "30")
+    _get_env_or_config(
+        "NAQ_SCHEDULER_LOCK_TTL", ["scheduler_service", "lock_ttl"], "30"
+    )
 )
 # How often the leader tries to renew the lock (should be less than TTL)
 SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS = int(
     _get_env_or_config(
-        "NAQ_SCHEDULER_LOCK_RENEW_INTERVAL", ["scheduler", "lock_renew_interval"], "15"
+        "NAQ_SCHEDULER_LOCK_RENEW_INTERVAL",
+        ["scheduler_service", "lock_renew_interval"],
+        "15",
     )
 )
 # Maximum number of times the scheduler will try to enqueue a job before marking it as failed.
 # Set to 0 or None for infinite retries by the scheduler itself.
 MAX_SCHEDULE_FAILURES = _get_env_or_config(
-    "NAQ_MAX_SCHEDULE_FAILURES", ["scheduler", "max_failures"]
+    "NAQ_MAX_SCHEDULE_FAILURES", ["scheduler_service", "max_failures"]
 )
-if MAX_SCHEDULE_FAILURES is not None:
+# Handle empty string as None
+if MAX_SCHEDULE_FAILURES is not None and MAX_SCHEDULE_FAILURES != "":
     try:
         MAX_SCHEDULE_FAILURES = int(MAX_SCHEDULE_FAILURES)
     except ValueError:
-        print(
-            f"Warning: Invalid NAQ_MAX_SCHEDULE_FAILURES value '{MAX_SCHEDULE_FAILURES}'. Disabling limit."
+        raise ConfigurationError(
+            f"Invalid NAQ_MAX_SCHEDULE_FAILURES value '{MAX_SCHEDULE_FAILURES}'. Must be an integer or None."
         )
-        MAX_SCHEDULE_FAILURES = None
 else:
     # Default to a reasonable limit, e.g., 5, or None for infinite
     MAX_SCHEDULE_FAILURES = 5
@@ -122,7 +235,9 @@ JOB_STATUS_KV_NAME = f"{NAQ_PREFIX}_job_status"
 
 # TTL for job status entries (e.g., 1 day) - adjust as needed
 JOB_STATUS_TTL_SECONDS = int(
-    _get_env_or_config("NAQ_JOB_STATUS_TTL", ["scheduler", "job_status_ttl"], 86400)
+    _get_env_or_config(
+        "NAQ_JOB_STATUS_TTL", ["scheduler_service", "job_status_ttl"], 86400
+    )
 )
 
 # Define subject for failed jobs
@@ -364,15 +479,15 @@ class NATSConnectionConfig(msgspec.Struct):
 
         # Validate numeric values
         if self.max_reconnect_attempts < 0:
-            raise ValueError("max_reconnect_attempts must be non-negative")
+            raise ConfigurationError("max_reconnect_attempts must be non-negative")
         if self.reconnect_time_wait < 0:
-            raise ValueError("reconnect_time_wait must be non-negative")
+            raise ConfigurationError("reconnect_time_wait must be non-negative")
         if self.connection_timeout < 0:
-            raise ValueError("connection_timeout must be non-negative")
+            raise ConfigurationError("connection_timeout must be non-negative")
         if self.ping_interval < 0:
-            raise ValueError("ping_interval must be non-negative")
+            raise ConfigurationError("ping_interval must be non-negative")
         if self.max_outstanding_pings < 0:
-            raise ValueError("max_outstanding_pings must be non-negative")
+            raise ConfigurationError("max_outstanding_pings must be non-negative")
 
 
 class Config:
@@ -408,6 +523,9 @@ class Config:
         events_flush_interval: Maximum time to wait before flushing batched events (in seconds)
         events_max_buffer_size: Maximum number of events to hold in the in-memory buffer
         events_stream_name: Name of the event stream
+        pickle_debug_logging_enabled: Whether debug logging is enabled for PickleSerializer
+        pickle_debug_logging_level: Log level for PickleSerializer debug messages
+        pickle_debug_logging_include_objects: Whether to include object analysis in debug logs
     """
 
     def __init__(
@@ -435,6 +553,13 @@ class Config:
         events_flush_interval: Optional[float] = None,
         events_max_buffer_size: Optional[int] = None,
         events_stream_name: Optional[str] = None,
+        pickle_debug_logging_enabled: Optional[bool] = None,
+        pickle_debug_logging_level: Optional[str] = None,
+        pickle_debug_logging_include_objects: Optional[bool] = None,
+        serialization_checksum_enabled: Optional[bool] = None,
+        serialization_checksum_algorithm: Optional[str] = None,
+        serialization_signature_key: Optional[str] = None,
+        serialization_max_size_bytes: Optional[int] = None,
     ) -> None:
         """Initialize the configuration with optional overrides."""
         # NATS connection configuration
@@ -486,6 +611,17 @@ class Config:
         self.events_max_buffer_size = events_max_buffer_size or EVENTS_MAX_BUFFER_SIZE
         self.events_stream_name = events_stream_name or EVENTS_STREAM_NAME
 
+        # Pickle debug logging configuration
+        self.pickle_debug_logging_enabled = pickle_debug_logging_enabled or PICKLE_DEBUG_LOGGING_ENABLED
+        self.pickle_debug_logging_level = pickle_debug_logging_level or PICKLE_DEBUG_LOGGING_LEVEL
+        self.pickle_debug_logging_include_objects = pickle_debug_logging_include_objects or PICKLE_DEBUG_LOGGING_INCLUDE_OBJECTS
+
+        # Serialization integrity configuration
+        self.serialization_checksum_enabled = serialization_checksum_enabled or SERIALIZATION_CHECKSUM_ENABLED
+        self.serialization_checksum_algorithm = serialization_checksum_algorithm or SERIALIZATION_CHECKSUM_ALGORITHM
+        self.serialization_signature_key = serialization_signature_key or SERIALIZATION_SIGNATURE_KEY
+        self.serialization_max_size_bytes = serialization_max_size_bytes or SERIALIZATION_MAX_SIZE_BYTES
+
         # Validate configuration
         self._validate_config()
 
@@ -493,34 +629,42 @@ class Config:
         """Validate the configuration values."""
         # Validate numeric values
         if self.scheduler_lock_ttl_seconds <= 0:
-            raise ValueError("scheduler_lock_ttl_seconds must be positive")
+            raise ConfigurationError("scheduler_lock_ttl_seconds must be positive")
         if self.scheduler_lock_renew_interval_seconds <= 0:
-            raise ValueError("scheduler_lock_renew_interval_seconds must be positive")
+            raise ConfigurationError(
+                "scheduler_lock_renew_interval_seconds must be positive"
+            )
         if self.job_status_ttl_seconds < 0:
-            raise ValueError("job_status_ttl_seconds must be non-negative")
+            raise ConfigurationError("job_status_ttl_seconds must be non-negative")
         if self.default_result_ttl_seconds < 0:
-            raise ValueError("default_result_ttl_seconds must be non-negative")
+            raise ConfigurationError("default_result_ttl_seconds must be non-negative")
         if self.worker_ttl_seconds <= 0:
-            raise ValueError("worker_ttl_seconds must be positive")
+            raise ConfigurationError("worker_ttl_seconds must be positive")
         if self.worker_heartbeat_interval_seconds <= 0:
-            raise ValueError("worker_heartbeat_interval_seconds must be positive")
+            raise ConfigurationError(
+                "worker_heartbeat_interval_seconds must be positive"
+            )
         if self.default_ack_wait_seconds <= 0:
-            raise ValueError("default_ack_wait_seconds must be positive")
+            raise ConfigurationError("default_ack_wait_seconds must be positive")
         if self.dependency_check_delay_seconds < 0:
-            raise ValueError("dependency_check_delay_seconds must be non-negative")
+            raise ConfigurationError(
+                "dependency_check_delay_seconds must be non-negative"
+            )
 
         # Validate event system configuration
         if self.events_batch_size <= 0:
-            raise ValueError("events_batch_size must be positive")
+            raise ConfigurationError("events_batch_size must be positive")
         if self.events_flush_interval < 0:
-            raise ValueError("events_flush_interval must be non-negative")
+            raise ConfigurationError("events_flush_interval must be non-negative")
         if self.events_max_buffer_size <= 0:
-            raise ValueError("events_max_buffer_size must be positive")
+            raise ConfigurationError("events_max_buffer_size must be positive")
 
         # Validate ack wait per queue
         for queue, ack_wait in self.ack_wait_per_queue.items():
             if ack_wait <= 0:
-                raise ValueError(f"ack_wait for queue '{queue}' must be positive")
+                raise ConfigurationError(
+                    f"ack_wait for queue '{queue}' must be positive"
+                )
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -536,141 +680,309 @@ class Config:
         # Create main config with environment overrides
         return cls(
             nats_connection=nats_config,
-            queue_name=_get_env_or_config(
-                "NAQ_DEFAULT_QUEUE", ["queues", "default_name"]
-            ),
-            job_serializer=_get_env_or_config(
-                "NAQ_JOB_SERIALIZER", ["serialization", "method"]
-            ),
-            json_encoder=_get_env_or_config(
-                "NAQ_JSON_ENCODER", ["serialization", "json_encoder"]
-            ),
-            json_decoder=_get_env_or_config(
-                "NAQ_JSON_DECODER", ["serialization", "json_decoder"]
-            ),
-            scheduler_lock_ttl_seconds=int(
-                _get_env_or_config(
-                    "NAQ_SCHEDULER_LOCK_TTL",
-                    ["scheduler", "lock_ttl"],
-                    SCHEDULER_LOCK_TTL_SECONDS,
-                )
-            ),
-            scheduler_lock_renew_interval_seconds=int(
-                _get_env_or_config(
-                    "NAQ_SCHEDULER_LOCK_RENEW_INTERVAL",
-                    ["scheduler", "lock_renew_interval"],
-                    SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS,
-                )
-            ),
-            max_schedule_failures=int(
-                _get_env_or_config(
-                    "NAQ_MAX_SCHEDULE_FAILURES",
-                    ["scheduler", "max_failures"],
-                    MAX_SCHEDULE_FAILURES,
-                )
-            )
-            if _get_env_or_config(
-                "NAQ_MAX_SCHEDULE_FAILURES", ["scheduler", "max_failures"]
-            )
-            else None,
-            job_status_ttl_seconds=int(
-                _get_env_or_config(
-                    "NAQ_JOB_STATUS_TTL",
-                    ["scheduler", "job_status_ttl"],
-                    JOB_STATUS_TTL_SECONDS,
-                )
-            ),
-            default_result_ttl_seconds=int(
-                _get_env_or_config(
-                    "NAQ_DEFAULT_RESULT_TTL",
-                    ["results", "ttl"],
-                    DEFAULT_RESULT_TTL_SECONDS,
-                )
-            ),
-            worker_ttl_seconds=int(
-                _get_env_or_config(
-                    "NAQ_WORKER_TTL", ["workers", "ttl"], DEFAULT_WORKER_TTL_SECONDS
-                )
-            ),
-            worker_heartbeat_interval_seconds=int(
-                _get_env_or_config(
-                    "NAQ_WORKER_HEARTBEAT_INTERVAL",
-                    ["workers", "heartbeat_interval"],
-                    DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
-                )
-            ),
-            default_ack_wait_seconds=int(
-                _get_env_or_config(
-                    "NAQ_DEFAULT_ACK_WAIT",
-                    ["queues", "ack_wait"],
-                    DEFAULT_ACK_WAIT_SECONDS,
-                )
-            ),
+            queue_name=cls._get_queue_config(),
+            job_serializer=cls._get_serialization_config(),
+            json_encoder=cls._get_json_encoder_config(),
+            json_decoder=cls._get_json_decoder_config(),
+            scheduler_lock_ttl_seconds=cls._get_scheduler_lock_ttl_config(),
+            scheduler_lock_renew_interval_seconds=cls._get_scheduler_lock_renew_interval_config(),
+            max_schedule_failures=cls._get_max_schedule_failures_config(),
+            job_status_ttl_seconds=cls._get_job_status_ttl_config(),
+            default_result_ttl_seconds=cls._get_default_result_ttl_config(),
+            worker_ttl_seconds=cls._get_worker_ttl_config(),
+            worker_heartbeat_interval_seconds=cls._get_worker_heartbeat_interval_config(),
+            default_ack_wait_seconds=cls._get_default_ack_wait_config(),
             ack_wait_per_queue=ACK_WAIT_PER_QUEUE,  # Already loaded from environment
             dependency_check_delay_seconds=DEPENDENCY_CHECK_DELAY_SECONDS,
-            log_level=_get_env_or_config(
-                "NAQ_LOG_LEVEL", ["logging", "level"], LOG_LEVEL
-            ),
-            log_to_file_enabled=(
-                _get_env_or_config(
-                    "NAQ_LOG_TO_FILE_ENABLED", ["logging", "to_file_enabled"], "false"
-                ).lower()
-                == "true"
-            )
-            if isinstance(
-                _get_env_or_config(
-                    "NAQ_LOG_TO_FILE_ENABLED", ["logging", "to_file_enabled"], "false"
-                ),
-                str,
-            )
-            else _get_env_or_config(
-                "NAQ_LOG_TO_FILE_ENABLED", ["logging", "to_file_enabled"], "false"
-            ),
-            log_file_path=_get_env_or_config(
-                "NAQ_LOG_FILE_PATH", ["logging", "file_path"], LOG_FILE_PATH
-            ),
-            events_enabled=(
-                _get_env_or_config(
-                    "NAQ_EVENTS_ENABLED", ["events", "enabled"], "False"
-                ).lower()
-                == "true"
-            )
-            if isinstance(
-                _get_env_or_config(
-                    "NAQ_EVENTS_ENABLED", ["events", "enabled"], "False"
-                ),
-                str,
-            )
-            else _get_env_or_config(
-                "NAQ_EVENTS_ENABLED", ["events", "enabled"], "False"
-            ),
-            events_batch_size=int(
-                _get_env_or_config(
-                    "NAQ_EVENTS_BATCH_SIZE",
-                    ["events", "batch_size"],
-                    EVENTS_BATCH_SIZE,
-                )
-            ),
-            events_flush_interval=float(
-                _get_env_or_config(
-                    "NAQ_EVENTS_FLUSH_INTERVAL",
-                    ["events", "flush_interval"],
-                    EVENTS_FLUSH_INTERVAL,
-                )
-            ),
-            events_max_buffer_size=int(
-                _get_env_or_config(
-                    "NAQ_EVENTS_MAX_BUFFER_SIZE",
-                    ["events", "max_buffer_size"],
-                    EVENTS_MAX_BUFFER_SIZE,
-                )
-            ),
-            events_stream_name=_get_env_or_config(
-                "NAQ_EVENTS_STREAM_NAME",
-                ["events", "stream"],
-                EVENTS_STREAM_NAME,
-            ),
+            log_level=cls._get_log_level_config(),
+            log_to_file_enabled=cls._get_log_to_file_enabled_config(),
+            log_file_path=cls._get_log_file_path_config(),
+            events_enabled=cls._get_events_enabled_config(),
+            events_batch_size=cls._get_events_batch_size_config(),
+            events_flush_interval=cls._get_events_flush_interval_config(),
+            events_max_buffer_size=cls._get_events_max_buffer_size_config(),
+            events_stream_name=cls._get_events_stream_name_config(),
+            pickle_debug_logging_enabled=cls._get_pickle_debug_logging_enabled_config(),
+            pickle_debug_logging_level=cls._get_pickle_debug_logging_level_config(),
+            pickle_debug_logging_include_objects=cls._get_pickle_debug_logging_include_objects_config(),
+            serialization_checksum_enabled=cls._get_serialization_checksum_enabled_config(),
+            serialization_checksum_algorithm=cls._get_serialization_checksum_algorithm_config(),
+            serialization_signature_key=cls._get_serialization_signature_key_config(),
+            serialization_max_size_bytes=cls._get_serialization_max_size_bytes_config(),
         )
+
+    @classmethod
+    def _get_queue_config(cls) -> Any:
+        """Get queue configuration from environment or config."""
+        return _get_env_or_config("NAQ_DEFAULT_QUEUE", ["queues", "default_name"])
+
+    @classmethod
+    def _get_serialization_config(cls) -> Any:
+        """Get job serialization configuration from environment or config."""
+        return _get_env_or_config("NAQ_JOB_SERIALIZER", ["serialization", "method"])
+
+    @classmethod
+    def _get_json_encoder_config(cls) -> Any:
+        """Get JSON encoder configuration from environment or config."""
+        return _get_env_or_config("NAQ_JSON_ENCODER", ["serialization", "json_encoder"])
+
+    @classmethod
+    def _get_json_decoder_config(cls) -> Any:
+        """Get JSON decoder configuration from environment or config."""
+        return _get_env_or_config("NAQ_JSON_DECODER", ["serialization", "json_decoder"])
+
+    @classmethod
+    def _get_scheduler_lock_ttl_config(cls) -> int:
+        """Get scheduler lock TTL configuration from environment or config."""
+        return int(
+            _get_env_or_config(
+                "NAQ_SCHEDULER_LOCK_TTL",
+                ["scheduler_service", "lock_ttl"],
+                "30",
+            )
+        )
+
+    @classmethod
+    def _get_scheduler_lock_renew_interval_config(cls) -> int:
+        """Get scheduler lock renew interval configuration from environment or config."""
+        return int(
+            _get_env_or_config(
+                "NAQ_SCHEDULER_LOCK_RENEW_INTERVAL",
+                ["scheduler_service", "lock_renew_interval"],
+                "15",
+            )
+        )
+
+    @classmethod
+    def _get_max_schedule_failures_config(cls) -> Optional[int]:
+        """Get maximum schedule failures configuration from environment or config."""
+        max_failures = _get_env_or_config(
+            "NAQ_MAX_SCHEDULE_FAILURES", ["scheduler_service", "max_failures"]
+        )
+        # Handle empty string as None
+        if max_failures is not None and max_failures != "":
+            try:
+                return int(max_failures)
+            except ValueError:
+                raise ConfigurationError(
+                    f"Invalid NAQ_MAX_SCHEDULE_FAILURES value '{max_failures}'. Must be an integer or None."
+                )
+        else:
+            # Default to a reasonable limit, e.g., 5, or None for infinite
+            return 5
+
+    @classmethod
+    def _get_job_status_ttl_config(cls) -> int:
+        """Get job status TTL configuration from environment or config."""
+        return int(
+            _get_env_or_config(
+                "NAQ_JOB_STATUS_TTL",
+                ["scheduler_service", "job_status_ttl"],
+                JOB_STATUS_TTL_SECONDS,
+            )
+        )
+
+    @classmethod
+    def _get_default_result_ttl_config(cls) -> int:
+        """Get default result TTL configuration from environment or config."""
+        return int(
+            _get_env_or_config(
+                "NAQ_DEFAULT_RESULT_TTL",
+                ["results", "ttl"],
+                DEFAULT_RESULT_TTL_SECONDS,
+            )
+        )
+
+    @classmethod
+    def _get_worker_ttl_config(cls) -> int:
+        """Get worker TTL configuration from environment or config."""
+        return int(
+            _get_env_or_config(
+                "NAQ_WORKER_TTL", ["workers", "ttl"], DEFAULT_WORKER_TTL_SECONDS
+            )
+        )
+
+    @classmethod
+    def _get_worker_heartbeat_interval_config(cls) -> int:
+        """Get worker heartbeat interval configuration from environment or config."""
+        return int(
+            _get_env_or_config(
+                "NAQ_WORKER_HEARTBEAT_INTERVAL",
+                ["workers", "heartbeat_interval"],
+                DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
+            )
+        )
+
+    @classmethod
+    def _get_default_ack_wait_config(cls) -> int:
+        """Get default ack wait configuration from environment or config."""
+        return int(
+            _get_env_or_config(
+                "NAQ_DEFAULT_ACK_WAIT",
+                ["queues", "ack_wait"],
+                DEFAULT_ACK_WAIT_SECONDS,
+            )
+        )
+
+    @classmethod
+    def _get_log_level_config(cls) -> Any:
+        """Get log level configuration from environment or config."""
+        return _get_env_or_config("NAQ_LOG_LEVEL", ["logging", "level"], LOG_LEVEL)
+
+    @classmethod
+    def _get_log_to_file_enabled_config(cls) -> Any:
+        """Get log to file enabled configuration from environment or config."""
+        log_to_file_enabled = _get_env_or_config(
+            "NAQ_LOG_TO_FILE_ENABLED", ["logging", "to_file_enabled"], "false"
+        )
+        if isinstance(log_to_file_enabled, str):
+            return log_to_file_enabled.lower() == "true"
+        return log_to_file_enabled
+
+    @classmethod
+    def _get_log_file_path_config(cls) -> Any:
+        """Get log file path configuration from environment or config."""
+        return _get_env_or_config(
+            "NAQ_LOG_FILE_PATH", ["logging", "file_path"], LOG_FILE_PATH
+        )
+
+    @classmethod
+    def _get_events_enabled_config(cls) -> Any:
+        """Get events enabled configuration from environment or config."""
+        events_enabled = _get_env_or_config(
+            "NAQ_EVENTS_ENABLED", ["events", "enabled"], "False"
+        )
+        if isinstance(events_enabled, str):
+            return events_enabled.lower() == "true"
+        return events_enabled
+
+    @classmethod
+    def _get_events_batch_size_config(cls) -> int:
+        """Get events batch size configuration from environment or config."""
+        return int(
+            _get_env_or_config(
+                "NAQ_EVENTS_BATCH_SIZE",
+                ["events", "batch_size"],
+                EVENTS_BATCH_SIZE,
+            )
+        )
+
+    @classmethod
+    def _get_events_flush_interval_config(cls) -> float:
+        """Get events flush interval configuration from environment or config."""
+        return float(
+            _get_env_or_config(
+                "NAQ_EVENTS_FLUSH_INTERVAL",
+                ["events", "flush_interval"],
+                EVENTS_FLUSH_INTERVAL,
+            )
+        )
+
+    @classmethod
+    def _get_events_max_buffer_size_config(cls) -> int:
+        """Get events max buffer size configuration from environment or config."""
+        return int(
+            _get_env_or_config(
+                "NAQ_EVENTS_MAX_BUFFER_SIZE",
+                ["events", "max_buffer_size"],
+                EVENTS_MAX_BUFFER_SIZE,
+            )
+        )
+
+    @classmethod
+    def _get_events_stream_name_config(cls) -> Any:
+        """Get events stream name configuration from environment or config."""
+        return _get_env_or_config(
+            "NAQ_EVENTS_STREAM_NAME",
+            ["events", "stream"],
+            EVENTS_STREAM_NAME,
+        )
+
+    @classmethod
+    def _get_pickle_debug_logging_enabled_config(cls) -> bool:
+        """Get pickle debug logging enabled configuration from environment or config."""
+        enabled = _get_env_or_config(
+            "NAQ_PICKLE_DEBUG_LOGGING_ENABLED",
+            ["serialization", "pickle_debug_logging_enabled"],
+            "False"
+        )
+        if isinstance(enabled, str):
+            return enabled.lower() == "true"
+        return enabled
+
+    @classmethod
+    def _get_pickle_debug_logging_level_config(cls) -> str:
+        """Get pickle debug logging level configuration from environment or config."""
+        level = _get_env_or_config(
+            "NAQ_PICKLE_DEBUG_LOGGING_LEVEL",
+            ["serialization", "pickle_debug_logging_level"],
+            "DEBUG"
+        )
+        return level.upper() if level is not None else "DEBUG"
+
+    @classmethod
+    def _get_pickle_debug_logging_include_objects_config(cls) -> bool:
+        """Get pickle debug logging include objects configuration from environment or config."""
+        include_objects = _get_env_or_config(
+            "NAQ_PICKLE_DEBUG_LOGGING_INCLUDE_OBJECTS",
+            ["serialization", "pickle_debug_logging_include_objects"],
+            "True"
+        )
+        if isinstance(include_objects, str):
+            return include_objects.lower() == "true"
+        return include_objects
+
+    @classmethod
+    def _get_serialization_checksum_enabled_config(cls) -> bool:
+        """Get serialization checksum enabled configuration from environment or config."""
+        enabled = _get_env_or_config(
+            "NAQ_SERIALIZATION_CHECKSUM_ENABLED",
+            ["serialization", "checksum_enabled"],
+            "False"
+        )
+        if isinstance(enabled, str):
+            return enabled.lower() == "true"
+        return enabled
+
+    @classmethod
+    def _get_serialization_checksum_algorithm_config(cls) -> str:
+        """Get serialization checksum algorithm configuration from environment or config."""
+        return _get_env_or_config(
+            "NAQ_SERIALIZATION_CHECKSUM_ALGORITHM",
+            ["serialization", "checksum_algorithm"],
+            "sha256"
+        )
+
+    @classmethod
+    def _get_serialization_signature_key_config(cls) -> Optional[str]:
+        """Get serialization signature key configuration from environment or config."""
+        return _get_env_or_config(
+            "NAQ_SERIALIZATION_SIGNATURE_KEY",
+            ["serialization", "signature_key"],
+            None
+        )
+
+    @classmethod
+    def _get_serialization_max_size_bytes_config(cls) -> int:
+        """Get serialization max size bytes configuration from environment or config."""
+        max_size = _get_env_or_config(
+            "NAQ_SERIALIZATION_MAX_SIZE_BYTES",
+            ["serialization", "max_size_bytes"],
+            "10485760"  # 10MB
+        )
+        # Handle empty string as None
+        if max_size is not None and max_size != "":
+            try:
+                max_size = int(max_size)
+                if max_size < 0:
+                    max_size = 0  # 0 means no limit
+                return max_size
+            except ValueError:
+                raise ConfigurationError(
+                    f"Invalid NAQ_SERIALIZATION_MAX_SIZE_BYTES value '{max_size}'. Must be a non-negative integer."
+                )
+        else:
+            return 10485760  # Default to 10MB
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "Config":
@@ -724,6 +1036,13 @@ class Config:
             "events_flush_interval": self.events_flush_interval,
             "events_max_buffer_size": self.events_max_buffer_size,
             "events_stream_name": self.events_stream_name,
+            "pickle_debug_logging_enabled": self.pickle_debug_logging_enabled,
+            "pickle_debug_logging_level": self.pickle_debug_logging_level,
+            "pickle_debug_logging_include_objects": self.pickle_debug_logging_include_objects,
+            "serialization_checksum_enabled": self.serialization_checksum_enabled,
+            "serialization_checksum_algorithm": self.serialization_checksum_algorithm,
+            "serialization_signature_key": self.serialization_signature_key,
+            "serialization_max_size_bytes": self.serialization_max_size_bytes,
         }
 
 
