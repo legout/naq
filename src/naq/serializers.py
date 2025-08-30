@@ -890,8 +890,11 @@ class PickleSerializer:
                 traceback=payload.get("traceback"),
             )
             
-            # Mark the job as failed
-            job.status = "failed"
+            # Mark the job as failed by setting the appropriate fields
+            # The status property is derived from _start_time, _finish_time, and error
+            job._start_time = time.time()
+            job._finish_time = time.time()
+            # error is already set above
             
             return job
         except Exception as e:
@@ -1344,6 +1347,58 @@ class JsonSerializer:
         except Exception as e:
             raise SerializationError(
                 f"Unexpected error during JSON result serialization: {e}"
+            ) from e
+
+    @staticmethod
+    def deserialize_failed_job(data: bytes) -> Job:
+        """Deserialize bytes to a failed job using JSON."""
+        _, Decoder = JsonSerializer._get_json_hooks()
+        try:
+            # Check if data contains integrity metadata
+            if SERIALIZATION_CHECKSUM_ENABLED:
+                try:
+                    integrity_metadata = json.loads(data.decode("utf-8"), cls=Decoder)
+                    if isinstance(integrity_metadata, dict) and "data" in integrity_metadata:
+                        # Verify integrity and extract original data
+                        data = _verify_integrity_metadata(integrity_metadata, for_json=True)
+                except (SerializationError, KeyError, TypeError):
+                    # If integrity check fails or metadata is invalid, proceed with original data
+                    # This maintains backward compatibility with data serialized without integrity checks
+                    pass
+            
+            payload = json.loads(data.decode("utf-8"), cls=Decoder)
+            
+            # Validate the deserialized payload before processing
+            _validate_deserialized_failed_job_payload(payload, "json")
+            
+            # Create a failed job with the deserialized data
+            # Note: We can't reconstruct the original function, args, and kwargs
+            # since we only stored their representations in serialize_failed_job
+            job = Job(
+                function=lambda: None,  # Placeholder function
+                args=(),                # Empty args
+                kwargs={},              # Empty kwargs
+                job_id=payload.get("job_id"),
+                enqueue_time=payload.get("enqueue_time"),
+                queue_name=payload.get("queue_name"),
+                max_retries=payload.get("max_retries", 0),
+                retry_delay=payload.get("retry_delay", 0),
+                error=payload.get("error"),
+                traceback=payload.get("traceback"),
+            )
+            
+            # Mark the job as failed by setting the appropriate fields
+            # The status property is derived from _start_time, _finish_time, and error
+            job._start_time = time.time()
+            job._finish_time = time.time()
+            # error is already set above
+            
+            return job
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise SerializationError(f"Failed to parse JSON failed job: {e}") from e
+        except Exception as e:
+            raise SerializationError(
+                f"Unexpected error during JSON failed job parsing: {e}"
             ) from e
 
     @staticmethod
