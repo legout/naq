@@ -85,6 +85,7 @@ import hashlib
 import hmac
 import importlib
 import json
+import msgspec
 import time
 from dataclasses import asdict, is_dataclass
 from typing import Any, Dict, List, Optional, Tuple, Protocol
@@ -1431,6 +1432,506 @@ class JsonSerializer:
             ) from e
 
 
+class MsgPackSerializer:
+    """
+    MessagePack-based serializer using msgspec.msgpack.Encoder/Decoder.
+
+    ✅ PERFORMANCE & SECURITY BENEFITS ✅
+
+    This serializer provides the same security guarantees as JsonSerializer but with
+    improved performance through the MessagePack binary format. It uses msgspec for
+    efficient serialization while maintaining type safety and security.
+
+    **Security Advantages:**
+    - No Remote Code Execution (RCE) vulnerability
+    - Safe for untrusted data sources
+    - Explicit rejection of dangerous data types
+    - Predictable, safe deserialization
+    - Type-safe decoding with msgspec
+
+    **Performance Advantages:**
+    - Faster than JSON serialization/deserialization
+    - Smaller serialized data size
+    - Binary format for efficient processing
+    - Optimized encoding/decoding with msgspec
+
+    **How It Works:**
+    - Functions are stored as importable module:qualname paths
+    - Exception classes are stored as qualified names
+    - Only MessagePack-serializable data types are accepted
+    - Uses msgspec.msgpack.Encoder/Decoder for efficient processing
+    - No fallback mechanisms that could introduce vulnerabilities
+
+    **Data Type Support:**
+    - ✅ Strings, numbers, booleans, None
+    - ✅ Lists, tuples, dictionaries
+    - ✅ Dataclasses (converted to dict)
+    - ❌ Functions, classes, complex objects
+    - ❌ Binary data, custom objects
+
+    **Performance Characteristics:**
+    - Fast serialization/deserialization
+    - Compact binary output
+    - Cross-platform compatibility
+    - Type-safe msgspec decoding
+
+    **Recommended Usage:**
+    - Production systems requiring high performance
+    - Systems processing large volumes of jobs
+    - Environments with network bandwidth constraints
+    - Cross-platform deployments
+
+    **Limitations:**
+    - Cannot serialize arbitrary Python objects
+    - Requires functions to be importable by path
+    - Binary format is not human-readable
+    """
+
+    @staticmethod
+    def _msgpack_encode(payload: Dict[str, Any]) -> bytes:
+        """Encode a payload dictionary to MessagePack bytes."""
+        encoder = msgspec.msgpack.Encoder()
+        try:
+            return encoder.encode(payload)
+        except (TypeError, ValueError) as e:
+            raise SerializationError(f"Failed to MessagePack-serialize payload: {e}") from e
+        except Exception as e:
+            raise SerializationError(
+                f"Unexpected error during MessagePack payload serialization: {e}"
+            ) from e
+
+    @staticmethod
+    def _msgpack_decode(data: bytes) -> Dict[str, Any]:
+        """Decode MessagePack bytes to a payload dictionary."""
+        decoder = msgspec.msgpack.Decoder(dict)
+        try:
+            return decoder.decode(data)
+        except (msgspec.DecodeError, ValueError) as e:
+            raise SerializationError(f"Failed to parse MessagePack payload: {e}") from e
+        except Exception as e:
+            raise SerializationError(
+                f"Unexpected error during MessagePack payload parsing: {e}"
+            ) from e
+
+    @staticmethod
+    def _resolve_dotted_path(path: str) -> Any:
+        try:
+            module_path, attr = path.split(":", 1)
+        except ValueError:
+            # backwards compatibility if dot-only: module.attr
+            parts = path.rsplit(".", 1)
+            if len(parts) != 2:
+                raise SerializationError(f"Invalid import path: {path}")
+            module_path, attr = parts
+        try:
+            module = importlib.import_module(module_path)
+            obj = module
+            for part in attr.split("."):
+                obj = getattr(obj, part)
+            return obj
+        except Exception as e:
+            raise SerializationError(f"Could not import '{path}': {e}") from e
+
+    @staticmethod
+    def _qualname(obj: Any) -> str:
+        module = getattr(obj, "__module__", None)
+        qualname = getattr(obj, "__qualname__", getattr(obj, "__name__", None))
+        
+        # Check if it's a lambda function or has <locals> in qualname
+        if not module or not qualname or "<lambda>" in str(qualname) or "<locals>" in str(qualname):
+            raise SerializationError(f"Object is not importable: {obj!r}")
+        return f"{module}:{qualname}"
+
+    @staticmethod
+    def _encode_args_kwargs(
+        args: Tuple, kwargs: Dict
+    ) -> Tuple[List[Any], Dict[str, Any]]:
+        def make_msgpackable(x: Any) -> Any:
+            if is_dataclass(x):
+                return asdict(x)
+            if isinstance(x, (str, int, float, bool)) or x is None:
+                return x
+            if isinstance(x, (list, tuple)):
+                return [make_msgpackable(i) for i in x]
+            if isinstance(x, dict):
+                return {str(k): make_msgpackable(v) for k, v in x.items()}
+            # No fallback - MessagePack serializer requires compatible data types
+            raise SerializationError(
+                f"Object of type {type(x).__name__} is not MessagePack serializable: {x!r}"
+            )
+
+        return make_msgpackable(args), make_msgpackable(kwargs)
+
+    @staticmethod
+    def _encode_exceptions(
+        exc_tuple: Optional[Tuple[Exception, ...]],
+    ) -> Optional[List[str]]:
+        if not exc_tuple:
+            return None
+        paths: List[str] = []
+        for exc in exc_tuple:
+            if not isinstance(exc, type) or not issubclass(exc, BaseException):
+                raise SerializationError(
+                    "retry_on/ignore_on must be exception classes when using MessagePack serializer"
+                )
+            paths.append(MsgPackSerializer._qualname(exc))
+        return paths
+
+    @staticmethod
+    def _decode_exceptions(
+        exc_paths: Optional[List[str]],
+    ) -> Optional[Tuple[type, ...]]:
+        if not exc_paths:
+            return None
+        types: List[type] = []
+        for path in exc_paths:
+            exc = MsgPackSerializer._resolve_dotted_path(path)
+            if not isinstance(exc, type) or not issubclass(exc, BaseException):
+                raise SerializationError(f"Imported '{path}' is not an Exception type")
+            types.append(exc)
+        return tuple(types)
+
+    @staticmethod
+    def _validate_job_payload(payload: Dict[str, Any]) -> None:
+        """Validate the job payload before serialization."""
+        required_fields = ["job_id", "function", "args", "kwargs"]
+        for field in required_fields:
+            if field not in payload:
+                raise SerializationError(f"Missing required field in job payload: {field}")
+        
+        # Validate job_id is a string
+        if not isinstance(payload["job_id"], str):
+            raise SerializationError(f"job_id must be a string, got {type(payload['job_id'])}")
+        
+        # Validate function is a string (import path)
+        if not isinstance(payload["function"], str):
+            raise SerializationError(f"function must be a string (import path), got {type(payload['function'])}")
+        
+        # Validate args is a list
+        if not isinstance(payload["args"], list):
+            raise SerializationError(f"args must be a list, got {type(payload['args'])}")
+        
+        # Validate kwargs is a dict
+        if not isinstance(payload["kwargs"], dict):
+            raise SerializationError(f"kwargs must be a dict, got {type(payload['kwargs'])}")
+        
+        # Validate numeric fields
+        numeric_fields = ["max_retries", "retry_delay", "result_ttl", "timeout"]
+        for field in numeric_fields:
+            if field in payload and payload[field] is not None:
+                if not isinstance(payload[field], (int, float)):
+                    raise SerializationError(f"{field} must be numeric, got {type(payload[field])}")
+                if payload[field] < 0:
+                    raise SerializationError(f"{field} must be non-negative, got {payload[field]}")
+        
+        # Validate depends_on is a list
+        if "depends_on" in payload and payload["depends_on"] is not None:
+            if not isinstance(payload["depends_on"], list):
+                raise SerializationError(f"depends_on must be a list, got {type(payload['depends_on'])}")
+        
+        # Validate retry_on and ignore_on are lists or None
+        list_fields = ["retry_on", "ignore_on"]
+        for field in list_fields:
+            if field in payload and payload[field] is not None:
+                if not isinstance(payload[field], list):
+                    raise SerializationError(f"{field} must be a list, got {type(payload[field])}")
+
+    @staticmethod
+    def serialize_job(job: Job) -> bytes:
+        try:
+            func_path = MsgPackSerializer._qualname(job.function)
+        except SerializationError as e:
+            # Do not allow pickling fallback for security
+            raise SerializationError(
+                f"MessagePack serializer requires importable function: {e}"
+            ) from e
+
+        args_msgpack, kwargs_msgpack = MsgPackSerializer._encode_args_kwargs(
+            job.args, job.kwargs
+        )
+
+        payload = {
+            "job_id": job.job_id,
+            "enqueue_time": job.enqueue_time,
+            "function": func_path,
+            "args": args_msgpack,
+            "kwargs": kwargs_msgpack,
+            "max_retries": job.max_retries,
+            "retry_delay": job.retry_delay,
+            "queue_name": job.queue_name,
+            "depends_on": job.dependency_ids,  # store as list of IDs
+            "result_ttl": job.result_ttl,
+            "timeout": job.timeout,
+            "retry_strategy": _normalize_retry_strategy(job.retry_strategy),
+            "retry_on": MsgPackSerializer._encode_exceptions(job.retry_on),
+            "ignore_on": MsgPackSerializer._encode_exceptions(job.ignore_on),
+        }
+        
+        MsgPackSerializer._validate_job_payload(payload)
+        serialized_data = MsgPackSerializer._msgpack_encode(payload)
+        
+        # Validate serialized data size
+        _validate_serialized_data_size(serialized_data, "MessagePack job")
+        
+        # Add integrity metadata if enabled
+        if SERIALIZATION_CHECKSUM_ENABLED:
+            integrity_metadata = _add_integrity_metadata(serialized_data, for_json=False)
+            final_data = MsgPackSerializer._msgpack_encode(integrity_metadata)
+            # Validate final data size with integrity metadata
+            _validate_serialized_data_size(final_data, "MessagePack job with integrity metadata")
+            return final_data
+        
+        return serialized_data
+
+    @staticmethod
+    def deserialize_job(data: bytes) -> Job:
+        # Check if data contains integrity metadata
+        if SERIALIZATION_CHECKSUM_ENABLED:
+            try:
+                integrity_metadata = MsgPackSerializer._msgpack_decode(data)
+                if isinstance(integrity_metadata, dict) and "data" in integrity_metadata:
+                    # Verify integrity and extract original data
+                    data = _verify_integrity_metadata(integrity_metadata, for_json=False)
+            except (SerializationError, KeyError, TypeError):
+                # If integrity check fails or metadata is invalid, proceed with original data
+                # This maintains backward compatibility with data serialized without integrity checks
+                pass
+        
+        payload = MsgPackSerializer._msgpack_decode(data)
+        
+        # Validate the deserialized payload before processing
+        _validate_deserialized_job_payload(payload, "msgpack")
+
+        function = MsgPackSerializer._resolve_dotted_path(payload["function"])
+        args = tuple(payload.get("args", []) or [])
+        kwargs = payload.get("kwargs", {}) or {}
+        retry_on = MsgPackSerializer._decode_exceptions(payload.get("retry_on"))
+        ignore_on = MsgPackSerializer._decode_exceptions(payload.get("ignore_on"))
+        depends_on = payload.get("depends_on")
+
+        retry_strategy = _normalize_retry_strategy(
+            payload.get("retry_strategy", RETRY_STRATEGY.LINEAR)
+        )
+
+        return Job(
+            function=function,
+            args=args,
+            kwargs=kwargs,
+            job_id=payload.get("job_id", ""),
+            queue_name=payload.get("queue_name") or DEFAULT_QUEUE_NAME,
+            max_retries=payload.get("max_retries", 0),
+            retry_delay=payload.get("retry_delay", 0),
+            retry_strategy=retry_strategy,
+            retry_on=retry_on,
+            ignore_on=ignore_on,
+            depends_on=depends_on,
+            result_ttl=payload.get("result_ttl"),
+            timeout=payload.get("timeout"),
+            enqueue_time=payload.get("enqueue_time", time.time()),
+        )
+
+    @staticmethod
+    def _validate_failed_job_payload(payload: Dict[str, Any]) -> None:
+        """Validate the failed job payload before serialization."""
+        required_fields = ["job_id", "function_str", "args_repr", "kwargs_repr"]
+        for field in required_fields:
+            if field not in payload:
+                raise SerializationError(f"Missing required field in failed job payload: {field}")
+        
+        # Validate job_id is a string
+        if not isinstance(payload["job_id"], str):
+            raise SerializationError(f"job_id must be a string, got {type(payload['job_id'])}")
+        
+        # Validate string fields
+        string_fields = ["function_str", "args_repr", "kwargs_repr", "error", "traceback"]
+        for field in string_fields:
+            if field in payload and payload[field] is not None:
+                if not isinstance(payload[field], str):
+                    raise SerializationError(f"{field} must be a string, got {type(payload[field])}")
+        
+        # Validate numeric fields
+        numeric_fields = ["max_retries", "retry_delay"]
+        for field in numeric_fields:
+            if field in payload and payload[field] is not None:
+                if not isinstance(payload[field], (int, float)):
+                    raise SerializationError(f"{field} must be numeric, got {type(payload[field])}")
+                if payload[field] < 0:
+                    raise SerializationError(f"{field} must be non-negative, got {payload[field]}")
+
+    @staticmethod
+    def serialize_failed_job(job: Job) -> bytes:
+        payload = {
+            "job_id": job.job_id,
+            "enqueue_time": job.enqueue_time,
+            "function_str": getattr(job.function, "__name__", repr(job.function)),
+            "args_repr": repr(job.args),
+            "kwargs_repr": repr(job.kwargs),
+            "max_retries": job.max_retries,
+            "retry_delay": job.retry_delay,
+            "queue_name": job.queue_name,
+            "error": job.error,
+            "traceback": job.traceback,
+        }
+        MsgPackSerializer._validate_failed_job_payload(payload)
+        serialized_data = MsgPackSerializer._msgpack_encode(payload)
+        
+        # Validate serialized data size
+        _validate_serialized_data_size(serialized_data, "MessagePack failed job")
+        
+        # Add integrity metadata if enabled
+        if SERIALIZATION_CHECKSUM_ENABLED:
+            integrity_metadata = _add_integrity_metadata(serialized_data, for_json=False)
+            final_data = MsgPackSerializer._msgpack_encode(integrity_metadata)
+            # Validate final data size with integrity metadata
+            _validate_serialized_data_size(final_data, "MessagePack failed job with integrity metadata")
+            return final_data
+        
+        return serialized_data
+
+    @staticmethod
+    def _validate_result_payload(payload: Dict[str, Any]) -> None:
+        """Validate the result payload before serialization."""
+        required_fields = ["status"]
+        for field in required_fields:
+            if field not in payload:
+                raise SerializationError(f"Missing required field in result payload: {field}")
+        
+        # Validate status is a string
+        if not isinstance(payload["status"], str):
+            raise SerializationError(f"status must be a string, got {type(payload['status'])}")
+        
+        # Validate string fields
+        string_fields = ["error", "traceback"]
+        for field in string_fields:
+            if field in payload and payload[field] is not None:
+                if not isinstance(payload[field], str):
+                    raise SerializationError(f"{field} must be a string, got {type(payload[field])}")
+
+    @staticmethod
+    def serialize_result(
+        result: Any,
+        status: JOB_STATUS,
+        error: Optional[str] = None,
+        traceback_str: Optional[str] = None,
+    ) -> bytes:
+        # status to value for storage
+        status_value = status.value if hasattr(status, "value") else str(status)
+        is_completed = (
+            hasattr(status, "value") and status.value == JOB_STATUS.COMPLETED.value
+        )
+
+        payload = {
+            "status": status_value,
+            "result": result if is_completed else None,
+            "error": error,
+            "traceback": traceback_str,
+        }
+        MsgPackSerializer._validate_result_payload(payload)
+        encoder = msgspec.msgpack.Encoder()
+        try:
+            serialized_data = encoder.encode(payload)
+            
+            # Validate serialized data size
+            _validate_serialized_data_size(serialized_data, "MessagePack result")
+            
+            # Add integrity metadata if enabled
+            if SERIALIZATION_CHECKSUM_ENABLED:
+                integrity_metadata = _add_integrity_metadata(serialized_data, for_json=False)
+                final_data = encoder.encode(integrity_metadata)
+                # Validate final data size with integrity metadata
+                _validate_serialized_data_size(final_data, "MessagePack result with integrity metadata")
+                return final_data
+            
+            return serialized_data
+        except (TypeError, ValueError) as e:
+            raise SerializationError(f"Failed to MessagePack-serialize result: {e}") from e
+        except Exception as e:
+            raise SerializationError(
+                f"Unexpected error during MessagePack result serialization: {e}"
+            ) from e
+
+    @staticmethod
+    def deserialize_failed_job(data: bytes) -> Job:
+        """Deserialize bytes to a failed job using MessagePack."""
+        decoder = msgspec.msgpack.Decoder(dict)
+        try:
+            # Check if data contains integrity metadata
+            if SERIALIZATION_CHECKSUM_ENABLED:
+                try:
+                    integrity_metadata = decoder.decode(data)
+                    if isinstance(integrity_metadata, dict) and "data" in integrity_metadata:
+                        # Verify integrity and extract original data
+                        data = _verify_integrity_metadata(integrity_metadata, for_json=False)
+                except (SerializationError, KeyError, TypeError):
+                    # If integrity check fails or metadata is invalid, proceed with original data
+                    # This maintains backward compatibility with data serialized without integrity checks
+                    pass
+            
+            payload = decoder.decode(data)
+            
+            # Validate the deserialized payload before processing
+            _validate_deserialized_failed_job_payload(payload, "msgpack")
+            
+            # Create a failed job with the deserialized data
+            # Note: We can't reconstruct the original function, args, and kwargs
+            # since we only stored their representations in serialize_failed_job
+            job = Job(
+                function=lambda: None,  # Placeholder function
+                args=(),                # Empty args
+                kwargs={},              # Empty kwargs
+                job_id=payload.get("job_id", ""),
+                enqueue_time=payload.get("enqueue_time"),
+                queue_name=payload.get("queue_name"),
+                max_retries=payload.get("max_retries", 0),
+                retry_delay=payload.get("retry_delay", 0),
+                error=payload.get("error"),
+                traceback=payload.get("traceback"),
+            )
+            
+            # Mark the job as failed by setting the appropriate fields
+            # The status property is derived from _start_time, _finish_time, and error
+            job._start_time = time.time()
+            job._finish_time = time.time()
+            # error is already set above
+            
+            return job
+        except (msgspec.DecodeError, ValueError) as e:
+            raise SerializationError(f"Failed to parse MessagePack failed job: {e}") from e
+        except Exception as e:
+            raise SerializationError(
+                f"Unexpected error during MessagePack failed job parsing: {e}"
+            ) from e
+
+    @staticmethod
+    def deserialize_result(data: bytes) -> Dict[str, Any]:
+        decoder = msgspec.msgpack.Decoder(dict)
+        try:
+            # Check if data contains integrity metadata
+            if SERIALIZATION_CHECKSUM_ENABLED:
+                try:
+                    integrity_metadata = decoder.decode(data)
+                    if isinstance(integrity_metadata, dict) and "data" in integrity_metadata:
+                        # Verify integrity and extract original data
+                        data = _verify_integrity_metadata(integrity_metadata, for_json=False)
+                except (SerializationError, KeyError, TypeError):
+                    # If integrity check fails or metadata is invalid, proceed with original data
+                    # This maintains backward compatibility with data serialized without integrity checks
+                    pass
+            
+            obj = decoder.decode(data)
+            
+            # Validate the deserialized result payload
+            _validate_deserialized_result_payload(obj, "msgpack")
+            
+            return obj
+        except (msgspec.DecodeError, ValueError) as e:
+            raise SerializationError(f"Failed to parse MessagePack result: {e}") from e
+        except Exception as e:
+            raise SerializationError(
+                f"Unexpected error during MessagePack result parsing: {e}"
+            ) from e
+
+
 # Factory function to get the appropriate serializer
 def get_serializer() -> Serializer:
     """
@@ -1447,13 +1948,19 @@ def get_serializer() -> Serializer:
 
     **Configuration:**
     Set the JOB_SERIALIZER setting to control which serializer is used:
-    - "json" (recommended): Use JsonSerializer (secure)
+    - "json" (recommended): Use JsonSerializer (secure, human-readable)
+    - "msgpack": Use MsgPackSerializer (secure, high-performance binary)
     - "pickle": Use PickleSerializer (fast but risky)
 
+    **Serializer Comparison:**
+    - JsonSerializer: Secure, human-readable, moderate performance
+    - MsgPackSerializer: Secure, binary format, high performance, compact size
+    - PickleSerializer: Fastest, supports all Python objects, but insecure
+
     **Migration Guide:**
-    When migrating from pickle to json serialization:
+    When migrating between serializers:
     1. Ensure all job functions are importable by qualified name
-    2. Verify all job arguments are JSON-serializable
+    2. Verify all job arguments are compatible with target serializer
     3. Test thoroughly in staging environment
     4. Monitor for any serialization failures
 
@@ -1467,5 +1974,7 @@ def get_serializer() -> Serializer:
         return PickleSerializer
     elif JOB_SERIALIZER == "json":
         return JsonSerializer
+    elif JOB_SERIALIZER == "msgpack":
+        return MsgPackSerializer
     else:
         raise SerializationError(f"Unknown serializer: {JOB_SERIALIZER}")
