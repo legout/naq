@@ -20,7 +20,8 @@ from nats.js.api import ConsumerConfig
 
 from ..exceptions import NaqException
 from ..models.enums import WORKER_STATUS
-from ..service_context import long_lived_service_context
+
+# Import long_lived_service_context lazily to avoid circular imports
 from ..services import (
     ConnectionService,
     EventService,
@@ -376,6 +377,9 @@ class Worker:
                         "Entering long_lived_service_context",
                         available_services=self._service_manager.get_service_names(),
                     )
+                    # Import here to avoid circular imports
+                    from ..service_context import long_lived_service_context
+
                     async with long_lived_service_context(
                         self._service_manager,
                         logger_name=f"naq.worker.core.{self.worker_id}",

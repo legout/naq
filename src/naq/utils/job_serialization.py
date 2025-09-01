@@ -9,7 +9,7 @@ import dependencies between the models.jobs and serializers modules.
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..models.enums import JOB_STATUS
-from ..models.jobs import Job
+from ..models.jobs import Job, JobResult
 from ..serializers import get_serializer
 
 
@@ -86,7 +86,7 @@ def serialize_result(
     error information, for storage in the result backend.
     """
     serializer = get_serializer()
-    return serializer.serialize_result(result, status.value, error, traceback_str)
+    return serializer.serialize_result(result, status, error, traceback_str)
 
 
 def deserialize_result(data: bytes) -> Dict[str, Any]:

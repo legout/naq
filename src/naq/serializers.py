@@ -79,6 +79,7 @@ export NAQ_SERIALIZATION_SIGNATURE_KEY="your-secret-key"
 - Serialized data without integrity metadata can still be deserialized
 - Graceful fallback ensures compatibility with existing deployments
 """
+
 import base64
 import cloudpickle
 import hashlib
@@ -92,7 +93,7 @@ from typing import Any, Dict, List, Optional, Tuple, Protocol
 
 from .exceptions import SerializationError
 from .models.enums import JOB_STATUS, RETRY_STRATEGY
-from .models.jobs import Job
+from .models.jobs import Job, JobResult
 from .settings import (
     DEFAULT_QUEUE_NAME,
     JOB_SERIALIZER,
@@ -123,14 +124,14 @@ def _normalize_retry_strategy(retry_strategy: Any) -> str:
 def _calculate_checksum(data: bytes, algorithm: str = "sha256") -> str:
     """
     Calculate a checksum for the given data using the specified algorithm.
-    
+
     Args:
         data: The data to calculate the checksum for
         algorithm: The hash algorithm to use (e.g., "md5", "sha256", "sha512")
-        
+
     Returns:
         The hexadecimal digest of the checksum
-        
+
     Raises:
         SerializationError: If the algorithm is not supported
     """
@@ -144,36 +145,38 @@ def _calculate_checksum(data: bytes, algorithm: str = "sha256") -> str:
 def _calculate_signature(data: bytes, key: str, algorithm: str = "sha256") -> str:
     """
     Calculate an HMAC signature for the given data using the specified key and algorithm.
-    
+
     Args:
         data: The data to calculate the signature for
         key: The secret key to use for the signature
         algorithm: The hash algorithm to use (e.g., "md5", "sha256", "sha512")
-        
+
     Returns:
         The hexadecimal digest of the signature
-        
+
     Raises:
         SerializationError: If the algorithm is not supported
     """
     try:
         # Convert key to bytes if it's a string
-        key_bytes = key.encode('utf-8') if isinstance(key, str) else key
+        key_bytes = key.encode("utf-8") if isinstance(key, str) else key
         hash_func = getattr(hashlib, algorithm.lower())
         return hmac.new(key_bytes, data, hash_func).hexdigest()
     except AttributeError:
         raise SerializationError(f"Unsupported signature algorithm: {algorithm}")
 
 
-def _verify_checksum(data: bytes, expected_checksum: str, algorithm: str = "sha256") -> bool:
+def _verify_checksum(
+    data: bytes, expected_checksum: str, algorithm: str = "sha256"
+) -> bool:
     """
     Verify that the data matches the expected checksum.
-    
+
     Args:
         data: The data to verify
         expected_checksum: The expected checksum value
         algorithm: The hash algorithm used to calculate the checksum
-        
+
     Returns:
         True if the checksum is valid, False otherwise
     """
@@ -184,16 +187,18 @@ def _verify_checksum(data: bytes, expected_checksum: str, algorithm: str = "sha2
         return False
 
 
-def _verify_signature(data: bytes, expected_signature: str, key: str, algorithm: str = "sha256") -> bool:
+def _verify_signature(
+    data: bytes, expected_signature: str, key: str, algorithm: str = "sha256"
+) -> bool:
     """
     Verify that the data matches the expected signature.
-    
+
     Args:
         data: The data to verify
         expected_signature: The expected signature value
         key: The secret key used for the signature
         algorithm: The hash algorithm used to calculate the signature
-        
+
     Returns:
         True if the signature is valid, False otherwise
     """
@@ -204,21 +209,23 @@ def _verify_signature(data: bytes, expected_signature: str, key: str, algorithm:
         return False
 
 
-def _validate_serialized_data_size(data: bytes, data_type: str = "serialized data") -> None:
+def _validate_serialized_data_size(
+    data: bytes, data_type: str = "serialized data"
+) -> None:
     """
     Validate that the serialized data size is within the configured limits.
-    
+
     Args:
         data: The serialized data to validate
         data_type: Description of the data type for error messages
-        
+
     Raises:
         SerializationError: If the data size exceeds the configured limit
     """
     # Skip validation if size limit is disabled (0)
     if SERIALIZATION_MAX_SIZE_BYTES == 0:
         return
-    
+
     data_size = len(data)
     if data_size > SERIALIZATION_MAX_SIZE_BYTES:
         raise SerializationError(
@@ -231,88 +238,109 @@ def _validate_serialized_data_size(data: bytes, data_type: str = "serialized dat
 def _add_integrity_metadata(data: bytes, for_json: bool = False) -> Dict[str, Any]:
     """
     Add integrity metadata (checksum and/or signature) to serialized data.
-    
+
     Args:
         data: The serialized data
         for_json: Whether the metadata will be JSON serialized (requires base64 encoding)
-        
+
     Returns:
         A dictionary containing the original data and integrity metadata
     """
     metadata = {}
-    
+
     if for_json:
         # For JSON serialization, encode bytes as base64
-        metadata["data"] = base64.b64encode(data).decode('ascii')
+        metadata["data"] = base64.b64encode(data).decode("ascii")
         metadata["data_encoding"] = "base64"
     else:
         # For pickle serialization, store bytes directly
         metadata["data"] = data
-    
+
     if SERIALIZATION_CHECKSUM_ENABLED:
-        metadata["checksum"] = _calculate_checksum(data, SERIALIZATION_CHECKSUM_ALGORITHM)
+        metadata["checksum"] = _calculate_checksum(
+            data, SERIALIZATION_CHECKSUM_ALGORITHM
+        )
         metadata["checksum_algorithm"] = SERIALIZATION_CHECKSUM_ALGORITHM
-        
+
         if SERIALIZATION_SIGNATURE_KEY:
             metadata["signature"] = _calculate_signature(
                 data, SERIALIZATION_SIGNATURE_KEY, SERIALIZATION_CHECKSUM_ALGORITHM
             )
-    
+
     return metadata
 
 
-def _verify_integrity_metadata(metadata: Dict[str, Any], for_json: bool = False) -> bytes:
+def _verify_integrity_metadata(
+    metadata: Dict[str, Any], for_json: bool = False
+) -> bytes:
     """
     Verify the integrity of serialized data using checksum and/or signature.
-    
+
     Args:
         metadata: Dictionary containing the data and integrity metadata
         for_json: Whether the metadata was JSON serialized (requires base64 decoding)
-        
+
     Returns:
         The original data if verification passes
-        
+
     Raises:
         SerializationError: If verification fails or metadata is invalid
     """
     if "data" not in metadata:
         raise SerializationError("Missing 'data' field in integrity metadata")
-    
+
     # Extract data, handling both raw bytes and base64 encoding
     data_field = metadata["data"]
     if isinstance(data_field, str) and metadata.get("data_encoding") == "base64":
         try:
-            data = base64.b64decode(data_field.encode('ascii'))
+            data = base64.b64decode(data_field.encode("ascii"))
         except Exception as e:
             raise SerializationError(f"Failed to decode base64 data: {e}") from e
     elif isinstance(data_field, bytes):
         data = data_field
     else:
-        raise SerializationError(f"Invalid data type in integrity metadata: {type(data_field)}")
-    
+        raise SerializationError(
+            f"Invalid data type in integrity metadata: {type(data_field)}"
+        )
+
     # Verify checksum if enabled and present
     if SERIALIZATION_CHECKSUM_ENABLED and "checksum" in metadata:
-        checksum_algorithm = metadata.get("checksum_algorithm", SERIALIZATION_CHECKSUM_ALGORITHM)
+        checksum_algorithm = metadata.get(
+            "checksum_algorithm", SERIALIZATION_CHECKSUM_ALGORITHM
+        )
         if not _verify_checksum(data, metadata["checksum"], checksum_algorithm):
             raise SerializationError("Data integrity check failed: checksum mismatch")
-    
+
     # Verify signature if enabled and present
-    if SERIALIZATION_CHECKSUM_ENABLED and SERIALIZATION_SIGNATURE_KEY and "signature" in metadata:
-        signature_algorithm = metadata.get("checksum_algorithm", SERIALIZATION_CHECKSUM_ALGORITHM)
-        if not _verify_signature(data, metadata["signature"], SERIALIZATION_SIGNATURE_KEY, signature_algorithm):
+    if (
+        SERIALIZATION_CHECKSUM_ENABLED
+        and SERIALIZATION_SIGNATURE_KEY
+        and "signature" in metadata
+    ):
+        signature_algorithm = metadata.get(
+            "checksum_algorithm", SERIALIZATION_CHECKSUM_ALGORITHM
+        )
+        if not _verify_signature(
+            data,
+            metadata["signature"],
+            SERIALIZATION_SIGNATURE_KEY,
+            signature_algorithm,
+        ):
             raise SerializationError("Data integrity check failed: signature mismatch")
-    
+
     return data
 
 
-def _validate_deserialized_job_payload(payload: Dict[str, Any], serializer_type: str = "pickle") -> None:
+def _validate_deserialized_job_payload(
+    payload: Dict[str, Any], serializer_type: str = "pickle"
+) -> None:
     """
     Validate the deserialized job payload to ensure it contains valid and safe data.
-    
+
     Args:
         payload: The deserialized job payload dictionary
         serializer_type: Type of serializer ("pickle" or "json") for context in error messages
-        
+
     Raises:
         SerializationError: If the payload contains invalid or unsafe data
     """
@@ -320,79 +348,113 @@ def _validate_deserialized_job_payload(payload: Dict[str, Any], serializer_type:
     required_fields = ["job_id", "function", "args", "kwargs"]
     for field in required_fields:
         if field not in payload:
-            raise SerializationError(f"Missing required field in {serializer_type} job payload: {field}")
-    
+            raise SerializationError(
+                f"Missing required field in {serializer_type} job payload: {field}"
+            )
+
     # Validate job_id is a non-empty string
     if not isinstance(payload["job_id"], str):
-        raise SerializationError(f"job_id must be a string in {serializer_type} job payload, got {type(payload['job_id'])}")
+        raise SerializationError(
+            f"job_id must be a string in {serializer_type} job payload, got {type(payload['job_id'])}"
+        )
     if not payload["job_id"].strip():
-        raise SerializationError(f"job_id cannot be empty in {serializer_type} job payload")
-    
+        raise SerializationError(
+            f"job_id cannot be empty in {serializer_type} job payload"
+        )
+
     # Validate function based on serializer type
     if serializer_type == "pickle":
         # For pickle, function should be bytes (pickled function)
         if not isinstance(payload["function"], bytes):
-            raise SerializationError(f"function must be pickled bytes in {serializer_type} job payload, got {type(payload['function'])}")
+            raise SerializationError(
+                f"function must be pickled bytes in {serializer_type} job payload, got {type(payload['function'])}"
+            )
     elif serializer_type == "json":
         # For JSON, function should be a string (import path)
         if not isinstance(payload["function"], str):
-            raise SerializationError(f"function must be a string (import path) in {serializer_type} job payload, got {type(payload['function'])}")
+            raise SerializationError(
+                f"function must be a string (import path) in {serializer_type} job payload, got {type(payload['function'])}"
+            )
         if not payload["function"].strip():
-            raise SerializationError(f"function path cannot be empty in {serializer_type} job payload")
-    
+            raise SerializationError(
+                f"function path cannot be empty in {serializer_type} job payload"
+            )
+
     # Validate args and kwargs based on serializer type
     if serializer_type == "pickle":
         # For pickle, args and kwargs should be bytes (pickled)
         if not isinstance(payload["args"], bytes):
-            raise SerializationError(f"args must be pickled bytes in {serializer_type} job payload, got {type(payload['args'])}")
+            raise SerializationError(
+                f"args must be pickled bytes in {serializer_type} job payload, got {type(payload['args'])}"
+            )
         if not isinstance(payload["kwargs"], bytes):
-            raise SerializationError(f"kwargs must be pickled bytes in {serializer_type} job payload, got {type(payload['kwargs'])}")
+            raise SerializationError(
+                f"kwargs must be pickled bytes in {serializer_type} job payload, got {type(payload['kwargs'])}"
+            )
     elif serializer_type == "json":
         # For JSON, args should be a list and kwargs should be a dict
         if not isinstance(payload["args"], list):
-            raise SerializationError(f"args must be a list in {serializer_type} job payload, got {type(payload['args'])}")
+            raise SerializationError(
+                f"args must be a list in {serializer_type} job payload, got {type(payload['args'])}"
+            )
         if not isinstance(payload["kwargs"], dict):
-            raise SerializationError(f"kwargs must be a dict in {serializer_type} job payload, got {type(payload['kwargs'])}")
-    
+            raise SerializationError(
+                f"kwargs must be a dict in {serializer_type} job payload, got {type(payload['kwargs'])}"
+            )
+
     # Validate numeric fields are non-negative
     numeric_fields = ["max_retries", "retry_delay", "result_ttl", "timeout"]
     for field in numeric_fields:
         if field in payload and payload[field] is not None:
             if not isinstance(payload[field], (int, float)):
-                raise SerializationError(f"{field} must be numeric in {serializer_type} job payload, got {type(payload[field])}")
+                raise SerializationError(
+                    f"{field} must be numeric in {serializer_type} job payload, got {type(payload[field])}"
+                )
             if payload[field] < 0:
-                raise SerializationError(f"{field} must be non-negative in {serializer_type} job payload, got {payload[field]}")
-    
+                raise SerializationError(
+                    f"{field} must be non-negative in {serializer_type} job payload, got {payload[field]}"
+                )
+
     # Validate string fields
     string_fields = ["queue_name", "retry_strategy"]
     for field in string_fields:
         if field in payload and payload[field] is not None:
             if not isinstance(payload[field], str):
-                raise SerializationError(f"{field} must be a string in {serializer_type} job payload, got {type(payload[field])}")
-    
+                raise SerializationError(
+                    f"{field} must be a string in {serializer_type} job payload, got {type(payload[field])}"
+                )
+
     # Validate list fields
     list_fields = ["depends_on", "retry_on", "ignore_on"]
     for field in list_fields:
         if field in payload and payload[field] is not None:
             if not isinstance(payload[field], list):
-                raise SerializationError(f"{field} must be a list in {serializer_type} job payload, got {type(payload[field])}")
-    
+                raise SerializationError(
+                    f"{field} must be a list in {serializer_type} job payload, got {type(payload[field])}"
+                )
+
     # Validate enqueue_time if present
     if "enqueue_time" in payload and payload["enqueue_time"] is not None:
         if not isinstance(payload["enqueue_time"], (int, float)):
-            raise SerializationError(f"enqueue_time must be numeric in {serializer_type} job payload, got {type(payload['enqueue_time'])}")
+            raise SerializationError(
+                f"enqueue_time must be numeric in {serializer_type} job payload, got {type(payload['enqueue_time'])}"
+            )
         if payload["enqueue_time"] < 0:
-            raise SerializationError(f"enqueue_time must be non-negative in {serializer_type} job payload, got {payload['enqueue_time']}")
+            raise SerializationError(
+                f"enqueue_time must be non-negative in {serializer_type} job payload, got {payload['enqueue_time']}"
+            )
 
 
-def _validate_deserialized_result_payload(payload: Dict[str, Any], serializer_type: str = "pickle") -> None:
+def _validate_deserialized_result_payload(
+    payload: Dict[str, Any], serializer_type: str = "pickle"
+) -> None:
     """
     Validate the deserialized result payload to ensure it contains valid and safe data.
-    
+
     Args:
         payload: The deserialized result payload dictionary
         serializer_type: Type of serializer ("pickle" or "json") for context in error messages
-        
+
     Raises:
         SerializationError: If the payload contains invalid or unsafe data
     """
@@ -400,35 +462,47 @@ def _validate_deserialized_result_payload(payload: Dict[str, Any], serializer_ty
     required_fields = ["status"]
     for field in required_fields:
         if field not in payload:
-            raise SerializationError(f"Missing required field in {serializer_type} result payload: {field}")
-    
+            raise SerializationError(
+                f"Missing required field in {serializer_type} result payload: {field}"
+            )
+
     # Validate status is a string
     if not isinstance(payload["status"], str):
-        raise SerializationError(f"status must be a string in {serializer_type} result payload, got {type(payload['status'])}")
+        raise SerializationError(
+            f"status must be a string in {serializer_type} result payload, got {type(payload['status'])}"
+        )
     if not payload["status"].strip():
-        raise SerializationError(f"status cannot be empty in {serializer_type} result payload")
-    
+        raise SerializationError(
+            f"status cannot be empty in {serializer_type} result payload"
+        )
+
     # Validate string fields
     string_fields = ["error", "traceback"]
     for field in string_fields:
         if field in payload and payload[field] is not None:
             if not isinstance(payload[field], str):
-                raise SerializationError(f"{field} must be a string in {serializer_type} result payload, got {type(payload[field])}")
-    
+                raise SerializationError(
+                    f"{field} must be a string in {serializer_type} result payload, got {type(payload[field])}"
+                )
+
     # Validate that result is only present when status is 'completed'
     if "result" in payload and payload["result"] is not None:
         if payload["status"] != "completed":
-            raise SerializationError(f"result should only be present when status is 'completed' in {serializer_type} result payload")
+            raise SerializationError(
+                f"result should only be present when status is 'completed' in {serializer_type} result payload"
+            )
 
 
-def _validate_deserialized_failed_job_payload(payload: Dict[str, Any], serializer_type: str = "pickle") -> None:
+def _validate_deserialized_failed_job_payload(
+    payload: Dict[str, Any], serializer_type: str = "pickle"
+) -> None:
     """
     Validate the deserialized failed job payload to ensure it contains valid and safe data.
-    
+
     Args:
         payload: The deserialized failed job payload dictionary
         serializer_type: Type of serializer ("pickle" or "json") for context in error messages
-        
+
     Raises:
         SerializationError: If the payload contains invalid or unsafe data
     """
@@ -436,36 +510,52 @@ def _validate_deserialized_failed_job_payload(payload: Dict[str, Any], serialize
     required_fields = ["job_id", "function_str", "args_repr", "kwargs_repr"]
     for field in required_fields:
         if field not in payload:
-            raise SerializationError(f"Missing required field in {serializer_type} failed job payload: {field}")
-    
+            raise SerializationError(
+                f"Missing required field in {serializer_type} failed job payload: {field}"
+            )
+
     # Validate job_id is a non-empty string
     if not isinstance(payload["job_id"], str):
-        raise SerializationError(f"job_id must be a string in {serializer_type} failed job payload, got {type(payload['job_id'])}")
+        raise SerializationError(
+            f"job_id must be a string in {serializer_type} failed job payload, got {type(payload['job_id'])}"
+        )
     if not payload["job_id"].strip():
-        raise SerializationError(f"job_id cannot be empty in {serializer_type} failed job payload")
-    
+        raise SerializationError(
+            f"job_id cannot be empty in {serializer_type} failed job payload"
+        )
+
     # Validate string fields
     string_fields = ["function_str", "args_repr", "kwargs_repr", "error", "traceback"]
     for field in string_fields:
         if field in payload and payload[field] is not None:
             if not isinstance(payload[field], str):
-                raise SerializationError(f"{field} must be a string in {serializer_type} failed job payload, got {type(payload[field])}")
-    
+                raise SerializationError(
+                    f"{field} must be a string in {serializer_type} failed job payload, got {type(payload[field])}"
+                )
+
     # Validate numeric fields are non-negative
     numeric_fields = ["max_retries", "retry_delay"]
     for field in numeric_fields:
         if field in payload and payload[field] is not None:
             if not isinstance(payload[field], (int, float)):
-                raise SerializationError(f"{field} must be numeric in {serializer_type} failed job payload, got {type(payload[field])}")
+                raise SerializationError(
+                    f"{field} must be numeric in {serializer_type} failed job payload, got {type(payload[field])}"
+                )
             if payload[field] < 0:
-                raise SerializationError(f"{field} must be non-negative in {serializer_type} failed job payload, got {payload[field]}")
-    
+                raise SerializationError(
+                    f"{field} must be non-negative in {serializer_type} failed job payload, got {payload[field]}"
+                )
+
     # Validate enqueue_time if present
     if "enqueue_time" in payload and payload["enqueue_time"] is not None:
         if not isinstance(payload["enqueue_time"], (int, float)):
-            raise SerializationError(f"enqueue_time must be numeric in {serializer_type} failed job payload, got {type(payload['enqueue_time'])}")
+            raise SerializationError(
+                f"enqueue_time must be numeric in {serializer_type} failed job payload, got {type(payload['enqueue_time'])}"
+            )
         if payload["enqueue_time"] < 0:
-            raise SerializationError(f"enqueue_time must be non-negative in {serializer_type} failed job payload, got {payload['enqueue_time']}")
+            raise SerializationError(
+                f"enqueue_time must be non-negative in {serializer_type} failed job payload, got {payload['enqueue_time']}"
+            )
 
 
 class Serializer(Protocol):
@@ -571,31 +661,45 @@ class PickleSerializer:
         required_fields = ["job_id", "function", "args", "kwargs"]
         for field in required_fields:
             if field not in payload:
-                raise SerializationError(f"Missing required field in job payload: {field}")
-        
+                raise SerializationError(
+                    f"Missing required field in job payload: {field}"
+                )
+
         # Validate job_id is a string
         if not isinstance(payload["job_id"], str):
-            raise SerializationError(f"job_id must be a string, got {type(payload['job_id'])}")
-        
+            raise SerializationError(
+                f"job_id must be a string, got {type(payload['job_id'])}"
+            )
+
         # Validate function is bytes (pickled)
         if not isinstance(payload["function"], bytes):
-            raise SerializationError(f"function must be pickled bytes, got {type(payload['function'])}")
-        
+            raise SerializationError(
+                f"function must be pickled bytes, got {type(payload['function'])}"
+            )
+
         # Validate args and kwargs are bytes (pickled)
         if not isinstance(payload["args"], bytes):
-            raise SerializationError(f"args must be pickled bytes, got {type(payload['args'])}")
-        
+            raise SerializationError(
+                f"args must be pickled bytes, got {type(payload['args'])}"
+            )
+
         if not isinstance(payload["kwargs"], bytes):
-            raise SerializationError(f"kwargs must be pickled bytes, got {type(payload['kwargs'])}")
-        
+            raise SerializationError(
+                f"kwargs must be pickled bytes, got {type(payload['kwargs'])}"
+            )
+
         # Validate numeric fields
         numeric_fields = ["max_retries", "retry_delay", "result_ttl", "timeout"]
         for field in numeric_fields:
             if field in payload and payload[field] is not None:
                 if not isinstance(payload[field], (int, float)):
-                    raise SerializationError(f"{field} must be numeric, got {type(payload[field])}")
+                    raise SerializationError(
+                        f"{field} must be numeric, got {type(payload[field])}"
+                    )
                 if payload[field] < 0:
-                    raise SerializationError(f"{field} must be non-negative, got {payload[field]}")
+                    raise SerializationError(
+                        f"{field} must be non-negative, got {payload[field]}"
+                    )
 
     @staticmethod
     def serialize_job(job: Job) -> bytes:
@@ -604,18 +708,20 @@ class PickleSerializer:
             payload = PickleSerializer._create_job_payload(job)
             PickleSerializer._validate_job_payload(payload)
             serialized_data = cloudpickle.dumps(payload)
-            
+
             # Validate serialized data size
             _validate_serialized_data_size(serialized_data, "Pickle job")
-            
+
             # Add integrity metadata if enabled
             if SERIALIZATION_CHECKSUM_ENABLED:
                 integrity_metadata = _add_integrity_metadata(serialized_data)
                 final_data = cloudpickle.dumps(integrity_metadata)
                 # Validate final data size with integrity metadata
-                _validate_serialized_data_size(final_data, "Pickle job with integrity metadata")
+                _validate_serialized_data_size(
+                    final_data, "Pickle job with integrity metadata"
+                )
                 return final_data
-            
+
             return serialized_data
         except Exception as e:
             # Log detailed error information for debugging
@@ -630,12 +736,14 @@ class PickleSerializer:
             try:
                 cloudpickle.dumps(value)
             except Exception as pickle_error:
-                unpicklable_objects.append({
-                    "key": key,
-                    "type": type(value).__name__,
-                    "repr": repr(value),
-                    "error": str(pickle_error),
-                })
+                unpicklable_objects.append(
+                    {
+                        "key": key,
+                        "type": type(value).__name__,
+                        "repr": repr(value),
+                        "error": str(pickle_error),
+                    }
+                )
         return unpicklable_objects
 
     @staticmethod
@@ -658,9 +766,9 @@ class PickleSerializer:
         # Check if debug logging is enabled
         if not PICKLE_DEBUG_LOGGING_ENABLED:
             return
-        
+
         logger = loguru.logger.bind(job_id=job.job_id)
-        
+
         # Use configured log level
         log_method = getattr(logger, PICKLE_DEBUG_LOGGING_LEVEL.lower(), logger.debug)
 
@@ -674,15 +782,21 @@ class PickleSerializer:
         if PICKLE_DEBUG_LOGGING_INCLUDE_OBJECTS:
             unpicklable_objects = PickleSerializer._find_unpicklable_objects(job)
             if unpicklable_objects:
-                log_method("Found unpicklable objects in job kwargs", unpicklable_objects=unpicklable_objects)
-            
+                log_method(
+                    "Found unpicklable objects in job kwargs",
+                    unpicklable_objects=unpicklable_objects,
+                )
+
             # Check for asyncio.Task objects
             task_objects = PickleSerializer._find_asyncio_tasks(job)
             if task_objects:
-                log_method("Found asyncio.Task objects in job kwargs", task_objects=task_objects)
+                log_method(
+                    "Found asyncio.Task objects in job kwargs",
+                    task_objects=task_objects,
+                )
 
         log_method("=== END DEBUG: Job kwargs analysis ===")
-        
+
         # Always call debug at least once to ensure test compatibility
         logger.debug("Serialization debug info logged")
 
@@ -694,19 +808,24 @@ class PickleSerializer:
             if SERIALIZATION_CHECKSUM_ENABLED:
                 try:
                     integrity_metadata = cloudpickle.loads(data)
-                    if isinstance(integrity_metadata, dict) and "data" in integrity_metadata:
+                    if (
+                        isinstance(integrity_metadata, dict)
+                        and "data" in integrity_metadata
+                    ):
                         # Verify integrity and extract original data
-                        data = _verify_integrity_metadata(integrity_metadata, for_json=False)
+                        data = _verify_integrity_metadata(
+                            integrity_metadata, for_json=False
+                        )
                 except (SerializationError, KeyError, TypeError):
                     # If integrity check fails or metadata is invalid, proceed with original data
                     # This maintains backward compatibility with data serialized without integrity checks
                     pass
-            
+
             payload = cloudpickle.loads(data)
-            
+
             # Validate the deserialized payload before processing
             _validate_deserialized_job_payload(payload, "pickle")
-            
+
             function = cloudpickle.loads(payload["function"])
             args = cloudpickle.loads(payload["args"])
             kwargs = cloudpickle.loads(payload["kwargs"])
@@ -739,27 +858,43 @@ class PickleSerializer:
         required_fields = ["job_id", "function_str", "args_repr", "kwargs_repr"]
         for field in required_fields:
             if field not in payload:
-                raise SerializationError(f"Missing required field in failed job payload: {field}")
-        
+                raise SerializationError(
+                    f"Missing required field in failed job payload: {field}"
+                )
+
         # Validate job_id is a string
         if not isinstance(payload["job_id"], str):
-            raise SerializationError(f"job_id must be a string, got {type(payload['job_id'])}")
-        
+            raise SerializationError(
+                f"job_id must be a string, got {type(payload['job_id'])}"
+            )
+
         # Validate string fields
-        string_fields = ["function_str", "args_repr", "kwargs_repr", "error", "traceback"]
+        string_fields = [
+            "function_str",
+            "args_repr",
+            "kwargs_repr",
+            "error",
+            "traceback",
+        ]
         for field in string_fields:
             if field in payload and payload[field] is not None:
                 if not isinstance(payload[field], str):
-                    raise SerializationError(f"{field} must be a string, got {type(payload[field])}")
-        
+                    raise SerializationError(
+                        f"{field} must be a string, got {type(payload[field])}"
+                    )
+
         # Validate numeric fields
         numeric_fields = ["max_retries", "retry_delay"]
         for field in numeric_fields:
             if field in payload and payload[field] is not None:
                 if not isinstance(payload[field], (int, float)):
-                    raise SerializationError(f"{field} must be numeric, got {type(payload[field])}")
+                    raise SerializationError(
+                        f"{field} must be numeric, got {type(payload[field])}"
+                    )
                 if payload[field] < 0:
-                    raise SerializationError(f"{field} must be non-negative, got {payload[field]}")
+                    raise SerializationError(
+                        f"{field} must be non-negative, got {payload[field]}"
+                    )
 
     @staticmethod
     def serialize_failed_job(job: Job) -> bytes:
@@ -779,18 +914,22 @@ class PickleSerializer:
             }
             PickleSerializer._validate_failed_job_payload(payload)
             serialized_data = cloudpickle.dumps(payload)
-            
+
             # Validate serialized data size
             _validate_serialized_data_size(serialized_data, "Pickle failed job")
-            
+
             # Add integrity metadata if enabled
             if SERIALIZATION_CHECKSUM_ENABLED:
-                integrity_metadata = _add_integrity_metadata(serialized_data, for_json=False)
+                integrity_metadata = _add_integrity_metadata(
+                    serialized_data, for_json=False
+                )
                 final_data = cloudpickle.dumps(integrity_metadata)
                 # Validate final data size with integrity metadata
-                _validate_serialized_data_size(final_data, "Pickle failed job with integrity metadata")
+                _validate_serialized_data_size(
+                    final_data, "Pickle failed job with integrity metadata"
+                )
                 return final_data
-            
+
             return serialized_data
         except Exception as e:
             raise SerializationError(f"Failed to pickle failed job details: {e}") from e
@@ -801,18 +940,24 @@ class PickleSerializer:
         required_fields = ["status"]
         for field in required_fields:
             if field not in payload:
-                raise SerializationError(f"Missing required field in result payload: {field}")
-        
+                raise SerializationError(
+                    f"Missing required field in result payload: {field}"
+                )
+
         # Validate status is a string
         if not isinstance(payload["status"], str):
-            raise SerializationError(f"status must be a string, got {type(payload['status'])}")
-        
+            raise SerializationError(
+                f"status must be a string, got {type(payload['status'])}"
+            )
+
         # Validate string fields
         string_fields = ["error", "traceback"]
         for field in string_fields:
             if field in payload and payload[field] is not None:
                 if not isinstance(payload[field], str):
-                    raise SerializationError(f"{field} must be a string, got {type(payload[field])}")
+                    raise SerializationError(
+                        f"{field} must be a string, got {type(payload[field])}"
+                    )
 
     @staticmethod
     def serialize_result(
@@ -829,27 +974,35 @@ class PickleSerializer:
             is_completed = (
                 hasattr(status, "value") and status.value == JOB_STATUS.COMPLETED.value
             )
+
+            # Create a JobResult object for efficient serialization
+            job_result = JobResult(
+                job_id="",  # Empty job_id for standalone result
+                status=status_value,
+                result=result if is_completed else None,
+                error=error,
+                traceback=traceback_str,
+                start_time=0.0,  # Not tracking time for standalone result
+                finish_time=0.0,
+            )
             
-            payload = {
-                "status": status_value,
-                "result": result if is_completed else None,
-                "error": error,
-                "traceback": traceback_str,
-            }
-            PickleSerializer._validate_result_payload(payload)
-            serialized_data = cloudpickle.dumps(payload)
-            
+            serialized_data = cloudpickle.dumps(job_result)
+
             # Validate serialized data size
             _validate_serialized_data_size(serialized_data, "Pickle result")
-            
+
             # Add integrity metadata if enabled
             if SERIALIZATION_CHECKSUM_ENABLED:
-                integrity_metadata = _add_integrity_metadata(serialized_data, for_json=False)
+                integrity_metadata = _add_integrity_metadata(
+                    serialized_data, for_json=False
+                )
                 final_data = cloudpickle.dumps(integrity_metadata)
                 # Validate final data size with integrity metadata
-                _validate_serialized_data_size(final_data, "Pickle result with integrity metadata")
+                _validate_serialized_data_size(
+                    final_data, "Pickle result with integrity metadata"
+                )
                 return final_data
-            
+
             return serialized_data
         except Exception as e:
             raise SerializationError(f"Failed to pickle result data: {e}") from e
@@ -862,26 +1015,31 @@ class PickleSerializer:
             if SERIALIZATION_CHECKSUM_ENABLED:
                 try:
                     integrity_metadata = cloudpickle.loads(data)
-                    if isinstance(integrity_metadata, dict) and "data" in integrity_metadata:
+                    if (
+                        isinstance(integrity_metadata, dict)
+                        and "data" in integrity_metadata
+                    ):
                         # Verify integrity and extract original data
-                        data = _verify_integrity_metadata(integrity_metadata, for_json=False)
+                        data = _verify_integrity_metadata(
+                            integrity_metadata, for_json=False
+                        )
                 except (SerializationError, KeyError, TypeError):
                     # If integrity check fails or metadata is invalid, proceed with original data
                     # This maintains backward compatibility with data serialized without integrity checks
                     pass
-            
+
             payload = cloudpickle.loads(data)
-            
+
             # Validate the deserialized payload before processing
             _validate_deserialized_failed_job_payload(payload, "pickle")
-            
+
             # Create a failed job with the deserialized data
             # Note: We can't reconstruct the original function, args, and kwargs
             # since we only stored their representations in serialize_failed_job
             job = Job(
                 function=lambda: None,  # Placeholder function
-                args=(),                # Empty args
-                kwargs={},              # Empty kwargs
+                args=(),  # Empty args
+                kwargs={},  # Empty kwargs
                 job_id=payload.get("job_id"),
                 enqueue_time=payload.get("enqueue_time"),
                 queue_name=payload.get("queue_name"),
@@ -890,13 +1048,13 @@ class PickleSerializer:
                 error=payload.get("error"),
                 traceback=payload.get("traceback"),
             )
-            
+
             # Mark the job as failed by setting the appropriate fields
             # The status property is derived from _start_time, _finish_time, and error
             job._start_time = time.time()
             job._finish_time = time.time()
             # error is already set above
-            
+
             return job
         except Exception as e:
             raise SerializationError(f"Failed to unpickle failed job: {e}") from e
@@ -909,20 +1067,37 @@ class PickleSerializer:
             if SERIALIZATION_CHECKSUM_ENABLED:
                 try:
                     integrity_metadata = cloudpickle.loads(data)
-                    if isinstance(integrity_metadata, dict) and "data" in integrity_metadata:
+                    if (
+                        isinstance(integrity_metadata, dict)
+                        and "data" in integrity_metadata
+                    ):
                         # Verify integrity and extract original data
-                        data = _verify_integrity_metadata(integrity_metadata, for_json=False)
+                        data = _verify_integrity_metadata(
+                            integrity_metadata, for_json=False
+                        )
                 except (SerializationError, KeyError, TypeError):
                     # If integrity check fails or metadata is invalid, proceed with original data
                     # This maintains backward compatibility with data serialized without integrity checks
                     pass
+
+            # Deserialize as JobResult object
+            job_result = cloudpickle.loads(data)
+
+            # Handle backward compatibility with dictionary format
+            if isinstance(job_result, dict):
+                # Validate the deserialized result payload
+                _validate_deserialized_result_payload(job_result, "pickle")
+                return job_result
             
-            result = cloudpickle.loads(data)
-            
-            # Validate the deserialized result payload
-            _validate_deserialized_result_payload(result, "pickle")
-            
-            return result
+            # Convert JobResult to dictionary for API compatibility
+            result_dict = {
+                "status": job_result.status,
+                "result": job_result.result,
+                "error": job_result.error,
+                "traceback": job_result.traceback,
+            }
+
+            return result_dict
         except Exception as e:
             raise SerializationError(f"Failed to unpickle result data: {e}") from e
 
@@ -1023,9 +1198,14 @@ class JsonSerializer:
     def _qualname(obj: Any) -> str:
         module = getattr(obj, "__module__", None)
         qualname = getattr(obj, "__qualname__", getattr(obj, "__name__", None))
-        
+
         # Check if it's a lambda function or has <locals> in qualname
-        if not module or not qualname or "<lambda>" in str(qualname) or "<locals>" in str(qualname):
+        if (
+            not module
+            or not qualname
+            or "<lambda>" in str(qualname)
+            or "<locals>" in str(qualname)
+        ):
             raise SerializationError(f"Object is not importable: {obj!r}")
         return f"{module}:{qualname}"
 
@@ -1081,6 +1261,7 @@ class JsonSerializer:
     @staticmethod
     def _get_json_hooks():
         """Resolve encoder/decoder classes from settings; fallback to stdlib."""
+
         def resolve_hook(hook_path, default_hook):
             try:
                 return JsonSerializer._resolve_dotted_path(hook_path)
@@ -1097,44 +1278,62 @@ class JsonSerializer:
         required_fields = ["job_id", "function", "args", "kwargs"]
         for field in required_fields:
             if field not in payload:
-                raise SerializationError(f"Missing required field in job payload: {field}")
-        
+                raise SerializationError(
+                    f"Missing required field in job payload: {field}"
+                )
+
         # Validate job_id is a string
         if not isinstance(payload["job_id"], str):
-            raise SerializationError(f"job_id must be a string, got {type(payload['job_id'])}")
-        
+            raise SerializationError(
+                f"job_id must be a string, got {type(payload['job_id'])}"
+            )
+
         # Validate function is a string (import path)
         if not isinstance(payload["function"], str):
-            raise SerializationError(f"function must be a string (import path), got {type(payload['function'])}")
-        
+            raise SerializationError(
+                f"function must be a string (import path), got {type(payload['function'])}"
+            )
+
         # Validate args is a list
         if not isinstance(payload["args"], list):
-            raise SerializationError(f"args must be a list, got {type(payload['args'])}")
-        
+            raise SerializationError(
+                f"args must be a list, got {type(payload['args'])}"
+            )
+
         # Validate kwargs is a dict
         if not isinstance(payload["kwargs"], dict):
-            raise SerializationError(f"kwargs must be a dict, got {type(payload['kwargs'])}")
-        
+            raise SerializationError(
+                f"kwargs must be a dict, got {type(payload['kwargs'])}"
+            )
+
         # Validate numeric fields
         numeric_fields = ["max_retries", "retry_delay", "result_ttl", "timeout"]
         for field in numeric_fields:
             if field in payload and payload[field] is not None:
                 if not isinstance(payload[field], (int, float)):
-                    raise SerializationError(f"{field} must be numeric, got {type(payload[field])}")
+                    raise SerializationError(
+                        f"{field} must be numeric, got {type(payload[field])}"
+                    )
                 if payload[field] < 0:
-                    raise SerializationError(f"{field} must be non-negative, got {payload[field]}")
-        
+                    raise SerializationError(
+                        f"{field} must be non-negative, got {payload[field]}"
+                    )
+
         # Validate depends_on is a list
         if "depends_on" in payload and payload["depends_on"] is not None:
             if not isinstance(payload["depends_on"], list):
-                raise SerializationError(f"depends_on must be a list, got {type(payload['depends_on'])}")
-        
+                raise SerializationError(
+                    f"depends_on must be a list, got {type(payload['depends_on'])}"
+                )
+
         # Validate retry_on and ignore_on are lists or None
         list_fields = ["retry_on", "ignore_on"]
         for field in list_fields:
             if field in payload and payload[field] is not None:
                 if not isinstance(payload[field], list):
-                    raise SerializationError(f"{field} must be a list, got {type(payload[field])}")
+                    raise SerializationError(
+                        f"{field} must be a list, got {type(payload[field])}"
+                    )
 
     @staticmethod
     def serialize_job(job: Job) -> bytes:
@@ -1166,21 +1365,23 @@ class JsonSerializer:
             "retry_on": JsonSerializer._encode_exceptions(job.retry_on),
             "ignore_on": JsonSerializer._encode_exceptions(job.ignore_on),
         }
-        
+
         JsonSerializer._validate_job_payload(payload)
         serialized_data = JsonSerializer._json_encode(payload)
-        
+
         # Validate serialized data size
         _validate_serialized_data_size(serialized_data, "JSON job")
-        
+
         # Add integrity metadata if enabled
         if SERIALIZATION_CHECKSUM_ENABLED:
             integrity_metadata = _add_integrity_metadata(serialized_data, for_json=True)
             final_data = JsonSerializer._json_encode(integrity_metadata)
             # Validate final data size with integrity metadata
-            _validate_serialized_data_size(final_data, "JSON job with integrity metadata")
+            _validate_serialized_data_size(
+                final_data, "JSON job with integrity metadata"
+            )
             return final_data
-        
+
         return serialized_data
 
     @staticmethod
@@ -1189,16 +1390,19 @@ class JsonSerializer:
         if SERIALIZATION_CHECKSUM_ENABLED:
             try:
                 integrity_metadata = JsonSerializer._json_decode(data)
-                if isinstance(integrity_metadata, dict) and "data" in integrity_metadata:
+                if (
+                    isinstance(integrity_metadata, dict)
+                    and "data" in integrity_metadata
+                ):
                     # Verify integrity and extract original data
                     data = _verify_integrity_metadata(integrity_metadata, for_json=True)
             except (SerializationError, KeyError, TypeError):
                 # If integrity check fails or metadata is invalid, proceed with original data
                 # This maintains backward compatibility with data serialized without integrity checks
                 pass
-        
+
         payload = JsonSerializer._json_decode(data)
-        
+
         # Validate the deserialized payload before processing
         _validate_deserialized_job_payload(payload, "json")
 
@@ -1236,27 +1440,43 @@ class JsonSerializer:
         required_fields = ["job_id", "function_str", "args_repr", "kwargs_repr"]
         for field in required_fields:
             if field not in payload:
-                raise SerializationError(f"Missing required field in failed job payload: {field}")
-        
+                raise SerializationError(
+                    f"Missing required field in failed job payload: {field}"
+                )
+
         # Validate job_id is a string
         if not isinstance(payload["job_id"], str):
-            raise SerializationError(f"job_id must be a string, got {type(payload['job_id'])}")
-        
+            raise SerializationError(
+                f"job_id must be a string, got {type(payload['job_id'])}"
+            )
+
         # Validate string fields
-        string_fields = ["function_str", "args_repr", "kwargs_repr", "error", "traceback"]
+        string_fields = [
+            "function_str",
+            "args_repr",
+            "kwargs_repr",
+            "error",
+            "traceback",
+        ]
         for field in string_fields:
             if field in payload and payload[field] is not None:
                 if not isinstance(payload[field], str):
-                    raise SerializationError(f"{field} must be a string, got {type(payload[field])}")
-        
+                    raise SerializationError(
+                        f"{field} must be a string, got {type(payload[field])}"
+                    )
+
         # Validate numeric fields
         numeric_fields = ["max_retries", "retry_delay"]
         for field in numeric_fields:
             if field in payload and payload[field] is not None:
                 if not isinstance(payload[field], (int, float)):
-                    raise SerializationError(f"{field} must be numeric, got {type(payload[field])}")
+                    raise SerializationError(
+                        f"{field} must be numeric, got {type(payload[field])}"
+                    )
                 if payload[field] < 0:
-                    raise SerializationError(f"{field} must be non-negative, got {payload[field]}")
+                    raise SerializationError(
+                        f"{field} must be non-negative, got {payload[field]}"
+                    )
 
     @staticmethod
     def serialize_failed_job(job: Job) -> bytes:
@@ -1274,18 +1494,20 @@ class JsonSerializer:
         }
         JsonSerializer._validate_failed_job_payload(payload)
         serialized_data = JsonSerializer._json_encode(payload)
-        
+
         # Validate serialized data size
         _validate_serialized_data_size(serialized_data, "JSON failed job")
-        
+
         # Add integrity metadata if enabled
         if SERIALIZATION_CHECKSUM_ENABLED:
             integrity_metadata = _add_integrity_metadata(serialized_data, for_json=True)
             final_data = JsonSerializer._json_encode(integrity_metadata)
             # Validate final data size with integrity metadata
-            _validate_serialized_data_size(final_data, "JSON failed job with integrity metadata")
+            _validate_serialized_data_size(
+                final_data, "JSON failed job with integrity metadata"
+            )
             return final_data
-        
+
         return serialized_data
 
     @staticmethod
@@ -1294,18 +1516,24 @@ class JsonSerializer:
         required_fields = ["status"]
         for field in required_fields:
             if field not in payload:
-                raise SerializationError(f"Missing required field in result payload: {field}")
-        
+                raise SerializationError(
+                    f"Missing required field in result payload: {field}"
+                )
+
         # Validate status is a string
         if not isinstance(payload["status"], str):
-            raise SerializationError(f"status must be a string, got {type(payload['status'])}")
-        
+            raise SerializationError(
+                f"status must be a string, got {type(payload['status'])}"
+            )
+
         # Validate string fields
         string_fields = ["error", "traceback"]
         for field in string_fields:
             if field in payload and payload[field] is not None:
                 if not isinstance(payload[field], str):
-                    raise SerializationError(f"{field} must be a string, got {type(payload[field])}")
+                    raise SerializationError(
+                        f"{field} must be a string, got {type(payload[field])}"
+                    )
 
     @staticmethod
     def serialize_result(
@@ -1320,28 +1548,44 @@ class JsonSerializer:
             hasattr(status, "value") and status.value == JOB_STATUS.COMPLETED.value
         )
 
+        # Create a JobResult object for efficient serialization
+        job_result = JobResult(
+            job_id="",  # Empty job_id for standalone result
+            status=status_value,
+            result=result if is_completed else None,
+            error=error,
+            traceback=traceback_str,
+            start_time=0.0,  # Not tracking time for standalone result
+            finish_time=0.0,
+        )
+        
+        # Convert JobResult to dict for JSON serialization
         payload = {
-            "status": status_value,
-            "result": result if is_completed else None,
-            "error": error,
-            "traceback": traceback_str,
+            "status": job_result.status,
+            "result": job_result.result,
+            "error": job_result.error,
+            "traceback": job_result.traceback,
         }
-        JsonSerializer._validate_result_payload(payload)
+        
         Encoder, _ = JsonSerializer._get_json_hooks()
         try:
             serialized_data = json.dumps(payload, cls=Encoder).encode("utf-8")
-            
+
             # Validate serialized data size
             _validate_serialized_data_size(serialized_data, "JSON result")
-            
+
             # Add integrity metadata if enabled
             if SERIALIZATION_CHECKSUM_ENABLED:
-                integrity_metadata = _add_integrity_metadata(serialized_data, for_json=True)
+                integrity_metadata = _add_integrity_metadata(
+                    serialized_data, for_json=True
+                )
                 final_data = json.dumps(integrity_metadata, cls=Encoder).encode("utf-8")
                 # Validate final data size with integrity metadata
-                _validate_serialized_data_size(final_data, "JSON result with integrity metadata")
+                _validate_serialized_data_size(
+                    final_data, "JSON result with integrity metadata"
+                )
                 return final_data
-            
+
             return serialized_data
         except (TypeError, ValueError) as e:
             raise SerializationError(f"Failed to JSON-serialize result: {e}") from e
@@ -1359,26 +1603,31 @@ class JsonSerializer:
             if SERIALIZATION_CHECKSUM_ENABLED:
                 try:
                     integrity_metadata = json.loads(data.decode("utf-8"), cls=Decoder)
-                    if isinstance(integrity_metadata, dict) and "data" in integrity_metadata:
+                    if (
+                        isinstance(integrity_metadata, dict)
+                        and "data" in integrity_metadata
+                    ):
                         # Verify integrity and extract original data
-                        data = _verify_integrity_metadata(integrity_metadata, for_json=True)
+                        data = _verify_integrity_metadata(
+                            integrity_metadata, for_json=True
+                        )
                 except (SerializationError, KeyError, TypeError):
                     # If integrity check fails or metadata is invalid, proceed with original data
                     # This maintains backward compatibility with data serialized without integrity checks
                     pass
-            
+
             payload = json.loads(data.decode("utf-8"), cls=Decoder)
-            
+
             # Validate the deserialized payload before processing
             _validate_deserialized_failed_job_payload(payload, "json")
-            
+
             # Create a failed job with the deserialized data
             # Note: We can't reconstruct the original function, args, and kwargs
             # since we only stored their representations in serialize_failed_job
             job = Job(
                 function=lambda: None,  # Placeholder function
-                args=(),                # Empty args
-                kwargs={},              # Empty kwargs
+                args=(),  # Empty args
+                kwargs={},  # Empty kwargs
                 job_id=payload.get("job_id"),
                 enqueue_time=payload.get("enqueue_time"),
                 queue_name=payload.get("queue_name"),
@@ -1387,13 +1636,13 @@ class JsonSerializer:
                 error=payload.get("error"),
                 traceback=payload.get("traceback"),
             )
-            
+
             # Mark the job as failed by setting the appropriate fields
             # The status property is derived from _start_time, _finish_time, and error
             job._start_time = time.time()
             job._finish_time = time.time()
             # error is already set above
-            
+
             return job
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             raise SerializationError(f"Failed to parse JSON failed job: {e}") from e
@@ -1410,20 +1659,44 @@ class JsonSerializer:
             if SERIALIZATION_CHECKSUM_ENABLED:
                 try:
                     integrity_metadata = json.loads(data.decode("utf-8"), cls=Decoder)
-                    if isinstance(integrity_metadata, dict) and "data" in integrity_metadata:
+                    if (
+                        isinstance(integrity_metadata, dict)
+                        and "data" in integrity_metadata
+                    ):
                         # Verify integrity and extract original data
-                        data = _verify_integrity_metadata(integrity_metadata, for_json=True)
+                        data = _verify_integrity_metadata(
+                            integrity_metadata, for_json=True
+                        )
                 except (SerializationError, KeyError, TypeError):
                     # If integrity check fails or metadata is invalid, proceed with original data
                     # This maintains backward compatibility with data serialized without integrity checks
                     pass
-            
+
             obj = json.loads(data.decode("utf-8"), cls=Decoder)
-            
+
             # Validate the deserialized result payload
             _validate_deserialized_result_payload(obj, "json")
-            
-            return obj
+
+            # Create a JobResult object from the dictionary
+            job_result = JobResult(
+                job_id="",  # Empty job_id for standalone result
+                status=obj.get("status", ""),
+                result=obj.get("result"),
+                error=obj.get("error"),
+                traceback=obj.get("traceback"),
+                start_time=0.0,  # Not tracking time for standalone result
+                finish_time=0.0,
+            )
+
+            # Convert JobResult back to dictionary for API compatibility
+            result_dict = {
+                "status": job_result.status,
+                "result": job_result.result,
+                "error": job_result.error,
+                "traceback": job_result.traceback,
+            }
+
+            return result_dict
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             raise SerializationError(f"Failed to parse JSON result: {e}") from e
         except Exception as e:
@@ -1494,7 +1767,9 @@ class MsgPackSerializer:
         try:
             return encoder.encode(payload)
         except (TypeError, ValueError) as e:
-            raise SerializationError(f"Failed to MessagePack-serialize payload: {e}") from e
+            raise SerializationError(
+                f"Failed to MessagePack-serialize payload: {e}"
+            ) from e
         except Exception as e:
             raise SerializationError(
                 f"Unexpected error during MessagePack payload serialization: {e}"
@@ -1536,9 +1811,14 @@ class MsgPackSerializer:
     def _qualname(obj: Any) -> str:
         module = getattr(obj, "__module__", None)
         qualname = getattr(obj, "__qualname__", getattr(obj, "__name__", None))
-        
+
         # Check if it's a lambda function or has <locals> in qualname
-        if not module or not qualname or "<lambda>" in str(qualname) or "<locals>" in str(qualname):
+        if (
+            not module
+            or not qualname
+            or "<lambda>" in str(qualname)
+            or "<locals>" in str(qualname)
+        ):
             raise SerializationError(f"Object is not importable: {obj!r}")
         return f"{module}:{qualname}"
 
@@ -1597,44 +1877,62 @@ class MsgPackSerializer:
         required_fields = ["job_id", "function", "args", "kwargs"]
         for field in required_fields:
             if field not in payload:
-                raise SerializationError(f"Missing required field in job payload: {field}")
-        
+                raise SerializationError(
+                    f"Missing required field in job payload: {field}"
+                )
+
         # Validate job_id is a string
         if not isinstance(payload["job_id"], str):
-            raise SerializationError(f"job_id must be a string, got {type(payload['job_id'])}")
-        
+            raise SerializationError(
+                f"job_id must be a string, got {type(payload['job_id'])}"
+            )
+
         # Validate function is a string (import path)
         if not isinstance(payload["function"], str):
-            raise SerializationError(f"function must be a string (import path), got {type(payload['function'])}")
-        
+            raise SerializationError(
+                f"function must be a string (import path), got {type(payload['function'])}"
+            )
+
         # Validate args is a list
         if not isinstance(payload["args"], list):
-            raise SerializationError(f"args must be a list, got {type(payload['args'])}")
-        
+            raise SerializationError(
+                f"args must be a list, got {type(payload['args'])}"
+            )
+
         # Validate kwargs is a dict
         if not isinstance(payload["kwargs"], dict):
-            raise SerializationError(f"kwargs must be a dict, got {type(payload['kwargs'])}")
-        
+            raise SerializationError(
+                f"kwargs must be a dict, got {type(payload['kwargs'])}"
+            )
+
         # Validate numeric fields
         numeric_fields = ["max_retries", "retry_delay", "result_ttl", "timeout"]
         for field in numeric_fields:
             if field in payload and payload[field] is not None:
                 if not isinstance(payload[field], (int, float)):
-                    raise SerializationError(f"{field} must be numeric, got {type(payload[field])}")
+                    raise SerializationError(
+                        f"{field} must be numeric, got {type(payload[field])}"
+                    )
                 if payload[field] < 0:
-                    raise SerializationError(f"{field} must be non-negative, got {payload[field]}")
-        
+                    raise SerializationError(
+                        f"{field} must be non-negative, got {payload[field]}"
+                    )
+
         # Validate depends_on is a list
         if "depends_on" in payload and payload["depends_on"] is not None:
             if not isinstance(payload["depends_on"], list):
-                raise SerializationError(f"depends_on must be a list, got {type(payload['depends_on'])}")
-        
+                raise SerializationError(
+                    f"depends_on must be a list, got {type(payload['depends_on'])}"
+                )
+
         # Validate retry_on and ignore_on are lists or None
         list_fields = ["retry_on", "ignore_on"]
         for field in list_fields:
             if field in payload and payload[field] is not None:
                 if not isinstance(payload[field], list):
-                    raise SerializationError(f"{field} must be a list, got {type(payload[field])}")
+                    raise SerializationError(
+                        f"{field} must be a list, got {type(payload[field])}"
+                    )
 
     @staticmethod
     def serialize_job(job: Job) -> bytes:
@@ -1666,21 +1964,25 @@ class MsgPackSerializer:
             "retry_on": MsgPackSerializer._encode_exceptions(job.retry_on),
             "ignore_on": MsgPackSerializer._encode_exceptions(job.ignore_on),
         }
-        
+
         MsgPackSerializer._validate_job_payload(payload)
         serialized_data = MsgPackSerializer._msgpack_encode(payload)
-        
+
         # Validate serialized data size
         _validate_serialized_data_size(serialized_data, "MessagePack job")
-        
+
         # Add integrity metadata if enabled
         if SERIALIZATION_CHECKSUM_ENABLED:
-            integrity_metadata = _add_integrity_metadata(serialized_data, for_json=False)
+            integrity_metadata = _add_integrity_metadata(
+                serialized_data, for_json=False
+            )
             final_data = MsgPackSerializer._msgpack_encode(integrity_metadata)
             # Validate final data size with integrity metadata
-            _validate_serialized_data_size(final_data, "MessagePack job with integrity metadata")
+            _validate_serialized_data_size(
+                final_data, "MessagePack job with integrity metadata"
+            )
             return final_data
-        
+
         return serialized_data
 
     @staticmethod
@@ -1689,16 +1991,21 @@ class MsgPackSerializer:
         if SERIALIZATION_CHECKSUM_ENABLED:
             try:
                 integrity_metadata = MsgPackSerializer._msgpack_decode(data)
-                if isinstance(integrity_metadata, dict) and "data" in integrity_metadata:
+                if (
+                    isinstance(integrity_metadata, dict)
+                    and "data" in integrity_metadata
+                ):
                     # Verify integrity and extract original data
-                    data = _verify_integrity_metadata(integrity_metadata, for_json=False)
+                    data = _verify_integrity_metadata(
+                        integrity_metadata, for_json=False
+                    )
             except (SerializationError, KeyError, TypeError):
                 # If integrity check fails or metadata is invalid, proceed with original data
                 # This maintains backward compatibility with data serialized without integrity checks
                 pass
-        
+
         payload = MsgPackSerializer._msgpack_decode(data)
-        
+
         # Validate the deserialized payload before processing
         _validate_deserialized_job_payload(payload, "msgpack")
 
@@ -1736,27 +2043,43 @@ class MsgPackSerializer:
         required_fields = ["job_id", "function_str", "args_repr", "kwargs_repr"]
         for field in required_fields:
             if field not in payload:
-                raise SerializationError(f"Missing required field in failed job payload: {field}")
-        
+                raise SerializationError(
+                    f"Missing required field in failed job payload: {field}"
+                )
+
         # Validate job_id is a string
         if not isinstance(payload["job_id"], str):
-            raise SerializationError(f"job_id must be a string, got {type(payload['job_id'])}")
-        
+            raise SerializationError(
+                f"job_id must be a string, got {type(payload['job_id'])}"
+            )
+
         # Validate string fields
-        string_fields = ["function_str", "args_repr", "kwargs_repr", "error", "traceback"]
+        string_fields = [
+            "function_str",
+            "args_repr",
+            "kwargs_repr",
+            "error",
+            "traceback",
+        ]
         for field in string_fields:
             if field in payload and payload[field] is not None:
                 if not isinstance(payload[field], str):
-                    raise SerializationError(f"{field} must be a string, got {type(payload[field])}")
-        
+                    raise SerializationError(
+                        f"{field} must be a string, got {type(payload[field])}"
+                    )
+
         # Validate numeric fields
         numeric_fields = ["max_retries", "retry_delay"]
         for field in numeric_fields:
             if field in payload and payload[field] is not None:
                 if not isinstance(payload[field], (int, float)):
-                    raise SerializationError(f"{field} must be numeric, got {type(payload[field])}")
+                    raise SerializationError(
+                        f"{field} must be numeric, got {type(payload[field])}"
+                    )
                 if payload[field] < 0:
-                    raise SerializationError(f"{field} must be non-negative, got {payload[field]}")
+                    raise SerializationError(
+                        f"{field} must be non-negative, got {payload[field]}"
+                    )
 
     @staticmethod
     def serialize_failed_job(job: Job) -> bytes:
@@ -1774,18 +2097,22 @@ class MsgPackSerializer:
         }
         MsgPackSerializer._validate_failed_job_payload(payload)
         serialized_data = MsgPackSerializer._msgpack_encode(payload)
-        
+
         # Validate serialized data size
         _validate_serialized_data_size(serialized_data, "MessagePack failed job")
-        
+
         # Add integrity metadata if enabled
         if SERIALIZATION_CHECKSUM_ENABLED:
-            integrity_metadata = _add_integrity_metadata(serialized_data, for_json=False)
+            integrity_metadata = _add_integrity_metadata(
+                serialized_data, for_json=False
+            )
             final_data = MsgPackSerializer._msgpack_encode(integrity_metadata)
             # Validate final data size with integrity metadata
-            _validate_serialized_data_size(final_data, "MessagePack failed job with integrity metadata")
+            _validate_serialized_data_size(
+                final_data, "MessagePack failed job with integrity metadata"
+            )
             return final_data
-        
+
         return serialized_data
 
     @staticmethod
@@ -1794,18 +2121,24 @@ class MsgPackSerializer:
         required_fields = ["status"]
         for field in required_fields:
             if field not in payload:
-                raise SerializationError(f"Missing required field in result payload: {field}")
-        
+                raise SerializationError(
+                    f"Missing required field in result payload: {field}"
+                )
+
         # Validate status is a string
         if not isinstance(payload["status"], str):
-            raise SerializationError(f"status must be a string, got {type(payload['status'])}")
-        
+            raise SerializationError(
+                f"status must be a string, got {type(payload['status'])}"
+            )
+
         # Validate string fields
         string_fields = ["error", "traceback"]
         for field in string_fields:
             if field in payload and payload[field] is not None:
                 if not isinstance(payload[field], str):
-                    raise SerializationError(f"{field} must be a string, got {type(payload[field])}")
+                    raise SerializationError(
+                        f"{field} must be a string, got {type(payload[field])}"
+                    )
 
     @staticmethod
     def serialize_result(
@@ -1820,31 +2153,49 @@ class MsgPackSerializer:
             hasattr(status, "value") and status.value == JOB_STATUS.COMPLETED.value
         )
 
+        # Create a JobResult object for efficient serialization
+        job_result = JobResult(
+            job_id="",  # Empty job_id for standalone result
+            status=status_value,
+            result=result if is_completed else None,
+            error=error,
+            traceback=traceback_str,
+            start_time=0.0,  # Not tracking time for standalone result
+            finish_time=0.0,
+        )
+        
+        # Convert JobResult to dict for MessagePack serialization
         payload = {
-            "status": status_value,
-            "result": result if is_completed else None,
-            "error": error,
-            "traceback": traceback_str,
+            "status": job_result.status,
+            "result": job_result.result,
+            "error": job_result.error,
+            "traceback": job_result.traceback,
         }
-        MsgPackSerializer._validate_result_payload(payload)
+        
         encoder = msgspec.msgpack.Encoder()
         try:
             serialized_data = encoder.encode(payload)
-            
+
             # Validate serialized data size
             _validate_serialized_data_size(serialized_data, "MessagePack result")
-            
+
             # Add integrity metadata if enabled
             if SERIALIZATION_CHECKSUM_ENABLED:
-                integrity_metadata = _add_integrity_metadata(serialized_data, for_json=False)
+                integrity_metadata = _add_integrity_metadata(
+                    serialized_data, for_json=False
+                )
                 final_data = encoder.encode(integrity_metadata)
                 # Validate final data size with integrity metadata
-                _validate_serialized_data_size(final_data, "MessagePack result with integrity metadata")
+                _validate_serialized_data_size(
+                    final_data, "MessagePack result with integrity metadata"
+                )
                 return final_data
-            
+
             return serialized_data
         except (TypeError, ValueError) as e:
-            raise SerializationError(f"Failed to MessagePack-serialize result: {e}") from e
+            raise SerializationError(
+                f"Failed to MessagePack-serialize result: {e}"
+            ) from e
         except Exception as e:
             raise SerializationError(
                 f"Unexpected error during MessagePack result serialization: {e}"
@@ -1859,26 +2210,31 @@ class MsgPackSerializer:
             if SERIALIZATION_CHECKSUM_ENABLED:
                 try:
                     integrity_metadata = decoder.decode(data)
-                    if isinstance(integrity_metadata, dict) and "data" in integrity_metadata:
+                    if (
+                        isinstance(integrity_metadata, dict)
+                        and "data" in integrity_metadata
+                    ):
                         # Verify integrity and extract original data
-                        data = _verify_integrity_metadata(integrity_metadata, for_json=False)
+                        data = _verify_integrity_metadata(
+                            integrity_metadata, for_json=False
+                        )
                 except (SerializationError, KeyError, TypeError):
                     # If integrity check fails or metadata is invalid, proceed with original data
                     # This maintains backward compatibility with data serialized without integrity checks
                     pass
-            
+
             payload = decoder.decode(data)
-            
+
             # Validate the deserialized payload before processing
             _validate_deserialized_failed_job_payload(payload, "msgpack")
-            
+
             # Create a failed job with the deserialized data
             # Note: We can't reconstruct the original function, args, and kwargs
             # since we only stored their representations in serialize_failed_job
             job = Job(
                 function=lambda: None,  # Placeholder function
-                args=(),                # Empty args
-                kwargs={},              # Empty kwargs
+                args=(),  # Empty args
+                kwargs={},  # Empty kwargs
                 job_id=payload.get("job_id", ""),
                 enqueue_time=payload.get("enqueue_time"),
                 queue_name=payload.get("queue_name"),
@@ -1887,16 +2243,18 @@ class MsgPackSerializer:
                 error=payload.get("error"),
                 traceback=payload.get("traceback"),
             )
-            
+
             # Mark the job as failed by setting the appropriate fields
             # The status property is derived from _start_time, _finish_time, and error
             job._start_time = time.time()
             job._finish_time = time.time()
             # error is already set above
-            
+
             return job
         except (msgspec.DecodeError, ValueError) as e:
-            raise SerializationError(f"Failed to parse MessagePack failed job: {e}") from e
+            raise SerializationError(
+                f"Failed to parse MessagePack failed job: {e}"
+            ) from e
         except Exception as e:
             raise SerializationError(
                 f"Unexpected error during MessagePack failed job parsing: {e}"
@@ -1910,20 +2268,44 @@ class MsgPackSerializer:
             if SERIALIZATION_CHECKSUM_ENABLED:
                 try:
                     integrity_metadata = decoder.decode(data)
-                    if isinstance(integrity_metadata, dict) and "data" in integrity_metadata:
+                    if (
+                        isinstance(integrity_metadata, dict)
+                        and "data" in integrity_metadata
+                    ):
                         # Verify integrity and extract original data
-                        data = _verify_integrity_metadata(integrity_metadata, for_json=False)
+                        data = _verify_integrity_metadata(
+                            integrity_metadata, for_json=False
+                        )
                 except (SerializationError, KeyError, TypeError):
                     # If integrity check fails or metadata is invalid, proceed with original data
                     # This maintains backward compatibility with data serialized without integrity checks
                     pass
-            
+
             obj = decoder.decode(data)
-            
+
             # Validate the deserialized result payload
             _validate_deserialized_result_payload(obj, "msgpack")
-            
-            return obj
+
+            # Create a JobResult object from the dictionary
+            job_result = JobResult(
+                job_id="",  # Empty job_id for standalone result
+                status=obj.get("status", ""),
+                result=obj.get("result"),
+                error=obj.get("error"),
+                traceback=obj.get("traceback"),
+                start_time=0.0,  # Not tracking time for standalone result
+                finish_time=0.0,
+            )
+
+            # Convert JobResult back to dictionary for API compatibility
+            result_dict = {
+                "status": job_result.status,
+                "result": job_result.result,
+                "error": job_result.error,
+                "traceback": job_result.traceback,
+            }
+
+            return result_dict
         except (msgspec.DecodeError, ValueError) as e:
             raise SerializationError(f"Failed to parse MessagePack result: {e}") from e
         except Exception as e:

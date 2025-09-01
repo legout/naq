@@ -104,24 +104,20 @@ JSON_DECODER = _get_env_or_config(
 # Data integrity settings
 # Whether to enable checksum/signature verification for serialized data
 SERIALIZATION_CHECKSUM_ENABLED = _get_env_or_config(
-    "NAQ_SERIALIZATION_CHECKSUM_ENABLED",
-    ["serialization", "checksum_enabled"],
-    "False"
+    "NAQ_SERIALIZATION_CHECKSUM_ENABLED", ["serialization", "checksum_enabled"], "False"
 )
 
 # Algorithm to use for checksum calculation (e.g., "md5", "sha256", "sha512")
 SERIALIZATION_CHECKSUM_ALGORITHM = _get_env_or_config(
     "NAQ_SERIALIZATION_CHECKSUM_ALGORITHM",
     ["serialization", "checksum_algorithm"],
-    "sha256"
+    "sha256",
 )
 
 # Secret key for HMAC signature (if using HMAC for additional security)
 # If not provided, only checksums will be used
 SERIALIZATION_SIGNATURE_KEY = _get_env_or_config(
-    "NAQ_SERIALIZATION_SIGNATURE_KEY",
-    ["serialization", "signature_key"],
-    None
+    "NAQ_SERIALIZATION_SIGNATURE_KEY", ["serialization", "signature_key"], None
 )
 
 # Maximum size for serialized data in bytes (default: 10MB)
@@ -129,7 +125,7 @@ SERIALIZATION_SIGNATURE_KEY = _get_env_or_config(
 SERIALIZATION_MAX_SIZE_BYTES = _get_env_or_config(
     "NAQ_SERIALIZATION_MAX_SIZE_BYTES",
     ["serialization", "max_size_bytes"],
-    "10485760"  # 10MB
+    "10485760",  # 10MB
 )
 
 # Convert to integer if not None
@@ -156,13 +152,13 @@ SERIALIZATION_CHECKSUM_ENABLED = (
 PICKLE_DEBUG_LOGGING_ENABLED = _get_env_or_config(
     "NAQ_PICKLE_DEBUG_LOGGING_ENABLED",
     ["serialization", "pickle_debug_logging_enabled"],
-    "False"
+    "False",
 )
 
 PICKLE_DEBUG_LOGGING_LEVEL = _get_env_or_config(
     "NAQ_PICKLE_DEBUG_LOGGING_LEVEL",
     ["serialization", "pickle_debug_logging_level"],
-    "DEBUG"
+    "DEBUG",
 )
 
 # Convert to uppercase if not None
@@ -174,7 +170,7 @@ else:
 PICKLE_DEBUG_LOGGING_INCLUDE_OBJECTS = _get_env_or_config(
     "NAQ_PICKLE_DEBUG_LOGGING_INCLUDE_OBJECTS",
     ["serialization", "pickle_debug_logging_include_objects"],
-    "True"
+    "True",
 )
 
 # Convert string boolean values to actual booleans
@@ -612,15 +608,29 @@ class Config:
         self.events_stream_name = events_stream_name or EVENTS_STREAM_NAME
 
         # Pickle debug logging configuration
-        self.pickle_debug_logging_enabled = pickle_debug_logging_enabled or PICKLE_DEBUG_LOGGING_ENABLED
-        self.pickle_debug_logging_level = pickle_debug_logging_level or PICKLE_DEBUG_LOGGING_LEVEL
-        self.pickle_debug_logging_include_objects = pickle_debug_logging_include_objects or PICKLE_DEBUG_LOGGING_INCLUDE_OBJECTS
+        self.pickle_debug_logging_enabled = (
+            pickle_debug_logging_enabled or PICKLE_DEBUG_LOGGING_ENABLED
+        )
+        self.pickle_debug_logging_level = (
+            pickle_debug_logging_level or PICKLE_DEBUG_LOGGING_LEVEL
+        )
+        self.pickle_debug_logging_include_objects = (
+            pickle_debug_logging_include_objects or PICKLE_DEBUG_LOGGING_INCLUDE_OBJECTS
+        )
 
         # Serialization integrity configuration
-        self.serialization_checksum_enabled = serialization_checksum_enabled or SERIALIZATION_CHECKSUM_ENABLED
-        self.serialization_checksum_algorithm = serialization_checksum_algorithm or SERIALIZATION_CHECKSUM_ALGORITHM
-        self.serialization_signature_key = serialization_signature_key or SERIALIZATION_SIGNATURE_KEY
-        self.serialization_max_size_bytes = serialization_max_size_bytes or SERIALIZATION_MAX_SIZE_BYTES
+        self.serialization_checksum_enabled = (
+            serialization_checksum_enabled or SERIALIZATION_CHECKSUM_ENABLED
+        )
+        self.serialization_checksum_algorithm = (
+            serialization_checksum_algorithm or SERIALIZATION_CHECKSUM_ALGORITHM
+        )
+        self.serialization_signature_key = (
+            serialization_signature_key or SERIALIZATION_SIGNATURE_KEY
+        )
+        self.serialization_max_size_bytes = (
+            serialization_max_size_bytes or SERIALIZATION_MAX_SIZE_BYTES
+        )
 
         # Validate configuration
         self._validate_config()
@@ -904,7 +914,7 @@ class Config:
         enabled = _get_env_or_config(
             "NAQ_PICKLE_DEBUG_LOGGING_ENABLED",
             ["serialization", "pickle_debug_logging_enabled"],
-            "False"
+            "False",
         )
         if isinstance(enabled, str):
             return enabled.lower() == "true"
@@ -916,7 +926,7 @@ class Config:
         level = _get_env_or_config(
             "NAQ_PICKLE_DEBUG_LOGGING_LEVEL",
             ["serialization", "pickle_debug_logging_level"],
-            "DEBUG"
+            "DEBUG",
         )
         return level.upper() if level is not None else "DEBUG"
 
@@ -926,7 +936,7 @@ class Config:
         include_objects = _get_env_or_config(
             "NAQ_PICKLE_DEBUG_LOGGING_INCLUDE_OBJECTS",
             ["serialization", "pickle_debug_logging_include_objects"],
-            "True"
+            "True",
         )
         if isinstance(include_objects, str):
             return include_objects.lower() == "true"
@@ -938,7 +948,7 @@ class Config:
         enabled = _get_env_or_config(
             "NAQ_SERIALIZATION_CHECKSUM_ENABLED",
             ["serialization", "checksum_enabled"],
-            "False"
+            "False",
         )
         if isinstance(enabled, str):
             return enabled.lower() == "true"
@@ -950,16 +960,14 @@ class Config:
         return _get_env_or_config(
             "NAQ_SERIALIZATION_CHECKSUM_ALGORITHM",
             ["serialization", "checksum_algorithm"],
-            "sha256"
+            "sha256",
         )
 
     @classmethod
     def _get_serialization_signature_key_config(cls) -> Optional[str]:
         """Get serialization signature key configuration from environment or config."""
         return _get_env_or_config(
-            "NAQ_SERIALIZATION_SIGNATURE_KEY",
-            ["serialization", "signature_key"],
-            None
+            "NAQ_SERIALIZATION_SIGNATURE_KEY", ["serialization", "signature_key"], None
         )
 
     @classmethod
@@ -968,7 +976,7 @@ class Config:
         max_size = _get_env_or_config(
             "NAQ_SERIALIZATION_MAX_SIZE_BYTES",
             ["serialization", "max_size_bytes"],
-            "10485760"  # 10MB
+            "10485760",  # 10MB
         )
         # Handle empty string as None
         if max_size is not None and max_size != "":

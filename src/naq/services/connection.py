@@ -13,6 +13,7 @@ import nats
 from nats.aio.client import Client as NATSClient
 from nats.js import JetStreamContext
 
+from ..circuit_breaker import get_circuit_breaker
 from ..config import get_config
 from ..config.types import NAQConfig
 from ..connection.manager import ConnectionManager
@@ -39,6 +40,10 @@ class ConnectionServiceConfig(BaseConnectionServiceConfig):
     ping_interval: float = 30.0
     max_outstanding_pings: int = 3
     prefer_thread_local: bool = False
+    # Circuit breaker configuration
+    circuit_breaker_failure_threshold: int = 5
+    circuit_breaker_recovery_timeout: float = 60.0
+    enable_circuit_breaker: bool = True
 
 
 class ConnectionService(BaseService):
@@ -80,6 +85,7 @@ class ConnectionService(BaseService):
         self._reconnect_tasks: Dict[str, asyncio.Task] = {}
         self._connection_stats: Dict[str, Dict[str, Any]] = {}
         self._connection_locks: Dict[str, asyncio.Lock] = {}
+        self._circuit_breakers: Dict[str, Any] = {}
 
     def _extract_connection_config(self) -> ConnectionServiceConfig:
         """
@@ -314,6 +320,7 @@ class ConnectionService(BaseService):
         - Lazy connection initialization
         - Connection caching with health checks
         - Minimal overhead for cached connections
+        - Circuit breaker protection for connection failures
 
         Args:
             url: Optional NATS server URL. If not provided, uses the configured URL.
@@ -367,10 +374,34 @@ class ConnectionService(BaseService):
 
                 start_time = time.perf_counter()
 
-                # Get connection from the underlying connection manager
-                nc = await self._connection_manager.get_connection(
-                    url, prefer_thread_local=self._connection_config.prefer_thread_local
-                )
+                # Get or create circuit breaker for this URL if enabled
+                if self._connection_config.enable_circuit_breaker:
+                    if url not in self._circuit_breakers:
+                        self._circuit_breakers[url] = await get_circuit_breaker(
+                            name=f"nats-connection-{url}",
+                            failure_threshold=self._connection_config.circuit_breaker_failure_threshold,
+                            recovery_timeout=self._connection_config.circuit_breaker_recovery_timeout,
+                            expected_exception=NaqConnectionError,
+                        )
+
+                    # Use circuit breaker to protect connection creation
+                    circuit_breaker = self._circuit_breakers[url]
+
+                    # Define the connection creation function
+                    async def create_connection():
+                        return await self._connection_manager.get_connection(
+                            url,
+                            prefer_thread_local=self._connection_config.prefer_thread_local,
+                        )
+
+                    # Call through circuit breaker
+                    nc = await circuit_breaker.call(create_connection)
+                else:
+                    # Get connection directly without circuit breaker
+                    nc = await self._connection_manager.get_connection(
+                        url,
+                        prefer_thread_local=self._connection_config.prefer_thread_local,
+                    )
 
                 # Cache the connection
                 self._connections[url] = nc
@@ -424,10 +455,33 @@ class ConnectionService(BaseService):
             return self._jetstream_contexts[url]
 
         try:
-            # Get JetStream context from the underlying connection manager
-            js = await self._connection_manager.get_jetstream(
-                url, prefer_thread_local=self._connection_config.prefer_thread_local
-            )
+            # Get or create circuit breaker for this URL if enabled
+            if self._connection_config.enable_circuit_breaker:
+                if url not in self._circuit_breakers:
+                    self._circuit_breakers[url] = await get_circuit_breaker(
+                        name=f"nats-jetstream-{url}",
+                        failure_threshold=self._connection_config.circuit_breaker_failure_threshold,
+                        recovery_timeout=self._connection_config.circuit_breaker_recovery_timeout,
+                        expected_exception=NaqConnectionError,
+                    )
+
+                # Use circuit breaker to protect JetStream context creation
+                circuit_breaker = self._circuit_breakers[url]
+
+                # Define the JetStream context creation function
+                async def create_jetstream():
+                    return await self._connection_manager.get_jetstream(
+                        url,
+                        prefer_thread_local=self._connection_config.prefer_thread_local,
+                    )
+
+                # Call through circuit breaker
+                js = await circuit_breaker.call(create_jetstream)
+            else:
+                # Get JetStream context directly without circuit breaker
+                js = await self._connection_manager.get_jetstream(
+                    url, prefer_thread_local=self._connection_config.prefer_thread_local
+                )
 
             # Cache the JetStream context
             self._jetstream_contexts[url] = js
