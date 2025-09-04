@@ -26,7 +26,7 @@ from typing import (
 import msgspec
 
 from .enums import JOB_STATUS, VALID_RETRY_STRATEGIES
-from ..settings import (
+from ..config import (
     DEFAULT_QUEUE_NAME,
 )
 

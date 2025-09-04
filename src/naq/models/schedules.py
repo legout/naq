@@ -12,7 +12,7 @@ from typing import Optional
 
 import msgspec
 
-from ..settings import MAX_SCHEDULE_FAILURES
+from ..config import MAX_SCHEDULE_FAILURES
 from .jobs import Job
 
 

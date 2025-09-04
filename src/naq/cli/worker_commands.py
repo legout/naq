@@ -5,7 +5,7 @@ from typing import List, Optional
 
 import typer
 
-from ..settings import DEFAULT_NATS_URL, DEFAULT_QUEUE_NAME
+from ..config import DEFAULT_NATS_URL, DEFAULT_QUEUE_NAME
 from ..utils import setup_logging
 from ..utils.decorators import timing, log_errors
 from ..utils.validation import validate_parameter, ensure_type
@@ -257,7 +257,7 @@ def list_workers(
     from datetime import timezone
     from rich.table import Table
 
-    from ..settings import DEFAULT_WORKER_TTL_SECONDS
+    from ..config import DEFAULT_WORKER_TTL_SECONDS
 
     handler = WorkerCommandHandler()
     handler.setup_logging(log_level if log_level else "CRITICAL")

@@ -16,7 +16,7 @@ from ..exceptions import (
 )
 from ..models.jobs import Job
 from ..models.enums import SCHEDULED_JOB_STATUS
-from ..settings import (
+from ..config import (
     JOB_SERIALIZER,
     SCHEDULED_JOBS_KV_NAME,
 )

@@ -8,7 +8,7 @@ from typing import Optional
 import typer
 from rich.table import Table
 
-from ..settings import DEFAULT_NATS_URL
+from ..config import DEFAULT_NATS_URL
 from ..models.enums import SCHEDULED_JOB_STATUS
 from ..scheduler import Scheduler
 from ..services.base import ServiceManager, ServiceConfig

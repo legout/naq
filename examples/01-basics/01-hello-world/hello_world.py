@@ -21,7 +21,6 @@ from typing import Any
 # Import NAQ components
 from naq import SyncClient, setup_logging
 from naq.nats_client import NatsClientConfig
-from naq.settings import QueueConfig
 
 # Configure secure JSON serialization (recommended for production)
 os.environ.setdefault('NAQ_JOB_SERIALIZER', 'json')
@@ -86,10 +85,6 @@ def main():
             nats_url="nats://localhost:4222",
             connection_timeout=5,
             max_reconnect_attempts=3
-        )
-        
-        queue_config = QueueConfig(
-            default_name="default"
         )
         
         with SyncClient(nats_url=nats_config.nats_url) as client:

@@ -11,7 +11,7 @@ from ..config import get_config
 from ..exceptions import SerializationError
 from ..models.events import JobEvent
 from ..models.jobs import Job
-from ..settings import FAILED_JOB_STREAM_NAME, FAILED_JOB_SUBJECT_PREFIX
+from ..config import FAILED_JOB_STREAM_NAME, FAILED_JOB_SUBJECT_PREFIX
 from ..utils.decorators import timing
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception
 from ..utils.logging import StructuredLogger

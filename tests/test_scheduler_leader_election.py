@@ -21,7 +21,7 @@ from naq.exceptions import (
     LockDataError,
 )
 from naq.scheduler import LeaderElection, LockData
-from naq.settings import SCHEDULER_LOCK_KV_NAME, SCHEDULER_LOCK_KEY
+from naq.config import SCHEDULER_LOCK_KV_NAME, SCHEDULER_LOCK_KEY
 from naq.utils.error_handling import ErrorHandler, create_error_context, wrap_naq_exception
 
 

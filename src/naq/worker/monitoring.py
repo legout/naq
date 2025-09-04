@@ -9,7 +9,7 @@ import cloudpickle
 
 from ..config import get_config
 from ..nats_client import NatsClient
-from ..settings import WORKER_KV_NAME
+from ..config import WORKER_KV_NAME
 from ..utils import run_async_from_sync
 from ..utils.decorators import timing
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception

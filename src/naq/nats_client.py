@@ -18,7 +18,7 @@ from nats.js.api import ConsumerConfig, StreamConfig
 
 from .config import get_config
 from .exceptions import NaqConnectionError, NaqException
-from .settings import NatsConnectionConfig
+from .config.types import NatsConfig
 from .utils.logging import StructuredLogger
 from .utils.decorators import retry
 from .utils.validation import validate_parameter
@@ -66,28 +66,6 @@ class NatsClientConfig:
 
 
 class NatsClient:
-    
-    
-    def __init__(self, config: Optional[NatsClientConfig] = None) -> None:
-        """
-        Initialize the NATS client.
-        
-        Args:
-            config: Optional configuration for the client.
-        """
-        self._config = config or NatsClientConfig()
-        self._nc: Optional[NATSClient] = None
-        self._js: Optional[JetStreamContext] = None
-        self._logger = StructuredLogger("naq.nats_client")
-        self._connection_lock = asyncio.Lock()
-        self._is_connected = False
-        
-    @property
-    def is_connected(self) -> bool:
-        """Check if the client is connected to NATS."""
-        return self._is_connected and self._nc is not None and self._nc.is_connected
-    
-    @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
     """
     A unified client for interacting with NATS and JetStream.
 
@@ -117,6 +95,27 @@ class NatsClient:
         >>> async with NatsClient() as client:
         ...     await client.publish("subject", b"message")
     """
+    
+    def __init__(self, config: Optional[NatsClientConfig] = None) -> None:
+        """
+        Initialize the NATS client.
+        
+        Args:
+            config: Optional configuration for the client.
+        """
+        self._config = config or NatsClientConfig()
+        self._nc: Optional[NATSClient] = None
+        self._js: Optional[JetStreamContext] = None
+        self._logger = StructuredLogger("naq.nats_client")
+        self._connection_lock = asyncio.Lock()
+        self._is_connected = False
+        
+    @property
+    def is_connected(self) -> bool:
+        """Check if the client is connected to NATS."""
+        return self._is_connected and self._nc is not None and self._nc.is_connected
+    
+    @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
     async def connect(self) -> None:
         """
         Connect to NATS server.

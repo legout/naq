@@ -3,8 +3,9 @@
 This package provides queue management functionality for the NAQ job queue system.
 """
 
-# Import all async functions
-from .async_api import (
+# Import all functions from the unified API
+from .api import (
+    # Async functions
     cancel_scheduled_job,
     enqueue,
     enqueue_at,
@@ -14,14 +15,8 @@ from .async_api import (
     purge_queue,
     resume_scheduled_job,
     schedule,
-)
-from .core import Queue
-from .scheduled import ScheduledJobManager
-
-# Import all sync functions
-from .sync_api import (
+    # Sync functions
     cancel_scheduled_job_sync,
-    close_sync_connections,
     enqueue_at_sync,
     enqueue_in_sync,
     enqueue_sync,
@@ -31,6 +26,8 @@ from .sync_api import (
     resume_scheduled_job_sync,
     schedule_sync,
 )
+from .core import Queue
+from .scheduled import ScheduledJobManager
 
 __all__ = [
     # Classes
@@ -56,5 +53,4 @@ __all__ = [
     "pause_scheduled_job_sync",
     "resume_scheduled_job_sync",
     "modify_scheduled_job_sync",
-    "close_sync_connections",
 ]

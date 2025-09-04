@@ -14,7 +14,7 @@ from ..nats_client import NatsClient
 from ..config import get_config
 from ..models import JOB_STATUS
 from ..models.jobs import Job
-from ..settings import DEFAULT_RESULT_TTL_SECONDS, JOB_STATUS_KV_NAME, RESULT_KV_NAME
+from ..config import DEFAULT_RESULT_TTL_SECONDS, JOB_STATUS_KV_NAME, RESULT_KV_NAME
 from ..utils.decorators import timing
 from ..utils.error_handling import ErrorHandler
 from ..utils.logging import StructuredLogger

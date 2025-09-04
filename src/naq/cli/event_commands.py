@@ -13,7 +13,7 @@ from rich.panel import Panel
 from rich.live import Live
 from rich.layout import Layout
 
-from ..settings import DEFAULT_NATS_URL
+from ..config import DEFAULT_NATS_URL
 from ..services.events import EventService
 from ..services.connection import ConnectionService
 from ..services.worker import WorkerService

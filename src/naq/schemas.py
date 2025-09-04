@@ -2,11 +2,11 @@
 Schema constants for NAQ.
 
 This module provides constants used throughout the NAQ library for naming
-and configuration purposes. These constants are imported from settings
+and configuration purposes. These constants are imported from config
 for backward compatibility.
 """
 
-from .settings import (
+from .config import (
     SCHEDULED_JOBS_KV_NAME,
     SCHEDULER_LOCK_KEY,
     SCHEDULER_LOCK_KV_NAME,

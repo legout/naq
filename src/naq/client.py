@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, List, Optional, Union
 
 from .models.jobs import Job, RetryDelayType
-from .queue.sync_api import (
+from .queue import (
     enqueue_sync,
     enqueue_at_sync,
     enqueue_in_sync,
@@ -20,7 +20,7 @@ from .queue.sync_api import (
     resume_scheduled_job_sync,
     modify_scheduled_job_sync,
 )
-from .settings import DEFAULT_QUEUE_NAME, DEFAULT_NATS_URL
+from .config import DEFAULT_QUEUE_NAME, DEFAULT_NATS_URL
 
 
 class SyncClient:

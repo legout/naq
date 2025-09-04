@@ -14,7 +14,7 @@ from nats.aio.errors import ErrNoServers, ErrTimeout, ErrConnectionClosed
 from nats.js.errors import BucketNotFoundError
 from loguru import logger
 
-from ..settings import DEFAULT_NATS_URL
+from ..config import DEFAULT_NATS_URL
 from ..config import get_config, NAQConfig
 from ..exceptions import NaqConnectionError
 

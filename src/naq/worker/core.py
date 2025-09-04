@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 
 class Worker:
-    
+    """
     A worker that fetches jobs from specified NATS queues (subjects) and executes them.
     
     This class uses the unified NatsClient for all NATS operations, replacing the previous
@@ -68,7 +68,6 @@ class Worker:
         >>> # Use with a custom NatsClient
         >>> client = NatsClient()
         >>> worker = Worker(queues=["my_queue"], nats_client=client)
-    """
     """
 
     def __init__(

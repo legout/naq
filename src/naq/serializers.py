@@ -94,7 +94,7 @@ from typing import Any, Dict, List, Optional, Tuple, Protocol
 from .exceptions import SerializationError
 from .models.enums import JOB_STATUS, RETRY_STRATEGY
 from .models.jobs import Job, JobResult
-from .settings import (
+from .config import (
     DEFAULT_QUEUE_NAME,
     JOB_SERIALIZER,
     JSON_ENCODER,

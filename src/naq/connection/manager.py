@@ -8,7 +8,7 @@ from nats.aio.client import Client as NATSClient
 from nats.js import JetStreamContext, api
 
 from ..exceptions import NaqConnectionError
-from ..settings import DEFAULT_NATS_URL
+from ..config import DEFAULT_NATS_URL
 
 
 class ConnectionManager:

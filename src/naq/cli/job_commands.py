@@ -6,7 +6,7 @@ from typing import List, Optional
 import typer
 from rich.panel import Panel
 
-from ..settings import DEFAULT_NATS_URL
+from ..config import DEFAULT_NATS_URL
 from ..services.jobs import JobService
 from ..services.scheduler import SchedulerService
 from ..services.streams import StreamService
@@ -97,7 +97,7 @@ def purge(
             )
 
             # Use services to purge queues
-            from ..settings import NAQ_PREFIX
+            from ..config import NAQ_PREFIX
 
             results = {}
             total_purged = 0

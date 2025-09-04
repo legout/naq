@@ -14,7 +14,7 @@ from ..exceptions import ConfigurationError
 from ..models.jobs import Job, RetryDelayType
 from .scheduled import ScheduledJobManager
 from ..models.enums import SCHEDULED_JOB_STATUS
-from ..settings import DEFAULT_QUEUE_NAME, DEFAULT_NATS_URL, NAQ_PREFIX
+from ..config import DEFAULT_QUEUE_NAME, DEFAULT_NATS_URL, NAQ_PREFIX
 from ..utils import setup_logging
 from ..utils.decorators import retry
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception

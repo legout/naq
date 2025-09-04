@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 
-from ..settings import DEFAULT_NATS_URL
+from ..config import DEFAULT_NATS_URL
 from ..services.base import ServiceManager, ServiceConfig
 from ..services.config import GlobalServiceConfig
 from ..service_context import service_context

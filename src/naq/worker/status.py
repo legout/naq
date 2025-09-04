@@ -15,7 +15,7 @@ from ..nats_client import NatsClient
 from ..config import get_config
 from ..exceptions import NaqException
 from ..models.enums import WORKER_STATUS
-from ..settings import (
+from ..config import (
     DEFAULT_NATS_URL,
     DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
     WORKER_KV_NAME,

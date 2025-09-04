@@ -9,7 +9,7 @@ import pytest
 
 from naq.scheduler import LeaderElection, Scheduler
 from naq.nats_client import NatsClient
-from naq.settings import (
+from naq.config import (
     SCHEDULER_LOCK_KV_NAME,
     SCHEDULER_LOCK_KEY,
     SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS,

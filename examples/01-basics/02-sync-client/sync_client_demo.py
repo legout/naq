@@ -21,7 +21,6 @@ from typing import List
 # Import NAQ components
 from naq import SyncClient, setup_logging
 from naq.nats_client import NatsClientConfig
-from naq.settings import QueueConfig
 
 # Configure secure JSON serialization
 os.environ.setdefault('NAQ_JOB_SERIALIZER', 'json')
@@ -101,9 +100,6 @@ def performance_test():
         max_reconnect_attempts=3
     )
     
-    queue_config = QueueConfig(
-        default_name="batch_jobs"
-    )
     
     for i in range(10):
         with SyncClient(nats_url=nats_config.nats_url) as client:
@@ -155,17 +151,10 @@ def batch_operations_demo():
         max_reconnect_attempts=3
     )
     
-    default_queue_config = QueueConfig(
-        default_name="default"
-    )
-    
-    batch_queue_config = QueueConfig(
-        default_name="batch_jobs"
-    )
-    
-    test_queue_config = QueueConfig(
-        default_name="test_queue"
-    )
+    # Define queue names
+    default_queue = "default"
+    batch_queue = "batch_jobs"
+    test_queue = "test_queue"
     
     with SyncClient(nats_url=nats_config.nats_url) as client:
         # Batch 1: Data processing jobs
@@ -191,7 +180,7 @@ def batch_operations_demo():
                 send_notification,
                 user_id=user,
                 message="Batch processing completed",
-                queue_name=default_queue_config.default_name
+                queue_name=default_queue
             )
             notification_jobs.append(job)
         
@@ -234,7 +223,7 @@ def batch_operations_demo():
                 process_data,
                 data_id=i + 2000,
                 category="test",
-                queue_name=test_queue_config.default_name
+                queue_name=test_queue
             )
             test_jobs.append(job)
         
