@@ -1,191 +1,50 @@
-"""Utils package for NAQ.
+"""
+Utility modules for NAQ
 
-This package contains various utility modules for common functionality
-used throughout the NAQ codebase.
+This package contains various utility modules used throughout the NAQ library.
 """
 
-# Import from all sub-modules
-from .async_helpers import run_async_from_sync
-from .context_managers import ResourceManagementError, managed_resource
-from .decorators import retry, log_errors, timing, RetryError
-from .error_handling import ErrorHandler
-from .logging import setup_logging
-from .nats_helpers import build_subject, parse_subject, stream_exists
-from .serialization import (
-    SerializationHelper,
-    serialize_with_metadata,
-    deserialize_with_metadata,
-)
-from .timing import Stopwatch, measure_execution_time, measure_execution_time_cm
-from .warnings import deprecated_import_warning, create_deprecated_class
-from .types import (
-    # Basic type aliases
-    JobID,
-    WorkerID,
-    QueueName,
-    StreamName,
-    SubjectName,
-    Timestamp,
-    Duration,
-    TTL,
-    RetryDelayType,
-    JobDependency,
-    FunctionArgs,
-    FunctionKwargs,
-    ExceptionTypes,
-    ConfigDict,
-    NatsServers,
-    NatsAuth,
-    NatsTLS,
-    QueueNames,
-    SubjectNames,
-    JobStatusData,
-    EventData,
-    WorkerStatusData,
-    MetricsDict,
-    StatsDict,
-    SerializedData,
-    DeserializedData,
-    JobCallback,
-    EventCallback,
-    ErrorCallback,
-    AsyncJobCallback,
-    AsyncEventCallback,
-    AsyncErrorCallback,
-    # TypedDict classes
-    JobInfo,
-    WorkerInfo,
-    QueueInfo,
-    ConnectionInfo,
-    JobFilter,
-    WorkerFilter,
-    QueueFilter,
-    JobMetrics,
-    WorkerMetrics,
-    QueueMetrics,
-    SystemMetrics,
-    # msgspec.Struct classes
-    ConnectionMetrics,
-    JobTiming,
-    WorkerTiming,
-    QueueTiming,
-    # Collection type aliases
-    JobInfoList,
-    WorkerInfoList,
-    QueueInfoList,
-    ConnectionInfoList,
-    JobMetricsList,
-    WorkerMetricsList,
-    QueueMetricsList,
-    SystemMetricsList,
-    # Timing dict type aliases
-    JobTimingDict,
-    WorkerTimingDict,
-    QueueTimingDict,
-)
+from .logging import StructuredLogger, get_logger, setup_logging
+from .decorators import retry, timeout, measure_time, circuit_breaker, rate_limit
 from .validation import (
     validate_parameter,
+    validate_nats_url,
+    validate_subject,
+    validate_stream_name,
+    validate_queue_name,
+    validate_job_id,
+    validate_timeout,
+    validate_concurrency,
+    validate_batch_size,
     ensure_type,
-    ValidationError,
-    TypeConversionError,
 )
+from .async_helpers import run_async_from_sync
 
 __all__ = [
-    # From async_helpers
-    "run_async_from_sync",
-    # From context_managers
-    "ResourceManagementError",
-    "managed_resource",
-    # From decorators
-    "retry",
-    "log_errors",
-    "timing",
-    "RetryError",
-    # From error_handling
-    "ErrorHandler",
-    # From logging
+    # Logging utilities
+    "StructuredLogger",
+    "get_logger",
     "setup_logging",
-    # From nats_helpers
-    "build_subject",
-    "parse_subject",
-    "stream_exists",
-    # From serialization
-    "SerializationHelper",
-    "serialize_with_metadata",
-    "deserialize_with_metadata",
-    # From timing
-    "Stopwatch",
-    "measure_execution_time",
-    "measure_execution_time_cm",
-    # From warnings
-    "deprecated_import_warning",
-    "create_deprecated_class",
-    # From validation
+    
+    # Decorator utilities
+    "retry",
+    "timeout",
+    "measure_time",
+    "circuit_breaker",
+    "rate_limit",
+    
+    # Validation utilities
     "validate_parameter",
+    "validate_nats_url",
+    "validate_subject",
+    "validate_stream_name",
+    "validate_queue_name",
+    "validate_job_id",
+    "validate_timeout",
+    "validate_concurrency",
+    "validate_batch_size",
     "ensure_type",
-    "ValidationError",
-    "TypeConversionError",
-    # Basic type aliases
-    "JobID",
-    "WorkerID",
-    "QueueName",
-    "StreamName",
-    "SubjectName",
-    "Timestamp",
-    "Duration",
-    "TTL",
-    "RetryDelayType",
-    "JobDependency",
-    "FunctionArgs",
-    "FunctionKwargs",
-    "ExceptionTypes",
-    "ConfigDict",
-    "NatsServers",
-    "NatsAuth",
-    "NatsTLS",
-    "QueueNames",
-    "SubjectNames",
-    "JobStatusData",
-    "EventData",
-    "WorkerStatusData",
-    "MetricsDict",
-    "StatsDict",
-    "SerializedData",
-    "DeserializedData",
-    "JobCallback",
-    "EventCallback",
-    "ErrorCallback",
-    "AsyncJobCallback",
-    "AsyncEventCallback",
-    "AsyncErrorCallback",
-    # TypedDict classes
-    "JobInfo",
-    "WorkerInfo",
-    "QueueInfo",
-    "ConnectionInfo",
-    "JobFilter",
-    "WorkerFilter",
-    "QueueFilter",
-    "JobMetrics",
-    "WorkerMetrics",
-    "QueueMetrics",
-    "SystemMetrics",
-    # msgspec.Struct classes
-    "ConnectionMetrics",
-    "JobTiming",
-    "WorkerTiming",
-    "QueueTiming",
-    # Collection type aliases
-    "JobInfoList",
-    "WorkerInfoList",
-    "QueueInfoList",
-    "ConnectionInfoList",
-    "JobMetricsList",
-    "WorkerMetricsList",
-    "QueueMetricsList",
-    "SystemMetricsList",
-    # Timing dict type aliases
-    "JobTimingDict",
-    "WorkerTimingDict",
-    "QueueTimingDict",
+    
+    # Async utilities
+    "run_async_from_sync",
 ]

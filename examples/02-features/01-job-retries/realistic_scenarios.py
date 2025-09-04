@@ -20,7 +20,10 @@ import random
 import time
 from typing import Dict, Any
 
-from naq import SyncClient, setup_logging
+from loguru import logger
+
+from naq import NatsClient, setup_logging
+from naq.config import NatsConfig, QueueConfig
 
 # Configure secure JSON serialization
 os.environ.setdefault('NAQ_JOB_SERIALIZER', 'json')
@@ -71,7 +74,7 @@ def call_external_api(endpoint: str, user_id: int) -> Dict[str, Any]:
         ConnectionError: For network issues
         TimeoutError: For timeout issues
     """
-    print(f"🌐 Calling API {endpoint} for user {user_id}")
+    logger.info(f"🌐 Calling API {endpoint} for user {user_id}")
     
     # Simulate API call delay
     time.sleep(random.uniform(0.5, 1.5))
@@ -79,19 +82,19 @@ def call_external_api(endpoint: str, user_id: int) -> Dict[str, Any]:
     failure_type = random.random()
     
     if failure_type < 0.1:  # 10% auth errors (don't retry)
-        print(f"🔐 Authentication failed for user {user_id}")
+        logger.error(f"🔐 Authentication failed for user {user_id}")
         raise AuthenticationError(f"Invalid token for user {user_id}")
     elif failure_type < 0.3:  # 20% connection errors (retry)
-        print(f"🔌 Connection lost to {endpoint}")
+        logger.error(f"🔌 Connection lost to {endpoint}")
         raise ConnectionError(f"Network connection failed")
     elif failure_type < 0.5:  # 20% timeout errors (retry)
-        print(f"⏱️  Request to {endpoint} timed out")
+        logger.error(f"⏱️  Request to {endpoint} timed out")
         raise TimeoutError(f"API request timeout")
     elif failure_type < 0.6:  # 10% API errors (retry)
-        print(f"⚠️  API error from {endpoint}")
+        logger.error(f"⚠️  API error from {endpoint}")
         raise APIError(f"Internal API error: {random.choice(['Rate limit', 'Service unavailable', 'Internal error'])}")
     else:  # 40% success
-        print(f"✅ API call to {endpoint} successful")
+        logger.success(f"✅ API call to {endpoint} successful")
         return {
             "user_id": user_id,
             "endpoint": endpoint,
@@ -115,7 +118,7 @@ def process_database_record(record_id: int, operation: str) -> str:
         DatabaseConnectionError: For connection issues (retryable)
         ValueError: For invalid data (not retryable)
     """
-    print(f"🗄️  Database {operation} for record {record_id}")
+    logger.info(f"🗄️  Database {operation} for record {record_id}")
     
     # Simulate database operation delay
     time.sleep(random.uniform(0.2, 0.8))
@@ -123,16 +126,16 @@ def process_database_record(record_id: int, operation: str) -> str:
     failure_type = random.random()
     
     if failure_type < 0.05:  # 5% invalid data (don't retry)
-        print(f"❌ Invalid data for record {record_id}")
+        logger.error(f"❌ Invalid data for record {record_id}")
         raise ValueError(f"Record {record_id} has invalid data format")
     elif failure_type < 0.25:  # 20% connection errors (retry)
-        print(f"🔌 Database connection lost")
+        logger.error(f"🔌 Database connection lost")
         raise DatabaseConnectionError("Connection to database lost")
     elif failure_type < 0.35:  # 10% timeout (retry)
-        print(f"⏱️  Database operation timed out")
+        logger.error(f"⏱️  Database operation timed out")
         raise DatabaseConnectionError("Database operation timeout")
     else:  # 65% success
-        print(f"✅ Database {operation} successful for record {record_id}")
+        logger.success(f"✅ Database {operation} successful for record {record_id}")
         return f"Database {operation} completed for record {record_id}"
 
 
@@ -151,7 +154,7 @@ def process_file_upload(filename: str, file_size: int) -> str:
         FileSystemError: For temporary file system issues (retryable)
         ValueError: For unsupported file types (not retryable)
     """
-    print(f"📁 Processing file: {filename} ({file_size}MB)")
+    logger.info(f"📁 Processing file: {filename} ({file_size}MB)")
     
     # Simulate processing time based on file size
     processing_time = file_size * 0.1  # 0.1 seconds per MB
@@ -160,16 +163,16 @@ def process_file_upload(filename: str, file_size: int) -> str:
     failure_type = random.random()
     
     if failure_type < 0.05:  # 5% unsupported format (don't retry)
-        print(f"❌ Unsupported file format: {filename}")
+        logger.error(f"❌ Unsupported file format: {filename}")
         raise ValueError(f"File format not supported: {filename}")
     elif failure_type < 0.2:  # 15% disk space issues (retry)
-        print(f"💾 Insufficient disk space for {filename}")
+        logger.error(f"💾 Insufficient disk space for {filename}")
         raise FileSystemError("Insufficient disk space")
     elif failure_type < 0.3:  # 10% permission issues (retry)
-        print(f"🔒 Permission denied for {filename}")
+        logger.error(f"🔒 Permission denied for {filename}")
         raise FileSystemError("Permission denied")
     else:  # 70% success
-        print(f"✅ File {filename} processed successfully")
+        logger.success(f"✅ File {filename} processed successfully")
         return f"File {filename} ({file_size}MB) processed and uploaded"
 
 
@@ -189,7 +192,7 @@ def send_email_notification(email: str, subject: str, template: str) -> str:
         EmailDeliveryError: For delivery issues (retryable)
         ValueError: For invalid email format (not retryable)
     """
-    print(f"📧 Sending email to {email}: {subject}")
+    logger.info(f"📧 Sending email to {email}: {subject}")
     
     # Simulate email sending delay
     time.sleep(random.uniform(0.3, 1.0))
@@ -197,27 +200,43 @@ def send_email_notification(email: str, subject: str, template: str) -> str:
     failure_type = random.random()
     
     if failure_type < 0.02:  # 2% invalid email (don't retry)
-        print(f"❌ Invalid email format: {email}")
+        logger.error(f"❌ Invalid email format: {email}")
         raise ValueError(f"Invalid email address: {email}")
     elif failure_type < 0.15:  # 13% SMTP errors (retry)
-        print(f"📮 SMTP server error")
+        logger.error(f"📮 SMTP server error")
         raise EmailDeliveryError("SMTP server temporarily unavailable")
     elif failure_type < 0.25:  # 10% rate limiting (retry)
-        print(f"🚫 Rate limit exceeded")
+        logger.error(f"🚫 Rate limit exceeded")
         raise EmailDeliveryError("Email rate limit exceeded")
     else:  # 75% success
-        print(f"✅ Email sent successfully to {email}")
+        logger.success(f"✅ Email sent successfully to {email}")
         return f"Email '{subject}' delivered to {email}"
 
 
-def demonstrate_api_retry_patterns():
+def demonstrate_api_retry_patterns() -> list:
     """
     Demonstrate API call retry patterns with selective error handling.
-    """
-    print("🌐 API Retry Patterns")
-    print("-" * 30)
     
-    with SyncClient() as client:
+    Returns:
+        List of enqueued jobs
+    """
+    logger.info("🌐 API Retry Patterns")
+    logger.info("-" * 30)
+    
+    # Create configuration for API queue
+    nats_config = NatsConfig(
+        servers=["nats://localhost:4222"],
+        connect_timeout=5,
+        max_reconnect_attempts=3
+    )
+    
+    api_queue_config = QueueConfig(
+        name="api_queue",
+        stream_name="NAQ_JOBS",
+        consumer_name="realistic_scenarios_consumer"
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=api_queue_config) as client:
         jobs = []
         
         # API calls with selective retries
@@ -233,7 +252,6 @@ def demonstrate_api_retry_patterns():
                 call_external_api,
                 endpoint=endpoint,
                 user_id=1000 + i,
-                queue_name="api_queue",
                 max_retries=4,
                 retry_delay=3,
                 retry_strategy="exponential",
@@ -242,19 +260,29 @@ def demonstrate_api_retry_patterns():
                 ignore_on=(AuthenticationError,)
             )
             jobs.append(job)
-            print(f"  📤 API job {i+1}: {endpoint} ({job.job_id})")
+            logger.info(f"  📤 API job {i+1}: {endpoint} ({job.job_id})")
         
         return jobs
 
 
-def demonstrate_database_retry_patterns():
+def demonstrate_database_retry_patterns() -> list:
     """
     Demonstrate database operation retry patterns.
-    """
-    print("\n🗄️  Database Retry Patterns")
-    print("-" * 30)
     
-    with SyncClient() as client:
+    Returns:
+        List of enqueued jobs
+    """
+    logger.info("\n🗄️  Database Retry Patterns")
+    logger.info("-" * 30)
+    
+    # Create configuration for database queue
+    db_queue_config = QueueConfig(
+        name="db_queue",
+        stream_name="NAQ_JOBS",
+        consumer_name="realistic_scenarios_consumer"
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=db_queue_config) as client:
         jobs = []
         
         # Database operations
@@ -270,7 +298,6 @@ def demonstrate_database_retry_patterns():
                 process_database_record,
                 record_id=record_id,
                 operation=operation,
-                queue_name="db_queue",
                 max_retries=5,  # Database issues might need more retries
                 retry_delay=[2, 4, 8, 16, 32],  # Exponential backoff
                 retry_strategy="linear",  # Use linear with custom delays
@@ -278,19 +305,29 @@ def demonstrate_database_retry_patterns():
                 ignore_on=(ValueError,)  # Don't retry data validation errors
             )
             jobs.append(job)
-            print(f"  📤 DB job: {operation} record {record_id} ({job.job_id})")
+            logger.info(f"  📤 DB job: {operation} record {record_id} ({job.job_id})")
         
         return jobs
 
 
-def demonstrate_file_processing_retries():
+def demonstrate_file_processing_retries() -> list:
     """
     Demonstrate file processing retry patterns.
-    """
-    print("\n📁 File Processing Retry Patterns")
-    print("-" * 35)
     
-    with SyncClient() as client:
+    Returns:
+        List of enqueued jobs
+    """
+    logger.info("\n📁 File Processing Retry Patterns")
+    logger.info("-" * 35)
+    
+    # Create configuration for file queue
+    file_queue_config = QueueConfig(
+        name="file_queue",
+        stream_name="NAQ_JOBS",
+        consumer_name="realistic_scenarios_consumer"
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=file_queue_config) as client:
         jobs = []
         
         # File processing jobs
@@ -306,7 +343,6 @@ def demonstrate_file_processing_retries():
                 process_file_upload,
                 filename=filename,
                 file_size=size,
-                queue_name="file_queue",
                 max_retries=3,
                 retry_delay=5,  # Fixed delay for file operations
                 retry_strategy="linear",
@@ -314,19 +350,29 @@ def demonstrate_file_processing_retries():
                 ignore_on=(ValueError,)  # Don't retry format errors
             )
             jobs.append(job)
-            print(f"  📤 File job: {filename} ({size}MB) ({job.job_id})")
+            logger.info(f"  📤 File job: {filename} ({size}MB) ({job.job_id})")
         
         return jobs
 
 
-def demonstrate_email_retry_patterns():
+def demonstrate_email_retry_patterns() -> list:
     """
     Demonstrate email sending retry patterns.
-    """
-    print("\n📧 Email Retry Patterns")
-    print("-" * 25)
     
-    with SyncClient() as client:
+    Returns:
+        List of enqueued jobs
+    """
+    logger.info("\n📧 Email Retry Patterns")
+    logger.info("-" * 25)
+    
+    # Create configuration for email queue
+    email_queue_config = QueueConfig(
+        name="email_queue",
+        stream_name="NAQ_JOBS",
+        consumer_name="realistic_scenarios_consumer"
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=email_queue_config) as client:
         jobs = []
         
         # Email sending jobs
@@ -343,7 +389,6 @@ def demonstrate_email_retry_patterns():
                 email=email,
                 subject=subject,
                 template=template,
-                queue_name="email_queue",
                 max_retries=3,
                 retry_delay=10,  # Longer delays for email to avoid rate limits
                 retry_strategy="linear",
@@ -351,17 +396,20 @@ def demonstrate_email_retry_patterns():
                 ignore_on=(ValueError,)  # Don't retry invalid addresses
             )
             jobs.append(job)
-            print(f"  📤 Email job: {subject} to {email} ({job.job_id})")
+            logger.info(f"  📤 Email job: {subject} to {email} ({job.job_id})")
         
         return jobs
 
 
-def main():
+def main() -> int:
     """
     Main function demonstrating realistic retry scenarios.
+    
+    Returns:
+        Exit code (0 for success, 1 for error)
     """
-    print("🚀 NAQ Realistic Retry Scenarios")
-    print("=" * 50)
+    logger.info("🚀 NAQ Realistic Retry Scenarios")
+    logger.info("=" * 50)
     
     try:
         # Demonstrate different real-world scenarios
@@ -372,41 +420,41 @@ def main():
         
         all_jobs = api_jobs + db_jobs + file_jobs + email_jobs
         
-        print(f"\n🎉 Enqueued {len(all_jobs)} realistic jobs!")
+        logger.info(f"\n🎉 Enqueued {len(all_jobs)} realistic jobs!")
         
-        print("\n" + "=" * 50)
-        print("📊 Scenario Summary:")
-        print("=" * 50)
-        print(f"API calls: {len(api_jobs)} jobs (selective retries)")
-        print(f"Database ops: {len(db_jobs)} jobs (connection retries only)")
-        print(f"File processing: {len(file_jobs)} jobs (filesystem retries only)")
-        print(f"Email sending: {len(email_jobs)} jobs (delivery retries only)")
+        logger.info("\n" + "=" * 50)
+        logger.info("📊 Scenario Summary:")
+        logger.info("=" * 50)
+        logger.info(f"API calls: {len(api_jobs)} jobs (selective retries)")
+        logger.info(f"Database ops: {len(db_jobs)} jobs (connection retries only)")
+        logger.info(f"File processing: {len(file_jobs)} jobs (filesystem retries only)")
+        logger.info(f"Email sending: {len(email_jobs)} jobs (delivery retries only)")
         
-        print("\n🎯 Retry Strategy Highlights:")
-        print("   • API: Retry network/API errors, skip auth errors")
-        print("   • Database: Retry connection issues, skip data errors")
-        print("   • Files: Retry filesystem issues, skip format errors")
-        print("   • Email: Retry delivery issues, skip invalid addresses")
+        logger.info("\n🎯 Retry Strategy Highlights:")
+        logger.info("   • API: Retry network/API errors, skip auth errors")
+        logger.info("   • Database: Retry connection issues, skip data errors")
+        logger.info("   • Files: Retry filesystem issues, skip format errors")
+        logger.info("   • Email: Retry delivery issues, skip invalid addresses")
         
-        print("\n💡 Watch for these patterns:")
-        print("   • Jobs that fail immediately (ignored errors)")
-        print("   • Jobs that retry multiple times (retryable errors)")
-        print("   • Different retry delays per scenario")
-        print("   • Final success after retries")
+        logger.info("\n💡 Watch for these patterns:")
+        logger.info("   • Jobs that fail immediately (ignored errors)")
+        logger.info("   • Jobs that retry multiple times (retryable errors)")
+        logger.info("   • Different retry delays per scenario")
+        logger.info("   • Final success after retries")
         
-        print("\n📋 Production Tips:")
-        print("   • Monitor retry patterns to identify systemic issues")
-        print("   • Adjust retry counts based on real failure rates")
-        print("   • Use appropriate delays for different service types")
-        print("   • Implement circuit breakers for external services")
-        print("   • Set up alerts for excessive retry rates")
+        logger.info("\n📋 Production Tips:")
+        logger.info("   • Monitor retry patterns to identify systemic issues")
+        logger.info("   • Adjust retry counts based on real failure rates")
+        logger.info("   • Use appropriate delays for different service types")
+        logger.info("   • Implement circuit breakers for external services")
+        logger.info("   • Set up alerts for excessive retry rates")
         
     except Exception as e:
-        print(f"❌ Error: {e}")
-        print("\n🔧 Troubleshooting:")
-        print("   - Is NATS running? (cd docker && docker-compose up -d)")
-        print("   - Are workers running for all queues?")
-        print("   - Is NAQ_JOB_SERIALIZER=json set?")
+        logger.error(f"❌ Error: {e}")
+        logger.error("\n🔧 Troubleshooting:")
+        logger.error("   - Is NATS running? (cd docker && docker-compose up -d)")
+        logger.error("   - Are workers running for all queues?")
+        logger.error("   - Is NAQ_JOB_SERIALIZER=json set?")
         return 1
     
     return 0

@@ -6,129 +6,52 @@ title: "Architecture Overview"
 
 ## Core Components
 
-The `naq` ecosystem consists of two main architectural layers:
+The `naq` ecosystem consists of the following core components:
 
-### 1. Service Layer
-
-The service layer provides a modular, extensible foundation for all `naq` functionality. Each service is responsible for a specific domain and can be used independently or composed together to create complex workflows.
-
-**Base Infrastructure:**
-
--   **ServiceManager**: The central coordinator that manages service lifecycles, handles dependency injection, and provides a unified interface for accessing services.
--   **BaseService**: Abstract base class for all services with consistent lifecycle management and error handling.
--   **Configuration System**: Hierarchical configuration with environment variable support and service-specific settings.
-
-**Core Services:**
-
--   **ConnectionService**: Manages NATS connections, connection pooling, and JetStream contexts with automatic reconnection and monitoring.
--   **KVStoreService**: Provides centralized access to NATS KeyValue stores with transaction support and TTL management.
--   **StreamService**: Handles JetStream stream creation, management, and configuration with consistent parameters.
--   **EventService**: Logs and retrieves job and worker events with configurable retention policies.
--   **JobService**: Manages job execution, result storage, and lifecycle events with integrated failure handling.
--   **WorkerService**: Tracks worker registration, status, and heartbeats with lifecycle management.
--   **SchedulerService**: Handles job scheduling, triggering, cancellation, and pausing with support for recurring jobs.
-
-### ServiceManager Integration Testing
-
-The ServiceManager includes comprehensive integration tests that validate cross-service communication, dependency injection, and lifecycle management:
-
-**Test Coverage**:
--   ServiceManager initialization and service registration
--   Automatic dependency injection across all services
--   Cross-service communication and data flow validation
--   Full lifecycle management for all services
--   Error handling and recovery scenarios
--   Circular dependency detection
--   Mixed real and mock service configurations
-
-**Key Test Scenarios**:
--   Validates that JobService receives correct dependencies from ConnectionService, KVStoreService, and EventService
--   Tests cross-service communication patterns (e.g., JobService to EventService event logging)
--   Verifies proper initialization order based on service dependencies
--   Ensures coordinated cleanup in the correct reverse order
--   Tests error propagation and recovery during service failures
-
-The integration tests are located in [`tests/test_services/test_service_manager.py`](tests/test_services/test_service_manager.py) and use the existing testing infrastructure with fixtures and utilities for consistent test patterns.
-
-### 2. Application Layer
-
-The application layer consists of the high-level components that you interact with directly:
-
--   **Client (Producer)**: Any application that enqueues jobs. This can be done via simple helper functions (`enqueue`, `schedule`) or by using the `JobService` directly.
--   **Worker**: A process that executes jobs. It uses the `WorkerService` to register itself and the `JobService` to process tasks from one or more queues.
--   **Scheduler**: A dedicated process that uses the `SchedulerService` to enqueue jobs at their scheduled times.
+-   **Client (Producer)**: Any application that enqueues jobs. This can be done via simple helper functions (`enqueue`, `schedule`) or by using the `Queue` class directly.
+-   **Worker**: A process that executes jobs. It uses the `Worker` class to process tasks from one or more queues.
+-   **Scheduler**: A dedicated process that uses the `Scheduler` class to enqueue jobs at their scheduled times.
 -   **NATS Server (with JetStream)**: The message broker that provides persistence, guaranteed message delivery, and storage for job results, events, and metadata.
-
-## Service Layer Benefits
-
-The service layer architecture provides several key advantages:
-
--   **Modularity**: Each service has a single responsibility and can be used independently or composed as needed.
--   **Testability**: Services can be easily mocked or stubbed for unit testing, and dependencies can be injected.
--   **Reusability**: Services can be shared across different parts of an application or even different applications.
--   **Consistency**: All services follow the same lifecycle pattern and error handling conventions.
--   **Extensibility**: New services can be added without modifying existing ones, following the open/closed principle.
--   **Dependency Management**: The ServiceManager handles service initialization, dependency resolution, and cleanup in the correct order.
--   **Configuration Flexibility**: Services can be configured globally or individually, with environment variable support.
+-   **NatsClient**: A unified client that provides both synchronous and asynchronous interfaces for interacting with NATS and JetStream.
+-   **Configuration System**: A schema-driven configuration system that supports environment variable overrides and validation.
 
 ## How It Works: The Job Lifecycle
 
-This diagram illustrates the flow of a job through the `naq` system, highlighting the interaction between the application and service layers.
+This diagram illustrates the flow of a job through the `naq` system:
 
 ```{mermaid}
 graph TD
-    subgraph "Application Layer"
+    subgraph "NAQ Components"
         Client[Client]
         Worker[Worker]
         Scheduler[Scheduler]
-    end
-    
-    subgraph "Service Layer"
-        JobService[JobService]
-        ConnectionService[ConnectionService]
-        KVStoreService[KVStoreService]
-        EventService[EventService]
-        WorkerService[WorkerService]
-        SchedulerService[SchedulerService]
+        Queue[Queue]
+        NatsClient[NatsClient]
     end
 
     subgraph "NATS Infrastructure"
         QueueStream[Queue Stream]
         ResultStore[Result KV Store]
         ScheduledJobs[Scheduled Jobs KV]
-        WorkerStatus[Worker Status KV]
-        EventsKV[Events KV Store]
     end
 
-    Client -- "1. Enqueue Job" --> JobService
-    JobService -- "2. Publish to NATS" --> QueueStream
-    JobService -- "3. Logs Job Events" --> EventService
+    Client -- "1. Enqueue Job" --> Queue
+    Queue -- "2. Publish to NATS" --> QueueStream
     
-    Scheduler -- "4. Check for Due Jobs" --> SchedulerService
-    SchedulerService -- "5. Trigger Due Jobs" --> QueueStream
-    SchedulerService -- "6. Logs Scheduler Events" --> EventService
+    Scheduler -- "3. Check for Due Jobs" --> ScheduledJobs
+    Scheduler -- "4. Trigger Due Jobs" --> Queue
     
-    Worker -- "7. Fetch Job" --> QueueStream
-    Worker -- "8. Executes via JobService" --> JobService
-    Worker -- "9. Logs Worker Events" --> EventService
-    JobService -- "10. Store Result" --> ResultStore
-    JobService -- "11. Logs Job Events" --> EventService
-    
-    EventService -- "12. Stores Events" --> EventsKV
-    
-    Worker -- "13. Register/Update Status" --> WorkerService
-    WorkerService -- "14. Store Status" --> WorkerStatus
+    Worker -- "5. Fetch Job" --> QueueStream
+    Worker -- "6. Execute Job" --> NatsClient
+    NatsClient -- "7. Store Result" --> ResultStore
 ```
 
-1.  **Enqueueing**: The client calls an `enqueue` function or directly uses the JobService. The function, its arguments, and metadata are serialized into a job payload and published to a NATS subject.
-2.  **Job Service Processing**: The JobService handles the publishing to NATS and logs job events through the EventService.
-3.  **Scheduler Triggering**: The SchedulerService periodically checks for due jobs and triggers them by publishing to the appropriate queue, also logging scheduler events.
-4.  **Persistence**: NATS JetStream receives the message and persists it in a **Stream**. Each queue maps directly to a JetStream Stream.
-5.  **Fetching**: A worker process fetches jobs from the queue's Stream. The WorkerService tracks worker registration and status, and the Worker also logs its own events.
-6.  **Execution**: The worker uses the JobService to execute the job, which handles the actual function execution, result storage, and event logging.
-7.  **Result Handling**: The JobService uses the `KVStoreService` to store the job's result in the `Result KV Store` with configurable TTL and logs completion events.
-8.  **Event Storage**: The EventService stores all logged events (Job, Worker, Scheduler, System) in a dedicated NATS Key-Value store, allowing for historical lookup and auditing.
-9.  **Worker Management**: The WorkerService tracks worker registration, status updates, and heartbeats in a dedicated KV store.
+1.  **Enqueueing**: The client calls an `enqueue` function or uses the `Queue` class directly. The function, its arguments, and metadata are serialized into a job payload and published to a NATS subject.
+2.  **Persistence**: NATS JetStream receives the message and persists it in a **Stream**. Each queue maps directly to a JetStream Stream.
+3.  **Scheduler Triggering**: The Scheduler periodically checks for due jobs in the `ScheduledJobs` KV store and triggers them by publishing to the appropriate queue.
+4.  **Fetching**: A worker process fetches jobs from the queue's Stream.
+5.  **Execution**: The worker executes the job function and stores the result using the `NatsClient`.
+6.  **Result Handling**: The `NatsClient` stores the job's result in the `Result KV Store` with configurable TTL.
 
 ## Why NATS?
 
@@ -138,195 +61,16 @@ Using NATS and JetStream as the foundation provides several key advantages:
 -   **Scalability**: You can add more workers at any time to increase your processing capacity. NATS handles the load balancing of jobs to available workers automatically.
 -   **Resilience**: If a worker crashes, JetStream ensures that the job it was processing will be re-delivered to another worker after a timeout. If the entire `naq` system goes down, the jobs are safe in the NATS stream, ready to be processed when the system comes back online.
 -   **Simplicity**: By offloading the complexities of persistence, delivery guarantees, and storage to NATS, the `naq` codebase can remain focused on the core logic of job execution and scheduling.
--   **Service Flexibility**: The service layer architecture allows each component to leverage NATS features independently while maintaining a consistent interface.
+-   **Simplicity**: The unified `NatsClient` provides a clean, consistent interface for all NATS operations.
 
-## Event System Architecture
+## Configuration System
 
-The `naq` event system is designed to provide comprehensive observability into the job queue's operation. It captures various events related to jobs, workers, and the scheduler, storing them for real-time monitoring and historical analysis.
+The `naq` library uses a schema-driven configuration system that provides type safety, validation, and environment variable support. The configuration is defined using `msgspec.Struct` classes and can be customized through environment variables or direct configuration objects.
 
-**Key Principles:**
--   **Centralized Logging**: All events are funneled through the `EventService` and stored in a dedicated NATS Key-Value (KV) store.
--   **Structured Events**: Events are strongly typed using `msgspec.Struct` for efficient serialization and clear data fields.
--   **Extensibility**: Custom event processors can be implemented and registered to react to specific events (e.g., send notifications, update dashboards).
--   **CLI Integration**: Event data is exposed via CLI commands for easy inspection and monitoring.
+**Key Features:**
+-   **Type Safety**: All configuration values are validated against their defined types.
+-   **Environment Variable Support**: Configuration can be overridden using environment variables.
+-   **Hierarchical Configuration**: Configuration can be organized in a hierarchical structure.
+-   **Validation**: Configuration values are validated at startup.
 
-**Event Flow:**
-
-```{mermaid}
-graph TD
-    subgraph "NAQ Components"
-        JobService[JobService]
-        Worker[Worker]
-        Scheduler[Scheduler]
-    end
-
-    subgraph "Event System"
-        EventService[EventService]
-        EventsKV[Events KV Store]
-        EventProcessors[Custom Event Processors]
-    end
-
-    JobService -- "Logs Job Events" --> EventService
-    Worker -- "Logs Worker Events" --> EventService
-    Scheduler -- "Logs Scheduler Events" --> EventService
-    
-    EventService -- "Stores Events" --> EventsKV
-    EventsKV -- "Real-time Stream" --> CLI[CLI Monitoring Commands]
-    EventsKV -- "Historical Query" --> CLI
-    EventsKV -- "Processed by" --> EventProcessors
-```
-
-**Event Types:**
-
-`naq` defines several categories of events to cover different aspects of the system:
-
--   **Job Events**: Track the lifecycle of individual jobs (e.g., `ENQUEUED`, `STARTED`, `COMPLETED`, `FAILED`, `RETRY_SCHEDULED`, `SCHEDULED`, `SCHEDULE_TRIGGERED`, `CANCELLED`, `STATUS_CHANGED`).
--   **Worker Events**: Monitor the status and activity of workers (e.g., `STARTED`, `STOPPED`, `HEARTBEAT`, `JOB_STARTED`, `JOB_COMPLETED`, `JOB_FAILED`, `PAUSED`, `RESUMED`).
--   **Scheduler Events**: Log actions performed by the scheduler (e.g., job scheduling, triggering).
--   **System Events**: General system-level events (e.g., service startup/shutdown, configuration changes).
-
-For a detailed description of each event type and their data fields, refer to the [Events API Reference](api/events.qmd).
-
-## Service Dependencies and Relationships
-
-Services are designed to work together with clear dependency relationships:
-
-```{mermaid}
-graph TD
-    ConnectionService -- "provides" --> KVStoreService
-    ConnectionService -- "provides" --> StreamService
-    ConnectionService -- "provides" --> JobService
-    ConnectionService -- "provides" --> WorkerService
-    ConnectionService -- "provides" --> SchedulerService
-    ConnectionService -- "provides" --> EventService
-    
-    KVStoreService -- "used by" --> EventService
-    KVStoreService -- "used by" --> JobService
-    KVStoreService -- "used by" --> WorkerService
-    KVStoreService -- "used by" --> SchedulerService
-    
-    EventService -- "used by" --> JobService
-    EventService -- "used by" --> WorkerService
-    EventService -- "used by" --> SchedulerService
-    
-    WorkerService -- "manages" --> WorkerStatus
-    SchedulerService -- "manages" --> ScheduledJobs
-    JobService -- "stores" --> JobResults
-    EventService -- "stores" --> EventsKV
-```
-
--   **ConnectionService** is the foundation service that provides NATS connectivity to all other services.
--   **KVStoreService** depends on ConnectionService and provides storage capabilities used by most other services.
--   **EventService** depends on both ConnectionService and KVStoreService to provide event logging functionality.
--   **JobService**, **WorkerService**, and **SchedulerService** all depend on the lower-level services to provide their domain-specific functionality.
-
-## Migration Validation
-
-When migrating to the service layer architecture, it's important to follow a structured validation process to ensure a successful transition. The following checklists provide comprehensive validation steps for both pre-integration and post-integration phases.
-
-### Pre-Integration Checklist
-
-Complete these checks before integrating with the service layer:
-
--   [ ] **Verify all services are implemented and tested**
-    -   [ ] ConnectionService is implemented and passes tests
-    -   [ ] ConfigService is implemented and passes tests
-    -   [ ] JobService is implemented and passes tests
-    -   [ ] KVStoreService is implemented and passes tests
-    -   [ ] StreamService is implemented and passes tests
-    -   [ ] EventService is implemented and passes tests
-    -   [ ] WorkerService is implemented and passes tests
-    -   [ ] SchedulerService is implemented and passes tests
-
--   [ ] **Confirm configuration system is working**
-    -   [ ] Configuration can be set and retrieved correctly
-    -   [ ] Environment variable overrides work as expected
-    -   [ ] Service-specific configuration is properly isolated
-    -   [ ] Configuration validation is working
-
--   [ ] **Ensure common patterns are extracted**
-    -   [ ] Connection pooling is implemented in ConnectionService
-    -   [ ] Error handling patterns are consistent across services
-    -   [ ] Logging is standardized using loguru
-    -   [ ] Performance monitoring is integrated into services
-    -   [ ] Resource cleanup is implemented consistently
-
--   [ ] **Record performance benchmarks**
-    -   [ ] Service initialization times are measured
-    -   [ ] Connection acquisition times are recorded
-    -   [ ] Memory usage patterns are documented
-    -   [ ] Throughput metrics are established
-    -   [ ] Resource utilization benchmarks are captured
-
-### Post-Integration Checklist
-
-Complete these checks after integrating with the service layer:
-
--   [ ] **Verify all components use the service layer**
-    -   [ ] Client applications use JobService for job operations
-    -   [ ] Worker processes use JobService for job execution
-    -   [ ] Scheduler uses SchedulerService for time-based events
-    -   [ ] No direct NATS operations in application code
-    -   [ ] All components properly initialize services
-
--   [ ] **Confirm no direct NATS operations outside services**
-    -   [ ] All NATS connections go through ConnectionService
-    -   [ ] All JetStream operations use appropriate services
-    -   [ ] No direct subject subscriptions in application code
-    -   [ ] All message publishing uses service layer
-    -   [ ] All KV operations use KVStoreService
-
--   [ ] **Validate configuration is passed correctly**
-    -   [ ] Services receive correct configuration parameters
-    -   [ ] Configuration overrides work as expected
-    -   [ ] Service-specific configuration is properly applied
-    -   [ ] Configuration changes are propagated correctly
-    -   [ ] Default configuration values are appropriate
-
--   [ ] **Ensure all tests pass**
-    -   [ ] Unit tests for all services pass
-    -   [ ] Integration tests pass
-    -   [ ] End-to-end tests pass
-    -   [ ] Performance tests meet requirements
-    -   [ ] Load tests pass under expected conditions
-
--   [ ] **Verify performance meets or exceeds benchmarks**
-    -   [ ] Service initialization times are within acceptable limits
-    -   [ ] Connection acquisition times are improved or maintained
-    -   [ ] Memory usage is within expected bounds
-    -   [ ] Throughput meets or exceeds previous benchmarks
-    -   [ ] Resource utilization is optimized
-
--   [ ] **Confirm resource cleanup is working**
-    -   [ ] Services properly clean up resources on shutdown
-    -   [ ] Connection pools are properly managed
-    -   [ ] Memory is properly released
-    -   [ ] File handles are properly closed
-    -   [ ] No resource leaks detected
-
-### Automated Migration Validation
-
-The [`src/naq/migration_validation.py`](src/naq/migration_validation.py) module provides automated validation of these checklists. To run a complete migration validation:
-
-```python
-from naq.services.base import ServiceManager
-from naq.migration_validation import validate_migration
-from naq.models.enums import ValidationStatus
-
-# Create and configure service manager
-service_manager = ServiceManager()
-
-# Run complete migration validation
-report = await validate_migration(service_manager)
-
-# Check results
-if report.overall_passed:
-    print("Migration validation passed successfully!")
-else:
-    print("Migration validation failed:")
-    for result in report.pre_integration_results + report.post_integration_results:
-        if result.status != ValidationStatus.PASS:
-            print(f"  - {result.name}: {result.message}")
-```
-
-The validation report provides detailed information about each check, including performance metrics and any issues found. This automated approach ensures consistent validation and provides a comprehensive audit trail for the migration process.
+For more details on configuration, see the [Configuration documentation](configuration.qmd).

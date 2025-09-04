@@ -21,16 +21,27 @@ import time
 from html import escape
 from typing import Dict, List, Any, Optional
 
-from naq import SyncClient, setup_logging
+import msgspec
+from loguru import logger
+
+from naq import NatsClient
+from naq.config import NatsConfig, QueueConfig
 
 # CRITICAL: Always use JSON serialization in production
 os.environ.setdefault('NAQ_JOB_SERIALIZER', 'json')
 
 # Setup logging to see security warnings
-setup_logging(level="INFO")
+logger.remove()
+logger.add(lambda msg: print(msg, end=""), level="INFO", format="{time} | {level} | {message}")
 
 
 # ===== SECURE FUNCTION PATTERNS =====
+
+class UserData(msgspec.Struct):
+    """User data structure with validation."""
+    name: str
+    email: str
+
 
 def secure_user_processing(user_id: int, operation: str, data: Dict[str, Any]) -> str:
     """
@@ -54,7 +65,7 @@ def secure_user_processing(user_id: int, operation: str, data: Dict[str, Any]) -
     Raises:
         ValueError: For invalid inputs
     """
-    print(f"🔒 Secure processing: User {user_id}, Operation {operation}")
+    logger.info(f"🔒 Secure processing: User {user_id}, Operation {operation}")
     
     # 1. Type validation
     if not isinstance(user_id, int):
@@ -97,7 +108,7 @@ def secure_user_processing(user_id: int, operation: str, data: Dict[str, Any]) -
     time.sleep(0.5)
     
     result = f"Securely processed {operation} for user {user_id} (name: {name}, email: {email})"
-    print(f"✅ {result}")
+    logger.info(f"✅ {result}")
     
     return result
 
@@ -117,7 +128,7 @@ def secure_content_processing(title: str, content: str, category: str) -> str:
     Raises:
         ValueError: For invalid or dangerous content
     """
-    print(f"📝 Secure content processing: {title[:30]}...")
+    logger.info(f"📝 Secure content processing: {title[:30]}...")
     
     # 1. Type validation
     if not all(isinstance(x, str) for x in [title, content, category]):
@@ -164,7 +175,7 @@ def secure_content_processing(title: str, content: str, category: str) -> str:
     time.sleep(1)
     
     result = f"Processed {category} content: '{safe_title}' ({len(safe_content)} chars)"
-    print(f"✅ {result}")
+    logger.info(f"✅ {result}")
     
     return result
 
@@ -184,7 +195,7 @@ def secure_file_processing(filename: str, file_type: str, size_mb: int) -> str:
     Raises:
         ValueError: For invalid or unsafe files
     """
-    print(f"📁 Secure file processing: {filename}")
+    logger.info(f"📁 Secure file processing: {filename}")
     
     # 1. Type validation
     if not isinstance(filename, str) or not isinstance(file_type, str):
@@ -220,7 +231,7 @@ def secure_file_processing(filename: str, file_type: str, size_mb: int) -> str:
     time.sleep(processing_time)
     
     result = f"Securely processed {file_type.upper()} file: {filename} ({size_mb}MB)"
-    print(f"✅ {result}")
+    logger.info(f"✅ {result}")
     
     return result
 
@@ -240,7 +251,7 @@ def secure_api_call(endpoint: str, method: str, params: Dict[str, Any]) -> str:
     Raises:
         ValueError: For invalid API parameters
     """
-    print(f"🌐 Secure API call: {method} {endpoint}")
+    logger.info(f"🌐 Secure API call: {method} {endpoint}")
     
     # 1. Type validation
     if not isinstance(endpoint, str) or not isinstance(method, str):
@@ -284,7 +295,7 @@ def secure_api_call(endpoint: str, method: str, params: Dict[str, Any]) -> str:
     time.sleep(0.5)
     
     result = f"Secure {method} to {endpoint} with {len(params)} parameters"
-    print(f"✅ {result}")
+    logger.info(f"✅ {result}")
     
     return result
 
@@ -308,7 +319,7 @@ def insecure_function_example():
     # 3. Functions with non-serializable arguments
     # complex_object = SomeComplexClass()
     
-    print("❌ This demonstrates patterns that don't work with secure JSON serialization")
+    logger.warning("❌ This demonstrates patterns that don't work with secure JSON serialization")
     return "These patterns require the insecure pickle serializer"
 
 
@@ -318,14 +329,29 @@ def demonstrate_secure_patterns():
     """
     Demonstrate secure job patterns with comprehensive validation.
     """
-    print("🔒 Secure Job Patterns Demo")
-    print("-" * 40)
+    logger.info("🔒 Secure Job Patterns Demo")
+    logger.info("-" * 40)
     
-    with SyncClient() as client:
+    # Configure NATS client
+    nats_config = NatsConfig(
+        servers=["nats://localhost:4222"],
+        connect_timeout=5.0,
+        max_reconnect_attempts=3
+    )
+    
+    # Configure secure queue
+    queue_config = QueueConfig(
+        name="secure_queue",
+        job_timeout=30.0,
+        max_retries=2,
+        retry_delay=3.0
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=queue_config) as client:
         jobs = []
         
         # 1. Secure user processing
-        print("📤 Secure user processing jobs...")
+        logger.info("📤 Secure user processing jobs...")
         user_jobs = [
             (1001, "create", {"name": "Alice Johnson", "email": "alice@example.com"}),
             (1002, "update", {"name": "Bob Smith", "email": "bob@company.com"}),
@@ -337,14 +363,13 @@ def demonstrate_secure_patterns():
                 secure_user_processing,
                 user_id=user_id,
                 operation=operation,
-                data=data,
-                queue_name="secure_queue"
+                data=data
             )
             jobs.append(job)
-            print(f"  ✅ User job: {operation} user {user_id} ({job.job_id})")
+            logger.info(f"  ✅ User job: {operation} user {user_id} ({job.job_id})")
         
         # 2. Secure content processing
-        print("\n📤 Secure content processing jobs...")
+        logger.info("\n📤 Secure content processing jobs...")
         content_jobs = [
             ("Getting Started with NAQ", "This guide explains how to use NAQ securely...", "documentation"),
             ("Weekly Newsletter", "This week's updates and important announcements...", "news"),
@@ -356,14 +381,13 @@ def demonstrate_secure_patterns():
                 secure_content_processing,
                 title=title,
                 content=content,
-                category=category,
-                queue_name="secure_queue"
+                category=category
             )
             jobs.append(job)
-            print(f"  ✅ Content job: {title[:30]}... ({job.job_id})")
+            logger.info(f"  ✅ Content job: {title[:30]}... ({job.job_id})")
         
         # 3. Secure file processing
-        print("\n📤 Secure file processing jobs...")
+        logger.info("\n📤 Secure file processing jobs...")
         file_jobs = [
             ("report.pdf", "pdf", 5),
             ("image.jpg", "jpg", 2),
@@ -376,14 +400,13 @@ def demonstrate_secure_patterns():
                 secure_file_processing,
                 filename=filename,
                 file_type=file_type,
-                size_mb=size,
-                queue_name="secure_queue"
+                size_mb=size
             )
             jobs.append(job)
-            print(f"  ✅ File job: {filename} ({job.job_id})")
+            logger.info(f"  ✅ File job: {filename} ({job.job_id})")
         
         # 4. Secure API calls
-        print("\n📤 Secure API call jobs...")
+        logger.info("\n📤 Secure API call jobs...")
         api_jobs = [
             ("/users/profile", "GET", {"user_id": "123"}),
             ("/orders", "POST", {"user_id": "456", "product": "widget"}),
@@ -395,11 +418,10 @@ def demonstrate_secure_patterns():
                 secure_api_call,
                 endpoint=endpoint,
                 method=method,
-                params=params,
-                queue_name="secure_queue"
+                params=params
             )
             jobs.append(job)
-            print(f"  ✅ API job: {method} {endpoint} ({job.job_id})")
+            logger.info(f"  ✅ API job: {method} {endpoint} ({job.job_id})")
         
         return jobs
 
@@ -408,14 +430,29 @@ def demonstrate_invalid_patterns():
     """
     Demonstrate what happens with invalid inputs (these will fail gracefully).
     """
-    print("\n⚠️  Invalid Input Handling Demo")
-    print("-" * 40)
+    logger.info("\n⚠️  Invalid Input Handling Demo")
+    logger.info("-" * 40)
     
-    with SyncClient() as client:
+    # Configure NATS client
+    nats_config = NatsConfig(
+        servers=["nats://localhost:4222"],
+        connect_timeout=5.0,
+        max_reconnect_attempts=3
+    )
+    
+    # Configure secure queue
+    queue_config = QueueConfig(
+        name="secure_queue",
+        job_timeout=30.0,
+        max_retries=2,
+        retry_delay=3.0
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=queue_config) as client:
         jobs = []
         
         # These jobs will fail with validation errors (which is good!)
-        print("📤 Jobs that will fail validation (demonstrating security)...")
+        logger.info("📤 Jobs that will fail validation (demonstrating security)...")
         
         invalid_jobs = [
             # Invalid user ID
@@ -450,17 +487,17 @@ def demonstrate_invalid_patterns():
         for func_name, kwargs in invalid_jobs:
             try:
                 if func_name == "secure_user_processing":
-                    job = client.enqueue(secure_user_processing, **kwargs, queue_name="secure_queue")
+                    job = client.enqueue(secure_user_processing, **kwargs)
                 elif func_name == "secure_content_processing":
-                    job = client.enqueue(secure_content_processing, **kwargs, queue_name="secure_queue")
+                    job = client.enqueue(secure_content_processing, **kwargs)
                 elif func_name == "secure_file_processing":
-                    job = client.enqueue(secure_file_processing, **kwargs, queue_name="secure_queue")
+                    job = client.enqueue(secure_file_processing, **kwargs)
                 
                 jobs.append(job)
-                print(f"  ⚠️  Invalid job enqueued: {job.job_id} (will fail validation)")
+                logger.warning(f"  ⚠️  Invalid job enqueued: {job.job_id} (will fail validation)")
             except Exception as e:
                 # This is expected for some validation errors
-                print(f"  ✅ Caught validation error (good!): {e}")
+                logger.info(f"  ✅ Caught validation error (good!): {e}")
         
         return jobs
 
@@ -469,18 +506,18 @@ def main():
     """
     Main function demonstrating secure NAQ patterns.
     """
-    print("🛡️  NAQ Security Best Practices Demo")
-    print("=" * 50)
+    logger.info("🛡️  NAQ Security Best Practices Demo")
+    logger.info("=" * 50)
     
     # Check if we're using secure serialization
     serializer = os.environ.get('NAQ_JOB_SERIALIZER', 'pickle')
     if serializer != 'json':
-        print("❌ SECURITY WARNING: Not using JSON serialization!")
-        print("   Set: export NAQ_JOB_SERIALIZER=json")
-        print("   This demo requires secure JSON serialization.")
+        logger.error("❌ SECURITY WARNING: Not using JSON serialization!")
+        logger.error("   Set: export NAQ_JOB_SERIALIZER=json")
+        logger.error("   This demo requires secure JSON serialization.")
         return 1
     else:
-        print("✅ Using secure JSON serialization")
+        logger.info("✅ Using secure JSON serialization")
     
     try:
         # Demonstrate secure patterns
@@ -489,38 +526,38 @@ def main():
         
         total_jobs = len(secure_jobs) + len(invalid_jobs)
         
-        print(f"\n🎉 Security demo completed!")
-        print(f"📊 Enqueued {total_jobs} jobs total:")
-        print(f"   ✅ {len(secure_jobs)} secure jobs (will succeed)")
-        print(f"   ⚠️  {len(invalid_jobs)} invalid jobs (will fail validation)")
+        logger.info(f"\n🎉 Security demo completed!")
+        logger.info(f"📊 Enqueued {total_jobs} jobs total:")
+        logger.info(f"   ✅ {len(secure_jobs)} secure jobs (will succeed)")
+        logger.info(f"   ⚠️  {len(invalid_jobs)} invalid jobs (will fail validation)")
         
-        print("\n🛡️  Security Highlights:")
-        print("   • JSON serialization prevents code execution")
-        print("   • All inputs are validated and sanitized")
-        print("   • Dangerous patterns are detected and rejected")
-        print("   • Type checking prevents injection attacks")
-        print("   • Size limits prevent resource exhaustion")
+        logger.info("\n🛡️  Security Highlights:")
+        logger.info("   • JSON serialization prevents code execution")
+        logger.info("   • All inputs are validated and sanitized")
+        logger.info("   • Dangerous patterns are detected and rejected")
+        logger.info("   • Type checking prevents injection attacks")
+        logger.info("   • Size limits prevent resource exhaustion")
         
-        print("\n📋 Production Security Checklist:")
-        print("   ✅ Use NAQ_JOB_SERIALIZER=json")
-        print("   ✅ Validate all job function inputs")
-        print("   ✅ Sanitize string data")
-        print("   ✅ Implement size and type limits")
-        print("   ✅ Monitor for security warnings")
-        print("   ✅ Use NATS authentication/TLS")
-        print("   ✅ Run workers with minimal privileges")
+        logger.info("\n📋 Production Security Checklist:")
+        logger.info("   ✅ Use NAQ_JOB_SERIALIZER=json")
+        logger.info("   ✅ Validate all job function inputs")
+        logger.info("   ✅ Sanitize string data")
+        logger.info("   ✅ Implement size and type limits")
+        logger.info("   ✅ Monitor for security warnings")
+        logger.info("   ✅ Use NATS authentication/TLS")
+        logger.info("   ✅ Run workers with minimal privileges")
         
-        print("\n💡 Watch the worker logs to see:")
-        print("   • Secure jobs processing successfully")
-        print("   • Invalid jobs failing with clear error messages")
-        print("   • Security validation in action")
+        logger.info("\n💡 Watch the worker logs to see:")
+        logger.info("   • Secure jobs processing successfully")
+        logger.info("   • Invalid jobs failing with clear error messages")
+        logger.info("   • Security validation in action")
         
     except Exception as e:
-        print(f"❌ Error: {e}")
-        print("\n🔧 Troubleshooting:")
-        print("   - Is NATS running? (cd docker && docker-compose up -d)")
-        print("   - Is NAQ_JOB_SERIALIZER=json set?")
-        print("   - Are workers running? (naq worker secure_queue)")
+        logger.error(f"❌ Error: {e}")
+        logger.error("\n🔧 Troubleshooting:")
+        logger.error("   - Is NATS running? (cd docker && docker-compose up -d)")
+        logger.error("   - Is NAQ_JOB_SERIALIZER=json set?")
+        logger.error("   - Are workers running? (naq worker secure_queue)")
         return 1
     
     return 0

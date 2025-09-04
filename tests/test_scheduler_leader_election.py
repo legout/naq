@@ -26,14 +26,21 @@ from naq.utils.error_handling import ErrorHandler, create_error_context, wrap_na
 
 
 @pytest.fixture
-def mock_kv_store_service():
-    """Create a mock KVStoreService for testing."""
-    service = AsyncMock()
-    service.get = AsyncMock()
-    service.set = AsyncMock()
-    service.delete = AsyncMock()
-    service.get_kv_store = AsyncMock()
-    return service
+def mock_nats_client():
+    """Create a mock NatsClient for testing."""
+    from naq.nats_client import NatsClient
+    
+    client = AsyncMock(spec=NatsClient)
+    
+    # Mock KV store operations
+    mock_kv = AsyncMock()
+    mock_kv.get = AsyncMock()
+    mock_kv.create = AsyncMock()
+    mock_kv.update = AsyncMock()
+    mock_kv.delete = AsyncMock()
+    client.get_kv_store = AsyncMock(return_value=mock_kv)
+    
+    return client
 
 
 @pytest.fixture
@@ -56,14 +63,14 @@ def mock_circuit_breaker():
 
 
 @pytest.fixture
-def leader_election(mock_kv_store_service):
+def leader_election(mock_nats_client):
     """Create a LeaderElection instance for testing."""
     instance_id = f"test-instance-{uuid.uuid4().hex[:8]}"
     return LeaderElection(
         instance_id=instance_id,
         lock_ttl=30,
         lock_renew_interval=10,
-        kv_store_service=mock_kv_store_service
+        client=mock_nats_client
     )
 
 
@@ -106,12 +113,12 @@ async def test_validate_kv_store_service_no_service(mock_circuit_breaker):
     """Test KV store service validation without service."""
     leader_election = LeaderElection(
         instance_id="test-instance",
-        kv_store_service=None
+        client=None
     )
     leader_election._circuit_breaker = mock_circuit_breaker
     
-    with pytest.raises(NaqConnectionError, match="KVStoreService is required for leader election"):
-        await leader_election._validate_kv_store_service()
+    with pytest.raises(NaqConnectionError, match="NatsClient is required for leader election"):
+        await leader_election._validate_client()
 
 
 @pytest.mark.asyncio
@@ -121,7 +128,7 @@ async def test_validate_kv_store_service_no_kv_store(leader_election, mock_circu
     mock_circuit_breaker.call.return_value = None
     
     with pytest.raises(NaqConnectionError, match=f"KV store '{SCHEDULER_LOCK_KV_NAME}' is not accessible"):
-        await leader_election._validate_kv_store_service()
+        await leader_election._validate_client()
 
 
 @pytest.mark.asyncio
@@ -131,7 +138,7 @@ async def test_validate_kv_store_service_exception(leader_election, mock_circuit
     mock_circuit_breaker.call.side_effect = Exception("Connection error")
     
     with pytest.raises(NaqConnectionError, match="Failed to access KV store"):
-        await leader_election._validate_kv_store_service()
+        await leader_election._validate_client()
 
 
 @pytest.mark.asyncio
@@ -175,7 +182,7 @@ async def test_validate_kv_store_service_with_retry_succeeds_after_failure(leade
     mock_circuit_breaker.call.side_effect = mock_get_kv_store
     
     # Should not raise an exception after retry
-    await leader_election._validate_kv_store_service_with_retry()
+    await leader_election._validate_client_with_retry()
     
     # Should have been called twice (initial failure + retry)
     assert call_count == 2
@@ -188,7 +195,7 @@ async def test_validate_kv_store_service_with_retry_fails_after_max_retries(lead
     mock_circuit_breaker.call.side_effect = Exception("Persistent failure")
     
     with pytest.raises(NaqConnectionError, match="Failed to access KV store.*after 3 attempts"):
-        await leader_election._validate_kv_store_service_with_retry(max_retries=3)
+        await leader_election._validate_client_with_retry(max_retries=3)
     
     # Should have been called 3 times (initial + 2 retries)
     assert mock_circuit_breaker.call.call_count == 3
@@ -196,12 +203,12 @@ async def test_validate_kv_store_service_with_retry_fails_after_max_retries(lead
 
 @pytest.mark.asyncio
 async def test_initialize_without_kv_store():
-    """Test initialization failure without KVStoreService."""
+    """Test initialization failure without NatsClient."""
     leader_election = LeaderElection(
         instance_id="test-instance",
-        kv_store_service=None
+        client=None
     )
-    with pytest.raises(NaqConnectionError, match="KVStoreService is required for leader election"):
+    with pytest.raises(NaqConnectionError, match="NatsClient is required for leader election"):
         await leader_election.initialize()
 
 
@@ -253,7 +260,7 @@ async def test_is_lock_held_by_other_expired_lock(leader_election, mock_kv_store
     expired_entry = MagicMock()
     expired_entry.value = msgspec.msgpack.encode(expired_lock_data)
     mock_kv_store.get.return_value = expired_entry
-    leader_election._kv_store_service.get_kv_store.return_value = mock_kv_store
+    leader_election._client.get_kv_store.return_value = mock_kv_store
     
     result = await leader_election._is_lock_held_by_other()
     
@@ -273,7 +280,7 @@ async def test_is_lock_held_by_other_valid_lock(leader_election, mock_kv_store):
     valid_entry = MagicMock()
     valid_entry.value = msgspec.msgpack.encode(valid_lock_data)
     mock_kv_store.get.return_value = valid_entry
-    leader_election._kv_store_service.get_kv_store.return_value = mock_kv_store
+    leader_election._client.get_kv_store.return_value = mock_kv_store
     
     result = await leader_election._is_lock_held_by_other()
     
@@ -293,7 +300,7 @@ async def test_is_lock_held_by_other_our_lock(leader_election, mock_kv_store):
     our_entry = MagicMock()
     our_entry.value = msgspec.msgpack.encode(our_lock_data)
     mock_kv_store.get.return_value = our_entry
-    leader_election._kv_store_service.get_kv_store.return_value = mock_kv_store
+    leader_election._client.get_kv_store.return_value = mock_kv_store
     
     result = await leader_election._is_lock_held_by_other()
     
@@ -304,7 +311,7 @@ async def test_is_lock_held_by_other_our_lock(leader_election, mock_kv_store):
 async def test_check_leader_lock_health_no_lock(leader_election, mock_kv_store):
     """Test check_leader_lock_health when no lock exists."""
     mock_kv_store.get.return_value = None
-    leader_election._kv_store_service.get_kv_store.return_value = mock_kv_store
+    leader_election._client.get_kv_store.return_value = mock_kv_store
     
     health = await leader_election.check_leader_lock_health()
     
@@ -327,7 +334,7 @@ async def test_check_leader_lock_health_healthy_lock(leader_election, mock_kv_st
     lock_entry = MagicMock()
     lock_entry.value = msgspec.msgpack.encode(lock_data)
     mock_kv_store.get.return_value = lock_entry
-    leader_election._kv_store_service.get_kv_store.return_value = mock_kv_store
+    leader_election._client.get_kv_store.return_value = mock_kv_store
     leader_election._is_leader = True
     
     health = await leader_election.check_leader_lock_health()
@@ -353,7 +360,7 @@ async def test_check_leader_lock_health_expired_lock(leader_election, mock_kv_st
     lock_entry = MagicMock()
     lock_entry.value = msgspec.msgpack.encode(lock_data)
     mock_kv_store.get.return_value = lock_entry
-    leader_election._kv_store_service.get_kv_store.return_value = mock_kv_store
+    leader_election._client.get_kv_store.return_value = mock_kv_store
     
     health = await leader_election.check_leader_lock_health()
     
@@ -367,12 +374,12 @@ async def test_check_leader_lock_health_expired_lock(leader_election, mock_kv_st
 @pytest.mark.asyncio
 async def test_check_leader_lock_health_error(leader_election):
     """Test check_leader_lock_health when there's an error."""
-    leader_election._kv_store_service.get_kv_store.side_effect = Exception("Connection error")
+    leader_election._client.get_kv_store.side_effect = Exception("Connection error")
     
     health = await leader_election.check_leader_lock_health()
     
     assert health["status"] == "error"
-    assert "KVStoreService not available" in health["message"]
+    assert "NatsClient not available" in health["message"]
     assert health["is_leader"] is False
 
 
@@ -382,22 +389,29 @@ async def test_acquire_lock_success(leader_election):
     # First call to _is_lock_held_by_other returns False
     leader_election._is_lock_held_by_other = AsyncMock(return_value=False)
     
-    # set returns success
-    leader_election._kv_store_service.set.return_value = True
+    # Get mock KV store
+    mock_kv = await leader_election._client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
+    
+    # create returns success
+    mock_kv.create.return_value = True
     
     # get returns our lock
-    lock_data = {
-        "instance_id": leader_election.instance_id,
-        "timestamp": time.time(),
-        "hostname": "our-host"
-    }
-    leader_election._kv_store_service.get.return_value = lock_data
+    lock_data = LockData(
+        instance_id=leader_election.instance_id,
+        timestamp=time.time(),
+        hostname="our-host",
+        pid=os.getpid(),
+        start_time=time.time()
+    )
+    lock_entry = MagicMock()
+    lock_entry.value = msgspec.msgpack.encode(lock_data)
+    mock_kv.get.return_value = lock_entry
     
     result = await leader_election._acquire_lock()
     
     assert result is True
     assert leader_election._is_leader is True
-    leader_election._kv_store_service.set.assert_called_once()
+    mock_kv.create.assert_called_once()
     assert leader_election._last_lock_renewal > 0
 
 
@@ -416,8 +430,11 @@ async def test_acquire_lock_held_by_other(leader_election):
 @pytest.mark.asyncio
 async def test_acquire_lock_set_failure(leader_election):
     """Test lock acquisition when set fails."""
+    # Get mock KV store
+    mock_kv = await leader_election._client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
+    
     leader_election._is_lock_held_by_other = AsyncMock(return_value=False)
-    leader_election._kv_store_service.set.return_value = False
+    mock_kv.create.return_value = False
     
     result = await leader_election._acquire_lock()
     
@@ -428,16 +445,23 @@ async def test_acquire_lock_set_failure(leader_election):
 @pytest.mark.asyncio
 async def test_acquire_lock_verification_failure(leader_election):
     """Test lock acquisition when verification fails."""
+    # Get mock KV store
+    mock_kv = await leader_election._client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
+    
     leader_election._is_lock_held_by_other = AsyncMock(return_value=False)
-    leader_election._kv_store_service.set.return_value = True
+    mock_kv.create.return_value = True
     
     # get returns someone else's lock
-    lock_data = {
-        "instance_id": "other-instance",
-        "timestamp": time.time(),
-        "hostname": "other-host"
-    }
-    leader_election._kv_store_service.get.return_value = lock_data
+    lock_data = LockData(
+        instance_id="other-instance",
+        timestamp=time.time(),
+        hostname="other-host",
+        pid=12345,
+        start_time=time.time()
+    )
+    lock_entry = MagicMock()
+    lock_entry.value = msgspec.msgpack.encode(lock_data)
+    mock_kv.get.return_value = lock_entry
     
     result = await leader_election._acquire_lock()
     
@@ -461,10 +485,10 @@ async def test_try_become_leader_success(leader_election):
 
 @pytest.mark.asyncio
 async def test_try_become_leader_no_kv_store():
-    """Test try_become_leader without KVStoreService."""
+    """Test try_become_leader without NatsClient."""
     leader_election = LeaderElection(
         instance_id="test-instance",
-        kv_store_service=None
+        client=None
     )
     
     result = await leader_election.try_become_leader()
@@ -499,55 +523,76 @@ async def test_try_become_leader_health_error(leader_election):
 @pytest.mark.asyncio
 async def test_renew_lock_success(leader_election):
     """Test successful lock renewal."""
-    # get returns our lock
-    lock_data = {
-        "instance_id": leader_election.instance_id,
-        "timestamp": time.time() - 10,
-        "hostname": "our-host"
-    }
-    leader_election._kv_store_service.get.return_value = lock_data
+    # Get mock KV store
+    mock_kv = await leader_election._client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
     
-    # set returns success
-    leader_election._kv_store_service.set.return_value = True
+    # get returns our lock
+    lock_data = LockData(
+        instance_id=leader_election.instance_id,
+        timestamp=time.time() - 10,
+        hostname="our-host",
+        pid=os.getpid(),
+        start_time=time.time() - 10
+    )
+    lock_entry = MagicMock()
+    lock_entry.value = msgspec.msgpack.encode(lock_data)
+    mock_kv.get.return_value = lock_entry
+    
+    # update returns success
+    mock_kv.update.return_value = True
     
     result = await leader_election._renew_lock()
     
     assert result is True
-    leader_election._kv_store_service.set.assert_called_once()
+    mock_kv.update.assert_called_once()
     assert leader_election._last_lock_renewal > 0
 
 
 @pytest.mark.asyncio
 async def test_renew_lock_no_longer_leader(leader_election):
     """Test lock renewal when no longer the leader."""
+    # Get mock KV store
+    mock_kv = await leader_election._client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
+    
     # get returns someone else's lock
-    lock_data = {
-        "instance_id": "other-instance",
-        "timestamp": time.time() - 10,
-        "hostname": "other-host"
-    }
-    leader_election._kv_store_service.get.return_value = lock_data
+    lock_data = LockData(
+        instance_id="other-instance",
+        timestamp=time.time() - 10,
+        hostname="other-host",
+        pid=12345,
+        start_time=time.time() - 10
+    )
+    lock_entry = MagicMock()
+    lock_entry.value = msgspec.msgpack.encode(lock_data)
+    mock_kv.get.return_value = lock_entry
     
     result = await leader_election._renew_lock()
     
     assert result is False
     assert leader_election._is_leader is False
-    leader_election._kv_store_service.set.assert_not_called()
+    mock_kv.update.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_renew_lock_set_failure(leader_election):
     """Test lock renewal when set fails."""
-    # get returns our lock
-    lock_data = {
-        "instance_id": leader_election.instance_id,
-        "timestamp": time.time() - 10,
-        "hostname": "our-host"
-    }
-    leader_election._kv_store_service.get.return_value = lock_data
+    # Get mock KV store
+    mock_kv = await leader_election._client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
     
-    # set returns failure
-    leader_election._kv_store_service.set.return_value = False
+    # get returns our lock
+    lock_data = LockData(
+        instance_id=leader_election.instance_id,
+        timestamp=time.time() - 10,
+        hostname="our-host",
+        pid=os.getpid(),
+        start_time=time.time() - 10
+    )
+    lock_entry = MagicMock()
+    lock_entry.value = msgspec.msgpack.encode(lock_data)
+    mock_kv.get.return_value = lock_entry
+    
+    # update returns failure
+    mock_kv.update.return_value = False
     
     result = await leader_election._renew_lock()
     

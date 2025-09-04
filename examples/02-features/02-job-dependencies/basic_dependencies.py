@@ -19,7 +19,10 @@ import os
 import time
 from typing import List, Dict, Any
 
-from naq import SyncClient, setup_logging
+from loguru import logger
+
+from naq import NatsClient, setup_logging
+from naq.config import NatsConfig, QueueConfig
 
 # Configure secure JSON serialization
 os.environ.setdefault('NAQ_JOB_SERIALIZER', 'json')
@@ -39,7 +42,7 @@ def prepare_data(dataset_name: str, size: int) -> Dict[str, Any]:
     Returns:
         Dataset information
     """
-    print(f"📊 Preparing dataset: {dataset_name} ({size} records)")
+    logger.info(f"📊 Preparing dataset: {dataset_name} ({size} records)")
     
     # Simulate data preparation time
     time.sleep(2)
@@ -51,7 +54,7 @@ def prepare_data(dataset_name: str, size: int) -> Dict[str, Any]:
         "status": "ready"
     }
     
-    print(f"✅ Dataset {dataset_name} prepared successfully")
+    logger.success(f"✅ Dataset {dataset_name} prepared successfully")
     return result
 
 
@@ -66,7 +69,7 @@ def process_data(dataset_name: str, operation: str) -> Dict[str, Any]:
     Returns:
         Processing results
     """
-    print(f"⚙️  Processing dataset: {dataset_name} with operation: {operation}")
+    logger.info(f"⚙️  Processing dataset: {dataset_name} with operation: {operation}")
     
     # Simulate processing time
     time.sleep(3)
@@ -79,7 +82,7 @@ def process_data(dataset_name: str, operation: str) -> Dict[str, Any]:
         "status": "completed"
     }
     
-    print(f"✅ Dataset {dataset_name} processed with {operation}")
+    logger.success(f"✅ Dataset {dataset_name} processed with {operation}")
     return result
 
 
@@ -94,7 +97,7 @@ def validate_results(dataset_name: str, expected_records: int) -> Dict[str, Any]
     Returns:
         Validation results
     """
-    print(f"🔍 Validating results for dataset: {dataset_name}")
+    logger.info(f"🔍 Validating results for dataset: {dataset_name}")
     
     # Simulate validation time
     time.sleep(1)
@@ -107,7 +110,7 @@ def validate_results(dataset_name: str, expected_records: int) -> Dict[str, Any]
         "status": "valid"
     }
     
-    print(f"✅ Validation passed for {dataset_name}")
+    logger.success(f"✅ Validation passed for {dataset_name}")
     return result
 
 
@@ -122,7 +125,7 @@ def generate_report(datasets: List[str], report_type: str) -> Dict[str, Any]:
     Returns:
         Report information
     """
-    print(f"📋 Generating {report_type} report from {len(datasets)} datasets")
+    logger.info(f"📋 Generating {report_type} report from {len(datasets)} datasets")
     
     # Simulate report generation time
     time.sleep(2)
@@ -135,7 +138,7 @@ def generate_report(datasets: List[str], report_type: str) -> Dict[str, Any]:
         "status": "completed"
     }
     
-    print(f"✅ Report generated: {report_type} ({result['pages']} pages)")
+    logger.success(f"✅ Report generated: {report_type} ({result['pages']} pages)")
     return result
 
 
@@ -149,68 +152,84 @@ def cleanup_temp_files(job_ids: List[str]) -> str:
     Returns:
         Cleanup status
     """
-    print(f"🧹 Cleaning up temporary files for {len(job_ids)} jobs")
+    logger.info(f"🧹 Cleaning up temporary files for {len(job_ids)} jobs")
     
     # Simulate cleanup time
     time.sleep(1)
     
-    print("✅ Temporary files cleaned up successfully")
+    logger.success("✅ Temporary files cleaned up successfully")
     return f"Cleaned up files for {len(job_ids)} jobs"
 
 
-def demonstrate_sequential_dependencies():
+def demonstrate_sequential_dependencies() -> list:
     """
     Demonstrate simple sequential job dependencies.
-    """
-    print("📍 Sequential Dependencies Demo")
-    print("-" * 40)
     
-    with SyncClient() as client:
+    Returns:
+        List of enqueued jobs
+    """
+    logger.info("📍 Sequential Dependencies Demo")
+    logger.info("-" * 40)
+    
+    # Create configuration
+    nats_config = NatsConfig(
+        servers=["nats://localhost:4222"],
+        connect_timeout=5,
+        max_reconnect_attempts=3
+    )
+    
+    queue_config = QueueConfig(
+        name="workflow_queue",
+        stream_name="NAQ_JOBS",
+        consumer_name="basic_dependencies_consumer"
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=queue_config) as client:
         # Step 1: Prepare data
-        print("📤 Step 1: Data preparation")
+        logger.info("📤 Step 1: Data preparation")
         prepare_job = client.enqueue(
             prepare_data,
             dataset_name="user_activity",
-            size=10000,
-            queue_name="workflow_queue"
+            size=10000
         )
-        print(f"  ✅ Enqueued preparation job: {prepare_job.job_id}")
+        logger.info(f"  ✅ Enqueued preparation job: {prepare_job.job_id}")
         
         # Step 2: Process data (depends on preparation)
-        print("\n📤 Step 2: Data processing (depends on Step 1)")
+        logger.info("\n📤 Step 2: Data processing (depends on Step 1)")
         process_job = client.enqueue(
             process_data,
             dataset_name="user_activity",
             operation="aggregation",
-            queue_name="workflow_queue",
             depends_on=[prepare_job]
         )
-        print(f"  ✅ Enqueued processing job: {process_job.job_id}")
-        print(f"  🔗 Depends on: {prepare_job.job_id}")
+        logger.info(f"  ✅ Enqueued processing job: {process_job.job_id}")
+        logger.info(f"  🔗 Depends on: {prepare_job.job_id}")
         
         # Step 3: Validate results (depends on processing)
-        print("\n📤 Step 3: Result validation (depends on Step 2)")
+        logger.info("\n📤 Step 3: Result validation (depends on Step 2)")
         validate_job = client.enqueue(
             validate_results,
             dataset_name="user_activity",
             expected_records=1000,
-            queue_name="workflow_queue",
             depends_on=[process_job]
         )
-        print(f"  ✅ Enqueued validation job: {validate_job.job_id}")
-        print(f"  🔗 Depends on: {process_job.job_id}")
+        logger.info(f"  ✅ Enqueued validation job: {validate_job.job_id}")
+        logger.info(f"  🔗 Depends on: {process_job.job_id}")
         
         return [prepare_job, process_job, validate_job]
 
 
-def demonstrate_parallel_convergence():
+def demonstrate_parallel_convergence() -> list:
     """
     Demonstrate parallel jobs converging to a single job.
-    """
-    print("\n📍 Parallel Convergence Demo")
-    print("-" * 40)
     
-    with SyncClient() as client:
+    Returns:
+        List of enqueued jobs
+    """
+    logger.info("\n📍 Parallel Convergence Demo")
+    logger.info("-" * 40)
+    
+    with NatsClient(nats_config=nats_config, queue_config=queue_config) as client:
         parallel_jobs = []
         
         # Create multiple parallel data preparation jobs
@@ -220,122 +239,124 @@ def demonstrate_parallel_convergence():
             ("product_data", 3000)
         ]
         
-        print("📤 Creating parallel preparation jobs:")
+        logger.info("📤 Creating parallel preparation jobs:")
         for dataset_name, size in datasets:
             job = client.enqueue(
                 prepare_data,
                 dataset_name=dataset_name,
-                size=size,
-                queue_name="workflow_queue"
+                size=size
             )
             parallel_jobs.append(job)
-            print(f"  ✅ {dataset_name}: {job.job_id}")
+            logger.info(f"  ✅ {dataset_name}: {job.job_id}")
         
         # Create convergence job that depends on all parallel jobs
-        print("\n📤 Creating convergence job (depends on all parallel jobs):")
+        logger.info("\n📤 Creating convergence job (depends on all parallel jobs):")
         report_job = client.enqueue(
             generate_report,
             datasets=[name for name, _ in datasets],
             report_type="monthly_summary",
-            queue_name="workflow_queue",
             depends_on=parallel_jobs
         )
-        print(f"  ✅ Report job: {report_job.job_id}")
-        print(f"  🔗 Depends on: {[job.job_id for job in parallel_jobs]}")
+        logger.info(f"  ✅ Report job: {report_job.job_id}")
+        logger.info(f"  🔗 Depends on: {[job.job_id for job in parallel_jobs]}")
         
         return parallel_jobs + [report_job]
 
 
-def demonstrate_cleanup_dependencies():
+def demonstrate_cleanup_dependencies() -> list:
     """
     Demonstrate cleanup jobs that run regardless of success/failure.
-    """
-    print("\n📍 Cleanup Dependencies Demo")
-    print("-" * 40)
     
-    with SyncClient() as client:
+    Returns:
+        List of enqueued jobs
+    """
+    logger.info("\n📍 Cleanup Dependencies Demo")
+    logger.info("-" * 40)
+    
+    with NatsClient(nats_config=nats_config, queue_config=queue_config) as client:
         # Main processing job
-        print("📤 Creating main processing job:")
+        logger.info("📤 Creating main processing job:")
         main_job = client.enqueue(
             process_data,
             dataset_name="temp_analysis",
-            operation="machine_learning",
-            queue_name="workflow_queue"
+            operation="machine_learning"
         )
-        print(f"  ✅ Main job: {main_job.job_id}")
+        logger.info(f"  ✅ Main job: {main_job.job_id}")
         
         # Cleanup job that runs whether main job succeeds or fails
-        print("\n📤 Creating cleanup job (runs after success or failure):")
+        logger.info("\n📤 Creating cleanup job (runs after success or failure):")
         cleanup_job = client.enqueue(
             cleanup_temp_files,
             job_ids=[main_job.job_id],
-            queue_name="workflow_queue",
             depends_on=[main_job],
             run_after_failure=True  # This makes it run even if main_job fails
         )
-        print(f"  ✅ Cleanup job: {cleanup_job.job_id}")
-        print(f"  🔗 Depends on: {main_job.job_id} (runs after success OR failure)")
+        logger.info(f"  ✅ Cleanup job: {cleanup_job.job_id}")
+        logger.info(f"  🔗 Depends on: {main_job.job_id} (runs after success OR failure)")
         
         return [main_job, cleanup_job]
 
 
-def demonstrate_fan_out_pattern():
+def demonstrate_fan_out_pattern() -> list:
     """
     Demonstrate fan-out pattern: one job creating work for multiple dependent jobs.
-    """
-    print("\n📍 Fan-out Pattern Demo")
-    print("-" * 40)
     
-    with SyncClient() as client:
+    Returns:
+        List of enqueued jobs
+    """
+    logger.info("\n📍 Fan-out Pattern Demo")
+    logger.info("-" * 40)
+    
+    with NatsClient(nats_config=nats_config, queue_config=queue_config) as client:
         # Central data preparation
-        print("📤 Creating central preparation job:")
+        logger.info("📤 Creating central preparation job:")
         central_job = client.enqueue(
             prepare_data,
             dataset_name="master_dataset",
-            size=50000,
-            queue_name="workflow_queue"
+            size=50000
         )
-        print(f"  ✅ Central job: {central_job.job_id}")
+        logger.info(f"  ✅ Central job: {central_job.job_id}")
         
         # Multiple processing jobs that depend on the central job
         processing_operations = ["analysis", "transformation", "validation", "export"]
         processing_jobs = []
         
-        print("\n📤 Creating dependent processing jobs:")
+        logger.info("\n📤 Creating dependent processing jobs:")
         for operation in processing_operations:
             job = client.enqueue(
                 process_data,
                 dataset_name="master_dataset",
                 operation=operation,
-                queue_name="workflow_queue",
                 depends_on=[central_job]
             )
             processing_jobs.append(job)
-            print(f"  ✅ {operation} job: {job.job_id}")
+            logger.info(f"  ✅ {operation} job: {job.job_id}")
         
-        print(f"  🔗 All jobs depend on: {central_job.job_id}")
+        logger.info(f"  🔗 All jobs depend on: {central_job.job_id}")
         
         # Final convergence job
-        print("\n📤 Creating final convergence job:")
+        logger.info("\n📤 Creating final convergence job:")
         final_job = client.enqueue(
             generate_report,
             datasets=["master_dataset"],
             report_type="comprehensive_analysis",
-            queue_name="workflow_queue",
             depends_on=processing_jobs
         )
-        print(f"  ✅ Final job: {final_job.job_id}")
-        print(f"  🔗 Depends on all processing jobs")
+        logger.info(f"  ✅ Final job: {final_job.job_id}")
+        logger.info(f"  🔗 Depends on all processing jobs")
         
         return [central_job] + processing_jobs + [final_job]
 
 
-def main():
+def main() -> int:
     """
     Main function demonstrating basic dependency patterns.
+    
+    Returns:
+        Exit code (0 for success, 1 for error)
     """
-    print("🚀 NAQ Basic Job Dependencies Demo")
-    print("=" * 50)
+    logger.info("🚀 NAQ Basic Job Dependencies Demo")
+    logger.info("=" * 50)
     
     try:
         # Demonstrate different dependency patterns
@@ -346,41 +367,41 @@ def main():
         
         all_jobs = sequential_jobs + parallel_jobs + cleanup_jobs + fanout_jobs
         
-        print(f"\n🎉 Enqueued {len(all_jobs)} jobs with dependencies!")
+        logger.info(f"\n🎉 Enqueued {len(all_jobs)} jobs with dependencies!")
         
-        print("\n" + "=" * 50)
-        print("📊 Dependency Pattern Summary:")
-        print("=" * 50)
-        print(f"Sequential chain: {len(sequential_jobs)} jobs")
-        print(f"Parallel convergence: {len(parallel_jobs)} jobs")
-        print(f"Cleanup pattern: {len(cleanup_jobs)} jobs")
-        print(f"Fan-out pattern: {len(fanout_jobs)} jobs")
+        logger.info("\n" + "=" * 50)
+        logger.info("📊 Dependency Pattern Summary:")
+        logger.info("=" * 50)
+        logger.info(f"Sequential chain: {len(sequential_jobs)} jobs")
+        logger.info(f"Parallel convergence: {len(parallel_jobs)} jobs")
+        logger.info(f"Cleanup pattern: {len(cleanup_jobs)} jobs")
+        logger.info(f"Fan-out pattern: {len(fanout_jobs)} jobs")
         
-        print("\n🎯 Dependency Highlights:")
-        print("   • Sequential: Jobs run one after another")
-        print("   • Parallel: Multiple jobs run simultaneously")
-        print("   • Convergence: Multiple jobs feed into one")
-        print("   • Cleanup: Jobs that always run (success or failure)")
-        print("   • Fan-out: One job enables multiple dependent jobs")
+        logger.info("\n🎯 Dependency Highlights:")
+        logger.info("   • Sequential: Jobs run one after another")
+        logger.info("   • Parallel: Multiple jobs run simultaneously")
+        logger.info("   • Convergence: Multiple jobs feed into one")
+        logger.info("   • Cleanup: Jobs that always run (success or failure)")
+        logger.info("   • Fan-out: One job enables multiple dependent jobs")
         
-        print("\n💡 Watch for these patterns in worker logs:")
-        print("   • Jobs waiting for dependencies to complete")
-        print("   • Parallel execution of independent jobs")
-        print("   • Sequential execution of dependent jobs")
-        print("   • Cleanup jobs running after failures")
+        logger.info("\n💡 Watch for these patterns in worker logs:")
+        logger.info("   • Jobs waiting for dependencies to complete")
+        logger.info("   • Parallel execution of independent jobs")
+        logger.info("   • Sequential execution of dependent jobs")
+        logger.info("   • Cleanup jobs running after failures")
         
-        print("\n📋 Next Steps:")
-        print("   • Try complex_workflows.py for advanced patterns")
-        print("   • Check failure_handling.py for error scenarios")
-        print("   • Monitor jobs with 'naq list-workers'")
-        print("   • Use 'naq dashboard' for visual workflow tracking")
+        logger.info("\n📋 Next Steps:")
+        logger.info("   • Try complex_workflows.py for advanced patterns")
+        logger.info("   • Check failure_handling.py for error scenarios")
+        logger.info("   • Monitor jobs with 'naq list-workers'")
+        logger.info("   • Use 'naq dashboard' for visual workflow tracking")
         
     except Exception as e:
-        print(f"❌ Error: {e}")
-        print("\n🔧 Troubleshooting:")
-        print("   - Is NATS running? (cd docker && docker-compose up -d)")
-        print("   - Are workers running? (naq worker default workflow_queue)")
-        print("   - Is NAQ_JOB_SERIALIZER=json set?")
+        logger.error(f"❌ Error: {e}")
+        logger.error("\n🔧 Troubleshooting:")
+        logger.error("   - Is NATS running? (cd docker && docker-compose up -d)")
+        logger.error("   - Are workers running? (naq worker default workflow_queue)")
+        logger.error("   - Is NAQ_JOB_SERIALIZER=json set?")
         return 1
     
     return 0

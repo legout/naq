@@ -114,21 +114,21 @@ The `WorkerEventType` enum defines the possible types of worker-related events:
 
 ## Scheduler Events
 
-Scheduler events provide visibility into the scheduler's operations, particularly around managing scheduled jobs. These events are often logged by the `SchedulerService` and can be observed through the event system.
+Scheduler events provide visibility into the scheduler's operations, particularly around managing scheduled jobs. These events are often logged by the `Scheduler` and can be observed through the event system.
 
 While there isn't a dedicated `SchedulerEvent` class in `naq/models/events.py` at the moment, scheduler activities (like triggering scheduled jobs) are often reflected as `JobEvent`s (e.g., `SCHEDULE_TRIGGERED`). Future versions might introduce a dedicated `SchedulerEvent` for more granular tracking.
 
 ## System Events
 
-System events encompass broader occurrences within the `naq` ecosystem that are not directly tied to a specific job or worker, such as service startup/shutdown, configuration changes, or critical errors within the core services. These events are typically logged by the respective services and provide an overview of the system's health and operational state.
+System events encompass broader occurrences within the `naq` ecosystem that are not directly tied to a specific job or worker, such as component startup/shutdown, configuration changes, or critical errors within the core components. These events are typically logged by the respective components and provide an overview of the system's health and operational state.
 
 Similar to Scheduler Events, System Events are currently integrated into the general event logging mechanism, often utilizing existing `JobEvent` or `WorkerEvent` types with appropriate `message` and `details` fields, or logged directly to the system's logging infrastructure. A dedicated `SystemEvent` class might be introduced in future iterations for more explicit typing.
 
 ## Event Storage and Retrieval
 
-All events are stored in a dedicated NATS Key-Value (KV) store, managed by the `EventService`. This allows for:
+All events are stored in a dedicated NATS Key-Value (KV) store. This allows for:
 
 -   **Real-time Streaming**: Events can be streamed live for immediate monitoring.
 -   **Historical Lookup**: Events can be queried by `job_id`, `worker_id`, `event_type`, or time range for post-mortem analysis and auditing.
 
-The `EventService` provides methods for logging and retrieving these events. For examples on how to interact with the EventService and query events, refer to the [Usage Examples - Event Logging, Streaming, and Querying](examples.qmd#event-logging-streaming-and-querying) section.
+The event system provides methods for logging and retrieving these events. For examples on how to interact with the event system and query events, refer to the [Usage Examples - Event Logging, Streaming, and Querying](examples.qmd#event-logging-streaming-and-querying) section.

@@ -21,7 +21,6 @@ from .queue.sync_api import (
     modify_scheduled_job_sync,
 )
 from .settings import DEFAULT_QUEUE_NAME, DEFAULT_NATS_URL
-from .services.config import GlobalServiceConfig
 
 
 class SyncClient:
@@ -50,16 +49,13 @@ class SyncClient:
     def __init__(
         self,
         nats_url: str = DEFAULT_NATS_URL,
-        config: Optional[GlobalServiceConfig] = None,
     ):
         """Initialize the SyncClient.
 
         Args:
             nats_url: NATS server URL
-            config: Global service configuration
         """
         self.nats_url = nats_url
-        self.config = config
         self._jobs: List[Job] = []
 
     def __enter__(self) -> "SyncClient":
@@ -106,7 +102,6 @@ class SyncClient:
             retry_delay=retry_delay,
             depends_on=depends_on,
             timeout=timeout,
-            config=self.config,
             **kwargs,
         )
         self._jobs.append(job)
@@ -147,7 +142,6 @@ class SyncClient:
             max_retries=max_retries,
             retry_delay=retry_delay,
             timeout=timeout,
-            config=self.config,
             **kwargs,
         )
         self._jobs.append(job)
@@ -188,7 +182,6 @@ class SyncClient:
             max_retries=max_retries,
             retry_delay=retry_delay,
             timeout=timeout,
-            config=self.config,
             **kwargs,
         )
         self._jobs.append(job)
@@ -235,7 +228,6 @@ class SyncClient:
             max_retries=max_retries,
             retry_delay=retry_delay,
             timeout=timeout,
-            config=self.config,
             **kwargs,
         )
         self._jobs.append(job)
@@ -253,7 +245,6 @@ class SyncClient:
         return purge_queue_sync(
             queue_name=queue_name,
             nats_url=self.nats_url,
-            config=self.config,
         )
 
     def cancel_scheduled_job(self, job_id: str) -> bool:
@@ -268,7 +259,6 @@ class SyncClient:
         return cancel_scheduled_job_sync(
             job_id=job_id,
             nats_url=self.nats_url,
-            config=self.config,
         )
 
     def pause_scheduled_job(self, job_id: str) -> bool:
@@ -283,7 +273,6 @@ class SyncClient:
         return pause_scheduled_job_sync(
             job_id=job_id,
             nats_url=self.nats_url,
-            config=self.config,
         )
 
     def resume_scheduled_job(self, job_id: str) -> bool:
@@ -298,7 +287,6 @@ class SyncClient:
         return resume_scheduled_job_sync(
             job_id=job_id,
             nats_url=self.nats_url,
-            config=self.config,
         )
 
     def modify_scheduled_job(self, job_id: str, **updates: Any) -> bool:
@@ -314,7 +302,6 @@ class SyncClient:
         return modify_scheduled_job_sync(
             job_id=job_id,
             nats_url=self.nats_url,
-            config=self.config,
             **updates,
         )
 

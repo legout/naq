@@ -3,6 +3,7 @@ title: "Usage Examples"
 ---
 
 This page provides practical examples for some of `naq`'s key features. For a full step-by-step guide, please see the [**NAQ Tutorial**](tutorial.qmd).
+
 ## Example 1: Scheduled and Recurring Jobs
 
 `naq` allows you to schedule jobs to run at a specific time in the future or on a recurring basis using cron expressions.
@@ -21,22 +22,6 @@ naq worker scheduled_queue
 
 You can enqueue a job to run after a specific delay or at a precise time.
 
-## Example 1: Scheduled and Recurring Jobs
-
-`naq` allows you to schedule jobs to run at a specific time or on a recurring basis using cron expressions.
-
-To run these examples, you need both a worker and the scheduler process running:
-
-```bash
-# Terminal 1: Start the scheduler
-naq scheduler
-
-# Terminal 2: Start a worker for the queue
-naq worker scheduled_queue
-```
-
-### One-Time Scheduled Job
-
 ```python
 # schedule_task.py
 import asyncio
@@ -53,14 +38,15 @@ async def main():
         send_reminder,
         user_id="user123",
         message="Your meeting starts in 5 minutes.",
-        timedelta\(minutes=5\),
+        timedelta(minutes=5),
         queue_name="scheduled_queue"
     )
 
     # Schedule a job to run at a specific time (UTC)
     run_at_time = datetime.utcnow() + timedelta(hours=1)
-    await enqueue_at\(\n        run_at_time,\n        send_reminder,
-        
+    await enqueue_at(
+        run_at_time,
+        send_reminder,
         user_id="user456",
         message="Don't forget your 1-hour follow-up.",
         queue_name="scheduled_queue"
@@ -86,7 +72,7 @@ async def main():
     await schedule(
         generate_nightly_report,
         cron="0 2 * * *",
-                queue_name="scheduled_queue"
+        queue_name="scheduled_queue"
     )
     print("Cron job 'nightly-sales-report' is now active.")
 
@@ -167,554 +153,6 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-## Example 4: Using the Service Layer
-
-The `ServiceManager` provides a unified way to manage all services with automatic dependency injection and lifecycle management. This is the recommended approach for building applications with `naq`.
-
-```python
-# service_manager_example.py
-import asyncio
-from naq.services.manager import ServiceManager
-from naq.models.jobs import Job
-
-
-async def process_data(data: str) -> str:
-    return f"Processed: {data}"
-
-async def main\(\):
-    # The ServiceManager handles all service initialization and cleanup
-    service_manager = ServiceManager\(\)
-    await service_manager.initialize_all\(\)
-
-    try:
-        # Get the services you need
-        job_service = service_manager.get_service\("jobs"\)
-        event_service = service_manager.get_service\("events"\)
-
-        # Create a job
-        job = Job\(
-            function=process_data,
-            args=\("Using the service layer is powerful and flexible.",\),
-            queue_name="service_queue",
-            max_retries=2,
-            retry_delay=1.0
-        \)
-
-        # Execute the job directly (useful for testing or specific integrations)
-        print("Executing job directly via JobService...")
-        result = await job_service.execute_job(job, "manual-worker-1")
-        print(f"Job completed with result: {result.result}")
-
-        # Retrieve events for the job
-        job_events = await event_service.get_job_events(job.job_id)
-        print(f"
-Found {len(job_events)} events for job {job.job_id}:")
-        for event in job_events:
-            print(f"  - {event.event_type.value} at {event.timestamp}")
-
-    finally:
-        # Clean up all services
-        await service_manager.cleanup_all()
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-
-### Recurring Job (Cron)
-
-For tasks that need to run on a regular schedule (e.g., nightly reports, weekly cleanups), you can use the `schedule` function with a cron string.
-
-```python
-# recurring_task.py
-import asyncio
-from naq import schedule
-
-async def generate_nightly_report():
-    print("Generating the nightly sales report...")
-    # Logic to aggregate data and create a report
-    print("Nightly report complete.")
-    return "Report generated successfully."
-
-async def main():
-    # Schedule the report to run every day at 2:00 AM UTC
-    cron_schedule = await schedule(
-        generate_nightly_report,
-        cron="0 2 * * *",  # Standard cron format
-        schedule_id="nightly-sales-report",
-        queue_name="scheduled_queue"
-    )
-    print(f"Cron job '{cron_schedule.schedule_id}' is now active.")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-## Example 2: Automatic Job Retries
-
-`naq` can automatically retry failed jobs with configurable strategies. This is useful for tasks that might fail due to transient issues, like network hiccups.
-
-```python
-# retry_task.py
-import asyncio
-import random
-from naq import enqueue
-
-async def flaky_api_call(request_id):
-    """
-    This function simulates an API call that sometimes fails.
-    """
-    print(f"Attempting to call API for request {request_id}...")
-    if random.random() > 0.5:
-        print("API call successful!")
-        return "Success"
-    else:
-        print("API call failed. Will retry...")
-        raise ConnectionError("Could not connect to the API")
-
-async def main():
-    # Enqueue the job with a retry policy
-    job = await enqueue(
-        flaky_api_call,
-        request_id="abc-123",
-        queue_name="default",
-        max_retries=3,          # Attempt the job up to 3 more times
-        retry_delay=5,          # Wait 5 seconds between retries
-        retry_strategy="linear" # Use a fixed delay
-    )
-    print(f"Enqueued job {job.job_id} with 3 linear retries.")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-## Example 5: Using ServiceManager for Simplified Service Management
-
-The `ServiceManager` provides a unified way to manage all services with automatic dependency injection and lifecycle management. This is the recommended approach for most applications.
-
-```python
-# service_manager_example.py
-import asyncio
-from naq.services.manager import ServiceManager
-from naq.models.jobs import Job
-from naq.config import get_config
-
-async def process_data\(data_id\):
-    """Example job function that processes data."""
-    print\(f"Processing data with ID: {data_id}"\)
-    await asyncio.sleep\(1\)  # Simulate processing time
-    return f"Processed data {data_id}"
-
-async def main():
-    # Load configuration from the centralized config system
-    config = get_config()
-    
-    # Initialize the service manager - handles all service initialization
-    service_manager = ServiceManager(config=config)
-    await service_manager.initialize_all()
-    
-    # Get the services we need
-    job_service = service_manager.get_service("jobs")
-    event_service = service_manager.get_service("events")
-    
-    # Create a job
-    job = Job(
-        function=process_data,
-        args=("data-123",),
-        queue_name="processing",
-        max_retries=2,
-        retry_delay=1.0
-    )
-    
-    # Execute the job
-    print("Executing job...")
-    result = await job_service.execute_job(job, "worker-1")
-    print(f"Job completed with result: {result.result}")
-    print(f"Job status: {result.status}")
-    print(f"Execution time: {result.execution_time:.2f} seconds")
-    
-    # Retrieve the stored result
-    stored_result = await job_service.get_result(job.job_id)
-    print(f"Retrieved result: {stored_result.result}")
-    
-    # Get job events
-    job_events = await event_service.get_job_events(job.job_id)
-    print(f"Job events: {len(job_events)} events logged")
-    for event in job_events:
-        print(f"  - {event.event_type.value} at {event.timestamp}")
-    
-    # Cleanup all services automatically
-    await service_manager.cleanup_all()
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using JobService with Centralized Configuration
-
-For more fine-grained control, you can still initialize services individually:
-
-```python
-# job_service_example.py
-import asyncio
-from naq.services.jobs import JobService
-from naq.services.connection import ConnectionService
-from naq.services.kv_stores import KVStoreService
-from naq.services.events import EventService
-from naq.models.jobs import Job
-from naq.config import get_config
-
-async def process_data(data_id):
-    """Example job function that processes data."""
-    print(f"Processing data with ID: {data_id}")
-    await asyncio.sleep(1)  # Simulate processing time
-    return f"Processed data {data_id}"
-
-async def main():
-    # Load configuration from the centralized config system
-    config = get_config()
-    
-    # Initialize services using centralized configuration
-    connection_service = ConnectionService(config=config)
-    await connection_service.initialize()
-    
-    kv_store_service = KVStoreService(config=config)
-    await kv_store_service.initialize()
-    
-    event_service = EventService(config=config, kv_store_service=kv_store_service)
-    await event_service.initialize()
-    
-    # Create JobService with centralized configuration and dependencies
-    job_service = JobService(
-        config=config,
-        connection_service=connection_service,
-        kv_store_service=kv_store_service,
-        event_service=event_service
-    )
-    await job_service.initialize()
-    
-    # Create a job
-    job = Job(
-        function=process_data,
-        args=("data-123",),
-        queue_name="processing",
-        max_retries=2,
-        retry_delay=1.0
-    )
-    
-    # Execute the job
-    print("Executing job...")
-    result = await job_service.execute_job(job, "worker-1")
-    print(f"Job completed with result: {result.result}")
-    print(f"Job status: {result.status}")
-    print(f"Execution time: {result.execution_time:.2f} seconds")
-    
-    # Retrieve the stored result
-    stored_result = await job_service.get_result(job.job_id)
-    print(f"Retrieved result: {stored_result.result}")
-    
-    # Get job events
-    job_events = await event_service.get_job_events(job.job_id)
-    print(f"Job events: {len(job_events)} events logged")
-    for event in job_events:
-        print(f"  - {event.event_type.value} at {event.timestamp}")
-    
-    # Cleanup
-    await job_service.cleanup()
-    await event_service.cleanup()
-    await kv_store_service.cleanup()
-    await connection_service.cleanup()
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Handling Job Failures with JobService
-
-The `JobService` provides robust failure handling with automatic retries and detailed error logging.
-
-```python
-# job_failure_example.py
-import asyncio
-from naq.services.base import ServiceConfig
-from naq.services.connection import ConnectionService, ConnectionServiceConfig
-from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
-from naq.services.events import EventService, EventServiceConfig
-from naq.services.jobs import JobService, JobServiceConfig
-from naq.models.jobs import Job
-
-async def unreliable_api_call():
-    """Example function that might fail."""
-    import random
-    if random.random() < 0.7:  # 70% chance of failure
-        raise ConnectionError("API temporarily unavailable")
-    return "API call successful"
-
-async def main():
-    # Initialize services (simplified for brevity)
-    connection_config = ConnectionServiceConfig()
-    connection_service = ConnectionService(config=ServiceConfig(custom_settings=connection_config.as_dict()))
-    await connection_service.initialize()
-    
-    kv_store_config = KVStoreServiceConfig()
-    kv_store_service = KVStoreService(config=ServiceConfig(custom_settings=kv_store_config.as_dict()))
-    await kv_store_service.initialize()
-    
-    event_config = EventServiceConfig()
-    event_service = EventService(config=ServiceConfig(custom_settings=event_config.as_dict()), kv_store_service=kv_store_service)
-    await event_service.initialize()
-    
-    # Create JobService with retry configuration
-    job_config = JobServiceConfig(
-        enable_job_execution=True,
-        enable_result_storage=True,
-        enable_event_logging=True
-    )
-    job_service = JobService(
-        config=ServiceConfig(custom_settings=job_config.as_dict()),
-        connection_service=connection_service,
-        kv_store_service=kv_store_service,
-        event_service=event_service
-    )
-    await job_service.initialize()
-    
-    # Create a job with retry configuration
-    job = Job(
-        function=unreliable_api_call,
-        queue_name="api_calls",
-        max_retries=3,  # Retry up to 3 times
-        retry_delay=2.0  # Wait 2 seconds between retries
-    )
-    
-    # Execute the job
-    try:
-        result = await job_service.execute_job(job, "worker-1")
-        print(f"Job succeeded: {result.result}")
-    except Exception as e:
-        print(f"Job failed after all retries: {e}")
-    
-    # Check the stored result regardless of success/failure
-    stored_result = await job_service.get_result(job.job_id)
-    if stored_result:
-        print(f"Final job status: {stored_result.status}")
-        if stored_result.status == "failed":
-            print(f"Error: {stored_result.error}")
-            print(f"Traceback: {stored_result.traceback}")
-    
-    # Get failure events
-    job_events = await event_service.get_job_events(job.job_id)
-    failure_events = [e for e in job_events if e.event_type.value == "failed"]
-    retry_events = [e for e in job_events if e.event_type.value == "retry_scheduled"]
-    
-    print(f"Failure events: {len(failure_events)}")
-    print(f"Retry events: {len(retry_events)}")
-    
-    # Cleanup
-    await job_service.cleanup()
-    await event_service.cleanup()
-    await kv_store_service.cleanup()
-    await connection_service.cleanup()
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Custom JobService Configuration
-
-You can customize the `JobService` behavior through its configuration.
-
-```python
-# custom_job_config.py
-import asyncio
-from naq.services.base import ServiceConfig
-from naq.services.connection import ConnectionService, ConnectionServiceConfig
-from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
-from naq.services.events import EventService, EventServiceConfig
-from naq.services.jobs import JobService, JobServiceConfig
-from naq.models.jobs import Job
-
-async def long_running_task():
-    """Example long-running task."""
-    await asyncio.sleep(5)  # Simulate 5 seconds of work
-    return "Task completed"
-
-async def main():
-    # Initialize services (simplified for brevity)
-    connection_config = ConnectionServiceConfig()
-    connection_service = ConnectionService(config=ServiceConfig(custom_settings=connection_config.as_dict()))
-    await connection_service.initialize()
-    
-    kv_store_config = KVStoreServiceConfig()
-    kv_store_service = KVStoreService(config=ServiceConfig(custom_settings=kv_store_config.as_dict()))
-    await kv_store_service.initialize()
-    
-    event_config = EventServiceConfig()
-    event_service = EventService(config=ServiceConfig(custom_settings=event_config.as_dict()), kv_store_service=kv_store_service)
-    await event_service.initialize()
-    
-    # Create JobService with custom configuration
-    job_config = JobServiceConfig(
-        enable_job_execution=True,
-        enable_result_storage=True,
-        enable_event_logging=True,
-        max_job_execution_time=10,  # Maximum 10 seconds per job
-        default_result_ttl=3600,    # Store results for 1 hour
-        results_bucket_name="custom_results",
-        auto_create_buckets=True
-    )
-    job_service = JobService(
-        config=ServiceConfig(custom_settings=job_config.as_dict()),
-        connection_service=connection_service,
-        kv_store_service=kv_store_service,
-        event_service=event_service
-    )
-    await job_service.initialize()
-    
-    # Check configuration
-    print(f"Job execution enabled: {job_service.is_job_execution_enabled}")
-    print(f"Result storage enabled: {job_service.is_result_storage_enabled}")
-    print(f"Event logging enabled: {job_service.is_event_logging_enabled}")
-    print(f"Max execution time: {job_service.job_config.max_job_execution_time} seconds")
-    
-    # Create and execute a job
-    job = Job(
-        function=long_running_task,
-        queue_name="long_tasks",
-        max_retries=1
-    )
-    
-    try:
-        result = await job_service.execute_job(job, "worker-1")
-        print(f"Job completed: {result.result}")
-    except Exception as e:
-        print(f"Job failed: {e}")
-    
-    # Cleanup
-    await job_service.cleanup()
-    await event_service.cleanup()
-    await kv_store_service.cleanup()
-    await connection_service.cleanup()
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using JobService with Minimal Dependencies
-
-If you only need basic job execution without all services, you can initialize `JobService` with minimal dependencies.
-
-```python
-# minimal_job_service.py
-import asyncio
-from naq.services.base import ServiceConfig
-from naq.services.connection import ConnectionService, ConnectionServiceConfig
-from naq.services.jobs import JobService, JobServiceConfig
-from naq.models.jobs import Job
-
-async def simple_task(x, y):
-    """Simple task that adds two numbers."""
-    return x + y
-
-async def main():
-    # Initialize only the connection service
-    connection_config = ConnectionServiceConfig()
-    connection_service = ConnectionService(config=ServiceConfig(custom_settings=connection_config.as_dict()))
-    await connection_service.initialize()
-    
-    # Create JobService with minimal configuration
-    job_config = JobServiceConfig(
-        enable_job_execution=True,
-        enable_result_storage=False,  # Disable result storage
-        enable_event_logging=False    # Disable event logging
-    )
-    job_service = JobService(
-        config=ServiceConfig(custom_settings=job_config.as_dict()),
-        connection_service=connection_service
-        # KVStoreService and EventService will be created automatically
-    )
-    await job_service.initialize()
-    
-    # Create and execute a job
-    job = Job(
-        function=simple_task,
-        args=(5, 7),
-        queue_name="simple_tasks"
-    )
-    
-    result = await job_service.execute_job(job, "worker-1")
-    print(f"Job result: {result.result}")
-    
-    # Result storage is disabled, so get_result will return None
-    stored_result = await job_service.get_result(job.job_id)
-    print(f"Stored result: {stored_result}")  # Will be None
-    
-    # Cleanup
-    await job_service.cleanup()
-    await connection_service.cleanup()
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-::: {.callout-note}
-**Retry Strategies**
-
-`naq` supports both `linear` (fixed delay) and `exponential` backoff strategies for retries. You can also provide a list of integers to `retry_delay` for a custom delay sequence.
-:::
-
-## Example 3: Job Dependencies
-
-You can create workflows by making jobs dependent on the successful completion of others. The dependent job will only run after its dependencies have finished.
-
-```python
-# dependency_workflow.py
-import asyncio
-from naq import enqueue
-
-async def download_data(source_url):
-    print(f"Downloading data from {source_url}...")
-    await asyncio.sleep(2)  # Simulate download
-    file_path = f"/tmp/{source_url.split('/')[-1]}.csv"
-    print(f"Data downloaded to {file_path}")
-    return file_path
-
-async def process_data(file_path):
-    print(f"Processing data from {file_path}...")
-    await asyncio.sleep(3)  # Simulate processing
-    result_path = f"{file_path}.processed"
-    print(f"Data processed and saved to {result_path}")
-    return result_path
-
-async def upload_results(result_path):
-    print(f"Uploading {result_path} to cloud storage...")
-    await asyncio.sleep(1)  # Simulate upload
-    print("Upload complete.")
-    return "Workflow finished successfully."
-
-async def main():
-    # Step 1: Download data
-    download_job = await enqueue(download_data, source_url="http://example.com/data")
-
-    # Step 2: Process data (depends on download)
-    process_job = await enqueue(
-        process_data,
-        file_path=download_job, # Pass the job object as an argument
-        depends_on=[download_job]
-    )
-
-    # Step 3: Upload results (depends on processing)
-    upload_job = await enqueue(
-        upload_results,
-        result_path=process_job,
-        depends_on=[process_job]
-    )
-
-    print(f"Workflow started. Final job: {upload_job.job_id}")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
 ## Example 4: Using Multiple Queues
 
 You can use different queues to prioritize jobs or to dedicate workers to specific types of tasks.
@@ -767,1232 +205,31 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-## Service Layer Examples
-
-The service layer provides a modular architecture for managing different aspects of the `naq` system. Each service can be used independently or composed together to create complex workflows.
-
-### Using ConnectionService with Centralized Configuration
-
-The `ConnectionService` manages the NATS connection and provides a centralized way to connect to the NATS server. It can now use the centralized configuration system.
-
-```python
-# connection_service_example.py
-import asyncio
-from naq.services.connection import ConnectionService
-from naq.config import get_config
-
-async def main():
-    # Load configuration from the centralized config system
-    config = get_config()
-    
-    # Initialize the connection service with centralized config
-    connection_service = ConnectionService(config=config)
-    
-    # Connect to NATS
-    await connection_service.initialize()
-    print(f"Connected to NATS cluster: {connection_service.get_connected_servers()}")
-    
-    # Check connection status
-    print(f"Connection status: {connection_service.is_connected}")
-    
-    # Publish a simple message
-    await connection_service.publish("test.subject", b"Hello, NATS!")
-    print("Message published to test.subject")
-    
-    # Subscribe to a subject
-    async def message_handler(msg):
-        print(f"Received message: {msg.data.decode()}")
-    
-    subscription = await connection_service.subscribe("test.subject", message_handler)
-    print(f"Subscribed to test.subject with subscription ID: {subscription}")
-    
-    # Wait for a message
-    await asyncio.sleep(1)
-    
-    # Unsubscribe
-    await connection_service.unsubscribe(subscription)
-    print("Unsubscribed from test.subject")
-    
-    # Close the connection
-    await connection_service.cleanup()
-    print("Connection closed")
-
-if __name__ == "__main__":
-    asyncio.run(main())
 ```
 
-### Using ConnectionService with Custom Configuration
+## Example 5: Event Logging and Querying
 
-You can also override the centralized configuration with custom settings:
-
-```python
-# connection_service_custom_example.py
-import asyncio
-from naq.services.base import ServiceConfig
-from naq.services.connection import ConnectionService, ConnectionServiceConfig
-from naq.config import get_config
-
-async def main():
-    # Load the base configuration
-    base_config = get_config()
-    
-    # Create custom connection configuration
-    connection_config = ConnectionServiceConfig(
-        servers=["nats://custom.server:4222"],
-        max_reconnect_attempts=10,
-        reconnect_time_wait=5.0
-    )
-    
-    # Initialize the connection service with custom config
-    # This will override the centralized configuration
-    connection_service = ConnectionService(
-        config=ServiceConfig(custom_settings=connection_config.as_dict())
-    )
-    
-    # Connect to NATS
-    await connection_service.initialize()
-    print(f"Connected to NATS cluster: {connection_service.get_connected_servers()}")
-    
-    # Check connection status
-    print(f"Connection status: {connection_service.is_connected}")
-    
-    # Publish a simple message
-    await connection_service.publish("test.subject", b"Hello, custom NATS!")
-    print("Message published to test.subject")
-    
-    # Close the connection
-    await connection_service.cleanup()
-    print("Connection closed")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using KVStoreService with Centralized Configuration
-
-The `KVStoreService` provides a key-value store interface using NATS KV. It can now use the centralized configuration system.
-
-```python
-# kv_store_example.py
-import asyncio
-from naq.services.kv_stores import KVStoreService
-from naq.config import get_config
-
-async def main():
-    # Load configuration from the centralized config system
-    config = get_config()
-    
-    # Initialize the KV store service with centralized config
-    kv_store_service = KVStoreService(config=config)
-    
-    # Create the bucket if it doesn't exist
-    await kv_store_service.initialize()
-    print(f"KV store bucket '{kv_store_service.bucket_name}' initialized")
-    
-    # Set a key-value pair
-    await kv_store_service.put("user:123", {"name": "Alice", "age": 30})
-    print("Stored user data for user:123")
-    
-    # Get a value
-    user_data = await kv_store_service.get("user:123")
-    print(f"Retrieved user data: {user_data}")
-    
-    # Update a value
-    await kv_store_service.put("user:123", {"name": "Alice", "age": 31})
-    print("Updated user data for user:123")
-    
-    # Get history of a key
-    history = await kv_store_service.get_history("user:123")
-    print(f"History for user:123 ({len(history)} revisions):")
-    for revision in history:
-        print(f"  - {revision.revision}: {revision.value}")
-    
-    # Delete a key
-    await kv_store_service.delete("user:123")
-    print("Deleted user:123")
-    
-    # Watch for changes
-    async def watch_callback(key, value, revision):
-        print(f"Key changed: {key} at revision {revision}: {value}")
-    
-    watch_task = asyncio.create_task(
-        kv_store_service.watch("user:123", watch_callback)
-    )
-    
-    # Put a value to trigger the watch
-    await kv_store_service.put("user:123", {"name": "Bob", "age": 25})
-    await asyncio.sleep(0.5)  # Wait for the watch callback
-    
-    # Cancel the watch
-    watch_task.cancel()
-    
-    # Cleanup
-    await kv_store_service.cleanup()
-    print("KV store service cleaned up")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using KVStoreService with Custom Configuration
-
-You can also override the centralized configuration with custom settings:
-
-```python
-# kv_store_custom_example.py
-import asyncio
-from naq.services.base import ServiceConfig
-from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
-from naq.config import get_config
-
-async def main():
-    # Load the base configuration
-    base_config = get_config()
-    
-    # Create custom KV store configuration
-    kv_config = KVStoreServiceConfig(
-        bucket_name="custom_user_data",
-        history=20,  # Keep 20 revisions of each key
-        stream_name="custom_user_data_stream"
-    )
-    
-    # Initialize the KV store service with custom config
-    # This will override the centralized configuration
-    kv_store_service = KVStoreService(
-        config=ServiceConfig(custom_settings=kv_config.as_dict())
-    )
-    
-    # Create the bucket if it doesn't exist
-    await kv_store_service.initialize()
-    print(f"KV store bucket '{kv_store_service.bucket_name}' initialized")
-    
-    # Set a key-value pair
-    await kv_store_service.put("user:456", {"name": "Charlie", "age": 40})
-    print("Stored user data for user:456")
-    
-    # Get a value
-    user_data = await kv_store_service.get("user:456")
-    print(f"Retrieved user data: {user_data}")
-    
-    # Cleanup
-    await kv_store_service.cleanup()
-    print("KV store service cleaned up")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using EventService with Centralized Configuration
-
-The `EventService` provides a structured way to log and retrieve events. It can now use the centralized configuration system.
-
-```python
-# event_service_example.py
-import asyncio
-from datetime import datetime
-from naq.services.kv_stores import KVStoreService
-from naq.services.events import EventService
-from naq.models.events import Event, EventType
-from naq.config import get_config
-
-async def main():
-    # Load configuration from the centralized config system
-    config = get_config()
-    
-    # Initialize KV store service (required for EventService)
-    kv_store_service = KVStoreService(config=config)
-    await kv_store_service.initialize()
-    
-    # Initialize the event service with centralized config
-    event_service = EventService(config=config, kv_store_service=kv_store_service)
-    await event_service.initialize()
-    print("Event service initialized")
-    
-    # Log different types of events
-    await event_service.log_event(
-        Event(
-            job_id="job-123",
-            event_type=EventType.started,
-            message="Job processing started",
-            timestamp=datetime.utcnow()
-        )
-    )
-    
-    await event_service.log_event(
-        Event(
-            job_id="job-123",
-            event_type=EventType.progress,
-            message="50% complete",
-            timestamp=datetime.utcnow()
-        )
-    )
-    
-    await event_service.log_event(
-        Event(
-            job_id="job-123",
-            event_type=EventType.completed,
-            message="Job completed successfully",
-            timestamp=datetime.utcnow()
-        )
-    )
-    
-    # Get events for a specific job
-    job_events = await event_service.get_job_events("job-123")
-    print(f"Events for job-123 ({len(job_events)} events):")
-    for event in job_events:
-        print(f"  - {event.event_type.value}: {event.message} at {event.timestamp}")
-    
-    # Get events by type for a specific job
-    # Note: EventService only supports getting events for a specific job
-    # completed_events = await event_service.get_job_events("some-job-id", event_type=EventType.completed)
-    # print(f"Completed events for job some-job-id: {len(completed_events)}")
-    
-    # Get events within a time range for a specific job
-    # Note: EventService only supports getting events for a specific job
-    # start_time = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    # end_time = datetime.utcnow()
-    # time_range_events = await event_service.get_job_events("some-job-id")  # Then filter by time in your code
-    # print(f"Events today for job some-job-id: {len(time_range_events)}")
-    
-    # Cleanup
-    await event_service.cleanup()
-    await kv_store_service.cleanup()
-    print("Event service cleaned up")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using EventService with Custom Configuration
-
-You can also override the centralized configuration with custom settings:
-
-```python
-# event_service_custom_example.py
-import asyncio
-from datetime import datetime
-from naq.services.base import ServiceConfig
-from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
-from naq.services.events import EventService, EventServiceConfig
-from naq.models.events import Event, EventType
-from naq.config import get_config
-
-async def main():
-    # Load the base configuration
-    base_config = get_config()
-    
-    # Initialize KV store service with custom config
-    kv_config = KVStoreServiceConfig(bucket_name="custom_events")
-    kv_store_service = KVStoreService(
-        config=ServiceConfig(custom_settings=kv_config.as_dict())
-    )
-    await kv_store_service.initialize()
-    
-    # Create custom event service configuration
-    event_config = EventServiceConfig(
-        event_bucket_name="custom_system_events",
-        event_ttl=172800  # Store events for 48 hours
-    )
-    
-    # Initialize the event service with custom config
-    # This will override the centralized configuration
-    event_service = EventService(
-        config=ServiceConfig(custom_settings=event_config.as_dict()),
-        kv_store_service=kv_store_service
-    )
-    await event_service.initialize()
-    print("Event service initialized with custom config")
-    
-    # Log different types of events
-    await event_service.log_event(
-        Event(
-            job_id="job-456",
-            event_type=EventType.started,
-            message="Custom job processing started",
-            timestamp=datetime.utcnow()
-        )
-    )
-    
-    await event_service.log_event(
-        Event(
-            job_id="job-456",
-            event_type=EventType.completed,
-            message="Custom job completed successfully",
-            timestamp=datetime.utcnow()
-        )
-    )
-    
-    # Get events for a specific job
-    job_events = await event_service.get_job_events("job-456")
-    print(f"Events for job-456 ({len(job_events)} events):")
-    for event in job_events:
-        print(f"  - {event.event_type.value}: {event.message} at {event.timestamp}")
-    
-    # Cleanup
-    await event_service.cleanup()
-    await kv_store_service.cleanup()
-    print("Event service cleaned up")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using StreamService with Centralized Configuration
-
-The `StreamService` provides a way to work with NATS JetStream streams. It can now use the centralized configuration system.
-
-```python
-# stream_service_example.py
-import asyncio
-from naq.services.connection import ConnectionService
-from naq.services.streams import StreamService
-from naq.config import get_config
-
-async def main():
-    # Load configuration from the centralized config system
-    config = get_config()
-    
-    # Initialize connection service with centralized config
-    connection_service = ConnectionService(config=config)
-    await connection_service.initialize()
-    
-    # Initialize the stream service with centralized config
-    stream_service = StreamService(config=config, connection_service=connection_service)
-    await stream_service.initialize()
-    print(f"Stream service initialized for stream: {stream_service.stream_name}")
-    
-    # Create or get the stream
-    stream_info = await stream_service.create_or_get_stream()
-    print(f"Stream info: {stream_info.config.name} with {stream_info.state.messages} messages")
-    
-    # Add a consumer
-    consumer_info = await stream_service.add_consumer(
-        "orders_processor",
-        durable_name="order_processor",
-        ack_policy="explicit"  # Require explicit acknowledgment
-    )
-    print(f"Consumer created: {consumer_info.name}")
-    
-    # Publish messages to the stream
-    for i in range(5):
-        message_data = f"Order {i+1} data"
-        sequence = await stream_service.publish(f"orders.order_{i+1}", message_data.encode())
-        print(f"Published message with sequence: {sequence}")
-    
-    # Get stream information
-    stream_info = await stream_service.get_stream_info()
-    print(f"Stream has {stream_info.state.messages} messages and {stream_info.state.consumers} consumers")
-    
-    # Get consumer information
-    consumer_info = await stream_service.get_consumer_info("order_processor")
-    print(f"Consumer has delivered {consumer_info.num_ack_pending} messages")
-    
-    # Cleanup
-    await stream_service.cleanup()
-    await connection_service.cleanup()
-    print("Stream service cleaned up")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using StreamService with Custom Configuration
-
-You can also override the centralized configuration with custom settings:
-
-```python
-# stream_service_custom_example.py
-import asyncio
-from naq.services.base import ServiceConfig
-from naq.services.connection import ConnectionService, ConnectionServiceConfig
-from naq.services.streams import StreamService, StreamServiceConfig
-from naq.config import get_config
-
-async def main():
-    # Load the base configuration
-    base_config = get_config()
-    
-    # Initialize connection service with custom config
-    connection_config = ConnectionServiceConfig()
-    connection_service = ConnectionService(
-        config=ServiceConfig(custom_settings=connection_config.as_dict())
-    )
-    await connection_service.initialize()
-    
-    # Create custom stream service configuration
-    stream_config = StreamServiceConfig(
-        stream_name="custom_orders",
-        subjects=["custom_orders.>"],  # Match all subjects starting with "custom_orders."
-        retention_limit=2000,   # Keep up to 2000 messages
-        max_age=7200            # Keep messages for 2 hours
-    )
-    
-    # Initialize the stream service with custom config
-    # This will override the centralized configuration
-    stream_service = StreamService(
-        config=ServiceConfig(custom_settings=stream_config.as_dict()),
-        connection_service=connection_service
-    )
-    await stream_service.initialize()
-    print(f"Stream service initialized for stream: {stream_service.stream_name}")
-    
-    # Create or get the stream
-    stream_info = await stream_service.create_or_get_stream()
-    print(f"Stream info: {stream_info.config.name} with {stream_info.state.messages} messages")
-    
-    # Add a consumer
-    consumer_info = await stream_service.add_consumer(
-        "custom_orders_processor",
-        durable_name="custom_order_processor",
-        ack_policy="explicit"  # Require explicit acknowledgment
-    )
-    print(f"Consumer created: {consumer_info.name}")
-    
-    # Publish messages to the stream
-    for i in range(3):
-        message_data = f"Custom Order {i+1} data"
-        sequence = await stream_service.publish(f"custom_orders.order_{i+1}", message_data.encode())
-        print(f"Published message with sequence: {sequence}")
-    
-    # Get stream information
-    stream_info = await stream_service.get_stream_info()
-    print(f"Stream has {stream_info.state.messages} messages and {stream_info.state.consumers} consumers")
-    
-    # Cleanup
-    await stream_service.cleanup()
-    await connection_service.cleanup()
-    print("Stream service cleaned up")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using WorkerService with Centralized Configuration
-
-The `WorkerService` provides a way to manage workers for processing jobs. It can now use the centralized configuration system.
-
-```python
-# worker_service_example.py
-import asyncio
-from naq.services.connection import ConnectionService
-from naq.services.kv_stores import KVStoreService
-from naq.services.events import EventService
-from naq.services.worker import WorkerService
-from naq.models.jobs import Job
-from naq.config import get_config
-
-async def process_order(order_id):
-    """Example job function that processes an order."""
-    print(f"Processing order {order_id}...")
-    await asyncio.sleep(2)  # Simulate processing time
-    return f"Order {order_id} processed successfully"
-
-async def main():
-    # Load configuration from the centralized config system
-    config = get_config()
-    
-    # Initialize required services using centralized configuration
-    connection_service = ConnectionService(config=config)
-    await connection_service.initialize()
-    
-    kv_store_service = KVStoreService(config=config)
-    await kv_store_service.initialize()
-    
-    event_service = EventService(config=config, kv_store_service=kv_store_service)
-    await event_service.initialize()
-    
-    # Initialize the worker service with centralized config
-    worker_service = WorkerService(
-        config=config,
-        connection_service=connection_service,
-        kv_store_service=kv_store_service,
-        event_service=event_service
-    )
-    await worker_service.initialize()
-    print(f"Worker service initialized for worker: {worker_service.worker_name}")
-    
-    # Register job handlers
-    @worker_service.register_job_handler("process_order")
-    async def handle_process_order(job: Job):
-        return await process_order(job.args[0])
-    
-    # Start processing jobs
-    await worker_service.start_processing()
-    print("Worker started processing jobs")
-    
-    # Keep the worker running for a while
-    await asyncio.sleep(10)
-    
-    # Stop processing
-    await worker_service.stop_processing()
-    print("Worker stopped processing jobs")
-    
-    # Get worker statistics
-    stats = worker_service.get_worker_stats()
-    print(f"Worker stats: {stats}")
-    
-    # Cleanup
-    await worker_service.cleanup()
-    await event_service.cleanup()
-    await kv_store_service.cleanup()
-    await connection_service.cleanup()
-    print("Worker service cleaned up")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using WorkerService with Custom Configuration
-
-You can also override the centralized configuration with custom settings:
-
-```python
-# worker_service_custom_example.py
-import asyncio
-from naq.services.base import ServiceConfig
-from naq.services.connection import ConnectionService, ConnectionServiceConfig
-from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
-from naq.services.events import EventService, EventServiceConfig
-from naq.services.worker import WorkerService, WorkerServiceConfig
-from naq.models.jobs import Job
-from naq.config import get_config
-
-async def process_order(order_id):
-    """Example job function that processes an order."""
-    print(f"Processing order {order_id}...")
-    await asyncio.sleep(2)  # Simulate processing time
-    return f"Order {order_id} processed successfully"
-
-async def main():
-    # Load the base configuration
-    base_config = get_config()
-    
-    # Initialize required services with custom config
-    connection_config = ConnectionServiceConfig()
-    connection_service = ConnectionService(
-        config=ServiceConfig(custom_settings=connection_config.as_dict())
-    )
-    await connection_service.initialize()
-    
-    kv_store_config = KVStoreServiceConfig(bucket_name="custom_worker_data")
-    kv_store_service = KVStoreService(
-        config=ServiceConfig(custom_settings=kv_store_config.as_dict())
-    )
-    await kv_store_service.initialize()
-    
-    event_config = EventServiceConfig()
-    event_service = EventService(
-        config=ServiceConfig(custom_settings=event_config.as_dict()),
-        kv_store_service=kv_store_service
-    )
-    await event_service.initialize()
-    
-    # Create custom worker service configuration
-    worker_config = WorkerServiceConfig(
-        worker_name="custom_order_processor",
-        queues=["high_priority_orders", "low_priority_orders"],
-        max_concurrent_jobs=10,
-        heartbeat_interval=15
-    )
-    
-    # Initialize the worker service with custom config
-    # This will override the centralized configuration
-    worker_service = WorkerService(
-        config=ServiceConfig(custom_settings=worker_config.as_dict()),
-        connection_service=connection_service,
-        kv_store_service=kv_store_service,
-        event_service=event_service
-    )
-    await worker_service.initialize()
-    print(f"Worker service initialized for worker: {worker_service.worker_name}")
-    
-    # Register job handlers
-    @worker_service.register_job_handler("process_order")
-    async def handle_process_order(job: Job):
-        return await process_order(job.args[0])
-    
-    # Start processing jobs
-    await worker_service.start_processing()
-    print("Worker started processing jobs")
-    
-    # Keep the worker running for a while
-    await asyncio.sleep(10)
-    
-    # Stop processing
-    await worker_service.stop_processing()
-    print("Worker stopped processing jobs")
-    
-    # Get worker statistics
-    stats = worker_service.get_worker_stats()
-    print(f"Worker stats: {stats}")
-    
-    # Cleanup
-    await worker_service.cleanup()
-    await event_service.cleanup()
-    await kv_store_service.cleanup()
-    await connection_service.cleanup()
-    print("Worker service cleaned up")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using SchedulerService with Centralized Configuration
-
-The `SchedulerService` provides a way to manage scheduled jobs. It can now use the centralized configuration system.
-
-```python
-# scheduler_service_example.py
-import asyncio
-from datetime import datetime, timedelta
-from naq.services.connection import ConnectionService
-from naq.services.kv_stores import KVStoreService
-from naq.services.events import EventService
-from naq.services.scheduler import SchedulerService
-from naq.models.schedules import Schedule, ScheduleType
-from naq.config import get_config
-
-async def send_daily_report():
-    """Example scheduled job function."""
-    print("Sending daily report...")
-    # Logic to generate and send report
-    return "Daily report sent"
-
-async def main():
-    # Load configuration from the centralized config system
-    config = get_config()
-    
-    # Initialize required services using centralized configuration
-    connection_service = ConnectionService(config=config)
-    await connection_service.initialize()
-    
-    kv_store_service = KVStoreService(config=config)
-    await kv_store_service.initialize()
-    
-    event_service = EventService(config=config, kv_store_service=kv_store_service)
-    await event_service.initialize()
-    
-    # Initialize the scheduler service with centralized config
-    scheduler_service = SchedulerService(
-        config=config,
-        connection_service=connection_service,
-        kv_store_service=kv_store_service,
-        event_service=event_service
-    )
-    await scheduler_service.initialize()
-    print(f"Scheduler service initialized for scheduler: {scheduler_service.scheduler_name}")
-    
-    # Schedule a one-time job
-    one_time_schedule = Schedule(
-        schedule_id="report_2023-08-14",
-        schedule_type=ScheduleType.ONCE,
-        run_at=datetime.utcnow() + timedelta(minutes=5),
-        function=send_daily_report,
-        queue_name="scheduled_jobs",
-        args=(),
-        kwargs={}
-    )
-    
-    await scheduler_service.add_schedule(one_time_schedule)
-    print(f"Scheduled one-time job: {one_time_schedule.schedule_id}")
-    
-    # Schedule a recurring job
-    recurring_schedule = Schedule(
-        schedule_id="daily_report",
-        schedule_type=ScheduleType.CRON,
-        cron="0 9 * * *",  # Every day at 9:00 AM UTC
-        function=send_daily_report,
-        queue_name="scheduled_jobs",
-        args=(),
-        kwargs={}
-    )
-    
-    await scheduler_service.add_schedule(recurring_schedule)
-    print(f"Scheduled recurring job: {recurring_schedule.schedule_id}")
-    
-    # Get all schedules
-    schedules = await scheduler_service.get_all_schedules()
-    print(f"Total schedules: {len(schedules)}")
-    
-    # Get a specific schedule
-    schedule = await scheduler_service.get_schedule("daily_report")
-    print(f"Schedule info: {schedule.schedule_type.value} - {schedule.cron}")
-    
-    # Remove a schedule
-    await scheduler_service.remove_schedule("report_2023-08-14")
-    print("Removed one-time schedule")
-    
-    # Start the scheduler
-    await scheduler_service.start()
-    print("Scheduler started")
-    
-    # Keep the scheduler running for a while
-    await asyncio.sleep(30)
-    
-    # Stop the scheduler
-    await scheduler_service.stop()
-    print("Scheduler stopped")
-    
-    # Cleanup
-    await scheduler_service.cleanup()
-    await event_service.cleanup()
-    await kv_store_service.cleanup()
-    await connection_service.cleanup()
-    print("Scheduler service cleaned up")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using SchedulerService with Custom Configuration
-
-You can also override the centralized configuration with custom settings:
-
-```python
-# scheduler_service_custom_example.py
-import asyncio
-from datetime import datetime, timedelta
-from naq.services.base import ServiceConfig
-from naq.services.connection import ConnectionService, ConnectionServiceConfig
-from naq.services.kv_stores import KVStoreService, KVStoreServiceConfig
-from naq.services.events import EventService, EventServiceConfig
-from naq.services.scheduler import SchedulerService, SchedulerServiceConfig
-from naq.models.schedules import Schedule, ScheduleType
-from naq.config import get_config
-
-async def send_daily_report():
-    """Example scheduled job function."""
-    print("Sending daily report...")
-    # Logic to generate and send report
-    return "Daily report sent"
-
-async def main():
-    # Load the base configuration
-    base_config = get_config()
-    
-    # Initialize required services with custom config
-    connection_config = ConnectionServiceConfig()
-    connection_service = ConnectionService(
-        config=ServiceConfig(custom_settings=connection_config.as_dict())
-    )
-    await connection_service.initialize()
-    
-    kv_store_config = KVStoreServiceConfig(bucket_name="custom_scheduler_data")
-    kv_store_service = KVStoreService(
-        config=ServiceConfig(custom_settings=kv_store_config.as_dict())
-    )
-    await kv_store_service.initialize()
-    
-    event_config = EventServiceConfig()
-    event_service = EventService(
-        config=ServiceConfig(custom_settings=event_config.as_dict()),
-        kv_store_service=kv_store_service
-    )
-    await event_service.initialize()
-    
-    # Create custom scheduler service configuration
-    scheduler_config = SchedulerServiceConfig(
-        scheduler_name="custom_main_scheduler",
-        check_interval=10,  # Check for scheduled jobs every 10 seconds
-        max_concurrent_schedules=20
-    )
-    
-    # Initialize the scheduler service with custom config
-    # This will override the centralized configuration
-    scheduler_service = SchedulerService(
-        config=ServiceConfig(custom_settings=scheduler_config.as_dict()),
-        connection_service=connection_service,
-        kv_store_service=kv_store_service,
-        event_service=event_service
-    )
-    await scheduler_service.initialize()
-    print(f"Scheduler service initialized for scheduler: {scheduler_service.scheduler_name}")
-    
-    # Schedule a one-time job
-    one_time_schedule = Schedule(
-        schedule_id="custom_report_2023-08-14",
-        schedule_type=ScheduleType.ONCE,
-        run_at=datetime.utcnow() + timedelta(minutes=5),
-        function=send_daily_report,
-        queue_name="custom_scheduled_jobs",
-        args=(),
-        kwargs={}
-    )
-    
-    await scheduler_service.add_schedule(one_time_schedule)
-    print(f"Scheduled one-time job: {one_time_schedule.schedule_id}")
-    
-    # Schedule a recurring job
-    recurring_schedule = Schedule(
-        schedule_id="custom_daily_report",
-        schedule_type=ScheduleType.CRON,
-        cron="0 10 * * *",  # Every day at 10:00 AM UTC
-        function=send_daily_report,
-        queue_name="custom_scheduled_jobs",
-        args=(),
-        kwargs={}
-    )
-    
-    await scheduler_service.add_schedule(recurring_schedule)
-    print(f"Scheduled recurring job: {recurring_schedule.schedule_id}")
-    
-    # Get all schedules
-    schedules = await scheduler_service.get_all_schedules()
-    print(f"Total schedules: {len(schedules)}")
-    
-    # Get a specific schedule
-    schedule = await scheduler_service.get_schedule("custom_daily_report")
-    print(f"Schedule info: {schedule.schedule_type.value} - {schedule.cron}")
-    
-    # Remove a schedule
-    await scheduler_service.remove_schedule("custom_report_2023-08-14")
-    print("Removed one-time schedule")
-    
-    # Start the scheduler
-    await scheduler_service.start()
-    print("Scheduler started")
-    
-    # Keep the scheduler running for a while
-    await asyncio.sleep(30)
-    
-    # Stop the scheduler
-    await scheduler_service.stop()
-    print("Scheduler stopped")
-    
-    # Cleanup
-    await scheduler_service.cleanup()
-    await event_service.cleanup()
-    await kv_store_service.cleanup()
-    await connection_service.cleanup()
-    print("Scheduler service cleaned up")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using ServiceManager with Centralized Configuration
-
-The `ServiceManager` provides a centralized way to manage all services using the unified NAQ configuration system.
-
-```python
-# service_manager_example.py
-import asyncio
-from naq.services.manager import ServiceManager
-from naq.config import get_config
-
-async def main():
-    # Load configuration from the centralized config system
-    # This will load from naq.yaml, environment variables, and defaults
-    config = get_config()
-    
-    # Initialize the service manager with the loaded configuration
-    service_manager = ServiceManager(config=config)
-    
-    # Start all services
-    await service_manager.initialize_all()
-    print("All services initialized")
-    
-    # Get a specific service
-    connection_service = service_manager.get_service("connection")
-    print(f"Connection service status: {connection_service.is_connected}")
-    
-    # Get all service statuses
-    service_statuses = service_manager.get_all_service_statuses()
-    print("Service statuses:")
-    for name, status in service_statuses.items():
-        print(f"  - {name}: {status}")
-    
-    # Use the services
-    kv_store_service = service_manager.get_service("kv_store")
-    await kv_store_service.put("app_status", "running")
-    print("App status stored")
-    
-    # Keep services running for a while
-    await asyncio.sleep(10)
-    
-    # Stop all services
-    await service_manager.cleanup_all()
-    print("All services cleaned up")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using ServiceManager with Custom Configuration
-
-You can also provide custom configuration that overrides the centralized settings:
-
-```python
-# service_manager_custom_example.py
-import asyncio
-from naq.services.manager import ServiceManager
-from naq.services.base import ServiceConfig
-from naq.services.connection import ConnectionServiceConfig
-from naq.services.worker import WorkerServiceConfig
-from naq.config import get_config
-
-async def main():
-    # Load the base configuration
-    base_config = get_config()
-    
-    # Create custom overrides for specific services
-    custom_config = {
-        "connection": ConnectionServiceConfig(
-            servers=["nats://custom.server:4222"],
-            max_reconnect_attempts=10
-        ),
-        "worker": WorkerServiceConfig(
-            worker_name="custom_worker",
-            queues=["high_priority", "low_priority"],
-            max_concurrent_jobs=20
-        )
-    }
-    
-    # Initialize the service manager with both base and custom config
-    service_manager = ServiceManager(
-        config=base_config,
-        custom_service_configs=custom_config
-    )
-    
-    # Start all services
-    await service_manager.initialize_all()
-    print("All services initialized with custom overrides")
-    
-    # Get the connection service to verify custom settings
-    connection_service = service_manager.get_service("connection")
-    print(f"Connection servers: {connection_service.servers}")
-    
-    # Get the worker service to verify custom settings
-    worker_service = service_manager.get_service("worker")
-    print(f"Worker name: {worker_service.worker_name}")
-    print(f"Worker queues: {worker_service.queues}")
-    
-    # Keep services running for a while
-    await asyncio.sleep(10)
-    
-    # Stop all services
-    await service_manager.cleanup_all()
-    print("All services cleaned up")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Composing Services for a Complete Workflow with Centralized Configuration
-
-Here's an example of how to compose multiple services to create a complete workflow using the centralized configuration system:
-
-```python
-# complete_workflow_example.py
-import asyncio
-from datetime import datetime
-from naq.services.connection import ConnectionService
-from naq.services.kv_stores import KVStoreService
-from naq.services.events import EventService
-from naq.services.jobs import JobService
-from naq.models.jobs import Job
-from naq.config import get_config
-
-async def unreliable_api_call():
-    """Example function that might fail."""
-    import random
-    if random.random() < 0.7:  # 70% chance of failure
-        raise ConnectionError("API temporarily unavailable")
-    return "API call successful"
-
-async def main():
-    # Load configuration from the centralized config system
-    config = get_config()
-    
-    # Initialize all required services using centralized configuration
-    connection_service = ConnectionService(config=config)
-    await connection_service.initialize()
-    
-    kv_store_service = KVStoreService(config=config)
-    await kv_store_service.initialize()
-    
-    event_service = EventService(config=config, kv_store_service=kv_store_service)
-    await event_service.initialize()
-    
-    # Create JobService with centralized configuration and dependencies
-    job_service = JobService(
-        config=config,
-        connection_service=connection_service,
-        kv_store_service=kv_store_service,
-        event_service=event_service
-    )
-    await job_service.initialize()
-    
-    # Create a job with retry configuration
-    job = Job(
-        function=unreliable_api_call,
-        queue_name="api_calls",
-        max_retries=3,  # Retry up to 3 times
-        retry_delay=2.0  # Wait 2 seconds between retries
-    )
-    
-    # Execute the job
-    try:
-        result = await job_service.execute_job(job, "worker-1")
-        print(f"Job succeeded: {result.result}")
-    except Exception as e:
-        print(f"Job failed after all retries: {e}")
-    
-    # Check the stored result regardless of success/failure
-    stored_result = await job_service.get_result(job.job_id)
-    if stored_result:
-        print(f"Final job status: {stored_result.status}")
-        if stored_result.status == "failed":
-            print(f"Error: {stored_result.error}")
-            print(f"Traceback: {stored_result.traceback}")
-    
-    # Get failure events
-    job_events = await event_service.get_job_events(job.job_id)
-    failure_events = [e for e in job_events if e.event_type.value == "failed"]
-    retry_events = [e for e in job_events if e.event_type.value == "retry_scheduled"]
-    
-    print(f"Failure events: {len(failure_events)}")
-    print(f"Retry events: {len(retry_events)}")
-    
-    # Cleanup
-    await job_service.cleanup()
-    await event_service.cleanup()
-    await kv_store_service.cleanup()
-    await connection_service.cleanup()
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### Using ServiceManager for Complete Workflow Management
-
-For even simpler workflow management, you can use the `ServiceManager` to handle all service initialization and cleanup:
-
-```python
-# service_manager_workflow_example.py
-import asyncio
-from naq.services.manager import ServiceManager
-from naq.models.jobs import Job
-from naq.config import get_config
-
-async def unreliable_api_call():
-    """Example function that might fail."""
-    import random
-    if random.random() < 0.7:  # 70% chance of failure
-        raise ConnectionError("API temporarily unavailable")
-    return "API call successful"
-
-async def main():
-    # Load configuration from the centralized config system
-    config = get_config()
-    
-    # Initialize the service manager with the loaded configuration
-    service_manager = ServiceManager(config=config)
-    
-    # Start all services
-    await service_manager.initialize_all()
-    print("All services initialized")
-    
-    # Get the services we need
-    connection_service = service_manager.get_service("connection")
-    kv_store_service = service_manager.get_service("kv_store")
-    event_service = service_manager.get_service("events")
-    job_service = service_manager.get_service("jobs")
-    
-    # Create a job with retry configuration
-    job = Job(
-        function=unreliable_api_call,
-        queue_name="api_calls",
-        max_retries=3,  # Retry up to 3 times
-        retry_delay=2.0  # Wait 2 seconds between retries
-    )
-    
-    # Execute the job
-    try:
-        result = await job_service.execute_job(job, "worker-1")
-        print(f"Job succeeded: {result.result}")
-    except Exception as e:
-        print(f"Job failed after all retries: {e}")
-    
-    # Check the stored result regardless of success/failure
-    stored_result = await job_service.get_result(job.job_id)
-    if stored_result:
-        print(f"Final job status: {stored_result.status}")
-        if stored_result.status == "failed":
-            print(f"Error: {stored_result.error}")
-            print(f"Traceback: {stored_result.traceback}")
-    
-    # Get failure events
-    job_events = await event_service.get_job_events(job.job_id)
-    failure_events = [e for e in job_events if e.event_type.value == "failed"]
-    retry_events = [e for e in job_events if e.event_type.value == "retry_scheduled"]
-    
-    print(f"Failure events: {len(failure_events)}")
-    print(f"Retry events: {len(retry_events)}")
-    
-    # Stop all services
-    await service_manager.cleanup_all()
-    print("All services cleaned up")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-::: {.callout-note}
-**Service Dependencies**
-
-Services can depend on other services. For example, `EventService` requires a `KVStoreService`, and `JobService` requires `ConnectionService`, `KVStoreService`, and `EventService`. The `ServiceManager` automatically handles these dependencies.
-:::
-
-## Example 6: Event Logging, Streaming, and Querying
-
-The `naq` event system provides powerful capabilities for observing and analyzing system behavior. Events are automatically logged by various `naq` components (JobService, WorkerService, SchedulerService) and stored in a persistent KV store.
+The `naq` event system provides powerful capabilities for observing and analyzing system behavior. Events are automatically logged by various `naq` components and stored in a persistent KV store.
 
 ### Event Logging
 
-While events are typically logged automatically by services, you can also manually log events using the `EventService` for custom scenarios.
+While events are typically logged automatically, you can also manually log events for custom scenarios.
 
 ```python
 # log_custom_event.py
 import asyncio
 from datetime import datetime
-from naq.services.manager import ServiceManager
-from naq.models.events import JobEvent, WorkerEvent
-from naq.models.enums import JobEventType, WorkerEventType
-from naq.config import get_config
+from naq import log_event
 
 async def main():
-    config = get_config()
-    service_manager = ServiceManager(config=config)
-    await service_manager.initialize_all()
-    
-    event_service = service_manager.get_service("events")
-    
-    # Log a custom JobEvent
-    await event_service.log_event(
-        JobEvent(
-            job_id="custom-job-1",
-            event_type=JobEventType.STATUS_CHANGED,
-            message="Custom processing step started",
-            details={"step": "data_validation", "progress": 10}
-        )
+    # Log a custom job event
+    await log_event(
+        job_id="custom-job-1",
+        event_type="status_changed",
+        message="Custom processing step started",
+        details={"step": "data_validation", "progress": 10}
     )
-    print("Logged custom JobEvent.")
-    
-    # Log a custom WorkerEvent
-    await event_service.log_event(
-        WorkerEvent(
-            worker_id="custom-worker-A",
-            event_type=WorkerEventType.HEARTBEAT,
-            cpu_usage=25.5,
-            memory_usage=1024.0,
-            message="Custom worker health update"
-        )
-    )
-    print("Logged custom WorkerEvent.")
-    
-    await service_manager.cleanup_all()
+    print("Logged custom job event.")
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -2009,17 +246,15 @@ naq events stream
 # Stream events for a specific job
 naq events stream --job-id custom-job-1
 
-# Stream only 'COMPLETED' job events
-naq events stream --event-type COMPLETED
+# Stream only 'completed' job events
+naq events stream --event-type completed
 
 # Stream worker heartbeats
-naq events stream --event-type HEARTBEAT --worker custom-worker-A
+naq events stream --event-type heartbeat --worker custom-worker-A
 
 # Show last 5 events and then follow
 naq events stream --tail 5
 ```
-
-For more details on CLI event commands, refer to the [Quickstart Guide - Event Monitoring CLI](quickstart.qmd#event-monitoring-cli) section.
 
 ### Event History and Querying (CLI)
 
@@ -2038,43 +273,207 @@ naq events stats --queue my_queue --time-range 7d
 
 ### Programmatic Event Querying
 
-You can also query historical events programmatically using the `EventService`:
+You can also query historical events programmatically:
 
 ```python
 # query_events.py
 import asyncio
-from naq.services.manager import ServiceManager
-from naq.models.enums import JobEventType, WorkerEventType
+from naq import get_job_events
 from datetime import datetime, timedelta
-from naq.config import get_config
 
 async def main():
-    config = get_config()
-    service_manager = ServiceManager(config=config)
-    await service_manager.initialize_all()
-    
-    event_service = service_manager.get_service("events")
-    
     # Get all events for a specific job
-    job_events = await event_service.get_job_events("custom-job-1")
+    job_events = await get_job_events("custom-job-1")
     print(f"Found {len(job_events)} events for custom-job-1:")
     for event in job_events:
-        print(f"- {event.event_type.value}: {event.message} (Worker: {event.worker_id or 'N/A'})")
-        
-    # Get all 'HEARTBEAT' worker events for a specific worker
-    # Note: EventService only supports getting events for a specific worker
-    # heartbeats = await event_service.get_worker_events("some-worker-id")  # Then filter by event type in your code
-    # print(f"\nFound {len(heartbeats)} worker heartbeats for worker some-worker-id.")
-    
-    # Get all events within the last hour
-    # Get events within a time range for a specific worker
-    # Note: EventService only supports getting events for a specific worker
-    # one_hour_ago = datetime.utcnow() - timedelta(hours=1)
-    # recent_events = await event_service.get_worker_events("some-worker-id")  # Then filter by time in your code
-    # print(f"\nFound {len(recent_events)} events in the last hour for worker some-worker-id.")
-    
-    await service_manager.cleanup_all()
+        print(f"- {event.event_type}: {event.message} (Worker: {event.worker_id or 'N/A'})")
 
 if __name__ == "__main__":
     asyncio.run(main())
 ```
+
+## Example 6: Using the Configuration System
+
+`naq` provides a unified configuration system that can be customized through environment variables, configuration files, or programmatically.
+
+### Loading Configuration
+
+```python
+# config_example.py
+import asyncio
+from naq import get_config, update_config
+
+async def main():
+    # Load the default configuration
+    config = get_config()
+    print(f"Default servers: {config.nats.servers}")
+    print(f"Default queue: {config.queue.default_queue_name}")
+    
+    # Update configuration programmatically
+    await update_config({
+        "nats": {
+            "servers": ["nats://custom.server:4222"]
+        },
+        "queue": {
+            "default_queue_name": "custom_queue"
+        }
+    })
+    
+    # Reload the configuration
+    updated_config = get_config()
+    print(f"Updated servers: {updated_config.nats.servers}")
+    print(f"Updated queue: {updated_config.queue.default_queue_name}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Configuration File
+
+Create a `naq.yaml` file in your project root:
+
+```yaml
+# naq.yaml
+nats:
+  servers:
+    - nats://localhost:4222
+  max_reconnect_attempts: 5
+  reconnect_time_wait: 2
+
+queue:
+  default_queue_name: default
+  job_timeout: 300
+  max_retries: 3
+
+results:
+  enabled: true
+  default_ttl: 3600
+
+events:
+  enabled: true
+  event_ttl: 604800
+```
+
+### Environment Variables
+
+You can also configure `naq` using environment variables:
+
+```bash
+# Set NATS servers
+export NAQ_NATS_SERVERS="nats://prod.server:4222"
+
+# Set default queue name
+export NAQ_QUEUE_DEFAULT_QUEUE_NAME="production_queue"
+
+# Enable result storage
+export NAQ_RESULTS_ENABLED="true"
+
+# Set result TTL
+export NAQ_RESULTS_DEFAULT_TTL="7200"
+```
+
+## Example 7: Advanced Job Patterns
+
+### Job Timeouts
+
+```python
+# timeout_example.py
+import asyncio
+from naq import enqueue
+
+async def long_running_task():
+    print("Starting long running task...")
+    await asyncio.sleep(10)  # This will exceed the timeout
+    return "Task completed"
+
+async def main():
+    # Enqueue a job with a timeout of 5 seconds
+    job = await enqueue(
+        long_running_task,
+        timeout=5,  # Job will be cancelled after 5 seconds
+        queue_name="timeout_test"
+    )
+    print(f"Enqueued job {job.job_id} with 5 second timeout")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Job Priority
+
+```python
+# priority_example.py
+import asyncio
+from naq import enqueue
+
+async def high_priority_task():
+    print("Executing high priority task...")
+    return "High priority task completed"
+
+async def low_priority_task():
+    print("Executing low priority task...")
+    return "Low priority task completed"
+
+async def main():
+    # Enqueue jobs with different priorities
+    low_job = await enqueue(
+        low_priority_task,
+        priority=1,  # Lower number = lower priority
+        queue_name="priority_test"
+    )
+    
+    high_job = await enqueue(
+        high_priority_task,
+        priority=10,  # Higher number = higher priority
+        queue_name="priority_test"
+    )
+    
+    print(f"Enqueued jobs with priorities: low={low_job.job_id}, high={high_job.job_id}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+### Job Results
+
+```python
+# results_example.py
+import asyncio
+from naq import enqueue, get_result
+
+async def data_processing_task(data_id):
+    print(f"Processing data {data_id}...")
+    await asyncio.sleep(2)
+    return {"status": "completed", "data_id": data_id, "result": "Processed successfully"}
+
+async def main():
+    # Enqueue a job with result storage enabled
+    job = await enqueue(
+        data_processing_task,
+        data_id="12345",
+        queue_name="results_test",
+        store_result=True  # Explicitly enable result storage
+    )
+    print(f"Enqueued job {job.job_id}")
+    
+    # Wait for the job to complete
+    await asyncio.sleep(3)
+    
+    # Retrieve the result
+    result = await get_result(job.job_id)
+    if result:
+        print(f"Job result: {result.result}")
+        print(f"Job status: {result.status}")
+        print(f"Execution time: {result.execution_time:.2f} seconds")
+    else:
+        print("No result found for job")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+::: {.callout-note}
+**Retry Strategies**
+
+`naq` supports both `linear` (fixed delay) and `exponential` backoff strategies for retries. You can also provide a list of integers to `retry_delay` for a custom delay sequence.
+:::

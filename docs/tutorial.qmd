@@ -215,61 +215,107 @@ if __name__ == "__main__":
 
 Run this script, and the `naq scheduler` will ensure the jobs are enqueued at the correct times for your workers to process.
 
-## 6. Using the Service Layer
+## 6. Using the API Directly
 
-For more complex applications, `naq` provides a powerful service layer that gives you fine-grained control over connections, job execution, and other components.
+For more control over your jobs and queues, you can use the `naq` API directly.
 
-The `ServiceManager` is the central piece of this architecture.
-
-### Service Layer Example
-
-Here's how you can use the `ServiceManager` to enqueue and execute a job:
+### Using Queue and Worker Directly
 
 ```python
-# service_layer_example.py
+# api_example.py
 import asyncio
-from naq.services.manager import ServiceManager
-from naq.models.jobs import Job
+from naq import Queue, Worker
 from tasks import count_words
 
 async def main():
-    # The ServiceManager handles all service initialization and cleanup
-    service_manager = ServiceManager()
-    await service_manager.initialize_all()
-
-    try:
-        # Get the services you need
-        job_service = service_manager.get_service("jobs")
-        event_service = service_manager.get_service("events")
-
-        # Create a job
-        job = Job(
-            function=count_words,
-            args=("Using the service layer is powerful and flexible.",),
-            queue_name="service_queue"
-        )
-
-        # Enqueue the job using the JobService
-        # Note: This requires a worker listening on 'service_queue'
-        await job_service.enqueue_job(job, subject=f"naq.queue.{job.queue_name}")
-        print(f"Enqueued job {job.job_id} via JobService.")
-
-        # You can also execute a job directly for testing or specific use cases
-        result = await job_service.execute_job(job, "manual-worker-1")
-        print(f"Directly executed job. Result: {result.result}")
-
-        # Retrieve events for the job
-        events = await event_service.get_job_events(job.job_id)
-        print(f"Found {len(events)} events for job {job.job_id}:")
-        for event in events:
-            print(f"  - {event.event_type.value} at {event.timestamp}")
-
-    finally:
-        # Clean up all services
-        await service_manager.cleanup_all()
+    # Create a queue
+    queue = Queue(queue_name="default")
+    
+    # Create a worker
+    worker = Worker(queue_name="default")
+    
+    # Start the worker
+    await worker.start()
+    
+    # Enqueue a job
+    long_text = (
+        "A journey of a thousand miles begins with a single step. "
+        "The best time to plant a tree was 20 years ago. "
+        "The second best time is now."
+    )
+    
+    job = await queue.enqueue(count_words, long_text)
+    print(f"Enqueued job {job.job_id}")
+    
+    # Let the worker process the job
+    await asyncio.sleep(5)
+    
+    # Stop the worker
+    await worker.stop()
 
 if __name__ == "__main__":
     asyncio.run(main())
+```
+
+### Getting Job Results
+
+```python
+# results_example.py
+import asyncio
+from naq import enqueue, get_job_result
+from tasks import count_words
+
+async def main():
+    # Enqueue a job
+    long_text = (
+        "A journey of a thousand miles begins with a single step. "
+        "The best time to plant a tree was 20 years ago. "
+        "The second best time is now."
+    )
+    
+    job = await enqueue(count_words, long_text)
+    print(f"Enqueued job {job.job_id}")
+    
+    # Get the job result
+    result = await get_job_result(job.job_id)
+    print(f"Job result: {result}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## 7. Configuration
+
+You can configure `naq` using a YAML file or environment variables. Create a `naq.yaml` file in your project directory:
+
+```yaml
+# naq.yaml
+nats:
+  servers:
+    - nats://localhost:4222
+  client_name: naq-client
+  max_reconnect_attempts: 5
+  reconnect_time_wait: 2.0
+  connection_timeout: 10.0
+  drain_timeout: 30.0
+
+workers:
+  concurrency: 1
+  heartbeat_interval: 15.0
+  ttl: 60.0
+  max_job_duration: 3600.0
+  shutdown_timeout: 10.0
+
+events:
+  enabled: false
+  batch_size: 100
+  flush_interval: 5.0
+  max_buffer_size: 1000
+  stream: naq_events
+
+logging:
+  level: INFO
+  to_file_enabled: false
 ```
 
 ## What's Next?
@@ -279,6 +325,6 @@ You've now seen the basics of `naq`! From here, you can explore:
 *   **Job Dependencies**: Create complex workflows where jobs depend on the completion of others.
 *   **Automatic Retries**: Configure jobs to automatically retry on failure.
 *   **Configuration**: Customize `naq`'s behavior with a `naq.yaml` file.
-*   **Advanced Features**: Dive deeper into the service layer, connection pooling, and performance tuning.
+*   **Advanced Features**: Dive deeper into event monitoring, performance tuning, and more.
 
 Check out the **[Examples](examples.qmd)** and **[Advanced Usage](advanced.qmd)** sections for more details.

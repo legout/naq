@@ -10,7 +10,7 @@ from .models.schedules import Schedule
 from .scheduler import Scheduler
 from .worker.core import Worker as _Worker
 from .queue.core import Queue as _Queue
-from .settings import Config
+from .config import NAQConfig as Config
 
 # Import deprecation utilities
 from .utils.warnings import create_deprecated_class
@@ -22,7 +22,7 @@ from .connection import (
 )
 
 # Queue APIs
-from .queue.async_api import (
+from .queue.api import (
     enqueue,
     enqueue_at,
     enqueue_in,
@@ -32,9 +32,6 @@ from .queue.async_api import (
     pause_scheduled_job,
     resume_scheduled_job,
     modify_scheduled_job,
-)
-
-from .queue.sync_api import (
     enqueue_sync,
     enqueue_at_sync,
     enqueue_in_sync,
@@ -47,6 +44,7 @@ from .queue.sync_api import (
 )
 
 # Client
+from .nats_client import NatsClient
 from .client import SyncClient
 
 # Configuration
@@ -127,6 +125,7 @@ __all__ = [
     "resume_scheduled_job_sync",
     "modify_scheduled_job_sync",
     # Client
+    "NatsClient",
     "SyncClient",
     # Worker monitoring
     "list_workers",

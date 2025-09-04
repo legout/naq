@@ -4,13 +4,10 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 from nats.js.errors import KeyNotFoundError
 
-from .connection import (
-    nats_kv_store,
-)
-from .services.config import create_global_config
+from .nats_client import NatsClient, NatsClientConfig
 from .exceptions import JobNotFoundError, NaqException
 from .models.jobs import Job, JobResult
-from .settings import DEFAULT_NATS_URL, DEFAULT_RESULT_TTL_SECONDS, RESULT_KV_NAME
+from .schemas import DEFAULT_NATS_URL, DEFAULT_RESULT_TTL_SECONDS, RESULT_KV_NAME
 
 
 class Results:
@@ -29,34 +26,44 @@ class Results:
             nats_url: NATS server URL. Defaults to DEFAULT_NATS_URL.
         """
         self.nats_url = nats_url
+        self._client = None
 
-    def _get_kv_store_context(self):
+    async def _get_client(self):
         """
-        Helper method to create a configured NATS KV store context manager.
+        Helper method to get or create a NATS client.
         This encapsulates the common logic for setting up NATS configuration
-        and obtaining the KV store context for RESULT_KV_NAME.
+        and obtaining the KV store for RESULT_KV_NAME.
         """
-        config = create_global_config()
-        config.nats_url = self.nats_url
-        try:
-            logger.debug(
-                "Preparing NATS KV store context",
-                bucket_name=RESULT_KV_NAME,
-                nats_url=config.nats_url
-            )
-            return nats_kv_store(RESULT_KV_NAME, config)
-        except ConnectionError as e:
-            logger.error(
-                f"Connection error while preparing KV store context for {RESULT_KV_NAME}: {e}",
-                exc_info=True
-            )
-            raise NaqException(f"Failed to connect to NATS server at {self.nats_url}: {e}") from e
-        except Exception as e:
-            logger.error(
-                f"Failed to prepare KV store context for {RESULT_KV_NAME}: {e}",
-                exc_info=True
-            )
-            raise NaqException(f"Failed to prepare KV store context: {e}") from e
+        if self._client is None:
+            try:
+                logger.debug(
+                    "Creating NATS client",
+                    bucket_name=RESULT_KV_NAME,
+                    nats_url=self.nats_url
+                )
+                config = NatsClientConfig(nats_url=self.nats_url)
+                self._client = NatsClient(config)
+                await self._client.connect()
+            except ConnectionError as e:
+                logger.error(
+                    f"Connection error while creating NATS client for {RESULT_KV_NAME}: {e}",
+                    exc_info=True
+                )
+                raise NaqException(f"Failed to connect to NATS server at {self.nats_url}: {e}") from e
+            except Exception as e:
+                logger.error(
+                    f"Failed to create NATS client for {RESULT_KV_NAME}: {e}",
+                    exc_info=True
+                )
+                raise NaqException(f"Failed to create NATS client: {e}") from e
+        return self._client
+
+    async def _get_kv_store(self):
+        """
+        Helper method to get the KV store for results.
+        """
+        client = await self._get_client()
+        return await client.get_kv(RESULT_KV_NAME)
 
     async def add_job_result(
         self, job_id: str, result_data: Dict[str, Any], result_ttl: Optional[int] = None
@@ -89,40 +96,41 @@ class Results:
         
         logger.debug("Attempting to add job result", job_id=job_id, result_ttl=result_ttl)
         try:
-            # Use the helper method to get the configured KV store context
-            async with self._get_kv_store_context() as kv:
-                # Create a JobResult object for efficient serialization
-                job_result = JobResult(
-                    job_id=job_id,
-                    status=result_data.get("status", ""),
-                    result=result_data.get("result"),
-                    error=result_data.get("error"),
-                    traceback=result_data.get("traceback"),
-                    start_time=result_data.get("start_time", 0.0),
-                    finish_time=result_data.get("finish_time", 0.0),
-                )
-                
-                # Serialize the JobResult object
-                serialized_result = Job.serialize_result(
-                    result=job_result.result,
-                    status=result_data.get("status"),
-                    error=job_result.error,
-                    traceback_str=job_result.traceback,
-                )
+            # Use the helper method to get the KV store
+            kv = await self._get_kv_store()
+            
+            # Create a JobResult object for efficient serialization
+            job_result = JobResult(
+                job_id=job_id,
+                status=result_data.get("status", ""),
+                result=result_data.get("result"),
+                error=result_data.get("error"),
+                traceback=result_data.get("traceback"),
+                start_time=result_data.get("start_time", 0.0),
+                finish_time=result_data.get("finish_time", 0.0),
+            )
+            
+            # Serialize the JobResult object
+            serialized_result = Job.serialize_result(
+                result=job_result.result,
+                status=result_data.get("status"),
+                error=job_result.error,
+                traceback_str=job_result.traceback,
+            )
 
-                # Set TTL (default to settings value if not provided)
-                ttl = (
-                    result_ttl if result_ttl is not None else DEFAULT_RESULT_TTL_SECONDS
-                )
-                
-                # Validate TTL
-                if ttl is not None and ttl < 0:
-                    logger.warning("Invalid TTL provided, using default", provided_ttl=ttl, default_ttl=DEFAULT_RESULT_TTL_SECONDS)
-                    ttl = DEFAULT_RESULT_TTL_SECONDS
+            # Set TTL (default to settings value if not provided)
+            ttl = (
+                result_ttl if result_ttl is not None else DEFAULT_RESULT_TTL_SECONDS
+            )
+            
+            # Validate TTL
+            if ttl is not None and ttl < 0:
+                logger.warning("Invalid TTL provided, using default", provided_ttl=ttl, default_ttl=DEFAULT_RESULT_TTL_SECONDS)
+                ttl = DEFAULT_RESULT_TTL_SECONDS
 
-                # Store the result with TTL
-                await kv.put(job_id, serialized_result, ttl=ttl)
-                logger.success("Job result added successfully", job_id=job_id)
+            # Store the result
+            await kv.put(job_id, serialized_result)
+            logger.success("Job result added successfully", job_id=job_id)
 
         except ConnectionError as e:
             logger.error("Connection error while adding job result", job_id=job_id, error=str(e), exc_info=True)
@@ -156,46 +164,47 @@ class Results:
             
         logger.debug("Attempting to fetch job result", job_id=job_id)
         try:
-            # Use the helper method to get the configured KV store context
-            async with self._get_kv_store_context() as kv:
-                try:
-                    entry = await kv.get(job_id)
-                    result_data = Job.deserialize_result(entry.value)
-                    
-                    # Create a JobResult object from the deserialized data
-                    job_result = JobResult(
-                        job_id=job_id,
-                        status=result_data.get("status", ""),
-                        result=result_data.get("result"),
-                        error=result_data.get("error"),
-                        traceback=result_data.get("traceback"),
-                        start_time=result_data.get("start_time", 0.0),
-                        finish_time=result_data.get("finish_time", 0.0),
-                    )
-                    
-                    # Convert JobResult back to dictionary for API compatibility
-                    result_dict = {
-                        "job_id": job_result.job_id,
-                        "status": job_result.status,
-                        "result": job_result.result,
-                        "error": job_result.error,
-                        "traceback": job_result.traceback,
-                        "start_time": job_result.start_time,
-                        "finish_time": job_result.finish_time,
-                        "duration_ms": job_result.duration_ms,
-                    }
-                    
-                    logger.success("Job result fetched successfully", job_id=job_id)
-                    return result_dict
-                except KeyNotFoundError:
-                    logger.warning("Job result not found", job_id=job_id)
-                    raise JobNotFoundError(
-                        f"Result for job {job_id} not found. It may not have completed, "
-                        f"failed, or the result expired."
-                    ) from None
-                except Exception as e:
-                    logger.error("Error processing job result data", job_id=job_id, error=str(e), exc_info=True)
-                    raise NaqException(f"Failed to process result data for job {job_id}: {e}") from e
+            # Use the helper method to get the KV store
+            kv = await self._get_kv_store()
+            
+            try:
+                entry = await kv.get(job_id)
+                result_data = Job.deserialize_result(entry.value)
+                
+                # Create a JobResult object from the deserialized data
+                job_result = JobResult(
+                    job_id=job_id,
+                    status=result_data.get("status", ""),
+                    result=result_data.get("result"),
+                    error=result_data.get("error"),
+                    traceback=result_data.get("traceback"),
+                    start_time=result_data.get("start_time", 0.0),
+                    finish_time=result_data.get("finish_time", 0.0),
+                )
+                
+                # Convert JobResult back to dictionary for API compatibility
+                result_dict = {
+                    "job_id": job_result.job_id,
+                    "status": job_result.status,
+                    "result": job_result.result,
+                    "error": job_result.error,
+                    "traceback": job_result.traceback,
+                    "start_time": job_result.start_time,
+                    "finish_time": job_result.finish_time,
+                    "duration_ms": job_result.duration_ms,
+                }
+                
+                logger.success("Job result fetched successfully", job_id=job_id)
+                return result_dict
+            except KeyNotFoundError:
+                logger.warning("Job result not found", job_id=job_id)
+                raise JobNotFoundError(
+                    f"Result for job {job_id} not found. It may not have completed, "
+                    f"failed, or the result expired."
+                ) from None
+            except Exception as e:
+                logger.error("Error processing job result data", job_id=job_id, error=str(e), exc_info=True)
+                raise NaqException(f"Failed to process result data for job {job_id}: {e}") from e
 
         except ConnectionError as e:
             logger.error("Connection error while fetching job result", job_id=job_id, error=str(e), exc_info=True)
@@ -222,13 +231,14 @@ class Results:
         """
         logger.debug("Attempting to list all job results")
         try:
-            # Use the helper method to get the configured KV store context
-            async with self._get_kv_store_context() as kv:
-                # Get all keys in the KV store
-                keys = await kv.keys()
-                job_ids = list(keys)
-                logger.success("Listed all job results successfully", count=len(job_ids))
-                return job_ids
+            # Use the helper method to get the KV store
+            kv = await self._get_kv_store()
+            
+            # Get all keys in the KV store
+            keys = await kv.keys()
+            job_ids = list(keys)
+            logger.success("Listed all job results successfully", count=len(job_ids))
+            return job_ids
 
         except ConnectionError as e:
             logger.error("Connection error while listing job results", error=str(e), exc_info=True)
@@ -246,20 +256,21 @@ class Results:
         """
         logger.debug("Attempting to purge all job results")
         try:
-            # Use the helper method to get the configured KV store context
-            async with self._get_kv_store_context() as kv:
-                # Get all keys and delete them
-                keys = await kv.keys()
-                deleted_count = 0
-                for key in keys:
-                    try:
-                        await kv.delete(key)
-                        deleted_count += 1
-                    except Exception as delete_error:
-                        logger.warning("Failed to delete individual job result during purge",
-                                     key=key, error=str(delete_error))
-                        # Continue with other keys even if one fails
-                logger.success("Purged all job results successfully", count=deleted_count)
+            # Use the helper method to get the KV store
+            kv = await self._get_kv_store()
+            
+            # Get all keys and delete them
+            keys = await kv.keys()
+            deleted_count = 0
+            for key in keys:
+                try:
+                    await kv.delete(key)
+                    deleted_count += 1
+                except Exception as delete_error:
+                    logger.warning("Failed to delete individual job result during purge",
+                                 key=key, error=str(delete_error))
+                    # Continue with other keys even if one fails
+            logger.success("Purged all job results successfully", count=deleted_count)
 
         except ConnectionError as e:
             logger.error("Connection error while purging job results", error=str(e), exc_info=True)
@@ -286,16 +297,17 @@ class Results:
             
         logger.debug("Attempting to delete job result", job_id=job_id)
         try:
-            # Use the helper method to get the configured KV store context
-            async with self._get_kv_store_context() as kv:
-                try:
-                    await kv.delete(job_id)
-                    logger.success("Job result deleted successfully", job_id=job_id)
-                except KeyNotFoundError:
-                    # If the key doesn't exist, we don't need to raise an error
-                    # as the end result is the same - the key doesn't exist
-                    logger.info("Job result not found for deletion, already deleted", job_id=job_id)
-                    pass
+            # Use the helper method to get the KV store
+            kv = await self._get_kv_store()
+            
+            try:
+                await kv.delete(job_id)
+                logger.success("Job result deleted successfully", job_id=job_id)
+            except KeyNotFoundError:
+                # If the key doesn't exist, we don't need to raise an error
+                # as the end result is the same - the key doesn't exist
+                logger.info("Job result not found for deletion, already deleted", job_id=job_id)
+                pass
 
         except ConnectionError as e:
             logger.error("Connection error while deleting job result", job_id=job_id, error=str(e), exc_info=True)

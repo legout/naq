@@ -2,31 +2,26 @@
 title: "Worker API"
 ---
 
-The `worker` module contains the `Worker` class, which is responsible for fetching and executing jobs from one or more queues. The worker has been refactored to use dependency injection and a service-oriented architecture for improved modularity and testability.
+The `worker` module contains the `Worker` class, which is responsible for fetching and executing jobs from one or more queues.
 
 ## `naq.worker.Worker`
 
 You can start a worker from the command line using `naq worker`, but you can also create and run a `Worker` instance programmatically.
 
-### `naq.worker.Worker(queues, worker_name=None, concurrency=10, service_manager=None, ...)`
+### `naq.worker.Worker(queues, worker_name=None, concurrency=10, config=None, ...)`
 
 | Parameter            | Type                               | Description                                                                                             |
 | -------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | `queues`             | `list[str]` &#124; `str`            | A list of queue names to listen to. Defaults to the single `naq_default_queue`.                         |
 | `worker_name`        | `str` &#124; `None`                 | A name for the worker, used for creating durable consumer names. A unique ID is generated if not provided. |
 | `concurrency`        | `int`                              | The maximum number of jobs to process concurrently. Defaults to `10`.                                     |
-| `service_manager`    | `ServiceManager` &#124; `None`      | Optional service manager for dependency injection. If not provided, a default one will be created.       |
 | `config`             | `Config` &#124; `None`              | Optional configuration object. If not provided, default configuration will be used.                      |
 
 ### Architecture Overview
 
-The `Worker` class uses a service-oriented architecture with the following key components:
+The `Worker` class uses a modular architecture with the following key components:
 
-- **Service Manager**: Manages all service instances and their dependencies
-- **Connection Service**: Handles NATS connections and JetStream context
-- **Stream Service**: Manages NATS JetStream streams and consumers
-- **KV Store Service**: Handles key-value store operations for job results and worker status
-- **Event Service**: Manages event logging and retrieval
+- **NATS Client**: Handles NATS connections and JetStream context
 - **Job Processor**: Handles job execution, retry logic, and result storage
 - **Status Manager**: Manages worker status, heartbeats, and lifecycle
 - **Failed Job Handler**: Handles failed job processing and retry logic
@@ -88,11 +83,7 @@ Returns a list of dictionaries, where each dictionary contains information about
 
 A synchronous version of `list_workers()`.
 
-### Service Integration
-
-The worker integrates with various services for different functionalities:
-
-#### Job Processing
+### Job Processing
 
 The worker uses a `JobProcessor` instance to handle job execution:
 
@@ -105,10 +96,9 @@ await worker.job_processor.process_message(message)
 # - Function execution
 # - Result storage
 # - Error handling and retries
-# - Event logging
 ```
 
-#### Status Management
+### Status Management
 
 The worker uses a `WorkerStatusManager` for lifecycle management:
 
@@ -123,7 +113,7 @@ await worker.status_manager.update_status(WORKER_STATUS.BUSY)
 await worker.status_manager.stop_heartbeat_loop()
 ```
 
-#### Failed Job Handling
+### Failed Job Handling
 
 The worker uses a `FailedJobHandler` for processing failed jobs:
 
@@ -138,44 +128,37 @@ The worker can be configured through the `Config` object or environment variable
 
 ```python
 from naq.worker import Worker
-from naq.settings import Config
+from naq.config import Config
 
 # Create custom configuration
 config = Config(
-    nats_connection=NATSConnectionConfig(
-        servers=["nats://localhost:4222"],
-        max_reconnect_attempts=10
-    ),
-    workers=WorkerConfig(
-        concurrency=20,
-        heartbeat_interval=30
-    )
+    nats_url="nats://localhost:4222",
+    max_reconnect_attempts=10,
+    concurrency=20,
+    heartbeat_interval=30
 )
 
 # Create worker with custom configuration
 worker = Worker(queues=["default"], config=config)
 ```
 
-### Dependency Injection
+### Testing
 
-The worker supports dependency injection for improved testability:
+The worker can be easily tested with mocked components:
 
 ```python
 import pytest
 from unittest.mock import AsyncMock
 
-# Create mock services
-mock_service_manager = AsyncMock()
-mock_connection_service = AsyncMock()
+# Create mock components
+mock_nats_client = AsyncMock()
 mock_status_manager = AsyncMock()
 
-# Create worker with mocked dependencies
-worker = Worker(
-    queues=["test_queue"],
-    service_manager=mock_service_manager
-)
+# Create worker with mocked components
+worker = Worker(queues=["test_queue"])
 
-# In tests, you can mock individual services
+# In tests, you can mock individual components
+worker.nats_client = mock_nats_client
 worker.status_manager = mock_status_manager
 ```
 
@@ -208,141 +191,4 @@ print(f"Current status: {stats.status}")
 
 # Worker status is automatically updated and can be monitored
 # through the status manager or KV store
-```
-## Service Layer Integration
-
-The Worker has been enhanced with the new service layer architecture to provide better integration with the ServiceManager, improved modularity, and enhanced monitoring capabilities.
-
-### Using Worker with ServiceManager
-
-For applications using the service layer architecture, it's recommended to use the ServiceManager for worker operations:
-
-```python
-from naq.services.manager import ServiceManager
-from naq.services.base import ServiceConfig
-from naq.services.worker import WorkerService
-
-# Create service configuration
-services_config = {
-    "worker": {
-        "queues": ["default", "high_priority"],
-        "concurrency": 20,
-        "heartbeat_interval": 30
-    },
-    "connection": {
-        "servers": ["nats://localhost:4222"],
-        "pool_size": 10
-    }
-}
-
-# Create service manager
-service_manager = ServiceManager(config=ServiceConfig(custom_settings=services_config))
-await service_manager.initialize_all()
-
-# Get worker service
-worker_service = service_manager.get_service("worker", WorkerService)
-
-# Start the worker
-await worker_service.start()
-
-# Monitor worker status
-status = await worker_service.get_status()
-print(f"Worker status: {status.status}")
-print(f"Jobs processed: {status.jobs_processed}")
-print(f"Active connections: {status.active_connections}")
-
-# Stop the worker
-await worker_service.stop()
-
-# Clean up
-await service_manager.cleanup_all()
-```
-
-### Advanced Worker Configuration
-
-The service layer provides advanced worker configuration options:
-
-```python
-from naq.services.worker import WorkerServiceConfig
-
-# Configure worker with advanced options
-config = WorkerServiceConfig(
-    queues=["default", "high_priority", "background"],
-    concurrency=20,
-    heartbeat_interval=30,
-    enable_job_batching=True,
-    batch_size=50,
-    batch_timeout=1.0,
-    enable_result_caching=True,
-    cache_ttl=300,
-    enable_performance_monitoring=True,
-    max_job_retries=3,
-    retry_delay_strategy="exponential"
-)
-
-worker_service = WorkerService(config=config)
-
-# Monitor performance
-stats = await worker_service.get_performance_statistics()
-print(f"Jobs processed: {stats.jobs_processed}")
-print(f"Jobs failed: {stats.jobs_failed}")
-print(f"Average processing time: {stats.average_processing_time}")
-print(f"Throughput: {stats.throughput} jobs/second")
-```
-
-### Worker Service Dependencies
-
-The worker service integrates with other services for enhanced functionality:
-
-```python
-from naq.services.manager import ServiceManager
-from naq.services.base import ServiceConfig
-
-# Create service manager with all dependencies
-service_manager = ServiceManager(config=ServiceConfig())
-await service_manager.initialize_all()
-
-# Get all services
-worker_service = service_manager.get_service("worker", WorkerService)
-job_service = service_manager.get_service("jobs", JobService)
-event_service = service_manager.get_service("events", EventService)
-connection_service = service_manager.get_service("connection", ConnectionService)
-
-# Services are automatically injected and configured
-# The worker service uses:
-# - ConnectionService for NATS connections
-# - JobService for job processing
-# - EventService for event logging
-# - KVStoreService for state management
-
-# Start worker with all dependencies
-await worker_service.start()
-
-# Clean up all services
-await service_manager.cleanup_all()
-```
-
-### Worker Health Monitoring
-
-The service layer provides comprehensive health monitoring for workers:
-
-```python
-from naq.services.worker import WorkerService
-
-worker_service = WorkerService(config=config)
-
-# Get detailed health status
-health = await worker_service.get_health_status()
-print(f"Overall health: {health.overall_status}")
-print(f"Connection health: {health.connection_health}")
-print(f"Job processing health: {health.job_processing_health}")
-print(f"Memory usage: {health.memory_usage}%")
-print(f"CPU usage: {health.cpu_usage}%")
-
-# Get worker metrics
-metrics = await worker_service.get_metrics()
-print(f"Active jobs: {metrics.active_jobs}")
-print(f"Completed jobs: {metrics.completed_jobs}")
-print(f"Failed jobs: {metrics.failed_jobs}")
-print(f"Queue backlog: {metrics.queue_backlog}")
 ```

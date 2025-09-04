@@ -19,7 +19,9 @@ from datetime import datetime, timedelta, timezone
 from typing import List
 
 # Import NAQ components
-from naq import SyncClient, enqueue_sync, setup_logging
+from naq import SyncClient, setup_logging
+from naq.nats_client import NatsClientConfig
+from naq.settings import QueueConfig
 
 # Configure secure JSON serialization
 os.environ.setdefault('NAQ_JOB_SERIALIZER', 'json')
@@ -93,14 +95,24 @@ def performance_test():
     start_time = time.time()
     
     jobs_individual = []
+    nats_config = NatsClientConfig(
+        nats_url="nats://localhost:4222",
+        connection_timeout=5,
+        max_reconnect_attempts=3
+    )
+    
+    queue_config = QueueConfig(
+        default_name="batch_jobs"
+    )
+    
     for i in range(10):
-        job = enqueue_sync(
-            process_data,
-            data_id=i,
-            category="performance_test",
-            queue_name="batch_jobs"
-        )
-        jobs_individual.append(job)
+        with SyncClient(nats_url=nats_config.nats_url) as client:
+            job = client.enqueue(
+                process_data,
+                data_id=i,
+                category="performance_test"
+            )
+            jobs_individual.append(job)
     
     individual_time = time.time() - start_time
     
@@ -108,13 +120,12 @@ def performance_test():
     start_time = time.time()
     
     jobs_batch = []
-    with SyncClient() as client:
+    with SyncClient(nats_url=nats_config.nats_url) as client:
         for i in range(10, 20):  # Different IDs to avoid confusion
             job = client.enqueue(
                 process_data,
                 data_id=i,
-                category="performance_test",
-                queue_name="batch_jobs"
+                category="performance_test"
             )
             jobs_batch.append(job)
     
@@ -137,7 +148,26 @@ def batch_operations_demo():
     print("\n📦 Batch Operations Demo")
     print("-" * 30)
     
-    with SyncClient() as client:
+    # Create configuration
+    nats_config = NatsClientConfig(
+        nats_url="nats://localhost:4222",
+        connection_timeout=5,
+        max_reconnect_attempts=3
+    )
+    
+    default_queue_config = QueueConfig(
+        default_name="default"
+    )
+    
+    batch_queue_config = QueueConfig(
+        default_name="batch_jobs"
+    )
+    
+    test_queue_config = QueueConfig(
+        default_name="test_queue"
+    )
+    
+    with SyncClient(nats_url=nats_config.nats_url) as client:
         # Batch 1: Data processing jobs
         print("📤 Enqueueing data processing jobs...")
         data_jobs = []
@@ -145,8 +175,7 @@ def batch_operations_demo():
             job = client.enqueue(
                 process_data,
                 data_id=i + 1000,
-                category="batch_demo",
-                queue_name="batch_jobs"
+                category="batch_demo"
             )
             data_jobs.append(job)
         
@@ -157,11 +186,12 @@ def batch_operations_demo():
         notification_jobs = []
         users = ["alice", "bob", "charlie"]
         for user in users:
+            # Switch to default queue
             job = client.enqueue(
                 send_notification,
                 user_id=user,
                 message="Batch processing completed",
-                queue_name="default"
+                queue_name=default_queue_config.default_name
             )
             notification_jobs.append(job)
         
@@ -178,7 +208,7 @@ def batch_operations_demo():
             generate_report,
             report_type="daily",
             date="2024-01-15",
-            queue_name="default"
+            queue_name=default_queue_config.default_name
         )
         scheduled_jobs.append(job1)
         
@@ -188,7 +218,7 @@ def batch_operations_demo():
             generate_report,
             report_type="weekly",
             date="2024-01-15",
-            queue_name="default"
+            queue_name=default_queue_config.default_name
         )
         scheduled_jobs.append(job2)
         
@@ -204,12 +234,12 @@ def batch_operations_demo():
                 process_data,
                 data_id=i + 2000,
                 category="test",
-                queue_name="test_queue"
+                queue_name=test_queue_config.default_name
             )
             test_jobs.append(job)
         
         # Purge the test queue
-        purged_count = client.purge_queue("test_queue")
+        purged_count = client.purge_queue(queue_name=test_queue_config.default_name)
         print(f"✅ Purged {purged_count} jobs from test queue")
         
         total_jobs = len(data_jobs) + len(notification_jobs) + len(scheduled_jobs)
@@ -222,7 +252,7 @@ def main():
     """
     Main demonstration function.
     """
-    print("🚀 NAQ SyncClient Performance Demo")
+    print("🚀 NAQ SyncClient Demo")
     print("=" * 40)
     
     try:

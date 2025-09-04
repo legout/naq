@@ -5,7 +5,7 @@ This module contains the ScheduledJobManager class for handling scheduled jobs.
 
 import datetime
 from datetime import timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, TYPE_CHECKING
 
 import cloudpickle
 from nats.js.errors import KeyNotFoundError, APIError
@@ -16,8 +16,6 @@ from ..exceptions import (
 )
 from ..models.jobs import Job
 from ..models.enums import SCHEDULED_JOB_STATUS
-from ..services import ServiceManager, ConnectionService, KVStoreService
-from ..services.config import create_global_config, GlobalServiceConfig
 from ..settings import (
     JOB_SERIALIZER,
     SCHEDULED_JOBS_KV_NAME,
@@ -25,6 +23,9 @@ from ..settings import (
 from ..utils.error_handling import wrap_naq_exception
 from ..utils.logging import StructuredLogger
 from ..utils.validation import validate_parameter
+
+if TYPE_CHECKING:
+    from ..nats_client import NatsClient
 
 
 class ScheduledJobManager:
@@ -37,42 +38,24 @@ class ScheduledJobManager:
         self,
         queue_name: str,
         nats_url: str,
-        config: Optional[GlobalServiceConfig] = None,
-        service_manager: Optional[ServiceManager] = None,
     ):
         validate_parameter(queue_name, "queue_name", str)
         validate_parameter(nats_url, "nats_url", str)
 
         self.queue_name = queue_name
         self._nats_url = nats_url
-        self._config = config or create_global_config()
-        self._service_manager = service_manager or self._config.service_manager
-        self._connection_service: Optional[ConnectionService] = None
-        self._kv_store_service: Optional[KVStoreService] = None
+        self._client: Optional["NatsClient"] = None
         self._logger = StructuredLogger(__name__)
 
-    async def _get_services(self) -> tuple[ConnectionService, KVStoreService]:
-        """Get the connection and KV store services from the service manager."""
-        with self._logger.operation_context("get_services", queue_name=self.queue_name):
-            if self._service_manager is None:
-                error_msg = "ServiceManager is required for service-based operations"
-                self._logger.error("service_manager_missing", error=error_msg)
-                raise NaqException(error_msg)
-
-            if self._connection_service is None:
-                self._logger.debug("getting_connection_service")
-                self._connection_service = await self._service_manager.get_service(
-                    "connection", ConnectionService
-                )
-
-            if self._kv_store_service is None:
-                self._logger.debug("getting_kv_store_service")
-                self._kv_store_service = await self._service_manager.get_service(
-                    "kv_store", KVStoreService
-                )
-
-            self._logger.debug("services_retrieved")
-            return self._connection_service, self._kv_store_service
+    async def _ensure_client(self) -> "NatsClient":
+        """Ensure that the NATS client is available."""
+        with self._logger.operation_context("ensure_client", queue_name=self.queue_name):
+            if self._client is None:
+                self._logger.debug("creating_nats_client")
+                self._client = NatsClient(nats_url=self._nats_url)
+                await self._client.connect()
+                self._logger.debug("nats_client_created")
+            return self._client
 
     async def store_job(
         self,
@@ -125,10 +108,10 @@ class ScheduledJobManager:
             }
 
             try:
-                # Use the KV store service
+                # Use the KV store client
                 self._logger.debug("storing_scheduled_job", job_id=job.job_id)
-                _, kv_store_service = await self._get_services()
-                await kv_store_service.put(
+                client = await self._ensure_client()
+                await client.kv_put(
                     SCHEDULED_JOBS_KV_NAME, job.job_id, schedule_data
                 )
                 self._logger.info("job_stored", job_id=job.job_id)
@@ -161,11 +144,11 @@ class ScheduledJobManager:
 
             self._logger.info("cancelling_job", job_id=job_id)
             try:
-                # Use the KV store service
-                _, kv_store_service = await self._get_services()
+                # Use the KV store client
+                client = await self._ensure_client()
                 # Use delete with purge=True to ensure it's fully removed
                 try:
-                    await kv_store_service.delete(
+                    await client.kv_delete(
                         SCHEDULED_JOBS_KV_NAME, job_id, purge=True
                     )
                     self._logger.info("job_cancelled", job_id=job_id)
@@ -242,10 +225,10 @@ class ScheduledJobManager:
                 )
 
             try:
-                # Use the KV store service
-                _, kv_store_service = await self._get_services()
+                # Use the KV store client
+                client = await self._ensure_client()
                 # Get the current job data
-                entry = await kv_store_service.get(SCHEDULED_JOBS_KV_NAME, job_id)
+                entry = await client.kv_get(SCHEDULED_JOBS_KV_NAME, job_id)
                 schedule_data = cloudpickle.loads(entry.value)
 
                 # Apply updates
@@ -298,7 +281,7 @@ class ScheduledJobManager:
                         )
 
                 # Put the updated data
-                await kv_store_service.put(
+                await client.kv_put(
                     SCHEDULED_JOBS_KV_NAME, job_id, schedule_data
                 )
 

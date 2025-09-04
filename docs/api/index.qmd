@@ -16,83 +16,12 @@ The API is organized into modules, each providing specific functionality.
 
 -   [**`scheduler` Module**](scheduler.qmd): Contains the `Scheduler` class, responsible for enqueuing scheduled and recurring jobs.
 
--   [**`connection` Module**](connection.qmd): Provides utilities for managing NATS connections, including connection monitoring, metrics tracking, and connection pooling.
+-   [**`nats_client` Module**](nats_client.qmd): Provides a unified client for managing NATS connections, supporting both sync and async operations.
 
 -   [**`exceptions` Module**](exceptions.qmd): Defines custom exceptions raised by `naq`.
 
 -   [**`utils` Module**](utils.qmd): Provides utility functions and classes for common functionality used throughout the NAQ codebase, including validation, error handling, serialization, and more.
 
-## Services
+## Additional Modules
 
--   [**`services` Module**](services.qmd): Provides a comprehensive service layer with modular components for connection management, job processing, event logging, and more. Includes the ServiceManager for dependency injection, service lifecycle management, and performance monitoring.
-
--   [**`kv_stores` Module**](kv_stores.qmd): Provides a robust, centralized service for managing NATS KeyValue stores with support for pooling, transactions, and TTL.
-
-## Service Layer Architecture
-
-The service layer is the foundation of NAQ's modular architecture, providing a clean separation of concerns and enabling flexible composition of functionality. Each service is designed to be:
-
-- **Modular**: Can be used independently or composed with other services
-- **Configurable**: Supports both centralized and service-specific configuration
-- **Monitorable**: Built-in performance tracking and health monitoring
-- **Extensible**: Easy to extend with custom functionality
-
-### Core Services
-
-| Service | Description | Key Features |
-|---------|-------------|--------------|
-| **ConnectionService** | Manages NATS connections and JetStream contexts | Connection pooling, caching, automatic reconnection |
-| **ConfigService** | Provides centralized configuration management | Environment variables, hierarchical settings, validation |
-| **JobService** | Handles job execution and lifecycle management | Result storage, event logging, retry handling |
-| **KVStoreService** | Manages NATS KeyValue stores | Transactions, TTL, history tracking |
-| **EventService** | Logs and retrieves system events | Configurable retention, event types, filtering |
-| **StreamService** | Manages JetStream streams | Stream creation, consumer management, message publishing |
-| **WorkerService** | Tracks worker status and job processing | Heartbeat monitoring, job registration, lifecycle management |
-| **SchedulerService** | Handles job scheduling and triggering | Cron expressions, one-time schedules, recurring jobs |
-
-### ServiceManager
-
-The `ServiceManager` is the central component that orchestrates all services:
-
-```python
-from naq.services.base import ServiceManager
-
-async def main():
-    # Create and initialize service manager
-    manager = ServiceManager()
-    await manager.initialize_all()
-    
-    # Access services as needed
-    connection_service = manager.get_service(ConnectionService)
-    job_service = manager.get_service(JobService)
-    
-    # Use services...
-    
-    # Cleanup all services
-    await manager.cleanup_all()
-```
-
-### Service Configuration
-
-Services can be configured through the centralized configuration system:
-
-```python
-from naq.services.base import ServiceConfig
-from naq.services.connection import ConnectionServiceConfig
-
-# Create service-specific configuration
-connection_config = ConnectionServiceConfig(
-    servers=["nats://localhost:4222"],
-    max_reconnect_attempts=10
-)
-
-# Apply to service
-service_config = ServiceConfig(custom_settings=connection_config.as_dict())
-connection_service = ConnectionService(config=service_config)
-```
-
-### Migration Guide
-
-For detailed information on migrating to the service layer, see the [Migration Validation](../architecture.qmd#migration-validation) section in the architecture documentation.
-
-For advanced usage patterns and performance optimization, see the [Service Layer Architecture](../advanced.qmd#service-layer-architecture) section in the advanced documentation.
+-   [**`events` Module**](events.qmd): Provides event handling utilities for job lifecycle events.

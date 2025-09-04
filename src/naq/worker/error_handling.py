@@ -9,9 +9,10 @@ from typing import Optional
 
 from nats.aio.msg import Msg
 
+from ..nats_client import NatsClient
+from ..config import get_config
 from ..models.events import JobEvent
 from ..models.jobs import Job
-from ..services import EventService, JobService, ServiceManager
 from ..utils.decorators import timing
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception
 from ..utils.logging import StructuredLogger
@@ -20,37 +21,31 @@ from ..utils.logging import StructuredLogger
 class JobErrorHandler:
     """Handles errors that occur during job execution."""
 
-    def __init__(self, service_manager: ServiceManager):
-        """Initialize the error handler with a service manager.
+    def __init__(self, nats_client: Optional[NatsClient] = None):
+        """Initialize the error handler with a NATS client.
 
         Args:
-            service_manager: The ServiceManager instance for accessing services.
+            nats_client: Optional NatsClient instance for accessing NATS.
         """
-        self._service_manager = service_manager
-        self._job_service: Optional[JobService] = None
-        self._event_service: Optional[EventService] = None
+        self._nats_client = nats_client
 
         # Initialize logging and error handling
         self._logger = StructuredLogger("job_error_handler")
         self._error_handler = ErrorHandler(self._logger)
 
     @timing(threshold_ms=100)
-    async def _get_services(self) -> None:
-        """Get service instances from the service manager."""
-        with self._logger.operation_context("get_services"):
+    async def _get_nats_client(self) -> NatsClient:
+        """Get or create a NATS client."""
+        if self._nats_client is None:
             try:
-                if self._job_service is None:
-                    self._job_service = await self._service_manager.get_service(
-                        "job_service", JobService
-                    )
-                if self._event_service is None:
-                    self._event_service = await self._service_manager.get_service(
-                        "event_service", EventService
-                    )
+                config = get_config()
+                self._nats_client = NatsClient(config)
+                await self._nats_client.connect()
             except Exception as e:
-                wrapped_error = wrap_naq_exception(e, "Failed to get services")
+                wrapped_error = wrap_naq_exception(e, "Failed to get NATS client")
                 self._error_handler.handle_error(wrapped_error)
                 raise
+        return self._nats_client
 
     @timing(threshold_ms=500)
     async def handle_job_execution_error(self, job: Optional[Job], msg: Msg) -> None:
@@ -59,7 +54,7 @@ class JobErrorHandler:
             "handle_job_execution_error", job_id=job.job_id if job else None
         ):
             try:
-                await self._get_services()
+                nats_client = await self._get_nats_client()
 
                 if job is None:
                     self._logger.error(
@@ -104,43 +99,11 @@ class JobErrorHandler:
                         attempt=attempt - 1,
                     )
 
-                    # Use JobService to handle job failure
-                    if self._job_service:
-                        try:
-                            error = Exception(job.error or "Job execution failed")
-                            await self._job_service.handle_job_failure(
-                                job=job,
-                                error=error,
-                                worker_id="unknown-worker",
-                                start_time=time.time(),
-                            )
-                        except Exception as e:
-                            wrapped_error = wrap_naq_exception(
-                                e, "Failed to handle job failure via JobService"
-                            )
-                            self._error_handler.handle_error(
-                                wrapped_error, {"job_id": job.job_id}
-                            )
+                    # Note: JobService functionality has been removed as part of service layer removal
+                    # This can be re-implemented later if needed using a different approach
 
-                    # Log failure event using EventService
-                    if self._event_service:
-                        try:
-                            failure_event = JobEvent.failed(
-                                job_id=job.job_id,
-                                worker_id="unknown-worker",
-                                error_type="JobExecutionError",
-                                error_message=job.error or "Job execution failed",
-                                duration_ms=0,
-                                queue_name=job.queue_name,
-                            )
-                            await self._event_service.log_job_event(failure_event)
-                        except Exception as e:
-                            wrapped_error = wrap_naq_exception(
-                                e, "Failed to log failure event via EventService"
-                            )
-                            self._error_handler.handle_error(
-                                wrapped_error, {"job_id": job.job_id}
-                            )
+                    # Note: EventService functionality has been removed as part of service layer removal
+                    # This can be re-implemented later if needed using a different approach
 
                     try:
                         await msg.ack()  # Ack original message after handling failure
@@ -174,7 +137,7 @@ class JobErrorHandler:
             "handle_unexpected_error", job_id=job.job_id if job else None, sid=msg.sid
         ):
             try:
-                await self._get_services()
+                nats_client = await self._get_nats_client()
 
                 self._logger.error(
                     "Unhandled error processing message",
@@ -191,42 +154,11 @@ class JobErrorHandler:
                     )
                     job.traceback = traceback.format_exc()
 
-                    # Use JobService to handle job failure
-                    if self._job_service:
-                        try:
-                            await self._job_service.handle_job_failure(
-                                job=job,
-                                error=error,
-                                worker_id="unknown-worker",
-                                start_time=time.time(),
-                            )
-                        except Exception as e:
-                            wrapped_error = wrap_naq_exception(
-                                e, "Failed to handle job failure via JobService"
-                            )
-                            self._error_handler.handle_error(
-                                wrapped_error, {"job_id": job.job_id}
-                            )
+                    # Note: JobService functionality has been removed as part of service layer removal
+                    # This can be re-implemented later if needed using a different approach
 
-                    # Log failure event using EventService
-                    if self._event_service:
-                        try:
-                            failure_event = JobEvent.failed(
-                                job_id=job.job_id,
-                                worker_id="unknown-worker",
-                                error_type=type(error).__name__,
-                                error_message=str(error),
-                                duration_ms=0,
-                                queue_name=job.queue_name,
-                            )
-                            await self._event_service.log_job_event(failure_event)
-                        except Exception as e:
-                            wrapped_error = wrap_naq_exception(
-                                e, "Failed to log failure event via EventService"
-                            )
-                            self._error_handler.handle_error(
-                                wrapped_error, {"job_id": job.job_id}
-                            )
+                    # Note: EventService functionality has been removed as part of service layer removal
+                    # This can be re-implemented later if needed using a different approach
 
                 await msg.term()
                 self._logger.warning(

@@ -15,29 +15,12 @@ import uuid
 from typing import Any, Dict, List, Optional, Sequence, TYPE_CHECKING
 
 import nats
-from nats.js import JetStreamContext
 from nats.js.api import ConsumerConfig
 
+from ..config import get_config
 from ..exceptions import NaqException
 from ..models.enums import WORKER_STATUS
-
-# Import long_lived_service_context lazily to avoid circular imports
-from ..services import (
-    ConnectionService,
-    EventService,
-    KVStoreService,
-    ServiceManager,
-    StreamService,
-)
-from ..settings import (
-    ACK_WAIT_PER_QUEUE,
-    DEFAULT_ACK_WAIT_SECONDS,
-    DEFAULT_NATS_URL,
-    DEFAULT_QUEUE_NAME,
-    DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
-    DEFAULT_WORKER_TTL_SECONDS,
-    NAQ_PREFIX,
-)
+from ..nats_client import NatsClient, NatsClientConfig
 from ..utils import setup_logging
 from ..utils.decorators import retry, timing
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception
@@ -58,59 +41,93 @@ if TYPE_CHECKING:
 
 
 class Worker:
-    """
+    
     A worker that fetches jobs from specified NATS queues (subjects) and executes them.
-    Uses JetStream pull consumers for fetching jobs. Coordinates with specialized manager
-    classes for status tracking, job management, and failed job handling.
+    
+    This class uses the unified NatsClient for all NATS operations, replacing the previous
+    service layer approach. It provides a clean interface for job processing with support
+    for multiple queues, concurrency control, and comprehensive error handling.
+    
+    The Worker coordinates with specialized manager classes for status tracking, job management,
+    and failed job handling. It uses JetStream pull consumers for efficient job fetching.
+    
+    Examples:
+        >>> # Create a worker for a single queue
+        >>> worker = Worker(queues=["my_queue"])
+        >>> 
+        >>> # Start the worker
+        >>> await worker.run()
+        >>> 
+        >>> # Create a worker with custom settings
+        >>> worker = Worker(
+        ...     queues=["queue1", "queue2"],
+        ...     concurrency=5,
+        ...     worker_name="my_worker"
+        ... )
+        >>> 
+        >>> # Use with a custom NatsClient
+        >>> client = NatsClient()
+        >>> worker = Worker(queues=["my_queue"], nats_client=client)
+    """
     """
 
     def __init__(
         self,
         queues: Optional[Sequence[QueueName] | QueueName] = None,
-        nats_url: str = DEFAULT_NATS_URL,
+        nats_url: Optional[str] = None,
         concurrency: int = 10,  # Max concurrent jobs
         worker_name: Optional[str] = None,  # For durable consumer names
-        heartbeat_interval: int = DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
-        worker_ttl: int = DEFAULT_WORKER_TTL_SECONDS,
+        heartbeat_interval: Optional[int] = None,
+        worker_ttl: Optional[int] = None,
         ack_wait: Optional[
             int | Dict[QueueName, int]
         ] = None,  # seconds; can be per-queue dict
         module_paths: Optional[Sequence[str] | str] = None,
-        service_manager: Optional[ServiceManager] = None,
+        nats_client: Optional[NatsClient] = None,
     ) -> None:
         """Initialize the worker with configuration and services.
 
         Args:
             queues: Optional sequence of queue names or single queue name to process.
                 If None or empty, defaults to DEFAULT_QUEUE_NAME.
-            nats_url: NATS server URL to connect to.
+            nats_url: NATS server URL to connect to. If None, uses config.
             concurrency: Maximum number of concurrent jobs to process.
             worker_name: Optional base name for the worker ID. If None, generates
                 a name based on hostname.
-            heartbeat_interval: Interval in seconds between worker heartbeats.
-            worker_ttl: Time-to-live in seconds for worker registration.
+            heartbeat_interval: Interval in seconds between worker heartbeats. If None, uses config.
+            worker_ttl: Time-to-live in seconds for worker registration. If None, uses config.
             ack_wait: Acknowledgment wait time in seconds. Can be a single value
                 or a dictionary mapping queue names to their specific ack wait times.
             module_paths: Optional sequence of paths or single path to add to sys.path
                 for job function imports.
-            service_manager: Optional ServiceManager instance to use. If None,
-                creates a default one.
+            nats_client: Optional NatsClient instance to use. If None, creates a default one.
         """
         # Validate parameters
         self._validate_init_parameters(
             concurrency, heartbeat_interval, worker_ttl, nats_url
         )
 
+        # Get configuration
+        config = get_config()
+        
+        # Set defaults from config if not provided
+        if nats_url is None:
+            nats_url = config.nats.servers[0] if config.nats.servers else "nats://localhost:4222"
+        if heartbeat_interval is None:
+            heartbeat_interval = config.workers.heartbeat_interval
+        if worker_ttl is None:
+            worker_ttl = config.workers.ttl
+        
         # Process queues parameter
         if isinstance(queues, str):
             queues = [queues]
         if not queues:
-            queues = [DEFAULT_QUEUE_NAME]
+            queues = [config.queues.default_name if config.queues and "default_name" in config.queues else "naq_default_queue"]
 
         # Preserve order while ensuring uniqueness using dict.fromkeys()
         self.queue_names: List[QueueName] = list(dict.fromkeys(queues))
         self.subjects: List[str] = [
-            f"{NAQ_PREFIX}.queue.{name}" for name in self.queue_names
+            f"{config.nats.prefix}.queue.{name}" for name in self.queue_names
         ]
 
         # Add current path to sys.path by default
@@ -137,16 +154,12 @@ class Worker:
         # Ack wait configuration
         self._ack_wait_arg: Optional[int | Dict[QueueName, int]] = ack_wait
 
-        # Service manager and services
-        self._service_manager = service_manager
-        self._connection_service: Optional[ConnectionService] = None
-        self._stream_service: Optional[StreamService] = None
-        self._kv_store_service: Optional[KVStoreService] = None
-        self._event_service: Optional[EventService] = None
+        # NATS client
+        self._nats_client = nats_client or NatsClient(
+            NatsClientConfig(nats_url=nats_url)
+        )
 
         # Connection and state variables
-        self._nc: Optional[nats.aio.client.Client] = None
-        self._js: Optional[JetStreamContext] = None
         self._tasks: List[asyncio.Task] = []
         self._running = False
         self._shutdown_event = asyncio.Event()
@@ -154,32 +167,18 @@ class Worker:
         self._consumers: Dict[QueueName, Any] = {}  # Track queue consumers
 
         # JetStream stream name
-        self.stream_name = f"{NAQ_PREFIX}_jobs"
+        self.stream_name = f"{config.nats.prefix}_jobs"
         # Durable consumer name prefix
-        self.consumer_prefix = f"{NAQ_PREFIX}-worker"
+        self.consumer_prefix = f"{config.nats.prefix}-worker"
 
         # Initialize logging and error handling
         self._logger = StructuredLogger("worker_core")
         self._error_handler = ErrorHandler(self._logger)
 
-        # Create a default service manager if none provided
-        if self._service_manager is None:
-            from ..services import ServiceConfig, ServiceManager
-
-            config = ServiceConfig(nats_url=self._nats_url)
-            self._service_manager = ServiceManager(config)
-            self._logger.info(
-                "Created default ServiceManager",
-                registered_services=self._service_manager.get_service_names(),
-            )
-            # Note: Services will be registered asynchronously in _initialize_services method
-
         # Create component managers
-        self.status_manager = WorkerStatusManager(
-            self, service_manager=self._service_manager
-        )
-        self.job_manager = JobStatusManager(self, service_manager=self._service_manager)
-        self.failed_handler = FailedJobHandler(self._service_manager)
+        self.status_manager = WorkerStatusManager(self, nats_client=self._nats_client)
+        self.job_manager = JobStatusManager(self, nats_client=self._nats_client)
+        self.failed_handler = FailedJobHandler(self._nats_client)
         self.job_processor = JobProcessor(self)
         self.sync_interface = WorkerSyncInterface(self)
 
@@ -192,16 +191,16 @@ class Worker:
     async def create(
         cls,
         queues: Optional[Sequence[QueueName] | QueueName] = None,
-        nats_url: str = DEFAULT_NATS_URL,
+        nats_url: Optional[str] = None,
         concurrency: int = 10,  # Max concurrent jobs
         worker_name: Optional[str] = None,  # For durable consumer names
-        heartbeat_interval: int = DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
-        worker_ttl: int = DEFAULT_WORKER_TTL_SECONDS,
+        heartbeat_interval: Optional[int] = None,
+        worker_ttl: Optional[int] = None,
         ack_wait: Optional[
             int | Dict[QueueName, int]
         ] = None,  # seconds; can be per-queue dict
         module_paths: Optional[Sequence[str] | str] = None,
-        service_manager: Optional[ServiceManager] = None,
+        nats_client: Optional[NatsClient] = None,
     ) -> "Worker":
         """Create and initialize a Worker instance with services.
 
@@ -211,18 +210,17 @@ class Worker:
         Args:
             queues: Optional sequence of queue names or single queue name to process.
                 If None or empty, defaults to DEFAULT_QUEUE_NAME.
-            nats_url: NATS server URL to connect to.
+            nats_url: NATS server URL to connect to. If None, uses config.
             concurrency: Maximum number of concurrent jobs to process.
             worker_name: Optional base name for the worker ID. If None, generates
                 a name based on hostname.
-            heartbeat_interval: Interval in seconds between worker heartbeats.
-            worker_ttl: Time-to-live in seconds for worker registration.
+            heartbeat_interval: Interval in seconds between worker heartbeats. If None, uses config.
+            worker_ttl: Time-to-live in seconds for worker registration. If None, uses config.
             ack_wait: Acknowledgment wait time in seconds. Can be a single value
                 or a dictionary mapping queue names to their specific ack wait times.
             module_paths: Optional sequence of paths or single path to add to sys.path
                 for job function imports.
-            service_manager: Optional ServiceManager instance to use. If None,
-                creates a default one.
+            nats_client: Optional NatsClient instance to use. If None, creates a default one.
 
         Returns:
             A fully initialized Worker instance.
@@ -237,122 +235,25 @@ class Worker:
             worker_ttl=worker_ttl,
             ack_wait=ack_wait,
             module_paths=module_paths,
-            service_manager=service_manager,
+            nats_client=nats_client,
         )
 
-        # Initialize services
-        await worker._initialize_services()
+        # Initialize NATS client
+        await worker._nats_client.connect()
 
         return worker
 
-    async def _initialize_services(self) -> None:
-        """Initialize and register all core services with the service manager."""
-        if self._service_manager is None:
-            raise NaqException("ServiceManager is not initialized")
-
-        # Check if services are already registered
-        if self._service_manager.has_service("connection"):
-            self._logger.info(
-                "Services already registered",
-                available_services=self._service_manager.get_service_names(),
-            )
-            return
-
-        from ..services.connection import ConnectionService
-        from ..services.jobs import JobService
-        from ..services.kv_stores import KVStoreService
-        from ..services.streams import StreamService
-        from ..services.events import EventService
-
+    async def _initialize_components(self) -> None:
+        """Initialize all worker components."""
         try:
-            # Register connection service first
-            self._logger.info("Registering connection service")
-            await self._service_manager.register_service(
-                "connection", ConnectionService, initialize=True
-            )
+            # Initialize component managers
+            await self.status_manager.initialize()
+            await self.job_manager.initialize()
+            await self.failed_handler.initialize()
 
-            # Get the connection service to pass to other services
-            connection_service = await self._service_manager.get_service(
-                "connection", ConnectionService
-            )
-
-            # Create stream service with connection service directly
-            stream_service = StreamService(
-                config=self._service_manager._default_config,
-                naq_config=self._service_manager._naq_config,
-                connection_service=connection_service,
-            )
-
-            # Manually register the already-created service
-            self._service_manager._services["stream"] = stream_service
-            self._service_manager._service_configs["stream"] = (
-                self._service_manager._default_config
-            )
-
-            # Now initialize the stream service
-            await stream_service.initialize()
-
-            # Create job service with connection service directly
-            job_service = JobService(
-                config=self._service_manager._default_config,
-                naq_config=self._service_manager._naq_config,
-                connection_service=connection_service,
-            )
-
-            # Manually register the already-created service
-            self._service_manager._services["jobs"] = job_service
-            self._service_manager._service_configs["jobs"] = (
-                self._service_manager._default_config
-            )
-
-            # Now initialize the job service
-            await job_service.initialize()
-
-            # Create KV store service with connection service directly
-            kv_service = KVStoreService(
-                config=self._service_manager._default_config,
-                naq_config=self._service_manager._naq_config,
-                connection_service=connection_service,
-            )
-
-            # Manually register the already-created service
-            self._service_manager._services["kv"] = kv_service
-            self._service_manager._service_configs["kv"] = (
-                self._service_manager._default_config
-            )
-
-            # Now initialize the KV store service
-            await kv_service.initialize()
-
-            # Create event service with connection service directly
-            event_service = EventService(
-                config=self._service_manager._default_config,
-                naq_config=self._service_manager._naq_config,
-                connection_service=connection_service,
-            )
-
-            # Manually register the already-created service
-            self._service_manager._services["events"] = event_service
-            self._service_manager._service_configs["events"] = (
-                self._service_manager._default_config
-            )
-
-            # Now initialize the event service
-            await event_service.initialize()
-
-            # Also register with "kv_store" alias for backward compatibility
-            self._service_manager._services["kv_store"] = kv_service
-            self._service_manager._service_configs["kv_store"] = (
-                self._service_manager._default_config
-            )
-
-            self._logger.info(
-                "All core services registered successfully",
-                registered_services=self._service_manager.get_service_names(),
-            )
-
+            self._logger.info("All worker components initialized successfully")
         except Exception as e:
-            self._logger.error("Failed to register core services", error=str(e))
+            self._logger.error("Failed to initialize worker components", error=str(e))
             raise
 
     @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
@@ -360,59 +261,17 @@ class Worker:
         """Establish NATS connection, JetStream context, and initialize components."""
         with self._logger.operation_context("worker_connect", worker_id=self.worker_id):
             try:
-                if self._nc is None or not self._nc.is_connected:
-                    # Get or create services
-                    if self._service_manager is None:
-                        # Create a default service manager if none provided
-                        from ..services import ServiceConfig, ServiceManager
+                # Connect to NATS if not already connected
+                if not self._nats_client.is_connected:
+                    await self._nats_client.connect()
 
-                        config = ServiceConfig(nats_url=self._nats_url)
-                        self._service_manager = ServiceManager(config)
+                self._logger.info(
+                    "Connected to NATS and JetStream", worker_id=self.worker_id
+                )
 
-                    # Initialize services if not already done
-                    await self._initialize_services()
-
-                    # Use long-lived service context for worker lifecycle
-                    self._logger.info(
-                        "Entering long_lived_service_context",
-                        available_services=self._service_manager.get_service_names(),
-                    )
-                    # Import here to avoid circular imports
-                    from ..service_context import long_lived_service_context
-
-                    async with long_lived_service_context(
-                        self._service_manager,
-                        logger_name=f"naq.worker.core.{self.worker_id}",
-                    ) as service_manager:
-                        # Get services from the service manager
-                        self._logger.info(
-                            "Attempting to get connection service",
-                            available_services=service_manager.get_service_names(),
-                        )
-                        self._connection_service = await service_manager.get_service(
-                            "connection", ConnectionService
-                        )
-                        self._stream_service = await service_manager.get_service(
-                            "stream", StreamService
-                        )
-                        self._kv_store_service = await service_manager.get_service(
-                            "kv_store", KVStoreService
-                        )
-                        self._event_service = await service_manager.get_service(
-                            "events", EventService
-                        )
-
-                        # Get connection and JetStream context
-                        self._nc = await self._connection_service.get_connection()
-                        self._js = await self._connection_service.get_jetstream()
-                        self._logger.info(
-                            "Connected to NATS and JetStream", worker_id=self.worker_id
-                        )
-
-                        # Initialize component managers
-                        await self.status_manager.start_heartbeat_loop()
-                        await self.job_manager.initialize(self._js)
-                        await self.failed_handler.initialize()
+                # Initialize component managers
+                await self._initialize_components()
+                await self.status_manager.start_heartbeat_loop()
             except Exception as e:
                 wrapped_error = wrap_naq_exception(e, "Failed to connect worker")
                 self._error_handler.handle_error(
@@ -435,6 +294,10 @@ class Worker:
         Returns:
             The ack_wait time in seconds for the specified queue.
         """
+        # Get configuration
+        config = get_config()
+        default_ack_wait = config.queues.ack_wait if config.queues and "ack_wait" in config.queues else 60
+        
         try:
             # 1) per-queue dict from constructor
             if (
@@ -442,16 +305,18 @@ class Worker:
                 and queue_name in self._ack_wait_arg
             ):
                 v = ensure_type(self._ack_wait_arg[queue_name], int, "ack_wait_value")
-                return v if v > 0 else DEFAULT_ACK_WAIT_SECONDS
+                return v if v > 0 else default_ack_wait
             # 2) single int from constructor
             if isinstance(self._ack_wait_arg, int) and self._ack_wait_arg > 0:
                 return int(self._ack_wait_arg)
             # 3) env per-queue
-            if queue_name in ACK_WAIT_PER_QUEUE:
-                v = ensure_type(
-                    ACK_WAIT_PER_QUEUE[queue_name], int, "env_ack_wait_value"
-                )
-                return v if v > 0 else DEFAULT_ACK_WAIT_SECONDS
+            if config.queues and "ack_wait_per_queue" in config.queues:
+                ack_wait_per_queue = config.queues["ack_wait_per_queue"]
+                if queue_name in ack_wait_per_queue:
+                    v = ensure_type(
+                        ack_wait_per_queue[queue_name], int, "env_ack_wait_value"
+                    )
+                    return v if v > 0 else default_ack_wait
         except Exception as e:
             self._logger.warning(
                 "Error resolving ack_wait seconds, using default",
@@ -459,7 +324,7 @@ class Worker:
                 error=str(e),
             )
         # 4) default
-        return DEFAULT_ACK_WAIT_SECONDS
+        return default_ack_wait
 
     @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
     async def _subscribe_to_queue(self, queue_name: QueueName) -> None:
@@ -472,10 +337,8 @@ class Worker:
             "subscribe_to_queue", queue_name=queue_name
         ):
             try:
-                if not self._js:
-                    raise NaqException("JetStream context not available.")
-
-                subject = f"{NAQ_PREFIX}.queue.{queue_name}"
+                config = get_config()
+                subject = f"{config.nats.prefix}.queue.{queue_name}"
                 durable_name = f"{self.consumer_prefix}-{queue_name}"
                 self._logger.info(
                     "Setting up consumer for queue",
@@ -483,9 +346,6 @@ class Worker:
                     subject=subject,
                     durable_name=durable_name,
                     stream_name=self.stream_name,
-                    available_streams=await self._get_available_streams()
-                    if self._js
-                    else "No JS context",
                 )
 
                 # Resolve ack_wait seconds for this queue
@@ -495,9 +355,11 @@ class Worker:
                     queue_name=queue_name,
                     ack_wait_seconds=ack_wait_seconds,
                 )
-                psub = await self._js.pull_subscribe(
+                
+                # Use NatsClient to create pull subscription
+                psub = await self._nats_client.pull_subscribe(
                     subject=subject,
-                    durable=durable_name,
+                    durable_name=durable_name,
                     config=ConsumerConfig(
                         ack_policy=nats.js.api.AckPolicy.EXPLICIT,
                         ack_wait=ack_wait_seconds,
@@ -532,8 +394,10 @@ class Worker:
             queue_name: The name of the queue being processed
         """
         try:
-            # Fetch messages with timeout
-            msgs = await psub.fetch(batch=1, timeout=1.0)
+            # Use NatsClient to fetch messages
+            msgs = await self._nats_client.fetch_messages(
+                psub, batch_size=1, timeout=1.0
+            )
             for msg in msgs:
                 # Acquire semaphore to respect concurrency limits
                 await self._semaphore.acquire()
@@ -584,16 +448,16 @@ class Worker:
                 await self.status_manager.start_heartbeat_loop()
 
                 # Ensure the main work stream exists
+                config = get_config()
                 self._logger.info(
                     "Ensuring stream exists",
                     stream_name=self.stream_name,
-                    subjects=[f"{NAQ_PREFIX}.queue.*"],
+                    subjects=[f"{config.nats.prefix}.queue.*"],
                 )
-                if self._stream_service:
-                    await self._stream_service.ensure_stream(
-                        stream_name=self.stream_name,
-                        subjects=[f"{NAQ_PREFIX}.queue.*"],
-                    )
+                await self._nats_client.ensure_stream(
+                    stream_name=self.stream_name,
+                    subjects=[f"{config.nats.prefix}.queue.*"],
+                )
                 self._logger.info(
                     "Stream ensured successfully", stream_name=self.stream_name
                 )
@@ -615,7 +479,7 @@ class Worker:
                 )
 
                 # Log worker_started event
-                if self._event_service:
+                try:
                     import os
                     import socket
 
@@ -631,7 +495,13 @@ class Worker:
                             "nats_url": self._nats_url,
                         },
                     )
-                    await self._event_service.log_worker_event(event)
+                    # Publish event to NATS
+                    await self._nats_client.jetstream_publish(
+                        f"{config.nats.prefix}.events.worker.started",
+                        event.to_json().encode(),
+                    )
+                except Exception as e:
+                    self._logger.warning("Failed to log worker_started event", error=str(e))
 
                 # Set status to idle once subscriptions are ready
                 await self.status_manager.update_status(status=WORKER_STATUS.IDLE)
@@ -732,48 +602,43 @@ class Worker:
 
             # Log worker_stopped event
             try:
-                if self._event_service:
-                    import os
-                    import socket
+                import os
+                import socket
+                config = get_config()
 
-                    from ..models.events import WorkerEvent
+                from ..models.events import WorkerEvent
 
-                    event = WorkerEvent.stopped(
-                        worker_id=self.worker_id,
-                        queue_names=self.queue_names,
-                        details={
-                            "hostname": socket.gethostname(),
-                            "pid": os.getpid(),
-                            "concurrency": self._concurrency,
-                            "nats_url": self._nats_url,
-                        },
-                    )
-                    await self._event_service.log_worker_event(event)
-            except Exception as e:
-                wrapped_error = wrap_naq_exception(
-                    e, "Error logging worker_stopped event"
+                event = WorkerEvent.stopped(
+                    worker_id=self.worker_id,
+                    queue_names=self.queue_names,
+                    details={
+                        "hostname": socket.gethostname(),
+                        "pid": os.getpid(),
+                        "concurrency": self._concurrency,
+                        "nats_url": self._nats_url,
+                    },
                 )
-                self._error_handler.handle_error(wrapped_error)
+                # Publish event to NATS
+                await self._nats_client.jetstream_publish(
+                    f"{config.nats.prefix}.events.worker.stopped",
+                    event.to_json().encode(),
+                )
+            except Exception as e:
+                self._logger.warning("Failed to log worker_stopped event", error=str(e))
 
             # Finally close NATS connection
             try:
-                if self._connection_service:
-                    await self._connection_service.close_connection()
+                await self._nats_client.disconnect()
             except Exception as e:
                 wrapped_error = wrap_naq_exception(e, "Error closing NATS connection")
                 self._error_handler.handle_error(wrapped_error)
 
-            self._nc = None
-            self._js = None
-
     async def _get_available_streams(self) -> List[str]:
         """Get list of available JetStream streams for debugging."""
-        if not self._js:
-            return []
-
         try:
-            streams = await self._js.stream_names()
-            return list(streams)
+            # This would need to be implemented in NatsClient
+            # For now, return empty list
+            return []
         except Exception as e:
             self._logger.warning("Failed to get stream names", error=str(e))
             return []
@@ -816,27 +681,34 @@ class Worker:
     # --- Static methods for worker monitoring ---
     @staticmethod
     @timing(threshold_ms=1000)
-    async def list_workers(nats_url: str = DEFAULT_NATS_URL) -> List[Dict[str, Any]]:
+    async def list_workers(nats_url: Optional[str] = None) -> List[Dict[str, Any]]:
         """Lists active workers by querying the worker status KV store."""
+        if nats_url is None:
+            config = get_config()
+            nats_url = config.nats.servers[0] if config.nats.servers else "nats://localhost:4222"
         return await Worker._list_workers_internal(nats_url, async_mode=True)  # type: ignore
 
     @staticmethod
     @timing(threshold_ms=1000)
-    def list_workers_sync(nats_url: str = DEFAULT_NATS_URL) -> List[Dict[str, Any]]:
+    def list_workers_sync(nats_url: Optional[str] = None) -> List[Dict[str, Any]]:
         """Synchronous version of list_workers."""
+        if nats_url is None:
+            config = get_config()
+            nats_url = config.nats.servers[0] if config.nats.servers else "nats://localhost:4222"
         return Worker._list_workers_internal(nats_url, async_mode=False)  # type: ignore
 
     # --- Sync interface for long-running worker using anyio.BlockingPortal ---
     def _validate_init_parameters(
-        self, concurrency: int, heartbeat_interval: int, worker_ttl: int, nats_url: str
+        self, concurrency: int, heartbeat_interval: Optional[int], worker_ttl: Optional[int], nats_url: Optional[str]
     ) -> None:
         """Validate initialization parameters."""
         validate_parameter(concurrency, "concurrency", not_none=True, min_value=1)
-        validate_parameter(
-            heartbeat_interval, "heartbeat_interval", not_none=True, min_value=1
-        )
-        validate_parameter(worker_ttl, "worker_ttl", not_none=True, min_value=1)
-        validate_parameter(nats_url, "nats_url", not_none=True)
+        if heartbeat_interval is not None:
+            validate_parameter(heartbeat_interval, "heartbeat_interval", not_none=True, min_value=1)
+        if worker_ttl is not None:
+            validate_parameter(worker_ttl, "worker_ttl", not_none=True, min_value=1)
+        if nats_url is not None:
+            validate_parameter(nats_url, "nats_url", not_none=True)
 
     def run_sync(self) -> None:
         """Start the async worker in a clean AnyIO event loop using a BlockingPortal."""
@@ -866,14 +738,12 @@ class Worker:
         nats_url: str, async_mode: bool
     ) -> List[Dict[str, Any]]:
         """Internal method to list workers, supporting both async and sync modes."""
-        from ..services import ServiceConfig, ServiceManager
         from ..utils.error_handling import ErrorHandler, wrap_naq_exception
         from ..utils.logging import StructuredLogger
 
-        # Create a temporary WorkerMonitor with ServiceManager
-        config = ServiceConfig(nats_url=nats_url)
-        service_manager = ServiceManager(config)
-        monitor = WorkerMonitor(service_manager=service_manager, nats_url=nats_url)
+        # Create a temporary NatsClient and WorkerMonitor
+        nats_client = NatsClient(NatsClientConfig(nats_url=nats_url))
+        monitor = WorkerMonitor(nats_client=nats_client, nats_url=nats_url)
 
         # Initialize logger and error handler for this static method
         logger_name = "worker_list" if async_mode else "worker_list_sync"
@@ -883,6 +753,9 @@ class Worker:
 
         try:
             with logger.operation_context(operation_name, nats_url=nats_url):
+                # Connect to NATS
+                await nats_client.connect()
+                
                 if async_mode:
                     return await monitor.list_workers(nats_url)
                 else:
@@ -897,22 +770,11 @@ class Worker:
             error_handler.handle_error(wrapped_error, {"nats_url": nats_url})
             raise
         finally:
-            # Clean up the service manager
+            # Clean up the NATS client
             try:
-                if async_mode:
-                    await service_manager.cleanup_all()
-                else:
-                    import asyncio
-
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # Create a task for cleanup if loop is running
-                        asyncio.create_task(service_manager.cleanup_all())
-                    else:
-                        # Run cleanup directly if loop is not running
-                        loop.run_until_complete(service_manager.cleanup_all())
+                await nats_client.disconnect()
             except Exception as e:
                 wrapped_error = wrap_naq_exception(
-                    e, "Error cleaning up service manager"
+                    e, "Error disconnecting NATS client"
                 )
                 error_handler.handle_error(wrapped_error)

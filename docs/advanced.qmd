@@ -41,119 +41,46 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-### Using Service Context Patterns
+### Using a `NatsClient` Instance
 
-For more advanced service management, `naq` provides service context patterns that handle service lifecycle, dependency management, and resource cleanup automatically. These patterns are designed for different use cases: short-lived operations, long-lived components, and synchronous API compatibility.
-
-#### Short-Lived Operations for High-Throughput Scenarios
-
-For high-throughput scenarios where you need to enqueue many jobs efficiently, use the `short_lived_service_context` context manager:
+For more advanced connection management, you can use the `NatsClient` class directly. This provides fine-grained control over connection parameters and lifecycle.
 
 ```python
 # high_throughput_enqueue.py
 import asyncio
-from naq.service_context import short_lived_service_context
+from naq import NatsClient
 from naq.models.jobs import Job
 
 async def my_task(i):
     return f"Processed item {i}"
 
 async def main():
-    # Use the short-lived service context for high-throughput operations
-    async with short_lived_service_context() as service_manager:
-        # Get the job service
-        job_service = service_manager.get_job_service()
-        
-        print("Enqueuing 1,000 jobs using service context...")
-        tasks = []
-        for i in range(1000):
-            # Create a job
-            job = Job(
-                function=my_task,
-                args=(i,),
-                queue_name="high_volume"
-            )
-            # Enqueue the job
-            task = job_service.enqueue_job(job)
-            tasks.append(task)
-
-        await asyncio.gather(*tasks)
-        print("All jobs enqueued.")
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-#### Long-Lived Components for Continuous Processing
-
-For continuous processing scenarios where you need to maintain services for an extended period, use the `long_lived_service_context` context manager:
-
-```python
-# continuous_processing.py
-import asyncio
-from naq.service_context import long_lived_service_context
-from naq.queue import Queue
-from naq.worker import Worker
-
-async def my_task(i):
-    return f"Processed item {i}"
-
-async def main():
-    # Use the long-lived service context for continuous processing
-    async with long_lived_service_context() as service_manager:
-        # Create a queue and worker
-        queue = Queue(service_manager=service_manager, queue_name="continuous")
-        worker = Worker(service_manager=service_manager, queue_name="continuous")
-        
-        # Start the worker
-        await worker.start()
-        
-        # Continuously enqueue jobs
-        for batch in range(10):
-            print(f"Enqueuing batch {batch + 1}...")
-            tasks = []
-            for i in range(100):
-                task = queue.enqueue(my_task, batch * 100 + i)
-                tasks.append(task)
-            
-            await asyncio.gather(*tasks)
-            print(f"Batch {batch + 1} enqueued.")
-            
-            # Wait a bit before the next batch
-            await asyncio.sleep(1)
-        
-        # Stop the worker
-        await worker.stop()
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-#### Synchronous API Compatibility
-
-For synchronous code that needs to use services efficiently, use the `run_with_service_context` function:
-
-```python
-# sync_high_throughput.py
-from naq.service_context import run_with_service_context
-from naq import enqueue_sync
-
-def my_task(i):
-    return f"Processed item {i}"
-
-def main():
-    # Use the synchronous service context for high-throughput operations
-    def enqueue_batch():
-        print("Enqueuing 1,000 jobs using synchronous service context...")
-        for i in range(1000):
-            enqueue_sync(my_task, i)
-        print("All jobs enqueued.")
+    # Create a NatsClient with optimized settings
+    client = NatsClient(
+        servers=["nats://localhost:4222"],
+        max_reconnect_attempts=10,
+        reconnect_time_wait=1.0,
+        connection_timeout=15.0
+    )
     
-    # Run the synchronous function with service context
-    run_with_service_context(enqueue_batch)
+    # Connect to NATS
+    await client.connect()
+    
+    print("Enqueuing 1,000 jobs using NatsClient...")
+    tasks = []
+    for i in range(1000):
+        # Enqueue the job
+        task = client.enqueue(my_task, i)
+        tasks.append(task)
+
+    await asyncio.gather(*tasks)
+    print("All jobs enqueued.")
+    
+    # Close the connection
+    await client.close()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
 ```
 
 ### Thread-Local Connections (Sync)
@@ -222,13 +149,13 @@ For more advanced NATS connection management, you can configure the following co
 
 ### Programmatic Configuration
 
-You can also configure NATS connections programmatically using the `NATSConnectionConfig` class:
+You can also configure NATS connections programmatically using the `NatsConfig` class:
 
 ```python
-from naq.settings import NATSConnectionConfig, Config
+from naq import NatsConfig
 
-# Create a custom NATS connection configuration
-nats_config = NATSConnectionConfig(
+# Create a custom NATS configuration
+nats_config = NatsConfig(
     servers=["nats://server1:4222", "nats://server2:4222"],
     max_reconnect_attempts=10,
     reconnect_time_wait=5.0,
@@ -237,24 +164,23 @@ nats_config = NATSConnectionConfig(
     password="mypassword"
 )
 
-# Use it with the main Config class
-config = Config(nats_connection=nats_config)
+# Use it with the NatsClient
+from naq import NatsClient
+client = NatsClient(config=nats_config)
 ```
 
 Or load it from a dictionary:
 
 ```python
 config_dict = {
-    "nats_connection": {
-        "servers": ["nats://server1:4222", "nats://server2:4222"],
-        "max_reconnect_attempts": 10,
-        "user": "myuser",
-        "password": "mypassword"
-    },
-    "queue_name": "my_queue"
+    "servers": ["nats://server1:4222", "nats://server2:4222"],
+    "max_reconnect_attempts": 10,
+    "user": "myuser",
+    "password": "mypassword"
 }
 
-config = Config.from_dict(config_dict)
+config = NatsConfig.from_dict(config_dict)
+client = NatsClient(config=config)
 ```
 
 ## Job Serialization (`pickle` vs. `json`)
@@ -285,133 +211,93 @@ It is **strongly recommended** to use the `json` serializer in any environment w
 
 ## Performance Optimization
 
-The NAQ service layer is designed with performance in mind. This section covers optimization strategies and best practices for getting the most out of your NAQ deployment.
+NAQ is designed with performance in mind. This section covers optimization strategies and best practices for getting the most out of your NAQ deployment.
 
-### Service Layer Performance Features
+### Connection Management
 
-The service layer includes several performance optimizations:
-
-#### Lazy Service Initialization
-Services are initialized only when first accessed, reducing startup time and resource usage:
+The `NatsClient` provides efficient connection management with automatic reconnection and connection pooling:
 
 ```python
-from naq.services.manager import ServiceManager
-from naq.services.connection import ConnectionService
+from naq import NatsClient
 
 async def main():
-    # Create service manager
-    manager = ServiceManager()
+    # Create a client with optimized settings
+    client = NatsClient(
+        servers=["nats://localhost:4222"],
+        max_reconnect_attempts=10,
+        reconnect_time_wait=1.0,
+        connection_timeout=15.0
+    )
     
-    # Register services (not initialized yet)
-    await manager.register_service("connection", ConnectionService, initialize=False)
+    # Connect to NATS
+    await client.connect()
     
-    # Service will be initialized only when first accessed
-    connection_service = await manager.get_service("connection")
+    # Use the client for multiple operations
+    for i in range(1000):
+        await client.enqueue(my_task, i)
     
-    # Get performance statistics
-    stats = manager.get_service_performance_stats()
-    print(f"Connection service init time: {stats['connection']['initialization_time']:.3f}s")
-```
-
-#### Connection Pooling and Caching
-The `ConnectionService` provides efficient connection management:
-
-```python
-from naq.services.connection import ConnectionService
-
-async def main():
-    # Initialize connection service
-    connection_service = ConnectionService()
-    await connection_service.initialize()
-    
-    # Get connection (cached and reused)
-    nc1 = await connection_service.get_connection()
-    nc2 = await connection_service.get_connection()  # Cache hit
-    
-    # Get connection pool information
-    pool_info = connection_service.get_connection_pool_info()
-    print(f"Active connections: {pool_info['active_connections']}")
-    print(f"Cache hits: {connection_service.get_connection_stats()['nats://localhost:4222']['cache_hits']}")
-    
-    # Cleanup idle connections
-    cleaned = await connection_service.cleanup_idle_connections(idle_threshold=300)
-    print(f"Cleaned up {cleaned} idle connections")
-```
-
-#### Hot Service Detection
-Monitor frequently accessed services to optimize performance:
-
-```python
-from naq.services.manager import ServiceManager
-
-async def main():
-    manager = ServiceManager()
-    
-    # Register and use services
-    # ...
-    
-    # Get hot services (frequently accessed)
-    hot_services = manager.get_hot_services(threshold=10)
-    print(f"Hot services: {hot_services}")
-    
-    # Get detailed performance statistics
-    stats = manager.get_service_performance_stats()
-    for service_name, service_stats in stats.items():
-        print(f"{service_name}: accessed {service_stats['access_count']} times")
+    # Close the connection
+    await client.close()
 ```
 
 ### Performance Best Practices
 
-#### 1. Reuse Service Instances
-Always reuse service instances rather than creating new ones:
+#### 1. Reuse Client Instances
+Always reuse client instances rather than creating new ones:
 
 ```python
-# Good: Reuse service manager
-manager = ServiceManager()
-connection_service = await manager.get_service("connection")
+# Good: Reuse client
+client = NatsClient()
+await client.connect()
+for i in range(1000):
+    await client.enqueue(my_task, i)
+await client.close()
 
-# Bad: Create new service instances
-connection_service1 = ConnectionService()
-connection_service2 = ConnectionService()
+# Bad: Create new clients for each operation
+for i in range(1000):
+    client = NatsClient()
+    await client.connect()
+    await client.enqueue(my_task, i)
+    await client.close()
 ```
 
-#### 2. Use Appropriate Service Lifecycles
-Choose the right service lifecycle for your use case:
+#### 2. Use Batch Operations
+When possible, batch operations to reduce overhead:
 
 ```python
-# For short-lived operations (high throughput)
-async with short_lived_service_context() as manager:
-    job_service = manager.get_job_service()
-    # Process many jobs quickly
+# Good: Batch operations
+async def batch_enqueue(client, tasks):
+    enqueue_ops = [client.enqueue(task_func, *args) for task_func, args in tasks]
+    return await asyncio.gather(*enqueue_ops)
 
-# For long-lived applications
-manager = ServiceManager()
-await manager.initialize_all()
-# Run for extended period
+# Bad: Individual operations
+async def individual_enqueue(client, tasks):
+    results = []
+    for task_func, args in tasks:
+        result = await client.enqueue(task_func, *args)
+        results.append(result)
+    return results
 ```
 
-#### 3. Monitor Connection Usage
-Keep track of connection usage patterns:
+#### 3. Choose the Right Serializer
+Select the appropriate serializer for your use case:
 
 ```python
-connection_service = ConnectionService()
-await connection_service.initialize()
+# For security and performance (recommended)
+import os
+os.environ['NAQ_JOB_SERIALIZER'] = 'json'
 
-# Get connection statistics
-stats = connection_service.get_connection_stats()
-for url, url_stats in stats.items():
-    cache_hit_rate = url_stats['cache_hits'] / (url_stats['cache_hits'] + url_stats['created_count'])
-    print(f"{url}: {cache_hit_rate:.2%} cache hit rate")
+# For maximum flexibility (less secure)
+os.environ['NAQ_JOB_SERIALIZER'] = 'pickle'
 ```
 
-#### 4. Optimize Connection Pool Settings
-Configure connection pooling based on your workload:
+#### 4. Optimize Connection Settings
+Configure connection settings based on your workload:
 
 ```python
-from naq.services.connection import ConnectionServiceConfig
-
 # High-throughput configuration
-high_throughput_config = ConnectionServiceConfig(
+high_throughput_config = NatsConfig(
+    servers=["nats://localhost:4222"],
     max_reconnect_attempts=10,
     reconnect_time_wait=1.0,
     connection_timeout=15.0,
@@ -419,7 +305,8 @@ high_throughput_config = ConnectionServiceConfig(
 )
 
 # Low-latency configuration
-low_latency_config = ConnectionServiceConfig(
+low_latency_config = NatsConfig(
+    servers=["nats://localhost:4222"],
     max_reconnect_attempts=3,
     reconnect_time_wait=0.5,
     connection_timeout=5.0,
@@ -431,54 +318,31 @@ low_latency_config = ConnectionServiceConfig(
 
 NAQ provides built-in performance monitoring capabilities:
 
-#### Service Performance Metrics
 ```python
-from naq.services.manager import ServiceManager
+from naq import NatsClient
 
-async def monitor_services():
-    manager = ServiceManager()
+async def monitor_performance():
+    client = NatsClient()
+    await client.connect()
     
-    # Get comprehensive performance statistics
-    stats = manager.get_service_performance_stats()
+    # Get connection statistics
+    stats = client.get_connection_stats()
+    print(f"Connection stats: {stats}")
     
-    for service_name, service_stats in stats.items():
-        if service_stats['initialization_time']:
-            print(f"{service_name}:")
-            print(f"  Initialization time: {service_stats['initialization_time']:.3f}s")
-            print(f"  Access count: {service_stats['access_count']}")
-            print(f"  Is initialized: {service_stats['is_initialized']}")
-```
-
-#### Connection Pool Metrics
-```python
-from naq.services.connection import ConnectionService
-
-async def monitor_connections():
-    connection_service = ConnectionService()
-    await connection_service.initialize()
+    # Monitor queue metrics
+    queue_stats = await client.get_queue_stats()
+    print(f"Queue stats: {queue_stats}")
     
-    # Get connection pool information
-    pool_info = connection_service.get_connection_pool_info()
-    print(f"Total connections: {pool_info['total_connections']}")
-    print(f"Active connections: {pool_info['active_connections']}")
-    print(f"JetStream contexts: {pool_info['jetstream_contexts']}")
-    
-    # Get detailed connection statistics
-    stats = connection_service.get_connection_stats()
-    for url, url_stats in stats.items():
-        print(f"{url}:")
-        print(f"  Created: {url_stats['created_count']} times")
-        print(f"  Cache hits: {url_stats['cache_hits']}")
-        print(f"  Errors: {url_stats['connection_errors']}")
+    await client.close()
 ```
 
 ### Performance Tuning Guidelines
 
 #### For High-Throughput Scenarios
-- Use connection pooling with appropriate pool sizes
+- Use connection pooling with appropriate settings
 - Increase `max_reconnect_attempts` for resilience
 - Use longer `ping_interval` to reduce overhead
-- Monitor cache hit rates and adjust accordingly
+- Batch operations when possible
 
 #### For Low-Latency Scenarios
 - Use shorter timeouts and retry intervals
@@ -487,10 +351,10 @@ async def monitor_connections():
 - Consider connection pre-warming
 
 #### For Resource-Constrained Environments
-- Use aggressive idle connection cleanup
-- Monitor memory usage of connection pools
-- Use shorter TTL for cached resources
+- Use aggressive connection cleanup
+- Monitor memory usage
 - Implement connection limits
+- Use appropriate batch sizes
 
 ### Benchmarking
 
@@ -499,541 +363,80 @@ NAQ includes performance benchmarking capabilities:
 ```python
 import asyncio
 import time
-from naq.services.manager import ServiceManager
-from naq.services.connection import ConnectionService
+from naq import NatsClient
 
-async def benchmark_service_access():
-    manager = ServiceManager()
-    await manager.register_service("connection", ConnectionService)
+async def benchmark_enqueue():
+    client = NatsClient()
+    await client.connect()
     
-    # Benchmark service access
+    # Benchmark enqueue operations
     start_time = time.perf_counter()
     
-    for _ in range(1000):
-        connection_service = await manager.get_service("connection")
+    for i in range(1000):
+        await client.enqueue(my_task, i)
     
     end_time = time.perf_counter()
     avg_time = (end_time - start_time) / 1000
     
-    print(f"Average service access time: {avg_time*1000:.2f}ms")
+    print(f"Average enqueue time: {avg_time*1000:.2f}ms")
     
-    # Get performance statistics
-    stats = manager.get_service_performance_stats()
-    print(f"Cache hits: {stats['connection']['access_count'] - 1}")
+    await client.close()
 
-async def benchmark_connections():
-    connection_service = ConnectionService()
-    await connection_service.initialize()
+async def benchmark_batch_enqueue():
+    client = NatsClient()
+    await client.connect()
     
-    # Benchmark connection access
+    # Benchmark batch enqueue operations
     start_time = time.perf_counter()
     
-    for _ in range(1000):
-        nc = await connection_service.get_connection()
+    tasks = [(my_task, i) for i in range(1000)]
+    await asyncio.gather(*[client.enqueue(func, *args) for func, args in tasks])
     
     end_time = time.perf_counter()
     avg_time = (end_time - start_time) / 1000
     
-    print(f"Average connection access time: {avg_time*1000:.2f}ms")
+    print(f"Average batch enqueue time: {avg_time*1000:.2f}ms")
     
-    # Get connection statistics
-    stats = connection_service.get_connection_stats()
-    url_stats = list(stats.values())[0]
-    cache_hit_rate = url_stats['cache_hits'] / (url_stats['cache_hits'] + url_stats['created_count'])
-    print(f"Cache hit rate: {cache_hit_rate:.2%}")
+    await client.close()
 ```
 
-## Service Layer Architecture
-
-The NAQ service layer provides a modular, extensible foundation for all functionality. Each service is responsible for a specific domain and can be used independently or composed together to create complex workflows.
-
-### Core Services
-
-The service layer consists of several core services, each with a specific responsibility:
-
-#### ConnectionService
-Manages NATS connections, connection pooling, and JetStream contexts with automatic reconnection and monitoring.
-
-```python
-from naq.services.connection import ConnectionService
-
-async def main():
-    # Initialize connection service
-    connection_service = ConnectionService()
-    await connection_service.initialize()
-    
-    # Get a connection (automatically pooled and cached)
-    nc = await connection_service.get_connection()
-    
-    # Use the connection for NATS operations
-    await nc.publish("test.subject", b"Hello, Service Layer!")
-    
-    # Alternatively, use the connection service's publish method
-    await connection_service.publish("test.subject", b"Hello from ConnectionService!")
-    
-    # Cleanup
-    await connection_service.cleanup()
-```
-
-#### ConfigService
-Provides centralized configuration management with environment variable support and hierarchical settings.
-
-```python
-from naq.services.config import ConfigService
-
-async def main():
-    # Initialize config service
-    config_service = ConfigService()
-    await config_service.initialize()
-    
-    # Set configuration values
-    await config_service.set("database.url", "postgresql://localhost/mydb")
-    await config_service.set("database.pool_size", 10)
-    
-    # Get configuration values
-    db_url = await config_service.get("database.url")
-    pool_size = await config_service.get("database.pool_size")
-    
-    # Cleanup
-    await config_service.cleanup()
-```
-
-#### JobService
-Manages job execution, result storage, and lifecycle events with integrated failure handling.
-
-```python
-from naq.services.jobs import JobService
-from naq.models.jobs import Job
-
-async def process_data(data_id):
-    return f"Processed {data_id}"
-
-async def main():
-    # Initialize job service with dependencies
-    job_service = JobService()
-    await job_service.initialize()
-    
-    # Create and execute a job
-    job = Job(
-        function=process_data,
-        args=("data-123",),
-        queue_name="processing"
-    )
-    
-    result = await job_service.execute_job(job, "worker-1")
-    print(f"Job result: {result.result}")
-    
-    # Cleanup
-    await job_service.cleanup()
-```
-
-#### KVStoreService
-Provides centralized access to NATS KeyValue stores with transaction support and TTL management.
-
-```python
-from naq.services.kvstore import KVStoreService
-
-async def main():
-    # Initialize KV store service
-    kv_service = KVStoreService()
-    await kv_service.initialize()
-    
-    # Store and retrieve data
-    await kv_service.put("user:123", {"name": "Alice", "age": 30})
-    user_data = await kv_service.get("user:123")
-    
-    # Cleanup
-    await kv_service.cleanup()
-```
-
-#### EventService
-Logs and retrieves job and worker events with configurable retention policies.
-
-```python
-from naq.services.events import EventService
-from naq.models.events import Event, EventType
-from datetime import datetime
-
-async def main():
-    # Initialize event service
-    event_service = EventService()
-    await event_service.initialize()
-    
-    # Log an event
-    event = Event(
-        job_id="job-123",
-        event_type=EventType.started,
-        message="Job started",
-        timestamp=datetime.utcnow()
-    )
-    await event_service.log_event(event)
-    
-    # Retrieve events
-    events = await event_service.get_job_events("job-123")
-    
-    # Cleanup
-    await event_service.cleanup()
-```
-
-#### StreamService
-Handles JetStream stream creation, management, and configuration with consistent parameters.
-
-```python
-from naq.services.stream import StreamService
-
-async def main():
-    # Initialize stream service
-    stream_service = StreamService()
-    await stream_service.initialize()
-    
-    # Create or get a stream
-    stream_info = await stream_service.create_or_get_stream()
-    
-    # Publish a message
-    sequence = await stream_service.publish("orders.123", b"order data")
-    
-    # Cleanup
-    await stream_service.cleanup()
-```
-
-#### WorkerService
-Tracks worker registration, status, and heartbeats with lifecycle management.
-
-```python
-from naq.services.worker import WorkerService
-from naq.models.jobs import Job
-
-async def process_task(task_id):
-    return f"Processed task {task_id}"
-
-async def main():
-    # Initialize worker service
-    worker_service = WorkerService()
-    await worker_service.initialize()
-    
-    # Register a job handler
-    @worker_service.register_job_handler("process_task")
-    async def handle_process_task(job: Job):
-        return await process_task(job.args[0])
-    
-    # Start processing jobs
-    await worker_service.start_processing()
-    
-    # Keep running for a while
-    await asyncio.sleep(30)
-    
-    # Stop processing
-    await worker_service.stop_processing()
-    
-    # Cleanup
-    await worker_service.cleanup()
-```
-
-#### SchedulerService
-Handles job scheduling, triggering, cancellation, and pausing with support for recurring jobs.
-
-```python
-from naq.services.scheduler import SchedulerService
-from naq.models.schedules import Schedule, ScheduleType
-from datetime import datetime, timedelta
-
-async def send_report():
-    return "Report sent"
-
-async def main():
-    # Initialize scheduler service
-    scheduler_service = SchedulerService()
-    await scheduler_service.initialize()
-    
-    # Schedule a one-time job
-    schedule = Schedule(
-        schedule_id="daily-report",
-        schedule_type=ScheduleType.ONCE,
-        run_at=datetime.utcnow() + timedelta(hours=1),
-        function=send_report,
-        queue_name="reports"
-    )
-    
-    await scheduler_service.add_schedule(schedule)
-    
-    # Start the scheduler
-    await scheduler_service.start()
-    
-    # Keep running for a while
-    await asyncio.sleep(120)
-    
-    # Stop the scheduler
-    await scheduler_service.stop()
-    
-    # Cleanup
-    await scheduler_service.cleanup()
-```
-
-### ServiceManager: Centralized Service Management
-
-The ServiceManager provides a unified way to manage all services, handling dependency injection, lifecycle management, and performance monitoring.
-
-```python
-from naq.services.base import ServiceManager
-
-async def main():
-    # Create service manager
-    service_manager = ServiceManager()
-    
-    # Initialize all services
-    await service_manager.initialize_all()
-    
-    # Get services as needed
-    connection_service = service_manager.get_service(ConnectionService)
-    job_service = service_manager.get_service(JobService)
-    
-    # Use the services
-    # ...
-    
-    # Cleanup all services
-    await service_manager.cleanup_all()
-```
-
-#### ServiceManager Features
-
-##### Lazy Initialization
-Services are initialized only when first accessed, reducing startup time:
-
-```python
-manager = ServiceManager()
-
-# Register services (not initialized yet)
-await manager.register_service("connection", ConnectionService, initialize=False)
-
-# Service will be initialized only when first accessed
-connection_service = await manager.get_service("connection")
-```
-
-##### Performance Monitoring
-Track service access patterns and initialization times:
-
-```python
-# Get performance statistics
-stats = manager.get_performance_stats()
-for service_name, service_stats in stats.items():
-    print(f"{service_name}: accessed {service_stats['access_count']} times")
-    print(f"Initialization time: {service_stats['initialization_time']:.3f}s")
-```
-
-##### Hot Service Detection
-Identify frequently accessed services for optimization:
-
-```python
-# Get hot services (accessed more than 10 times)
-hot_services = manager.get_hot_services(threshold=10)
-print(f"Hot services: {hot_services}")
-```
-
-### Service Configuration
-
-Services can be configured individually with service-specific settings:
-
-```python
-from naq.services.base import ServiceConfig
-from naq.services.connection import ConnectionServiceConfig
-
-# Create custom configuration
-connection_config = ConnectionServiceConfig(
-    servers=["nats://localhost:4222"],
-    max_reconnect_attempts=10,
-    reconnect_time_wait=5.0
-)
-
-# Initialize service with custom config
-service_config = ServiceConfig(custom_settings=connection_config.as_dict())
-connection_service = ConnectionService(config=service_config)
-```
-
-### Service Dependencies
-
-Services can depend on other services. The ServiceManager automatically handles dependency resolution:
-
-```python
-# EventService depends on KVStoreService
-# JobService depends on ConnectionService, KVStoreService, and EventService
-# ServiceManager will initialize dependencies in the correct order
-```
-
-### Service Lifecycle Management
-
-Services follow a consistent lifecycle pattern:
-
-1. **Registration**: Service is registered with the ServiceManager
-2. **Initialization**: Service is initialized (lazy or eager)
-3. **Usage**: Service is used for its intended purpose
-4. **Cleanup**: Service resources are cleaned up
-
-```python
-async def service_lifecycle_example():
-    manager = ServiceManager()
-    
-    # Registration
-    await manager.register_service("connection", ConnectionService)
-    
-    # Initialization (lazy - happens automatically on first access)
-    connection_service = await manager.get_service("connection")
-    
-    # Usage
-    nc = await connection_service.get_connection()
-    
-    # Cleanup
-    await manager.cleanup_all()
-```
-
-### Best Practices for Service Usage
-
-#### 1. Use ServiceManager for Complex Applications
-For applications that use multiple services, always use the ServiceManager:
-
-```python
-# Good: Use ServiceManager
-manager = ServiceManager()
-await manager.initialize_all()
-job_service = manager.get_service(JobService)
-
-# Bad: Initialize services manually
-job_service = JobService(
-    connection_service=ConnectionService(),
-    kv_store_service=KVStoreService(),
-    event_service=EventService()
-)
-```
-
-#### 2. Choose the Right Initialization Strategy
-Use lazy initialization for services that might not be needed:
-
-```python
-# Lazy initialization (default)
-await manager.register_service("connection", ConnectionService)
-
-# Eager initialization (for critical services)
-await manager.register_service("connection", ConnectionService, initialize=True)
-```
-
-#### 3. Monitor Service Performance
-Use built-in performance monitoring to identify bottlenecks:
-
-```python
-stats = manager.get_performance_stats()
-for service_name, service_stats in stats.items():
-    if service_stats['initialization_time'] > 1.0:
-        print(f"Warning: {service_name} slow to initialize")
-```
-
-#### 4. Handle Service Failures Gracefully
-Services can fail to initialize or operate. Always handle exceptions:
-
-```python
-try:
-    connection_service = await manager.get_service("connection")
-    nc = await connection_service.get_connection()
-except Exception as e:
-    logger.error(f"Failed to get connection: {e}")
-    # Fallback or error handling
-```
-
-### Migration from Direct NATS Usage
-
-When migrating from direct NATS usage to the service layer, follow these guidelines:
-
-#### Before (Direct NATS Usage)
-```python
-import asyncio
-import nats
-
-async def old_way():
-    nc = await nats.connect("nats://localhost:4222")
-    await nc.publish("orders.123", b"order data")
-    await nc.close()
-```
-
-#### After (Service Layer Usage)
-```python
-from naq.services.base import ServiceManager
-
-async def new_way():
-    manager = ServiceManager()
-    await manager.initialize_all()
-    
-    connection_service = manager.get_service("connection")
-    nc = await connection_service.get_connection()
-    await nc.publish("orders.123", b"order data")
-    
-    # Or use the connection service's publish method for better error handling
-    await connection_service.publish("orders.123", b"order data")
-    
-    await manager.cleanup_all()
-```
-
-#### Alternative: Using Service Context Patterns
-For even simpler migration, use the service context patterns:
-
-```python
-from naq.service_context import short_lived_service_context
-
-async def context_way():
-    async with short_lived_service_context() as service_manager:
-        connection_service = service_manager.get_connection_service()
-        nc = await connection_service.get_connection()
-        await nc.publish("orders.123", b"order data")
-```
-
-The service layer approach provides better connection management, error handling, monitoring capabilities, and automatic resource cleanup.
-
-By following these service layer patterns and best practices, you can build robust, maintainable, and performant applications with NAQ.
 ## Event System Advanced Configuration and Customization
 
 The `naq` event system is highly configurable and extensible, allowing you to tailor its behavior to your specific monitoring and processing needs.
 
 ### Configuration Parameters
 
-The `EventService` and its underlying components can be configured via the centralized `naq` configuration system or directly through `EventServiceConfig`.
+The event system can be configured via environment variables or programmatically:
 
 | Parameter | Type | Default | Description |
 | :------------------------ | :------ | :------------- | :------------------------------------------------------------------------ |
-| `events_bucket_name` | `str` | `naq_events` | Name of the NATS KV bucket used to store events. |
-| `event_ttl` | `int` | `604800` (7d) | Time-to-live (in seconds) for events in the KV store. Events older than this will be purged. |
-| `enable_event_logging` | `bool` | `true` | Whether event logging is enabled globally for the EventService. |
-| `auto_create_buckets` | `bool` | `true` | Whether the event KV bucket should be automatically created if it doesn't exist. |
+| `NAQ_EVENTS_BUCKET_NAME` | `str` | `naq_events` | Name of the NATS KV bucket used to store events. |
+| `NAQ_EVENT_TTL` | `int` | `604800` (7d) | Time-to-live (in seconds) for events in the KV store. Events older than this will be purged. |
+| `NAQ_ENABLE_EVENT_LOGGING` | `bool` | `true` | Whether event logging is enabled globally. |
+| `NAQ_AUTO_CREATE_BUCKETS` | `bool` | `true` | Whether the event KV bucket should be automatically created if it doesn't exist. |
 
-You can override these settings via environment variables (e.g., `NAQ_EVENTS_BUCKET_NAME`), `naq.yaml` configuration files, or programmatically:
+You can override these settings via environment variables or programmatically:
 
 ```python
 # custom_event_config.py
 import asyncio
-from naq.services.manager import ServiceManager
-from naq.services.events import EventService, EventServiceConfig
-from naq.config import get_config
+from naq import NatsClient
 
 async def main():
-    # Load base configuration
-    config = get_config()
-    
-    # Create custom EventService configuration
-    custom_event_config = EventServiceConfig(
+    # Create a client with custom event configuration
+    client = NatsClient(
         events_bucket_name="my_custom_naq_events",
         event_ttl=86400,  # Store events for 24 hours
-        enable_event_logging=False # Disable event logging for this instance
+        enable_event_logging=False  # Disable event logging for this instance
     )
     
-    # Initialize ServiceManager with custom config
-    service_manager = ServiceManager(config=config)
+    await client.connect()
     
-    # Register EventService with custom configuration
-    event_service = await service_manager.register_service(
-        "events", EventService, custom_settings=custom_event_config
-    )
+    print(f"Event bucket name: {client.events_bucket_name}")
+    print(f"Event TTL: {client.event_ttl} seconds")
+    print(f"Event logging enabled: {client.enable_event_logging}")
     
-    print(f"Event bucket name: {event_service.event_config.events_bucket_name}")
-    print(f"Event TTL: {event_service.event_config.event_ttl} seconds")
-    print(f"Event logging enabled: {event_service.event_config.enable_event_logging}")
-    
-    await service_manager.cleanup_all()
+    await client.close()
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -1048,17 +451,15 @@ You can implement custom event processors to react to specific events in real-ti
 -   Triggering downstream workflows based on event types.
 -   Performing custom analytics on event streams.
 
-To implement a custom event processor, you typically subscribe to the NATS event stream and process the incoming `JobEvent` or `WorkerEvent` messages.
+To implement a custom event processor, you typically subscribe to the NATS event stream and process the incoming event messages.
 
 ```python
 # custom_event_processor.py
 import asyncio
 import json
-from naq.services.manager import ServiceManager
-from naq.services.connection import ConnectionService
+from naq import NatsClient
 from naq.models.events import JobEvent, WorkerEvent
 from naq.models.enums import JobEventType, WorkerEventType
-from naq.config import get_config
 from naq.utils.serialization import SerializationHelper
 
 async def process_event(event_data: bytes):
@@ -1089,16 +490,14 @@ async def process_event(event_data: bytes):
         print(f"Raw event data: {event_data.decode(errors='ignore')}")
 
 async def main():
-    config = get_config()
-    service_manager = ServiceManager(config=config)
-    await service_manager.initialize_all()
-    
-    connection_service = service_manager.get_service("connection")
+    # Create a client
+    client = NatsClient()
+    await client.connect()
     
     # Subscribe to the NATS events stream for all events
     # The subject for events is typically "naq.events.>"
     print("Starting custom event processor. Listening for events...")
-    await connection_service.subscribe("naq.events.>", process_event)
+    await client.subscribe("naq.events.>", process_event)
     
     # Keep the processor running
     try:
@@ -1107,7 +506,7 @@ async def main():
     except asyncio.CancelledError:
         print("Event processor stopped.")
     finally:
-        await service_manager.cleanup_all()
+        await client.close()
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -1127,7 +526,7 @@ Ensure a NATS server with JetStream enabled is running and that `naq` components
 
 ### Event Data Retention and Purging
 
-The `event_ttl` configuration parameter for the `EventService` controls how long events are retained in the NATS KV store. Setting an appropriate TTL is crucial for managing storage consumption and ensuring compliance with data retention policies.
+The `event_ttl` configuration parameter controls how long events are retained in the NATS KV store. Setting an appropriate TTL is crucial for managing storage consumption and ensuring compliance with data retention policies.
 
 -   **Short TTLs (e.g., hours/days)**: Suitable for high-volume, real-time monitoring data where long-term historical analysis is not required or is handled by an external system.
 -   **Long TTLs (e.g., weeks/months)**: Appropriate for auditing, compliance, or infrequent historical analysis.

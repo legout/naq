@@ -24,19 +24,23 @@ import hashlib
 import hmac
 import json
 from datetime import datetime, timedelta
+from typing import Dict, Any, Optional, List
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from flask import Flask, request, jsonify, send_file, Response
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
-from naq import SyncClient, setup_logging
+from naq import NatsClient, setup_logging
+from naq.config import NatsConfig, QueueConfig
+from loguru import logger
 
 # Configure secure JSON serialization
 os.environ.setdefault('NAQ_JOB_SERIALIZER', 'json')
 
 # Setup logging
 setup_logging(level="INFO")
+logger.info("Starting Flask application with NAQ integration")
 
 # Flask app configuration
 app = Flask(__name__)
@@ -47,8 +51,44 @@ app.config['UPLOAD_FOLDER'] = '/tmp/naq_uploads'
 # Initialize SocketIO for real-time updates
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# NAQ client
-naq_client = SyncClient()
+# NAQ client configuration
+nats_config = NatsConfig(
+    servers=["nats://localhost:4222"],
+    connect_timeout=5.0,
+    max_reconnect_attempts=3
+)
+
+# Default queue configuration
+default_queue_config = QueueConfig(
+    name="web_queue",
+    job_timeout=30.0,
+    max_retries=3,
+    retry_delay=2.0
+)
+
+# File processing queue configuration
+file_queue_config = QueueConfig(
+    name="file_queue",
+    job_timeout=60.0,
+    max_retries=2,
+    retry_delay=5.0
+)
+
+# Webhook queue configuration
+webhook_queue_config = QueueConfig(
+    name="webhook_queue",
+    job_timeout=10.0,
+    max_retries=5,
+    retry_delay=1.0
+)
+
+# Email queue configuration
+email_queue_config = QueueConfig(
+    name="email_queue",
+    job_timeout=15.0,
+    max_retries=3,
+    retry_delay=3.0
+)
 
 # In-memory storage for demo (use Redis/database in production)
 job_subscriptions = {}
@@ -60,7 +100,7 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # ===== JOB FUNCTIONS =====
 
-def process_user_data(user_id: int, operation: str, data: dict = None) -> dict:
+def process_user_data(user_id: int, operation: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Process user data in background.
     
@@ -72,7 +112,7 @@ def process_user_data(user_id: int, operation: str, data: dict = None) -> dict:
     Returns:
         Processing results
     """
-    print(f"👤 Processing user data: ID={user_id}, Operation={operation}")
+    logger.info(f"Processing user data: ID={user_id}, Operation={operation}")
     
     # Simulate processing time
     processing_time = 2 + (hash(str(user_id)) % 5)  # 2-6 seconds
@@ -87,7 +127,7 @@ def process_user_data(user_id: int, operation: str, data: dict = None) -> dict:
         "status": "completed"
     }
     
-    print(f"✅ User data processing completed for user {user_id}")
+    logger.info(f"User data processing completed for user {user_id}")
     
     # Notify via SocketIO if there are subscribers
     if user_id in job_subscriptions:
@@ -100,7 +140,7 @@ def process_user_data(user_id: int, operation: str, data: dict = None) -> dict:
     return result
 
 
-def process_uploaded_file(file_path: str, original_filename: str, user_id: str = None) -> dict:
+def process_uploaded_file(file_path: str, original_filename: str, user_id: Optional[str] = None) -> Dict[str, Any]:
     """
     Process an uploaded file.
     
@@ -112,7 +152,7 @@ def process_uploaded_file(file_path: str, original_filename: str, user_id: str =
     Returns:
         File processing results
     """
-    print(f"📁 Processing uploaded file: {original_filename}")
+    logger.info(f"Processing uploaded file: {original_filename}")
     
     try:
         # Get file info
@@ -137,18 +177,18 @@ def process_uploaded_file(file_path: str, original_filename: str, user_id: str =
         if os.path.exists(file_path):
             os.remove(file_path)
         
-        print(f"✅ File processing completed: {original_filename}")
+        logger.info(f"File processing completed: {original_filename}")
         return result
         
     except Exception as e:
-        print(f"❌ File processing failed: {e}")
+        logger.error(f"File processing failed: {e}")
         # Clean up on failure
         if os.path.exists(file_path):
             os.remove(file_path)
         raise
 
 
-def process_webhook(event_type: str, payload: dict, source: str = "unknown") -> dict:
+def process_webhook(event_type: str, payload: Dict[str, Any], source: str = "unknown") -> Dict[str, Any]:
     """
     Process webhook payload.
     
@@ -160,7 +200,7 @@ def process_webhook(event_type: str, payload: dict, source: str = "unknown") -> 
     Returns:
         Webhook processing results
     """
-    print(f"🔗 Processing webhook: {source} - {event_type}")
+    logger.info(f"Processing webhook: {source} - {event_type}")
     
     # Simulate webhook processing
     time.sleep(1 + (hash(event_type) % 3))  # 1-3 seconds
@@ -184,11 +224,11 @@ def process_webhook(event_type: str, payload: dict, source: str = "unknown") -> 
     elif event_type == "user.created":
         result["actions_taken"].append("send_welcome_email")
     
-    print(f"✅ Webhook processing completed: {source} - {event_type}")
+    logger.info(f"Webhook processing completed: {source} - {event_type}")
     return result
 
 
-def send_email_campaign(campaign_id: str, recipient: str, template: str, data: dict = None) -> dict:
+def send_email_campaign(campaign_id: str, recipient: str, template: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Send campaign email to recipient.
     
@@ -201,7 +241,7 @@ def send_email_campaign(campaign_id: str, recipient: str, template: str, data: d
     Returns:
         Email sending results
     """
-    print(f"📧 Sending campaign email: {campaign_id} to {recipient}")
+    logger.info(f"Sending campaign email: {campaign_id} to {recipient}")
     
     # Simulate email sending
     time.sleep(0.5 + (hash(recipient) % 2))  # 0.5-2.5 seconds
@@ -215,11 +255,11 @@ def send_email_campaign(campaign_id: str, recipient: str, template: str, data: d
         "status": "sent"
     }
     
-    print(f"✅ Email sent: {campaign_id} to {recipient}")
+    logger.info(f"Email sent: {campaign_id} to {recipient}")
     return result
 
 
-def generate_report(report_type: str, date_range: dict, filters: dict = None, format: str = "pdf") -> dict:
+def generate_report(report_type: str, date_range: Dict[str, Any], filters: Optional[Dict[str, Any]] = None, format: str = "pdf") -> Dict[str, Any]:
     """
     Generate business report.
     
@@ -232,7 +272,7 @@ def generate_report(report_type: str, date_range: dict, filters: dict = None, fo
     Returns:
         Report generation results
     """
-    print(f"📊 Generating report: {report_type} ({format})")
+    logger.info(f"Generating report: {report_type} ({format})")
     
     # Simulate report generation time
     complexity_factor = len(filters) if filters else 1
@@ -261,7 +301,7 @@ def generate_report(report_type: str, date_range: dict, filters: dict = None, fo
         "status": "completed"
     }
     
-    print(f"✅ Report generated: {report_type}")
+    logger.info(f"Report generated: {report_type}")
     return result
 
 
@@ -281,13 +321,13 @@ def verify_webhook_signature(payload: bytes, signature: str, secret: str) -> boo
     return hmac.compare_digest(f"sha256={expected_signature}", signature)
 
 
-def validate_campaign_data(data: dict) -> bool:
+def validate_campaign_data(data: Dict[str, Any]) -> bool:
     """Validate email campaign data."""
     required_fields = ['name', 'template', 'recipients']
     return all(field in data for field in required_fields)
 
 
-def estimate_report_time(report_request: dict) -> int:
+def estimate_report_time(report_request: Dict[str, Any]) -> int:
     """Estimate report generation time in minutes."""
     base_time = 2  # Base 2 minutes
     
@@ -337,13 +377,13 @@ def process_data():
             return jsonify({'error': 'user_id and operation are required'}), 400
         
         # Enqueue background job
-        job = naq_client.enqueue(
-            process_user_data,
-            user_id=data['user_id'],
-            operation=data['operation'],
-            data=data.get('data'),
-            queue_name='web_queue'
-        )
+        with NatsClient(nats_config=nats_config, queue_config=default_queue_config) as client:
+            job = client.enqueue(
+                process_user_data,
+                user_id=data['user_id'],
+                operation=data['operation'],
+                data=data.get('data')
+            )
         
         # Store job info for tracking
         active_jobs[job.job_id] = {
@@ -388,13 +428,13 @@ def handle_file_upload():
         file.save(file_path)
         
         # Enqueue file processing job
-        job = naq_client.enqueue(
-            process_uploaded_file,
-            file_path=file_path,
-            original_filename=filename,
-            user_id=request.form.get('user_id'),
-            queue_name='file_queue'
-        )
+        with NatsClient(nats_config=nats_config, queue_config=file_queue_config) as client:
+            job = client.enqueue(
+                process_uploaded_file,
+                file_path=file_path,
+                original_filename=filename,
+                user_id=request.form.get('user_id')
+            )
         
         # Store job info
         active_jobs[job.job_id] = {
@@ -433,13 +473,13 @@ def handle_github_webhook():
         event_type = request.headers.get('X-GitHub-Event', 'unknown')
         
         # Enqueue webhook processing
-        job = naq_client.enqueue(
-            process_webhook,
-            event_type=event_type,
-            payload=payload,
-            source='github',
-            queue_name='webhook_queue'
-        )
+        with NatsClient(nats_config=nats_config, queue_config=webhook_queue_config) as client:
+            job = client.enqueue(
+                process_webhook,
+                event_type=event_type,
+                payload=payload,
+                source='github'
+            )
         
         # Store job info
         active_jobs[job.job_id] = {
@@ -473,16 +513,16 @@ def create_email_campaign():
         
         # Enqueue email sending jobs
         jobs = []
-        for recipient in campaign_data['recipients']:
-            job = naq_client.enqueue(
-                send_email_campaign,
-                campaign_id=campaign_id,
-                recipient=recipient,
-                template=campaign_data['template'],
-                data=campaign_data.get('data', {}),
-                queue_name='email_queue'
-            )
-            jobs.append(job.job_id)
+        with NatsClient(nats_config=nats_config, queue_config=email_queue_config) as client:
+            for recipient in campaign_data['recipients']:
+                job = client.enqueue(
+                    send_email_campaign,
+                    campaign_id=campaign_id,
+                    recipient=recipient,
+                    template=campaign_data['template'],
+                    data=campaign_data.get('data', {})
+                )
+                jobs.append(job.job_id)
         
         # Store campaign info
         for job_id in jobs:
@@ -518,17 +558,23 @@ def generate_business_report():
         # Estimate processing time
         estimated_time = estimate_report_time(report_request)
         
-        # Enqueue report generation
-        job = naq_client.enqueue(
-            generate_report,
-            report_type=report_request['type'],
-            date_range=report_request['date_range'],
-            filters=report_request.get('filters', {}),
-            format=report_request.get('format', 'pdf'),
-            queue_name='web_queue',
-            # Long-running reports need higher timeout
-            job_timeout=timedelta(minutes=30)
+        # Configure report queue with longer timeout
+        report_queue_config = QueueConfig(
+            name="web_queue",
+            job_timeout=1800.0,  # 30 minutes
+            max_retries=2,
+            retry_delay=5.0
         )
+        
+        # Enqueue report generation
+        with NatsClient(nats_config=nats_config, queue_config=report_queue_config) as client:
+            job = client.enqueue(
+                generate_report,
+                report_type=report_request['type'],
+                date_range=report_request['date_range'],
+                filters=report_request.get('filters', {}),
+                format=report_request.get('format', 'pdf')
+            )
         
         # Store job info
         active_jobs[job.job_id] = {
@@ -555,7 +601,8 @@ def get_job_status(job_id):
     """Get job status."""
     try:
         # Get status from NAQ
-        status = naq_client.get_job_status(job_id)
+        with NatsClient(nats_config=nats_config, queue_config=default_queue_config) as client:
+            status = client.get_job_status(job_id)
         
         if not status:
             return jsonify({'error': 'Job not found'}), 404
@@ -577,7 +624,8 @@ def stream_job_progress(job_id):
         try:
             while True:
                 # Get current status
-                status = naq_client.get_job_status(job_id)
+                with NatsClient(nats_config=nats_config, queue_config=default_queue_config) as client:
+                    status = client.get_job_status(job_id)
                 
                 if not status:
                     yield f"data: {json.dumps({'error': 'Job not found'})}\n\n"
@@ -606,7 +654,8 @@ def download_report(job_id):
     """Download generated report."""
     try:
         # Check job status
-        status = naq_client.get_job_status(job_id)
+        with NatsClient(nats_config=nats_config, queue_config=default_queue_config) as client:
+            status = client.get_job_status(job_id)
         
         if not status:
             return jsonify({'error': 'Job not found'}), 404
@@ -632,29 +681,29 @@ def download_report(job_id):
 @socketio.on('connect')
 def handle_connect():
     """Handle client connection."""
-    print(f"🔌 Client connected: {request.sid}")
+    logger.info(f"Client connected: {request.sid}")
     emit('connected', {'message': 'Connected to NAQ job updates'})
 
 
 @socketio.on('disconnect')
 def handle_disconnect():
     """Handle client disconnection."""
-    print(f"🔌 Client disconnected: {request.sid}")
+    logger.info(f"Client disconnected: {request.sid}")
 
 
 @socketio.on('subscribe_job')
-def handle_job_subscription(data):
+def handle_job_subscription(data: Dict[str, Any]):
     """Subscribe to job updates."""
     job_id = data.get('job_id')
     if job_id:
         join_room(f'job_{job_id}')
         job_subscriptions[job_id] = request.sid
         emit('subscribed', {'job_id': job_id})
-        print(f"📺 Client subscribed to job: {job_id}")
+        logger.info(f"Client subscribed to job: {job_id}")
 
 
 @socketio.on('unsubscribe_job')
-def handle_job_unsubscription(data):
+def handle_job_unsubscription(data: Dict[str, Any]):
     """Unsubscribe from job updates."""
     job_id = data.get('job_id')
     if job_id:
@@ -662,17 +711,17 @@ def handle_job_unsubscription(data):
         if job_id in job_subscriptions:
             del job_subscriptions[job_id]
         emit('unsubscribed', {'job_id': job_id})
-        print(f"📺 Client unsubscribed from job: {job_id}")
+        logger.info(f"Client unsubscribed from job: {job_id}")
 
 
 @socketio.on('subscribe_user')
-def handle_user_subscription(data):
+def handle_user_subscription(data: Dict[str, Any]):
     """Subscribe to user-specific updates."""
     user_id = data.get('user_id')
     if user_id:
         join_room(f'user_{user_id}')
         emit('user_subscribed', {'user_id': user_id})
-        print(f"👤 Client subscribed to user updates: {user_id}")
+        logger.info(f"Client subscribed to user updates: {user_id}")
 
 
 # ===== ERROR HANDLERS =====
@@ -697,32 +746,32 @@ def handle_server_error(e):
 
 # ===== MAIN APPLICATION =====
 
-def main():
+def main() -> None:
     """Main application entry point."""
-    print("🚀 Starting NAQ Flask Integration Demo")
-    print("=" * 50)
+    logger.info("Starting NAQ Flask Integration Demo")
+    logger.info("=" * 50)
     
-    print("📋 Available Endpoints:")
-    print("   POST /api/process - Process user data")
-    print("   POST /api/upload - Upload and process files")
-    print("   POST /webhooks/github - Handle GitHub webhooks")
-    print("   POST /api/campaigns - Create email campaigns")
-    print("   POST /api/reports - Generate reports")
-    print("   GET /api/jobs/<job_id> - Get job status")
-    print("   GET /api/jobs/<job_id>/stream - Stream job progress")
-    print("   GET /api/reports/<job_id>/download - Download reports")
+    logger.info("Available Endpoints:")
+    logger.info("   POST /api/process - Process user data")
+    logger.info("   POST /api/upload - Upload and process files")
+    logger.info("   POST /webhooks/github - Handle GitHub webhooks")
+    logger.info("   POST /api/campaigns - Create email campaigns")
+    logger.info("   POST /api/reports - Generate reports")
+    logger.info("   GET /api/jobs/<job_id> - Get job status")
+    logger.info("   GET /api/jobs/<job_id>/stream - Stream job progress")
+    logger.info("   GET /api/reports/<job_id>/download - Download reports")
     
-    print("\n🔌 WebSocket Events:")
-    print("   subscribe_job - Subscribe to job updates")
-    print("   subscribe_user - Subscribe to user updates")
+    logger.info("WebSocket Events:")
+    logger.info("   subscribe_job - Subscribe to job updates")
+    logger.info("   subscribe_user - Subscribe to user updates")
     
-    print("\n💡 Test the application:")
-    print("   curl -X POST http://localhost:5000/api/process \\")
-    print("     -H 'Content-Type: application/json' \\")
-    print("     -d '{\"user_id\": 123, \"operation\": \"test\"}'")
+    logger.info("Test the application:")
+    logger.info("   curl -X POST http://localhost:5000/api/process \\")
+    logger.info("     -H 'Content-Type: application/json' \\")
+    logger.info("     -d '{\"user_id\": 123, \"operation\": \"test\"}'")
     
-    print("\n🌐 Starting Flask application on http://localhost:5000")
-    print("📊 NAQ Dashboard available at http://localhost:8000")
+    logger.info("Starting Flask application on http://localhost:5000")
+    logger.info("NAQ Dashboard available at http://localhost:8000")
     
     # Run the application
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)

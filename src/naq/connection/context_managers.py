@@ -15,7 +15,7 @@ from nats.js.errors import BucketNotFoundError
 from loguru import logger
 
 from ..settings import DEFAULT_NATS_URL
-from ..services.config import create_global_config, GlobalServiceConfig
+from ..config import get_config, NAQConfig
 from ..exceptions import NaqConnectionError
 
 
@@ -59,7 +59,7 @@ async def jetstream_context(nc: NATSClient):
 
 
 @contextlib.asynccontextmanager
-async def nats_connection(config: Optional[GlobalServiceConfig] = None):
+async def nats_connection(config: Optional[NAQConfig] = None):
     """
     Asynchronous context manager for establishing and managing NATS connections.
 
@@ -87,24 +87,22 @@ async def nats_connection(config: Optional[GlobalServiceConfig] = None):
             await nc.publish("subject", b"message")
 
         # Using custom configuration
-        config = GlobalServiceConfig(nats_url="nats://custom:4222")
+        config = NAQConfig(nats=NatsConfig(servers=["nats://custom:4222"]))
         async with nats_connection(config) as nc:
             await nc.publish("subject", b"message")
         ```
     """
     # Get configuration if not provided
-    config = config or create_global_config()
+    config = config or get_config()
 
     # Extract NATS connection parameters from config
-    servers = config.nats_url or DEFAULT_NATS_URL
-    custom_settings = config.custom_settings or {}
-
-    client_name = custom_settings.get("client_name", "naq_client")
-    max_reconnect_attempts = custom_settings.get("max_reconnect_attempts", 5)
-    reconnect_time_wait = custom_settings.get("reconnect_time_wait", 2)
-    connect_timeout = custom_settings.get("connect_timeout", 5)
-    ping_interval = custom_settings.get("ping_interval", 60)
-    max_outstanding_pings = custom_settings.get("max_outstanding_pings", 2)
+    servers = config.nats.servers[0] if config.nats.servers else DEFAULT_NATS_URL
+    client_name = config.nats.client_name or "naq_client"
+    max_reconnect_attempts = config.nats.max_reconnect_attempts or 5
+    reconnect_time_wait = config.nats.reconnect_time_wait or 2
+    connect_timeout = config.nats.connect_timeout or 5
+    ping_interval = config.nats.ping_interval or 60
+    max_outstanding_pings = config.nats.max_outstanding_pings or 2
 
     conn = None
     try:
@@ -178,7 +176,7 @@ async def nats_closed_cb():
 
 
 @contextlib.asynccontextmanager
-async def nats_jetstream(config: Optional[GlobalServiceConfig] = None):
+async def nats_jetstream(config: Optional[NAQConfig] = None):
     """
     Asynchronous context manager that combines NATS connection and JetStream context.
 
@@ -209,14 +207,14 @@ async def nats_jetstream(config: Optional[GlobalServiceConfig] = None):
             await js.publish("my.subject", b"message")
 
         # Using custom configuration
-        config = GlobalServiceConfig(nats_url="nats://custom:4222")
+        config = NAQConfig(nats=NatsConfig(servers=["nats://custom:4222"]))
         async with nats_jetstream(config) as (nc, js):
             await js.add_stream(name="mystream", subjects=["my.subject"])
             await js.publish("my.subject", b"message")
         ```
     """
     # Get configuration if not provided
-    config = config or create_global_config()
+    config = config or get_config()
 
     try:
         logger.debug("Establishing NATS connection and JetStream context")
@@ -237,7 +235,7 @@ async def nats_jetstream(config: Optional[GlobalServiceConfig] = None):
 
 
 @contextlib.asynccontextmanager
-async def nats_kv_store(bucket_name: str, config: Optional[GlobalServiceConfig] = None):
+async def nats_kv_store(bucket_name: str, config: Optional[NAQConfig] = None):
     """
     Asynchronous context manager for NATS Key-Value store operations.
 
@@ -269,14 +267,14 @@ async def nats_kv_store(bucket_name: str, config: Optional[GlobalServiceConfig] 
             value = await kv.get("key")
 
         # Using custom configuration
-        config = GlobalServiceConfig(nats_url="nats://custom:4222")
+        config = NAQConfig(nats=NatsConfig(servers=["nats://custom:4222"]))
         async with nats_kv_store("my_bucket", config) as kv:
             await kv.put("key", b"value")
             value = await kv.get("key")
         ```
     """
     # Get configuration if not provided
-    config = config or create_global_config()
+    config = config or get_config()
 
     try:
         logger.debug(

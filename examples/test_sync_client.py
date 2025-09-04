@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
 """
-Test script to verify that SyncClient works correctly.
+Test script to verify that NatsClient works correctly.
 """
 
+import os
 import time
 from datetime import datetime, timedelta
 
-from naq import SyncClient
+from naq import SyncClient, setup_logging
+from naq.nats_client import NatsClientConfig
+from naq.settings import QueueConfig
+
+# Configure secure JSON serialization
+os.environ.setdefault('NAQ_JOB_SERIALIZER', 'json')
+
+# Setup logging
+setup_logging(level="INFO")
 
 
 def example_task(name: str) -> str:
@@ -22,7 +31,18 @@ def main():
     
     # Test basic enqueue
     try:
-        with SyncClient() as client:
+        # Create configuration
+        nats_config = NatsClientConfig(
+            nats_url="nats://localhost:4222",
+            connection_timeout=5,
+            max_reconnect_attempts=3
+        )
+        
+        queue_config = QueueConfig(
+            default_name="default"
+        )
+        
+        with SyncClient(nats_url=nats_config.nats_url) as client:
             print("Enqueuing jobs...")
             jobs = []
             for i in range(3):

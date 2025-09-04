@@ -14,28 +14,47 @@ from ..exceptions import ConfigurationError
 from ..models.jobs import Job, RetryDelayType
 from .scheduled import ScheduledJobManager
 from ..models.enums import SCHEDULED_JOB_STATUS
-from ..services import (
-    ConnectionService,
-    StreamService,
-    JobService,
-    EventService,
-    KVStoreService,
-)
-from ..services.config import create_global_config, GlobalServiceConfig
 from ..settings import DEFAULT_QUEUE_NAME, DEFAULT_NATS_URL, NAQ_PREFIX
 from ..utils import setup_logging
-from ..service_context import long_lived_service_context
 from ..utils.decorators import retry
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception
 from ..utils.logging import StructuredLogger
 from ..utils.validation import validate_parameter, ensure_type
 
 if TYPE_CHECKING:
-    from ..services.base import ServiceManager
+    from ..nats_client import NatsClient
 
 
 class Queue:
-    """Represents a job queue backed by a NATS JetStream stream."""
+    
+    """
+    Represents a job queue backed by a NATS JetStream stream.
+
+    This class provides a high-level interface for interacting with job queues.
+    It uses the unified NatsClient for all NATS operations, replacing the previous
+    service layer approach. The Queue class supports both synchronous and
+    asynchronous operations for job submission, retrieval, and management.
+
+    Key features:
+    - Job submission with various options (delay, retry, timeout)
+    - Job retrieval and status tracking
+    - Scheduled job management
+    - Integration with the new configuration system
+
+    Examples:
+        >>> # Create a queue with default settings
+        >>> queue = Queue()
+        >>> 
+        >>> # Submit a job
+        >>> job = await queue.submit(my_function, arg1, arg2)
+        >>> 
+        >>> # Create a queue with a custom name
+        >>> queue = Queue(name="my_custom_queue")
+        >>> 
+        >>> # Use with a custom NatsClient
+        >>> client = NatsClient()
+        >>> queue = Queue(nats_client=client)
+    """
 
     # Add regex for valid queue names (alphanumeric, underscore, hyphen)
     _VALID_QUEUE_NAME = re.compile(r"^[a-zA-Z0-9_.-]+$")
@@ -46,8 +65,6 @@ class Queue:
         nats_url: str = DEFAULT_NATS_URL,
         default_timeout: Optional[int] = None,
         prefer_thread_local: bool = False,
-        service_manager: Optional["ServiceManager"] = None,
-        config: Optional[GlobalServiceConfig] = None,
     ):
         """
         Initialize a Queue instance.
@@ -58,9 +75,6 @@ class Queue:
             nats_url: Optional NATS server URL override
             default_timeout: Optional default job timeout in seconds
             prefer_thread_local: When True, reuse a thread-local connection/JS context.
-            service_manager: Optional ServiceManager instance for managing services.
-                           If not provided, services will be created directly.
-            config: Optional GlobalServiceConfig for connection configuration.
 
         Raises:
             ValueError: If queue name is empty or contains invalid characters
@@ -77,15 +91,9 @@ class Queue:
         self._nats_url = nats_url
         self._default_timeout = default_timeout
         self._prefer_thread_local = prefer_thread_local
-        self._service_manager = service_manager
-        self._connection_service: Optional[ConnectionService] = None
-        self._stream_service: Optional[StreamService] = None
-        self._job_service: Optional[JobService] = None
-        self._event_service: Optional[EventService] = None
-        self._kv_store_service: Optional[KVStoreService] = None
-        self._config = config or create_global_config()
+        self._client: Optional["NatsClient"] = None
         self._scheduled_job_manager = ScheduledJobManager(
-            name, nats_url, service_manager=self._service_manager, config=self._config
+            name, nats_url
         )
 
         setup_logging()  # Ensure logging is set up
@@ -142,67 +150,27 @@ class Queue:
             raise ValueError("timeout must be non-negative")
 
     @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError, TimeoutError))
-    async def _ensure_services(self) -> None:
-        """Ensure that all required services are available."""
+    async def _ensure_client(self) -> None:
+        """Ensure that the NATS client is available."""
         structured_logger = StructuredLogger("naq.queue.core")
 
         with structured_logger.operation_context(
-            "ensure_services",
+            "ensure_client",
             queue_name=self.name,
-            has_service_manager=self._service_manager is not None,
         ):
             try:
-                if not self._service_manager:
-                    raise RuntimeError(
-                        "ServiceManager is required for Queue operations."
+                if self._client is None:
+                    logger.debug("Creating NATS client")
+                    self._client = NatsClient(
+                        nats_url=self._nats_url,
+                        prefer_thread_local=self._prefer_thread_local,
                     )
-
-                # DEBUG LOG: Log available services before requesting
-                available_services = self._service_manager.get_service_names()
-                logger.debug(
-                    "Available services in ServiceManager",
-                    available_services=available_services,
-                )
-                logger.debug(
-                    "Service manager details",
-                    service_manager=repr(self._service_manager),
-                    service_count=len(available_services),
-                )
-
-                if self._connection_service is None:
-                    logger.debug("Attempting to get 'connection' service")
-                    self._connection_service = await self._service_manager.get_service(
-                        "connection", ConnectionService
-                    )
-                    logger.debug("Successfully got 'connection' service")
-                if self._stream_service is None:
-                    logger.debug("Attempting to get 'stream' service")
-                    self._stream_service = await self._service_manager.get_service(
-                        "stream", StreamService
-                    )
-                    logger.debug("Successfully got 'stream' service")
-                if self._job_service is None:
-                    logger.debug("Attempting to get 'job' service")
-                    logger.debug(
-                        "Available services before job request",
-                        available_services=self._service_manager.get_service_names(),
-                    )
-                    self._job_service = await self._service_manager.get_service(
-                        "job", JobService
-                    )
-                    logger.debug("Successfully got 'job' service")
-                if self._event_service is None:
-                    self._event_service = await self._service_manager.get_service(
-                        "event", EventService
-                    )
-                if self._kv_store_service is None:
-                    self._kv_store_service = await self._service_manager.get_service(
-                        "kv_store", KVStoreService
-                    )
+                    await self._client.connect()
+                    logger.debug("Successfully created NATS client")
             except Exception as e:
                 error_handler = ErrorHandler()
                 wrapped_error = wrap_naq_exception(
-                    e, context="ensure_services operation"
+                    e, context="ensure_client operation"
                 )
                 error_handler.handle_error(
                     wrapped_error, context={"queue_name": self.name}

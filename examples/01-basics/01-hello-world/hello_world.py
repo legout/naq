@@ -19,7 +19,9 @@ import time
 from typing import Any
 
 # Import NAQ components
-from naq import enqueue_sync, setup_logging
+from naq import SyncClient, setup_logging
+from naq.nats_client import NatsClientConfig
+from naq.settings import QueueConfig
 
 # Configure secure JSON serialization (recommended for production)
 os.environ.setdefault('NAQ_JOB_SERIALIZER', 'json')
@@ -79,34 +81,37 @@ def main():
     print("=" * 40)
     
     try:
-        # Example 1: Basic greeting job
-        print("📤 Enqueueing greeting job...")
-        greeting_job = enqueue_sync(
-            say_hello,
-            name="Alice",
-            queue_name="default"  # Using the default queue
+        # Create configuration
+        nats_config = NatsClientConfig(
+            nats_url="nats://localhost:4222",
+            connection_timeout=5,
+            max_reconnect_attempts=3
         )
-        print(f"✅ Enqueued greeting job: {greeting_job.job_id}")
         
-        # Example 2: Calculation job with multiple arguments
-        print("\n📤 Enqueueing calculation job...")
-        calc_job = enqueue_sync(
-            calculate_sum,
-            a=15,
-            b=27,
-            queue_name="default"
+        queue_config = QueueConfig(
+            default_name="default"
         )
-        print(f"✅ Enqueued calculation job: {calc_job.job_id}")
         
-        # Example 3: Multiple jobs for demonstration
-        print("\n📤 Enqueueing multiple greeting jobs...")
-        names = ["Bob", "Charlie", "Diana"]
-        jobs = []
-        
-        for name in names:
-            job = enqueue_sync(say_hello, name=name, queue_name="default")
-            jobs.append(job)
-            print(f"✅ Enqueued job for {name}: {job.job_id}")
+        with SyncClient(nats_url=nats_config.nats_url) as client:
+            # Example 1: Basic greeting job
+            print("📤 Enqueueing greeting job...")
+            greeting_job = client.enqueue(say_hello, name="Alice")
+            print(f"✅ Enqueued greeting job: {greeting_job.job_id}")
+            
+            # Example 2: Calculation job with multiple arguments
+            print("\n📤 Enqueueing calculation job...")
+            calc_job = client.enqueue(calculate_sum, a=15, b=27)
+            print(f"✅ Enqueued calculation job: {calc_job.job_id}")
+            
+            # Example 3: Multiple jobs for demonstration
+            print("\n📤 Enqueueing multiple greeting jobs...")
+            names = ["Bob", "Charlie", "Diana"]
+            jobs = []
+            
+            for name in names:
+                job = client.enqueue(say_hello, name=name)
+                jobs.append(job)
+                print(f"✅ Enqueued job for {name}: {job.job_id}")
         
         print(f"\n🎉 Successfully enqueued {len(jobs) + 2} jobs!")
         print("\n💡 Check your worker terminal to see the jobs being processed")

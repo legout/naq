@@ -20,16 +20,28 @@ import time
 import random
 from typing import List, Dict, Any, Optional
 
-from naq import SyncClient, setup_logging
+import msgspec
+from loguru import logger
+from naq import NatsClient
+from naq.config import NatsConfig, QueueConfig
 
 # Configure secure JSON serialization
 os.environ.setdefault('NAQ_JOB_SERIALIZER', 'json')
 
 # Setup logging
-setup_logging(level="INFO")
+logger.add(level="INFO")
 
 
-def extract_data_source(source_name: str, source_type: str) -> Dict[str, Any]:
+class ExtractResult(msgspec.Struct):
+    """Result of data extraction operation."""
+    source_name: str
+    source_type: str
+    records_extracted: int
+    extracted_at: float
+    status: str
+
+
+def extract_data_source(source_name: str, source_type: str) -> ExtractResult:
     """
     Extract data from various sources.
     
@@ -39,8 +51,11 @@ def extract_data_source(source_name: str, source_type: str) -> Dict[str, Any]:
         
     Returns:
         Extracted data metadata
+        
+    Raises:
+        ConnectionError: If connection to data source fails
     """
-    print(f"📥 Extracting data from {source_type}: {source_name}")
+    logger.info(f"Extracting data from {source_type}: {source_name}")
     
     # Simulate extraction time based on source type
     extraction_times = {"database": 3, "api": 2, "file": 1}
@@ -50,19 +65,29 @@ def extract_data_source(source_name: str, source_type: str) -> Dict[str, Any]:
     if random.random() < 0.1:  # 10% failure rate
         raise ConnectionError(f"Failed to connect to {source_name}")
     
-    result = {
-        "source_name": source_name,
-        "source_type": source_type,
-        "records_extracted": random.randint(1000, 10000),
-        "extracted_at": time.time(),
-        "status": "success"
-    }
+    result = ExtractResult(
+        source_name=source_name,
+        source_type=source_type,
+        records_extracted=random.randint(1000, 10000),
+        extracted_at=time.time(),
+        status="success"
+    )
     
-    print(f"✅ Extracted {result['records_extracted']} records from {source_name}")
+    logger.info(f"Extracted {result.records_extracted} records from {source_name}")
     return result
 
 
-def transform_data(dataset_name: str, transformation_type: str, input_records: int) -> Dict[str, Any]:
+class TransformResult(msgspec.Struct):
+    """Result of data transformation operation."""
+    dataset_name: str
+    transformation_type: str
+    input_records: int
+    output_records: int
+    transformed_at: float
+    status: str
+
+
+def transform_data(dataset_name: str, transformation_type: str, input_records: int) -> TransformResult:
     """
     Transform extracted data.
     
@@ -74,26 +99,36 @@ def transform_data(dataset_name: str, transformation_type: str, input_records: i
     Returns:
         Transformation results
     """
-    print(f"🔄 Transforming {dataset_name} with {transformation_type}")
+    logger.info(f"Transforming {dataset_name} with {transformation_type}")
     
     # Simulate transformation time based on data size
     processing_time = input_records / 2000  # 2000 records per second
     time.sleep(min(processing_time, 5))  # Cap at 5 seconds for demo
     
-    result = {
-        "dataset_name": dataset_name,
-        "transformation_type": transformation_type,
-        "input_records": input_records,
-        "output_records": int(input_records * 0.95),  # Some data is filtered
-        "transformed_at": time.time(),
-        "status": "success"
-    }
+    result = TransformResult(
+        dataset_name=dataset_name,
+        transformation_type=transformation_type,
+        input_records=input_records,
+        output_records=int(input_records * 0.95),  # Some data is filtered
+        transformed_at=time.time(),
+        status="success"
+    )
     
-    print(f"✅ Transformed {dataset_name}: {result['input_records']} → {result['output_records']} records")
+    logger.info(f"Transformed {dataset_name}: {result.input_records} → {result.output_records} records")
     return result
 
 
-def validate_data_quality(dataset_name: str, expected_records: int) -> Dict[str, Any]:
+class ValidationResult(msgspec.Struct):
+    """Result of data validation operation."""
+    dataset_name: str
+    expected_records: int
+    actual_records: int
+    quality_score: float
+    validated_at: float
+    status: str
+
+
+def validate_data_quality(dataset_name: str, expected_records: int) -> ValidationResult:
     """
     Validate data quality and completeness.
     
@@ -104,7 +139,7 @@ def validate_data_quality(dataset_name: str, expected_records: int) -> Dict[str,
     Returns:
         Validation results
     """
-    print(f"🔍 Validating data quality for {dataset_name}")
+    logger.info(f"Validating data quality for {dataset_name}")
     
     # Simulate validation time
     time.sleep(1)
@@ -113,20 +148,29 @@ def validate_data_quality(dataset_name: str, expected_records: int) -> Dict[str,
     actual_records = expected_records + random.randint(-100, 100)
     quality_score = random.uniform(0.85, 1.0)
     
-    result = {
-        "dataset_name": dataset_name,
-        "expected_records": expected_records,
-        "actual_records": actual_records,
-        "quality_score": quality_score,
-        "validated_at": time.time(),
-        "status": "passed" if quality_score > 0.9 else "warning"
-    }
+    result = ValidationResult(
+        dataset_name=dataset_name,
+        expected_records=expected_records,
+        actual_records=actual_records,
+        quality_score=quality_score,
+        validated_at=time.time(),
+        status="passed" if quality_score > 0.9 else "warning"
+    )
     
-    print(f"✅ Validation complete: {dataset_name} (quality: {quality_score:.2f})")
+    logger.info(f"Validation complete: {dataset_name} (quality: {quality_score:.2f})")
     return result
 
 
-def load_to_warehouse(datasets: List[str], target_table: str) -> Dict[str, Any]:
+class LoadResult(msgspec.Struct):
+    """Result of data loading operation."""
+    target_table: str
+    datasets_loaded: List[str]
+    total_records: int
+    loaded_at: float
+    status: str
+
+
+def load_to_warehouse(datasets: List[str], target_table: str) -> LoadResult:
     """
     Load transformed data to data warehouse.
     
@@ -137,22 +181,22 @@ def load_to_warehouse(datasets: List[str], target_table: str) -> Dict[str, Any]:
     Returns:
         Load results
     """
-    print(f"📊 Loading {len(datasets)} datasets to warehouse table: {target_table}")
+    logger.info(f"Loading {len(datasets)} datasets to warehouse table: {target_table}")
     
     # Simulate loading time
     time.sleep(3)
     
     total_records = sum(random.randint(1000, 5000) for _ in datasets)
     
-    result = {
-        "target_table": target_table,
-        "datasets_loaded": datasets,
-        "total_records": total_records,
-        "loaded_at": time.time(),
-        "status": "success"
-    }
+    result = LoadResult(
+        target_table=target_table,
+        datasets_loaded=datasets,
+        total_records=total_records,
+        loaded_at=time.time(),
+        status="success"
+    )
     
-    print(f"✅ Loaded {total_records} records to {target_table}")
+    logger.info(f"Loaded {total_records} records to {target_table}")
     return result
 
 
@@ -272,18 +316,39 @@ def send_notification(recipients: List[str], subject: str, workflow_name: str) -
     return f"Notification sent for {workflow_name}"
 
 
-def create_etl_pipeline():
+def create_etl_pipeline() -> List[Any]:
     """
     Create a complex ETL (Extract, Transform, Load) pipeline.
-    """
-    print("📍 ETL Pipeline Workflow")
-    print("-" * 40)
     
-    with SyncClient() as client:
+    Returns:
+        List of created jobs
+    """
+    logger.info("ETL Pipeline Workflow")
+    
+    # Create configuration for pipeline queue
+    nats_config = NatsConfig(
+        servers=["nats://localhost:4222"],
+        connect_timeout=5,
+        max_reconnect_attempts=3
+    )
+    
+    pipeline_queue_config = QueueConfig(
+        name="pipeline_queue",
+        stream_name="NAQ_JOBS",
+        consumer_name="complex_workflows_consumer"
+    )
+    
+    workflow_queue_config = QueueConfig(
+        name="workflow_queue",
+        stream_name="NAQ_JOBS",
+        consumer_name="complex_workflows_consumer"
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=pipeline_queue_config) as client:
         jobs = []
         
         # Stage 1: Extract data from multiple sources
-        print("📤 Stage 1: Data Extraction (Parallel)")
+        logger.info("Stage 1: Data Extraction (Parallel)")
         sources = [
             ("user_database", "database"),
             ("sales_api", "api"),
@@ -297,17 +362,16 @@ def create_etl_pipeline():
                 extract_data_source,
                 source_name=source_name,
                 source_type=source_type,
-                queue_name="pipeline_queue",
                 max_retries=3,
                 retry_delay=5,
                 retry_on=(ConnectionError,)
             )
             extract_jobs.append(job)
             jobs.append(job)
-            print(f"  ✅ Extract {source_name}: {job.job_id}")
+            logger.info(f"Extract {source_name}: {job.job_id}")
         
         # Stage 2: Transform data (depends on extraction)
-        print("\n📤 Stage 2: Data Transformation (Parallel after extraction)")
+        logger.info("Stage 2: Data Transformation (Parallel after extraction)")
         transform_jobs = []
         transformations = [
             ("user_data", "normalization"),
@@ -322,93 +386,112 @@ def create_etl_pipeline():
                 dataset_name=dataset_name,
                 transformation_type=transform_type,
                 input_records=5000,  # Default for demo
-                queue_name="pipeline_queue",
                 depends_on=[extract_jobs[i]]  # Each transform depends on its extract job
             )
             transform_jobs.append(job)
             jobs.append(job)
-            print(f"  ✅ Transform {dataset_name}: {job.job_id}")
+            logger.info(f"Transform {dataset_name}: {job.job_id}")
         
         # Stage 3: Validate data quality (depends on transformation)
-        print("\n📤 Stage 3: Data Quality Validation")
+        logger.info("Stage 3: Data Quality Validation")
         validate_jobs = []
         for i, (dataset_name, _) in enumerate(transformations):
             job = client.enqueue(
                 validate_data_quality,
                 dataset_name=dataset_name,
                 expected_records=4750,  # After 5% filtering
-                queue_name="pipeline_queue",
                 depends_on=[transform_jobs[i]]
             )
             validate_jobs.append(job)
             jobs.append(job)
-            print(f"  ✅ Validate {dataset_name}: {job.job_id}")
+            logger.info(f"Validate {dataset_name}: {job.job_id}")
         
         # Stage 4: Load to warehouse (depends on all validations)
-        print("\n📤 Stage 4: Load to Data Warehouse")
+        logger.info("Stage 4: Load to Data Warehouse")
         load_job = client.enqueue(
             load_to_warehouse,
             datasets=[name for name, _ in transformations],
             target_table="main_warehouse",
-            queue_name="pipeline_queue",
             depends_on=validate_jobs
         )
         jobs.append(load_job)
-        print(f"  ✅ Load to warehouse: {load_job.job_id}")
+        logger.info(f"Load to warehouse: {load_job.job_id}")
         
         # Stage 5: Send completion notification
-        print("\n📤 Stage 5: Pipeline Completion Notification")
+        logger.info("Stage 5: Pipeline Completion Notification")
+        # Switch to workflow queue for notification
+        client.queue_config = workflow_queue_config
         notification_job = client.enqueue(
             send_notification,
             recipients=["admin@company.com", "data-team@company.com"],
             subject="ETL Pipeline Completed",
             workflow_name="Daily ETL Pipeline",
-            queue_name="workflow_queue",
             depends_on=[load_job],
             run_after_failure=True  # Send notification even if load fails
         )
+        # Switch back to pipeline queue
+        client.queue_config = pipeline_queue_config
         jobs.append(notification_job)
-        print(f"  ✅ Notification job: {notification_job.job_id}")
+        logger.info(f"Notification job: {notification_job.job_id}")
         
         return jobs
 
 
-def create_ml_training_pipeline():
+def create_ml_training_pipeline() -> List[Any]:
     """
     Create a machine learning training and deployment pipeline.
-    """
-    print("\n📍 ML Training Pipeline Workflow")
-    print("-" * 40)
     
-    with SyncClient() as client:
+    Returns:
+        List of created jobs
+    """
+    logger.info("ML Training Pipeline Workflow")
+    
+    # Create configuration for pipeline queue
+    nats_config = NatsConfig(
+        servers=["nats://localhost:4222"],
+        connect_timeout=5,
+        max_reconnect_attempts=3
+    )
+    
+    pipeline_queue_config = QueueConfig(
+        name="pipeline_queue",
+        stream_name="NAQ_JOBS",
+        consumer_name="complex_workflows_consumer"
+    )
+    
+    workflow_queue_config = QueueConfig(
+        name="workflow_queue",
+        stream_name="NAQ_JOBS",
+        consumer_name="complex_workflows_consumer"
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=pipeline_queue_config) as client:
         jobs = []
         
         # Stage 1: Prepare training data
-        print("📤 Stage 1: Data Preparation")
+        logger.info("Stage 1: Data Preparation")
         data_prep_job = client.enqueue(
             extract_data_source,
             source_name="ml_training_data",
-            source_type="database",
-            queue_name="pipeline_queue"
+            source_type="database"
         )
         jobs.append(data_prep_job)
-        print(f"  ✅ Data preparation: {data_prep_job.job_id}")
+        logger.info(f"Data preparation: {data_prep_job.job_id}")
         
         # Stage 2: Feature engineering
-        print("\n📤 Stage 2: Feature Engineering")
+        logger.info("Stage 2: Feature Engineering")
         feature_job = client.enqueue(
             transform_data,
             dataset_name="ml_features",
             transformation_type="feature_engineering",
             input_records=10000,
-            queue_name="pipeline_queue",
             depends_on=[data_prep_job]
         )
         jobs.append(feature_job)
-        print(f"  ✅ Feature engineering: {feature_job.job_id}")
+        logger.info(f"Feature engineering: {feature_job.job_id}")
         
         # Stage 3: Train multiple models in parallel
-        print("\n📤 Stage 3: Model Training (Parallel)")
+        logger.info("Stage 3: Model Training (Parallel)")
         algorithms = ["random_forest", "gradient_boosting", "neural_network"]
         training_jobs = []
         
@@ -418,15 +501,14 @@ def create_ml_training_pipeline():
                 model_name=f"model_{algorithm}",
                 dataset_size=10000,
                 algorithm=algorithm,
-                queue_name="pipeline_queue",
                 depends_on=[feature_job]
             )
             training_jobs.append(job)
             jobs.append(job)
-            print(f"  ✅ Train {algorithm}: {job.job_id}")
+            logger.info(f"Train {algorithm}: {job.job_id}")
         
         # Stage 4: Evaluate all models
-        print("\n📤 Stage 4: Model Evaluation")
+        logger.info("Stage 4: Model Evaluation")
         evaluation_jobs = []
         
         for i, algorithm in enumerate(algorithms):
@@ -434,37 +516,38 @@ def create_ml_training_pipeline():
                 evaluate_model,
                 model_name=f"model_{algorithm}",
                 test_dataset_size=2000,
-                queue_name="pipeline_queue",
                 depends_on=[training_jobs[i]]
             )
             evaluation_jobs.append(job)
             jobs.append(job)
-            print(f"  ✅ Evaluate {algorithm}: {job.job_id}")
+            logger.info(f"Evaluate {algorithm}: {job.job_id}")
         
         # Stage 5: Deploy best model (depends on all evaluations)
-        print("\n📤 Stage 5: Model Deployment")
+        logger.info("Stage 5: Model Deployment")
         deployment_job = client.enqueue(
             deploy_model,
             model_name="best_model",  # Would be selected based on evaluation
             environment="production",
-            queue_name="pipeline_queue",
             depends_on=evaluation_jobs
         )
         jobs.append(deployment_job)
-        print(f"  ✅ Deploy model: {deployment_job.job_id}")
+        logger.info(f"Deploy model: {deployment_job.job_id}")
         
         # Stage 6: Send deployment notification
-        print("\n📤 Stage 6: Deployment Notification")
+        logger.info("Stage 6: Deployment Notification")
+        # Switch to workflow queue for notification
+        client.queue_config = workflow_queue_config
         notification_job = client.enqueue(
             send_notification,
             recipients=["ml-team@company.com", "devops@company.com"],
             subject="ML Model Deployed",
             workflow_name="ML Training Pipeline",
-            queue_name="workflow_queue",
             depends_on=[deployment_job]
         )
+        # Switch back to pipeline queue
+        client.queue_config = pipeline_queue_config
         jobs.append(notification_job)
-        print(f"  ✅ Notification job: {notification_job.job_id}")
+        logger.info(f"Notification job: {notification_job.job_id}")
         
         return jobs
 
@@ -476,7 +559,7 @@ def create_conditional_workflow():
     print("\n📍 Conditional Workflow")
     print("-" * 40)
     
-    with SyncClient() as client:
+    with NatsClient(nats_config=nats_config, queue_config=workflow_queue_config) as client:
         jobs = []
         
         # Stage 1: Initial data validation
@@ -484,8 +567,7 @@ def create_conditional_workflow():
         validation_job = client.enqueue(
             validate_data_quality,
             dataset_name="input_data",
-            expected_records=10000,
-            queue_name="workflow_queue"
+            expected_records=10000
         )
         jobs.append(validation_job)
         print(f"  ✅ Data validation: {validation_job.job_id}")
@@ -497,7 +579,6 @@ def create_conditional_workflow():
             dataset_name="input_data",
             transformation_type="full_processing",
             input_records=10000,
-            queue_name="workflow_queue",
             depends_on=[validation_job]
         )
         jobs.append(success_processing)
@@ -510,7 +591,6 @@ def create_conditional_workflow():
             dataset_name="input_data",
             transformation_type="error_recovery",
             input_records=10000,
-            queue_name="workflow_queue",
             depends_on=[validation_job],
             run_after_failure=True  # Run if validation fails
         )
@@ -524,7 +604,6 @@ def create_conditional_workflow():
             recipients=["data-team@company.com"],
             subject="Conditional Workflow Completed",
             workflow_name="Conditional Processing",
-            queue_name="workflow_queue",
             depends_on=[success_processing, failure_handling],
             run_after_failure=True
         )

@@ -21,16 +21,28 @@ import time
 from datetime import datetime, timedelta
 from typing import Dict, Any
 
-from naq import SyncClient, setup_logging
+import msgspec
+from loguru import logger
+from naq import NatsClient
+from naq.config import NatsConfig, QueueConfig
 
 # Configure secure JSON serialization
 os.environ.setdefault('NAQ_JOB_SERIALIZER', 'json')
 
 # Setup logging
-setup_logging(level="INFO")
+logger.add(level="INFO")
 
 
-def simple_task(task_name: str, message: str) -> Dict[str, Any]:
+class TaskResult(msgspec.Struct):
+    """Result of task execution."""
+    task_name: str
+    message: str
+    executed_at: str
+    execution_time: float
+    status: str
+
+
+def simple_task(task_name: str, message: str) -> TaskResult:
     """
     A simple task for scheduling demonstrations.
     
@@ -41,25 +53,34 @@ def simple_task(task_name: str, message: str) -> Dict[str, Any]:
     Returns:
         Task execution results
     """
-    print(f"🎯 Executing scheduled task: {task_name}")
-    print(f"📝 Message: {message}")
+    logger.info(f"Executing scheduled task: {task_name}")
+    logger.info(f"Message: {message}")
     
     # Simulate some work
     time.sleep(1)
     
-    result = {
-        "task_name": task_name,
-        "message": message,
-        "executed_at": datetime.now().isoformat(),
-        "execution_time": 1.0,
-        "status": "completed"
-    }
+    result = TaskResult(
+        task_name=task_name,
+        message=message,
+        executed_at=datetime.now().isoformat(),
+        execution_time=1.0,
+        status="completed"
+    )
     
-    print(f"✅ Task {task_name} completed successfully")
+    logger.info(f"Task {task_name} completed successfully")
     return result
 
 
-def daily_report_task(report_type: str, date: str) -> Dict[str, Any]:
+class ReportResult(msgspec.Struct):
+    """Result of report generation task."""
+    report_type: str
+    date: str
+    generated_at: str
+    pages: int
+    status: str
+
+
+def daily_report_task(report_type: str, date: str) -> ReportResult:
     """
     Simulate a daily report generation task.
     
@@ -70,24 +91,32 @@ def daily_report_task(report_type: str, date: str) -> Dict[str, Any]:
     Returns:
         Report generation results
     """
-    print(f"📊 Generating {report_type} report for {date}")
+    logger.info(f"Generating {report_type} report for {date}")
     
     # Simulate report generation
     time.sleep(2)
     
-    result = {
-        "report_type": report_type,
-        "date": date,
-        "generated_at": datetime.now().isoformat(),
-        "pages": 25,
-        "status": "completed"
-    }
+    result = ReportResult(
+        report_type=report_type,
+        date=date,
+        generated_at=datetime.now().isoformat(),
+        pages=25,
+        status="completed"
+    )
     
-    print(f"✅ {report_type} report generated ({result['pages']} pages)")
+    logger.info(f"{report_type} report generated ({result.pages} pages)")
     return result
 
 
-def system_maintenance_task(maintenance_type: str, duration_minutes: int) -> Dict[str, Any]:
+class MaintenanceResult(msgspec.Struct):
+    """Result of system maintenance task."""
+    maintenance_type: str
+    duration_minutes: int
+    started_at: str
+    status: str
+
+
+def system_maintenance_task(maintenance_type: str, duration_minutes: int) -> MaintenanceResult:
     """
     Simulate a system maintenance task.
     
@@ -98,20 +127,20 @@ def system_maintenance_task(maintenance_type: str, duration_minutes: int) -> Dic
     Returns:
         Maintenance results
     """
-    print(f"🔧 Starting {maintenance_type} maintenance")
-    print(f"⏱️  Expected duration: {duration_minutes} minutes")
+    logger.info(f"Starting {maintenance_type} maintenance")
+    logger.info(f"Expected duration: {duration_minutes} minutes")
     
     # Simulate maintenance work
     time.sleep(min(duration_minutes * 0.1, 3))  # Scale down for demo
     
-    result = {
-        "maintenance_type": maintenance_type,
-        "duration_minutes": duration_minutes,
-        "started_at": datetime.now().isoformat(),
-        "status": "completed"
-    }
+    result = MaintenanceResult(
+        maintenance_type=maintenance_type,
+        duration_minutes=duration_minutes,
+        started_at=datetime.now().isoformat(),
+        status="completed"
+    )
     
-    print(f"✅ {maintenance_type} maintenance completed")
+    logger.info(f"{maintenance_type} maintenance completed")
     return result
 
 
@@ -127,215 +156,275 @@ def notification_task(recipient: str, notification_type: str, content: str) -> s
     Returns:
         Notification status
     """
-    print(f"📧 Sending {notification_type} notification to {recipient}")
-    print(f"💬 Content: {content}")
+    logger.info(f"Sending {notification_type} notification to {recipient}")
+    logger.info(f"Content: {content}")
     
     # Simulate notification sending
     time.sleep(0.5)
     
-    print(f"✅ Notification sent to {recipient}")
+    logger.info(f"Notification sent to {recipient}")
     return f"Notification sent to {recipient}"
 
 
-def demonstrate_one_time_scheduling():
+def demonstrate_one_time_scheduling() -> List[Any]:
     """
     Demonstrate one-time scheduled jobs.
-    """
-    print("📍 One-Time Scheduled Jobs Demo")
-    print("-" * 40)
     
-    with SyncClient() as client:
+    Returns:
+        List of created jobs
+    """
+    logger.info("One-Time Scheduled Jobs Demo")
+    
+    # Configure NATS client
+    nats_config = NatsConfig(
+        servers=["nats://localhost:4222"],
+        connect_timeout=5.0,
+        max_reconnect_attempts=3
+    )
+    
+    # Configure scheduled queue
+    queue_config = QueueConfig(
+        name="scheduled_queue",
+        job_timeout=30.0,
+        max_retries=2,
+        retry_delay=3.0
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=queue_config) as client:
         jobs = []
         
         # Schedule job to run in 30 seconds
-        print("📤 Scheduling job to run in 30 seconds:")
+        logger.info("Scheduling job to run in 30 seconds:")
         future_time = datetime.now() + timedelta(seconds=30)
         job1 = client.enqueue_at(
             simple_task,
             run_at=future_time,
             task_name="delayed_task",
-            message="This job was scheduled 30 seconds ago",
-            queue_name="scheduled_queue"
+            message="This job was scheduled 30 seconds ago"
         )
         jobs.append(job1)
-        print(f"  ✅ Job scheduled for {future_time.strftime('%H:%M:%S')}: {job1.job_id}")
+        logger.info(f"Job scheduled for {future_time.strftime('%H:%M:%S')}: {job1.job_id}")
         
         # Schedule job to run in 1 minute using enqueue_in
-        print("\n📤 Scheduling job to run in 1 minute:")
+        logger.info("Scheduling job to run in 1 minute:")
         job2 = client.enqueue_in(
             simple_task,
             delay=timedelta(minutes=1),
             task_name="reminder_task",
-            message="This is your 1-minute reminder",
-            queue_name="scheduled_queue"
+            message="This is your 1-minute reminder"
         )
         jobs.append(job2)
         scheduled_time = datetime.now() + timedelta(minutes=1)
-        print(f"  ✅ Job scheduled for {scheduled_time.strftime('%H:%M:%S')}: {job2.job_id}")
+        logger.info(f"Job scheduled for {scheduled_time.strftime('%H:%M:%S')}: {job2.job_id}")
         
         # Schedule job to run in 2 minutes
-        print("\n📤 Scheduling job to run in 2 minutes:")
+        logger.info("Scheduling job to run in 2 minutes:")
         job3 = client.enqueue_in(
             notification_task,
             delay=timedelta(minutes=2),
             recipient="admin@example.com",
             notification_type="system_alert",
-            content="Scheduled notification test completed",
-            queue_name="scheduled_queue"
+            content="Scheduled notification test completed"
         )
         jobs.append(job3)
         scheduled_time = datetime.now() + timedelta(minutes=2)
-        print(f"  ✅ Notification scheduled for {scheduled_time.strftime('%H:%M:%S')}: {job3.job_id}")
+        logger.info(f"Notification scheduled for {scheduled_time.strftime('%H:%M:%S')}: {job3.job_id}")
         
         return jobs
 
 
-def demonstrate_recurring_jobs():
+def demonstrate_recurring_jobs() -> List[Any]:
     """
     Demonstrate recurring jobs with cron expressions.
-    """
-    print("\n📍 Recurring Jobs Demo")
-    print("-" * 40)
     
-    with SyncClient() as client:
+    Returns:
+        List of created schedules
+    """
+    logger.info("Recurring Jobs Demo")
+    
+    # Configure NATS client
+    nats_config = NatsConfig(
+        servers=["nats://localhost:4222"],
+        connect_timeout=5.0,
+        max_reconnect_attempts=3
+    )
+    
+    # Configure scheduled queue
+    queue_config = QueueConfig(
+        name="scheduled_queue",
+        job_timeout=30.0,
+        max_retries=2,
+        retry_delay=3.0
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=queue_config) as client:
         schedules = []
         
         # Schedule daily report at 9 AM
-        print("📤 Scheduling daily report (9 AM every day):")
+        logger.info("Scheduling daily report (9 AM every day):")
         schedule1 = client.schedule(
             daily_report_task,
             cron="0 9 * * *",  # Daily at 9 AM
             report_type="daily_summary",
             date=datetime.now().strftime("%Y-%m-%d"),
-            schedule_id="daily-report",
-            queue_name="scheduled_queue"
+            schedule_id="daily-report"
         )
         schedules.append(schedule1)
-        print(f"  ✅ Daily report scheduled: {schedule1.schedule_id}")
-        print(f"  📅 Cron: 0 9 * * * (daily at 9 AM)")
+        logger.info(f"Daily report scheduled: {schedule1.schedule_id}")
+        logger.info(f"Cron: 0 9 * * * (daily at 9 AM)")
         
         # Schedule system maintenance every Sunday at 3 AM
-        print("\n📤 Scheduling weekly maintenance (Sunday 3 AM):")
+        logger.info("Scheduling weekly maintenance (Sunday 3 AM):")
         schedule2 = client.schedule(
             system_maintenance_task,
             cron="0 3 * * 0",  # Sunday at 3 AM
             maintenance_type="database_cleanup",
             duration_minutes=30,
-            schedule_id="weekly-maintenance",
-            queue_name="scheduled_queue"
+            schedule_id="weekly-maintenance"
         )
         schedules.append(schedule2)
-        print(f"  ✅ Weekly maintenance scheduled: {schedule2.schedule_id}")
-        print(f"  📅 Cron: 0 3 * * 0 (Sunday at 3 AM)")
+        logger.info(f"Weekly maintenance scheduled: {schedule2.schedule_id}")
+        logger.info(f"Cron: 0 3 * * 0 (Sunday at 3 AM)")
         
         # Schedule health check every 5 minutes
-        print("\n📤 Scheduling frequent health check (every 5 minutes):")
+        logger.info("Scheduling frequent health check (every 5 minutes):")
         schedule3 = client.schedule(
             simple_task,
             cron="*/5 * * * *",  # Every 5 minutes
             task_name="health_check",
             message="System health check",
-            schedule_id="health-check",
-            queue_name="scheduled_queue"
+            schedule_id="health-check"
         )
         schedules.append(schedule3)
-        print(f"  ✅ Health check scheduled: {schedule3.schedule_id}")
-        print(f"  📅 Cron: */5 * * * * (every 5 minutes)")
+        logger.info(f"Health check scheduled: {schedule3.schedule_id}")
+        logger.info(f"Cron: */5 * * * * (every 5 minutes)")
         
         # Schedule business hours notification (weekdays 9 AM - 5 PM)
-        print("\n📤 Scheduling business hours notification (weekdays 9-5):")
+        logger.info("Scheduling business hours notification (weekdays 9-5):")
         schedule4 = client.schedule(
             notification_task,
             cron="0 9-17 * * 1-5",  # Weekdays, 9 AM to 5 PM
             recipient="team@company.com",
             notification_type="business_hours",
             content="Business hours reminder",
-            schedule_id="business-hours",
-            queue_name="scheduled_queue"
+            schedule_id="business-hours"
         )
         schedules.append(schedule4)
-        print(f"  ✅ Business hours notification scheduled: {schedule4.schedule_id}")
-        print(f"  📅 Cron: 0 9-17 * * 1-5 (weekdays 9 AM - 5 PM)")
+        logger.info(f"Business hours notification scheduled: {schedule4.schedule_id}")
+        logger.info(f"Cron: 0 9-17 * * 1-5 (weekdays 9 AM - 5 PM)")
         
         return schedules
 
 
-def demonstrate_schedule_management():
+def demonstrate_schedule_management() -> Any:
     """
     Demonstrate schedule management operations.
-    """
-    print("\n📍 Schedule Management Demo")
-    print("-" * 40)
     
-    with SyncClient() as client:
+    Returns:
+        Created test schedule
+    """
+    logger.info("Schedule Management Demo")
+    
+    # Configure NATS client
+    nats_config = NatsConfig(
+        servers=["nats://localhost:4222"],
+        connect_timeout=5.0,
+        max_reconnect_attempts=3
+    )
+    
+    # Configure scheduled queue
+    queue_config = QueueConfig(
+        name="scheduled_queue",
+        job_timeout=30.0,
+        max_retries=2,
+        retry_delay=3.0
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=queue_config) as client:
         # Create a test schedule
-        print("📤 Creating test schedule:")
+        logger.info("Creating test schedule:")
         test_schedule = client.schedule(
             simple_task,
             cron="*/2 * * * *",  # Every 2 minutes
             task_name="test_schedule",
             message="This is a test schedule",
-            schedule_id="test-schedule",
-            queue_name="scheduled_queue"
+            schedule_id="test-schedule"
         )
-        print(f"  ✅ Test schedule created: {test_schedule.schedule_id}")
+        logger.info(f"Test schedule created: {test_schedule.schedule_id}")
         
         # List all schedules
-        print("\n📋 Listing all schedules:")
+        logger.info("Listing all schedules:")
         try:
             schedules = client.list_schedules()
             for schedule in schedules:
-                print(f"  📅 {schedule['id']}: {schedule['cron']} (enabled: {schedule['enabled']})")
+                logger.info(f"{schedule['id']}: {schedule['cron']} (enabled: {schedule['enabled']})")
         except Exception as e:
-            print(f"  ℹ️  Schedule listing not available in this demo: {e}")
+            logger.info(f"Schedule listing not available in this demo: {e}")
         
         # Get specific schedule details
-        print(f"\n🔍 Getting details for test schedule:")
+        logger.info(f"Getting details for test schedule:")
         try:
             schedule_details = client.get_schedule("test-schedule")
-            print(f"  📅 Schedule ID: {schedule_details['id']}")
-            print(f"  ⏰ Cron: {schedule_details['cron']}")
-            print(f"  ✅ Enabled: {schedule_details['enabled']}")
+            logger.info(f"Schedule ID: {schedule_details['id']}")
+            logger.info(f"Cron: {schedule_details['cron']}")
+            logger.info(f"Enabled: {schedule_details['enabled']}")
             if 'next_run' in schedule_details:
-                print(f"  ⏭️  Next run: {schedule_details['next_run']}")
+                logger.info(f"Next run: {schedule_details['next_run']}")
         except Exception as e:
-            print(f"  ℹ️  Schedule details not available in this demo: {e}")
+            logger.info(f"Schedule details not available in this demo: {e}")
         
         # Update schedule (change frequency)
-        print(f"\n📝 Updating test schedule (changing to every 3 minutes):")
+        logger.info(f"Updating test schedule (changing to every 3 minutes):")
         try:
             client.update_schedule("test-schedule", cron="*/3 * * * *")
-            print(f"  ✅ Schedule updated to run every 3 minutes")
+            logger.info(f"Schedule updated to run every 3 minutes")
         except Exception as e:
-            print(f"  ℹ️  Schedule update not available in this demo: {e}")
+            logger.info(f"Schedule update not available in this demo: {e}")
         
         # Disable schedule
-        print(f"\n⏸️  Disabling test schedule:")
+        logger.info(f"Disabling test schedule:")
         try:
             client.update_schedule("test-schedule", enabled=False)
-            print(f"  ✅ Schedule disabled")
+            logger.info(f"Schedule disabled")
         except Exception as e:
-            print(f"  ℹ️  Schedule disable not available in this demo: {e}")
+            logger.info(f"Schedule disable not available in this demo: {e}")
         
         # Re-enable schedule
-        print(f"\n▶️  Re-enabling test schedule:")
+        logger.info(f"Re-enabling test schedule:")
         try:
             client.update_schedule("test-schedule", enabled=True)
-            print(f"  ✅ Schedule re-enabled")
+            logger.info(f"Schedule re-enabled")
         except Exception as e:
-            print(f"  ℹ️  Schedule enable not available in this demo: {e}")
+            logger.info(f"Schedule enable not available in this demo: {e}")
         
         return test_schedule
 
 
-def demonstrate_timezone_scheduling():
+def demonstrate_timezone_scheduling() -> List[Any]:
     """
     Demonstrate timezone-aware scheduling.
-    """
-    print("\n📍 Timezone-Aware Scheduling Demo")
-    print("-" * 40)
     
-    with SyncClient() as client:
+    Returns:
+        List of created schedules
+    """
+    logger.info("Timezone-Aware Scheduling Demo")
+    
+    # Configure NATS client
+    nats_config = NatsConfig(
+        servers=["nats://localhost:4222"],
+        connect_timeout=5.0,
+        max_reconnect_attempts=3
+    )
+    
+    # Configure scheduled queue
+    queue_config = QueueConfig(
+        name="scheduled_queue",
+        job_timeout=30.0,
+        max_retries=2,
+        retry_delay=3.0
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=queue_config) as client:
         schedules = []
         
         # Schedule in different timezones
@@ -346,7 +435,7 @@ def demonstrate_timezone_scheduling():
             ("Asia/Tokyo", "Japan morning summary")
         ]
         
-        print("📤 Scheduling jobs in different timezones:")
+        logger.info("Scheduling jobs in different timezones:")
         for i, (timezone, description) in enumerate(timezones):
             try:
                 schedule = client.schedule(
@@ -355,37 +444,37 @@ def demonstrate_timezone_scheduling():
                     task_name=f"timezone_task_{i+1}",
                     message=description,
                     schedule_id=f"timezone-{timezone.lower().replace('/', '-')}",
-                    timezone=timezone,
-                    queue_name="scheduled_queue"
+                    timezone=timezone
                 )
                 schedules.append(schedule)
-                print(f"  ✅ {description}: {schedule.schedule_id} ({timezone})")
+                logger.info(f"{description}: {schedule.schedule_id} ({timezone})")
             except Exception as e:
-                print(f"  ℹ️  Timezone scheduling not available in this demo: {e}")
+                logger.info(f"Timezone scheduling not available in this demo: {e}")
                 # Create without timezone for demo
                 schedule = client.schedule(
                     simple_task,
                     cron="0 9 * * 1-5",
                     task_name=f"timezone_task_{i+1}",
                     message=description,
-                    schedule_id=f"timezone-{timezone.lower().replace('/', '-')}",
-                    queue_name="scheduled_queue"
+                    schedule_id=f"timezone-{timezone.lower().replace('/', '-')}"
                 )
                 schedules.append(schedule)
-                print(f"  ✅ {description}: {schedule.schedule_id} (default timezone)")
+                logger.info(f"{description}: {schedule.schedule_id} (default timezone)")
         
         return schedules
 
 
-def main():
+def main() -> int:
     """
     Main function demonstrating basic scheduling patterns.
+    
+    Returns:
+        Exit code (0 for success, 1 for failure)
     """
-    print("🚀 NAQ Basic Job Scheduling Demo")
-    print("=" * 50)
+    logger.info("NAQ Basic Job Scheduling Demo")
     
     current_time = datetime.now()
-    print(f"🕐 Current time: {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"Current time: {current_time.strftime('%Y-%m-%d %H:%M:%S')}")
     
     try:
         # Demonstrate different scheduling patterns
@@ -394,46 +483,44 @@ def main():
         management_demo = demonstrate_schedule_management()
         timezone_schedules = demonstrate_timezone_scheduling()
         
-        print(f"\n🎉 Scheduling demo completed!")
+        logger.info(f"Scheduling demo completed!")
         
-        print("\n" + "=" * 50)
-        print("📊 Scheduling Summary:")
-        print("=" * 50)
-        print(f"One-time jobs: {len(one_time_jobs)} scheduled")
-        print(f"Recurring schedules: {len(recurring_schedules)} created")
-        print(f"Timezone schedules: {len(timezone_schedules)} created")
-        print(f"Management demo: Schedule operations demonstrated")
+        logger.info("Scheduling Summary:")
+        logger.info(f"One-time jobs: {len(one_time_jobs)} scheduled")
+        logger.info(f"Recurring schedules: {len(recurring_schedules)} created")
+        logger.info(f"Timezone schedules: {len(timezone_schedules)} created")
+        logger.info(f"Management demo: Schedule operations demonstrated")
         
-        print("\n🎯 Scheduling Highlights:")
-        print("   • One-time: Jobs scheduled for specific future times")
-        print("   • Recurring: Cron-based repeating schedules")
-        print("   • Management: Create, update, enable/disable schedules")
-        print("   • Timezones: Schedule jobs in different time zones")
+        logger.info("Scheduling Highlights:")
+        logger.info("   • One-time: Jobs scheduled for specific future times")
+        logger.info("   • Recurring: Cron-based repeating schedules")
+        logger.info("   • Management: Create, update, enable/disable schedules")
+        logger.info("   • Timezones: Schedule jobs in different time zones")
         
-        print("\n💡 Watch for these events:")
-        print("   • One-time jobs executing at scheduled times")
-        print("   • Recurring jobs running according to cron schedule")
-        print("   • Schedule management operations taking effect")
+        logger.info("Watch for these events:")
+        logger.info("   • One-time jobs executing at scheduled times")
+        logger.info("   • Recurring jobs running according to cron schedule")
+        logger.info("   • Schedule management operations taking effect")
         
-        print("\n📋 Next Steps:")
-        print("   • Try recurring_jobs.py for advanced cron patterns")
-        print("   • Check schedule_management.py for full lifecycle")
-        print("   • Monitor schedules with 'naq list-schedules'")
-        print("   • Use 'naq dashboard' for visual schedule tracking")
+        logger.info("Next Steps:")
+        logger.info("   • Try recurring_jobs.py for advanced cron patterns")
+        logger.info("   • Check schedule_management.py for full lifecycle")
+        logger.info("   • Monitor schedules with 'naq list-schedules'")
+        logger.info("   • Use 'naq dashboard' for visual schedule tracking")
         
-        print("\n⏰ Scheduled Events (next few minutes):")
-        print("   • 30 seconds: delayed_task execution")
-        print("   • 1 minute: reminder_task execution")
-        print("   • 2 minutes: notification_task execution")
-        print("   • Every 5 minutes: health_check (if enabled)")
+        logger.info("Scheduled Events (next few minutes):")
+        logger.info("   • 30 seconds: delayed_task execution")
+        logger.info("   • 1 minute: reminder_task execution")
+        logger.info("   • 2 minutes: notification_task execution")
+        logger.info("   • Every 5 minutes: health_check (if enabled)")
         
     except Exception as e:
-        print(f"❌ Error: {e}")
-        print("\n🔧 Troubleshooting:")
-        print("   - Is NATS running? (cd docker && docker-compose up -d)")
-        print("   - Is scheduler running? (naq scheduler --log-level INFO)")
-        print("   - Are workers running? (naq worker default scheduled_queue)")
-        print("   - Is NAQ_JOB_SERIALIZER=json set?")
+        logger.error(f"Error: {e}")
+        logger.info("Troubleshooting:")
+        logger.info("   - Is NATS running? (cd docker && docker-compose up -d)")
+        logger.info("   - Is scheduler running? (naq scheduler --log-level INFO)")
+        logger.info("   - Are workers running? (naq worker default scheduled_queue)")
+        logger.info("   - Is NAQ_JOB_SERIALIZER=json set?")
         return 1
     
     return 0

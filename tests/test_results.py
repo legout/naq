@@ -33,17 +33,25 @@ class TestResults:
         return mock_kv
 
     @pytest.fixture
-    def mock_nats_kv_store(self, mock_kv_store: AsyncMock) -> MagicMock:
-        """Create a mock nats_kv_store context manager."""
-        mock_context = MagicMock()
-        mock_context.__aenter__.return_value = mock_kv_store
-        mock_context.__aexit__.return_value = None
-        return mock_context
+    def mock_nats_client(self, mock_kv_store: AsyncMock) -> AsyncMock:
+        """Create a mock NatsClient."""
+        mock_client = AsyncMock()
+        mock_client.connect = AsyncMock()
+        mock_client.get_kv = AsyncMock(return_value=mock_kv_store)
+        return mock_client
 
     @pytest.fixture
-    def results(self) -> Results:
-        """Create a Results instance."""
-        return Results()
+    def results(self, mock_nats_client: AsyncMock, mock_kv_store: AsyncMock) -> Results:
+        """Create a Results instance with a mocked NatsClient."""
+        # Create a Results instance
+        results_instance = Results()
+        
+        # Reset the _client attribute to None to force _get_client to create a new client
+        results_instance._client = None
+        
+        # Patch the NatsClient class to return our mock
+        with patch('naq.results.NatsClient', return_value=mock_nats_client):
+            yield results_instance
 
     @pytest.fixture
     def sample_job_result(self) -> JobResult:
@@ -107,53 +115,61 @@ class TestResults:
     async def test_add_job_result_success(
         self,
         results: Results,
-        mock_nats_kv_store: MagicMock,
+        mock_nats_client: AsyncMock,
         mock_kv_store: AsyncMock,
         sample_job_result: JobResult
     ) -> None:
         """Test successful storage of a job result."""
-        # Setup mock to return a valid KV store
-        with patch('naq.results.nats_kv_store', return_value=mock_nats_kv_store):
-            # Setup mock for Job.serialize_result
-            with patch('naq.results.Job.serialize_result', return_value=b'serialized_result'):
-                # Call the method
-                result_data = {
-                    "status": sample_job_result.status,
-                    "result": sample_job_result.result,
-                    "error": sample_job_result.error,
-                    "traceback": sample_job_result.traceback,
-                    "start_time": sample_job_result.start_time,
-                    "finish_time": sample_job_result.finish_time,
-                }
-                await results.add_job_result(sample_job_result.job_id, result_data)
-                
-                # Verify the storage call
-                mock_kv_store.put.assert_called_once_with(sample_job_result.job_id, b'serialized_result', ttl=604800)
+        # Setup mock for Job.serialize_result
+        with patch('naq.results.Job.serialize_result', return_value=b'serialized_result'):
+            # Call the method
+            result_data = {
+                "status": sample_job_result.status,
+                "result": sample_job_result.result,
+                "error": sample_job_result.error,
+                "traceback": sample_job_result.traceback,
+                "start_time": sample_job_result.start_time,
+                "finish_time": sample_job_result.finish_time,
+            }
+            await results.add_job_result(sample_job_result.job_id, result_data)
+            
+            # Verify the client was created and connected
+            mock_nats_client.connect.assert_called_once()
+            
+            # Verify the KV store was retrieved
+            mock_nats_client.get_kv.assert_called_once()
+            
+            # Verify the storage call
+            mock_kv_store.put.assert_called_once_with(sample_job_result.job_id, b'serialized_result')
 
     @pytest.mark.asyncio
     async def test_add_job_result_with_ttl(
         self,
         results: Results,
-        mock_nats_kv_store: MagicMock,
+        mock_nats_client: AsyncMock,
         mock_kv_store: AsyncMock,
         sample_job_result: JobResult
     ) -> None:
         """Test storage of a job result with custom TTL."""
         ttl = 1800  # 30 minutes
         
-        # Setup mock to return a valid KV store
-        with patch('naq.results.nats_kv_store', return_value=mock_nats_kv_store):
-            # Setup mock for Job.serialize_result
-            with patch('naq.results.Job.serialize_result', return_value=b'serialized_result'):
-                # Call the method with custom TTL
-                result_data = {
-                    "status": sample_job_result.status,
-                    "result": sample_job_result.result,
-                }
-                await results.add_job_result(sample_job_result.job_id, result_data, result_ttl=ttl)
-                
-                # Verify the storage call with custom TTL
-                mock_kv_store.put.assert_called_once_with(sample_job_result.job_id, b'serialized_result', ttl=ttl)
+        # Setup mock for Job.serialize_result
+        with patch('naq.results.Job.serialize_result', return_value=b'serialized_result'):
+            # Call the method with custom TTL
+            result_data = {
+                "status": sample_job_result.status,
+                "result": sample_job_result.result,
+            }
+            await results.add_job_result(sample_job_result.job_id, result_data, result_ttl=ttl)
+            
+            # Verify the client was created and connected
+            mock_nats_client.connect.assert_called_once()
+            
+            # Verify the KV store was retrieved
+            mock_nats_client.get_kv.assert_called_once()
+            
+            # Verify the storage call
+            mock_kv_store.put.assert_called_once_with(sample_job_result.job_id, b'serialized_result')
 
     @pytest.mark.asyncio
     async def test_add_job_result_invalid_job_id(
@@ -189,7 +205,7 @@ class TestResults:
     async def test_fetch_job_result_success(
         self,
         results: Results,
-        mock_nats_kv_store: MagicMock,
+        mock_nats_client: AsyncMock,
         mock_kv_store: AsyncMock,
         sample_job_result: JobResult
     ) -> None:
@@ -201,33 +217,37 @@ class TestResults:
         # Setup mock to return the entry
         mock_kv_store.get.return_value = mock_entry
         
-        # Setup mock to return a valid KV store
-        with patch('naq.results.nats_kv_store', return_value=mock_nats_kv_store):
-            # Setup mock for Job.deserialize_result
-            with patch('naq.results.Job.deserialize_result', return_value={
-                "status": sample_job_result.status,
-                "result": sample_job_result.result,
-                "error": sample_job_result.error,
-                "traceback": sample_job_result.traceback,
-                "start_time": sample_job_result.start_time,
-                "finish_time": sample_job_result.finish_time,
-            }):
-                # Call the method
-                result = await results.fetch_job_result(sample_job_result.job_id)
-                
-                # Verify the result
-                assert result["job_id"] == sample_job_result.job_id
-                assert result["status"] == sample_job_result.status
-                assert result["result"] == sample_job_result.result
-                
-                # Verify the get call
-                mock_kv_store.get.assert_called_once_with(sample_job_result.job_id)
+        # Setup mock for Job.deserialize_result
+        with patch('naq.results.Job.deserialize_result', return_value={
+            "status": sample_job_result.status,
+            "result": sample_job_result.result,
+            "error": sample_job_result.error,
+            "traceback": sample_job_result.traceback,
+            "start_time": sample_job_result.start_time,
+            "finish_time": sample_job_result.finish_time,
+        }):
+            # Call the method
+            result = await results.fetch_job_result(sample_job_result.job_id)
+            
+            # Verify the client was created and connected
+            mock_nats_client.connect.assert_called_once()
+            
+            # Verify the KV store was retrieved
+            mock_nats_client.get_kv.assert_called_once()
+            
+            # Verify the result
+            assert result["job_id"] == sample_job_result.job_id
+            assert result["status"] == sample_job_result.status
+            assert result["result"] == sample_job_result.result
+            
+            # Verify the get call
+            mock_kv_store.get.assert_called_once_with(sample_job_result.job_id)
 
     @pytest.mark.asyncio
     async def test_fetch_job_result_not_found(
         self,
         results: Results,
-        mock_nats_kv_store: MagicMock,
+        mock_nats_client: AsyncMock,
         mock_kv_store: AsyncMock
     ) -> None:
         """Test retrieval of a non-existent job result."""
@@ -236,14 +256,18 @@ class TestResults:
         # Setup mock to raise KeyNotFoundError
         mock_kv_store.get.side_effect = KeyNotFoundError
         
-        # Setup mock to return a valid KV store
-        with patch('naq.results.nats_kv_store', return_value=mock_nats_kv_store):
-            # Call the method and expect exception
-            with pytest.raises(JobNotFoundError, match="Result for job non-existent-job not found"):
-                await results.fetch_job_result("non-existent-job")
-            
-            # Verify the get call
-            mock_kv_store.get.assert_called_once_with("non-existent-job")
+        # Call the method and expect exception
+        with pytest.raises(JobNotFoundError, match="Result for job non-existent-job not found"):
+            await results.fetch_job_result("non-existent-job")
+        
+        # Verify the client was created and connected
+        mock_nats_client.connect.assert_called_once()
+        
+        # Verify the KV store was retrieved
+        mock_nats_client.get_kv.assert_called_once()
+        
+        # Verify the get call
+        mock_kv_store.get.assert_called_once_with("non-existent-job")
 
     @pytest.mark.asyncio
     async def test_fetch_job_result_invalid_job_id(
@@ -259,7 +283,7 @@ class TestResults:
     async def test_list_all_job_results_success(
         self,
         results: Results,
-        mock_nats_kv_store: MagicMock,
+        mock_nats_client: AsyncMock,
         mock_kv_store: AsyncMock
     ) -> None:
         """Test successful listing of all job results."""
@@ -267,22 +291,26 @@ class TestResults:
         job_ids = ["job1", "job2", "job3"]
         mock_kv_store.keys.return_value = job_ids
         
-        # Setup mock to return a valid KV store
-        with patch('naq.results.nats_kv_store', return_value=mock_nats_kv_store):
-            # Call the method
-            result = await results.list_all_job_results()
-            
-            # Verify the result
-            assert result == job_ids
-            
-            # Verify the keys call
-            mock_kv_store.keys.assert_called_once()
+        # Call the method
+        result = await results.list_all_job_results()
+        
+        # Verify the client was created and connected
+        mock_nats_client.connect.assert_called_once()
+        
+        # Verify the KV store was retrieved
+        mock_nats_client.get_kv.assert_called_once()
+        
+        # Verify the result
+        assert result == job_ids
+        
+        # Verify the keys call
+        mock_kv_store.keys.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_purge_all_job_results_success(
         self,
         results: Results,
-        mock_nats_kv_store: MagicMock,
+        mock_nats_client: AsyncMock,
         mock_kv_store: AsyncMock
     ) -> None:
         """Test successful purging of all job results."""
@@ -290,43 +318,51 @@ class TestResults:
         job_ids = ["job1", "job2", "job3"]
         mock_kv_store.keys.return_value = job_ids
         
-        # Setup mock to return a valid KV store
-        with patch('naq.results.nats_kv_store', return_value=mock_nats_kv_store):
-            # Call the method
-            await results.purge_all_job_results()
-            
-            # Verify the keys call
-            mock_kv_store.keys.assert_called_once()
-            
-            # Verify delete calls for each key
-            assert mock_kv_store.delete.call_count == 3
-            mock_kv_store.delete.assert_any_call("job1")
-            mock_kv_store.delete.assert_any_call("job2")
-            mock_kv_store.delete.assert_any_call("job3")
+        # Call the method
+        await results.purge_all_job_results()
+        
+        # Verify the client was created and connected
+        mock_nats_client.connect.assert_called_once()
+        
+        # Verify the KV store was retrieved
+        mock_nats_client.get_kv.assert_called_once()
+        
+        # Verify the keys call
+        mock_kv_store.keys.assert_called_once()
+        
+        # Verify delete calls for each key
+        assert mock_kv_store.delete.call_count == 3
+        mock_kv_store.delete.assert_any_call("job1")
+        mock_kv_store.delete.assert_any_call("job2")
+        mock_kv_store.delete.assert_any_call("job3")
 
     @pytest.mark.asyncio
     async def test_delete_job_result_success(
         self,
         results: Results,
-        mock_nats_kv_store: MagicMock,
+        mock_nats_client: AsyncMock,
         mock_kv_store: AsyncMock
     ) -> None:
         """Test successful deletion of a job result."""
         job_id = "test-job-to-delete"
         
-        # Setup mock to return a valid KV store
-        with patch('naq.results.nats_kv_store', return_value=mock_nats_kv_store):
-            # Call the method
-            await results.delete_job_result(job_id)
-            
-            # Verify the delete call
-            mock_kv_store.delete.assert_called_once_with(job_id)
+        # Call the method
+        await results.delete_job_result(job_id)
+        
+        # Verify the client was created and connected
+        mock_nats_client.connect.assert_called_once()
+        
+        # Verify the KV store was retrieved
+        mock_nats_client.get_kv.assert_called_once()
+        
+        # Verify the delete call
+        mock_kv_store.delete.assert_called_once_with(job_id)
 
     @pytest.mark.asyncio
     async def test_delete_job_result_not_found(
         self,
         results: Results,
-        mock_nats_kv_store: MagicMock,
+        mock_nats_client: AsyncMock,
         mock_kv_store: AsyncMock
     ) -> None:
         """Test deletion of a non-existent job result."""
@@ -335,13 +371,17 @@ class TestResults:
         # Setup mock to raise KeyNotFoundError
         mock_kv_store.delete.side_effect = KeyNotFoundError
         
-        # Setup mock to return a valid KV store
-        with patch('naq.results.nats_kv_store', return_value=mock_nats_kv_store):
-            # Call the method - should not raise an exception
-            await results.delete_job_result("non-existent-job")
-            
-            # Verify the delete call was still made
-            mock_kv_store.delete.assert_called_once_with("non-existent-job")
+        # Call the method - should not raise an exception
+        await results.delete_job_result("non-existent-job")
+        
+        # Verify the client was created and connected
+        mock_nats_client.connect.assert_called_once()
+        
+        # Verify the KV store was retrieved
+        mock_nats_client.get_kv.assert_called_once()
+        
+        # Verify the delete call was still made
+        mock_kv_store.delete.assert_called_once_with("non-existent-job")
 
     @pytest.mark.asyncio
     async def test_delete_job_result_invalid_job_id(

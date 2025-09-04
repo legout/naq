@@ -6,10 +6,11 @@ It is responsible for managing failed job streams and publishing failed job deta
 
 from typing import Optional
 
+from ..nats_client import NatsClient
+from ..config import get_config
 from ..exceptions import SerializationError
 from ..models.events import JobEvent
 from ..models.jobs import Job
-from ..services import ConnectionService, EventService, ServiceManager, StreamService
 from ..settings import FAILED_JOB_STREAM_NAME, FAILED_JOB_SUBJECT_PREFIX
 from ..utils.decorators import timing
 from ..utils.error_handling import ErrorHandler, wrap_naq_exception
@@ -18,96 +19,70 @@ from ..utils.logging import StructuredLogger
 
 class FailedJobHandler:
     """
-    Handles failed job processing and storage using the service layer.
+    Handles failed job processing and storage.
 
     This class is responsible for managing failed job streams and publishing
-    failed job details using the ConnectionService, StreamService, and EventService.
+    failed job details using the NatsClient.
     """
 
-    def __init__(self, service_manager: ServiceManager):
+    def __init__(self, nats_client: Optional[NatsClient] = None):
         """Initialize the failed job handler.
 
         Args:
-            service_manager: The ServiceManager instance for accessing services.
+            nats_client: Optional NatsClient instance for accessing NATS.
         """
-        self._service_manager = service_manager
-        self._connection_service: Optional[ConnectionService] = None
-        self._stream_service: Optional[StreamService] = None
-        self._event_service: Optional[EventService] = None
+        self._nats_client = nats_client
 
         # Initialize logging and error handling
         self._logger = StructuredLogger("failed_job_handler")
         self._error_handler = ErrorHandler(self._logger)
 
     @timing(threshold_ms=100)
-    async def _get_services(self) -> None:
-        """Get service instances from the service manager.
-
-        This method retrieves the ConnectionService, StreamService, and EventService
-        from the ServiceManager if they haven't been retrieved yet.
-        """
-        with self._logger.operation_context("get_services"):
+    async def _get_nats_client(self) -> NatsClient:
+        """Get or create a NATS client."""
+        if self._nats_client is None:
             try:
-                if self._connection_service is None:
-                    self._connection_service = await self._service_manager.get_service(
-                        "connection", ConnectionService
-                    )
-                if self._stream_service is None:
-                    self._stream_service = await self._service_manager.get_service(
-                        "stream", StreamService
-                    )
-                if self._event_service is None:
-                    self._event_service = await self._service_manager.get_service(
-                        "events", EventService
-                    )
+                config = get_config()
+                self._nats_client = NatsClient(config)
+                await self._nats_client.connect()
             except Exception as e:
-                wrapped_error = wrap_naq_exception(e, "Failed to get services")
+                wrapped_error = wrap_naq_exception(e, "Failed to get NATS client")
                 self._error_handler.handle_error(wrapped_error)
                 raise
+        return self._nats_client
 
     @timing(threshold_ms=500)
     async def handle_failed_job(self, job: Job) -> None:
-        """Handle a failed job by publishing it to the failed job stream.
-
-        This method uses the new context managers to ensure the failed job stream exists,
-        get a JetStream context for publishing, and log the failed job event.
-        """
+        """Handle a failed job by publishing it to the failed job stream."""
         with self._logger.operation_context("handle_failed_job", job_id=job.job_id):
             try:
-                await self._get_services()
+                nats_client = await self._get_nats_client()
 
                 subject = f"{FAILED_JOB_SUBJECT_PREFIX}.{job.queue_name}"
 
-                # Ensure the failed job stream exists using the StreamService if available
-                if self._stream_service:
-                    await self._stream_service.ensure_stream(
+                # Ensure the failed job stream exists
+                try:
+                    await nats_client.ensure_stream(
                         stream_name=FAILED_JOB_STREAM_NAME,
                         subjects=[f"{FAILED_JOB_SUBJECT_PREFIX}.*"],
                     )
-
-                # Publish the failed job using ConnectionService
-                if self._connection_service:
-                    js = await self._connection_service.get_jetstream()
-                    payload = job.serialize_failed_job()
-                    await js.publish(subject, payload)
-                    self._logger.info(
-                        "Published failed job to stream",
-                        job_id=job.job_id,
-                        subject=subject,
+                except Exception as e:
+                    self._logger.warning(
+                        "Failed to ensure stream exists: {error}", error=str(e)
                     )
 
-                # Log the failed job event
-                if self._event_service:
-                    event = JobEvent.failed(
-                        job_id=job.job_id,
-                        worker_id="unknown",  # Will be set by the caller
-                        error_type="JobError",
-                        error_message="Job failed during execution",
-                        duration_ms=0.0,  # Will be set by the caller
-                        queue_name=job.queue_name,
-                        details={"subject": subject},
-                    )
-                    await self._event_service.log_job_event(event)
+                # Publish the failed job
+                js = await nats_client.get_jetstream()
+                payload = job.serialize_failed_job()
+                await js.publish(subject, payload)
+                self._logger.info(
+                    "Published failed job to stream",
+                    job_id=job.job_id,
+                    subject=subject,
+                )
+
+                # Note: EventService functionality has been removed as part of service layer removal
+                # This can be re-implemented later if needed using a different approach
             except Exception as e:
                 wrapped_error = wrap_naq_exception(e, "Failed to publish failed job")
                 self._error_handler.handle_error(
@@ -117,16 +92,11 @@ class FailedJobHandler:
 
     @timing(threshold_ms=500)
     async def initialize(self) -> None:
-        """Initialize the failed job handler with services.
-
-        This method retrieves the required services from the ServiceManager
-        and gets a JetStream context from the ConnectionService.
-        """
+        """Initialize the failed job handler."""
         with self._logger.operation_context("initialize"):
             try:
-                await self._get_services()
-                if self._connection_service:
-                    self._js = await self._connection_service.get_jetstream()
+                nats_client = await self._get_nats_client()
+                await nats_client.get_jetstream()
                 await self._ensure_failed_stream()
             except Exception as e:
                 wrapped_error = wrap_naq_exception(
@@ -140,16 +110,10 @@ class FailedJobHandler:
         """Ensures the stream for failed jobs exists."""
         with self._logger.operation_context("ensure_failed_stream"):
             try:
-                await self._get_services()
-
-                if not self._stream_service:
-                    self._logger.error(
-                        "StreamService not available, cannot ensure failed stream"
-                    )
-                    return
+                nats_client = await self._get_nats_client()
 
                 try:
-                    await self._stream_service.ensure_stream(
+                    await nats_client.ensure_stream(
                         stream_name=FAILED_JOB_STREAM_NAME,
                         subjects=[f"{FAILED_JOB_SUBJECT_PREFIX}.*"],
                     )
@@ -168,42 +132,27 @@ class FailedJobHandler:
 
     @timing(threshold_ms=500)
     async def publish_failed_job(self, job: Job) -> None:
-        """Publishes failed job details to the failed job subject.
-
-        This method uses the new context managers to get a JetStream context for publishing
-        and log the failed job event.
-        """
+        """Publishes failed job details to the failed job subject."""
         with self._logger.operation_context("publish_failed_job", job_id=job.job_id):
             try:
-                await self._get_services()
+                nats_client = await self._get_nats_client()
 
                 failed_subject = (
                     f"{FAILED_JOB_SUBJECT_PREFIX}.{job.queue_name or 'unknown'}"
                 )
 
-                # Publish the failed job using ConnectionService
-                if self._connection_service:
-                    js = await self._connection_service.get_jetstream()
-                    payload = job.serialize_failed_job()
-                    await js.publish(failed_subject, payload)
-                    self._logger.info(
-                        "Published failed job details to subject",
-                        job_id=job.job_id,
-                        subject=failed_subject,
-                    )
+                # Publish the failed job
+                js = await nats_client.get_jetstream()
+                payload = job.serialize_failed_job()
+                await js.publish(failed_subject, payload)
+                self._logger.info(
+                    "Published failed job details to subject",
+                    job_id=job.job_id,
+                    subject=failed_subject,
+                )
 
-                # Log the failed job event
-                if self._event_service:
-                    event = JobEvent.failed(
-                        job_id=job.job_id,
-                        worker_id="unknown",  # Will be set by the caller
-                        error_type="JobError",
-                        error_message="Job failed during execution",
-                        duration_ms=0.0,  # Will be set by the caller
-                        queue_name=job.queue_name,
-                        details={"subject": failed_subject},
-                    )
-                    await self._event_service.log_job_event(event)
+                # Note: EventService functionality has been removed as part of service layer removal
+                # This can be re-implemented later if needed using a different approach
             except SerializationError as e:
                 wrapped_error = wrap_naq_exception(
                     e, "Could not serialize failed job details"

@@ -11,6 +11,7 @@ import anyio
 import msgspec
 from loguru import logger
 
+from .nats_client import NatsClient
 from .circuit_breaker import get_circuit_breaker
 from .exceptions import (
     NaqConnectionError,
@@ -24,13 +25,7 @@ from .exceptions import (
     LockUpdateError,
 )
 from .metrics import EventType, record_event
-from .service_context import long_lived_service_context
-from .services.base import ServiceManager
-from .services.connection import ConnectionService
-from .services.events import EventService
-from .services.kv_stores import KVStoreService
-from .services.scheduler import SchedulerService
-from .settings import (
+from .schemas import (
     SCHEDULED_JOBS_KV_NAME,
     SCHEDULER_LOCK_KEY,
     SCHEDULER_LOCK_KV_NAME,
@@ -79,7 +74,7 @@ class LeaderElection:
         instance_id: str,
         lock_ttl: int = SCHEDULER_LOCK_TTL_SECONDS,
         lock_renew_interval: int = SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS,
-        kv_store_service: Optional[KVStoreService] = None,
+        client: Optional[NatsClient] = None,
     ) -> None:
         """Initialize the leader election system.
 
@@ -87,7 +82,7 @@ class LeaderElection:
             instance_id: Unique identifier for this scheduler instance
             lock_ttl: Time-to-live for the leader lock in seconds
             lock_renew_interval: Interval at which to renew the leader lock in seconds
-            kv_store_service: Key-value store service for distributed locking
+            client: NATS client for distributed locking
         """
         self.instance_id = instance_id
         self.lock_ttl = lock_ttl
@@ -95,7 +90,7 @@ class LeaderElection:
         self._shutdown_event = anyio.Event()
         self._is_leader = False
         self._lock_renewal_task: Optional[anyio.Task[None]] = None
-        self._kv_store_service = kv_store_service
+        self._client = client
         self._error_handler = ErrorHandler(logger)
         self._last_lock_renewal = 0.0
         self.start_time = time.time()
@@ -108,11 +103,11 @@ class LeaderElection:
 
     async def initialize(self) -> None:
         """Initialize the leader election system."""
-        if not self._kv_store_service:
-            raise NaqConnectionError("KVStoreService is required for leader election")
+        if not self._client:
+            raise NaqConnectionError("NatsClient is required for leader election")
 
-        # Validate that the KV store service is properly initialized with retry
-        await self._validate_kv_store_service_with_retry()
+        # Validate that the client is properly initialized with retry
+        await self._validate_client_with_retry()
 
         # Initialize circuit breaker for KV store operations
         self._circuit_breaker = await get_circuit_breaker(
@@ -134,45 +129,45 @@ class LeaderElection:
             self.lock_renew_interval,
         )
 
-    async def _validate_kv_store_service(self) -> None:
-        """Validate that the KV store service is available and accessible.
+    async def _validate_client(self) -> None:
+        """Validate that the NATS client is available and accessible.
 
         Raises:
-            NaqConnectionError: If KV store service is not available or accessible
+            NaqConnectionError: If NATS client is not available or accessible
         """
-        if not self._kv_store_service:
-            raise NaqConnectionError("KVStoreService is required for leader election")
+        if not self._client:
+            raise NaqConnectionError("NatsClient is required for leader election")
 
         if not self._circuit_breaker:
             raise NaqConnectionError("Circuit breaker is required for leader election")
 
         try:
             # Use circuit breaker to protect KV store access
-            async def validate_kv_store():
-                kv = await self._kv_store_service.get_kv_store(SCHEDULER_LOCK_KV_NAME)
+            async def validate_client():
+                kv = await self._client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
                 if not kv:
                     raise NaqConnectionError(
                         f"KV store '{SCHEDULER_LOCK_KV_NAME}' is not accessible"
                     )
                 return kv
 
-            await self._circuit_breaker.call(validate_kv_store)
+            await self._circuit_breaker.call(validate_client)
         except Exception as e:
             raise NaqConnectionError(
                 f"Failed to access KV store '{SCHEDULER_LOCK_KV_NAME}': {e}"
             ) from e
 
-    async def _validate_kv_store_service_with_retry(self, max_retries: int = 3) -> None:
-        """Validate that the KV store service is available and accessible with retries.
+    async def _validate_client_with_retry(self, max_retries: int = 3) -> None:
+        """Validate that the NATS client is available and accessible with retries.
 
         Args:
             max_retries: Maximum number of retries before giving up
 
         Raises:
-            NaqConnectionError: If KV store service is not available or accessible after retries
+            NaqConnectionError: If NATS client is not available or accessible after retries
         """
-        if not self._kv_store_service:
-            raise NaqConnectionError("KVStoreService is required for leader election")
+        if not self._client:
+            raise NaqConnectionError("NatsClient is required for leader election")
 
         if not self._circuit_breaker:
             raise NaqConnectionError("Circuit breaker is required for leader election")
@@ -181,8 +176,8 @@ class LeaderElection:
         for attempt in range(max_retries):
             try:
                 # Use circuit breaker to protect KV store access
-                async def validate_kv_store():
-                    kv = await self._kv_store_service.get_kv_store(
+                async def validate_client():
+                    kv = await self._client.get_kv_store(
                         SCHEDULER_LOCK_KV_NAME
                     )
                     if not kv:
@@ -191,14 +186,14 @@ class LeaderElection:
                         )
                     return kv
 
-                await self._circuit_breaker.call(validate_kv_store)
+                await self._circuit_breaker.call(validate_client)
                 # If we get here, the validation succeeded
                 return
             except Exception as e:
                 last_exception = e
                 if attempt < max_retries - 1:
                     logger.warning(
-                        "KV store validation attempt {} failed, retrying: {}",
+                        "NATS client validation attempt {} failed, retrying: {}",
                         attempt + 1,
                         e,
                     )
@@ -207,7 +202,7 @@ class LeaderElection:
                     await anyio.sleep(min(backoff_time, 5.0))  # Cap at 5 seconds
                 else:
                     logger.error(
-                        "KV store validation failed after {} attempts: {}",
+                        "NATS client validation failed after {} attempts: {}",
                         max_retries,
                         e,
                     )
@@ -238,7 +233,7 @@ class LeaderElection:
             return await self._perform_leader_acquisition_with_timeout(start_time)
 
     async def _validate_service_for_leader_acquisition(self, start_time: float) -> bool:
-        """Validate KV store service for leader acquisition.
+        """Validate NATS client for leader acquisition.
 
         Args:
             start_time: When the acquisition attempt started (for metrics)
@@ -247,11 +242,11 @@ class LeaderElection:
             True if validation succeeded, False otherwise
         """
         try:
-            await self._validate_kv_store_service_with_retry()
+            await self._validate_client_with_retry()
             return True
         except NaqConnectionError as e:
             logger.error(
-                "KVStoreService validation failed for instance {}: {}",
+                "NatsClient validation failed for instance {}: {}",
                 self.instance_id,
                 e,
             )
@@ -458,10 +453,10 @@ class LeaderElection:
             In case of errors, conservatively returns True to prevent multiple leaders.
         """
         try:
-            await self._validate_kv_store_service_with_retry()
+            await self._validate_client_with_retry()
         except NaqConnectionError as e:
             logger.warning(
-                "KVStoreService validation failed for checking lock status on instance {}: {}",
+                "NatsClient validation failed for checking lock status on instance {}: {}",
                 self.instance_id,
                 e,
             )
@@ -471,7 +466,7 @@ class LeaderElection:
         try:
 
             async def get_kv_store():
-                return await self._kv_store_service.get_kv_store(SCHEDULER_LOCK_KV_NAME)
+                return await self._client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
 
             kv = await self._circuit_breaker.call(get_kv_store)
         except NaqConnectionError as e:
@@ -616,11 +611,11 @@ class LeaderElection:
         Returns:
             Dictionary containing lock health information
         """
-        # Validate KV store service
+        # Validate NATS client
         try:
-            await self._validate_kv_store_service_with_retry()
+            await self._validate_client_with_retry()
         except NaqConnectionError as e:
-            return {"status": "error", "message": f"KVStoreService not available: {e}"}
+            return {"status": "error", "message": f"NatsClient not available: {e}"}
 
         # Get the KV store object
         kv = await self._get_kv_store_for_health_check()
@@ -649,7 +644,7 @@ class LeaderElection:
         try:
 
             async def get_kv_store():
-                return await self._kv_store_service.get_kv_store(SCHEDULER_LOCK_KV_NAME)
+                return await self._client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
 
             return await self._circuit_breaker.call(get_kv_store)
         except NaqConnectionError as e:
@@ -822,10 +817,10 @@ class LeaderElection:
             True if lock was successfully acquired, False otherwise
         """
         try:
-            await self._validate_kv_store_service_with_retry()
+            await self._validate_client_with_retry()
         except NaqConnectionError as e:
             logger.error(
-                "KVStoreService validation failed for lock acquisition on instance {}: {}",
+                "NatsClient validation failed for lock acquisition on instance {}: {}",
                 self.instance_id,
                 e,
             )
@@ -877,7 +872,7 @@ class LeaderElection:
 
         # Get the KV store object using circuit breaker
         async def get_kv_store():
-            return await self._kv_store_service.get_kv_store(SCHEDULER_LOCK_KV_NAME)
+            return await self._client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
 
         kv = await self._circuit_breaker.call(get_kv_store)
 
@@ -1016,18 +1011,18 @@ class LeaderElection:
             shutdown_event: Event that signals when to stop renewal
 
         Raises:
-            NaqConnectionError: If KVStoreService is not available
+            NaqConnectionError: If NatsClient is not available
         """
         try:
-            await self._validate_kv_store_service_with_retry()
+            await self._validate_client_with_retry()
         except NaqConnectionError as e:
             logger.error(
-                "KVStoreService validation failed for starting renewal task on instance {}: {}",
+                "NatsClient validation failed for starting renewal task on instance {}: {}",
                 self.instance_id,
                 e,
             )
             raise NaqConnectionError(
-                f"KVStoreService is required for lock renewal: {e}"
+                f"NatsClient is required for lock renewal: {e}"
             ) from e
 
         # Use the shared operation lock to prevent concurrent task creation
@@ -1252,14 +1247,14 @@ class LeaderElection:
         record_event(EventType.LOCK_RENEWAL_ATTEMPT, self.instance_id)
 
         try:
-            await self._validate_kv_store_service_with_retry()
+            await self._validate_client_with_retry()
         except NaqConnectionError as e:
             logger.error(
-                "KVStoreService validation failed for lock renewal on instance {}: {}",
+                "NatsClient validation failed for lock renewal on instance {}: {}",
                 self.instance_id,
                 e,
             )
-            await self._clear_leadership_status("KVStoreService validation failed")
+            await self._clear_leadership_status("NatsClient validation failed")
             record_event(
                 EventType.LOCK_RENEWAL_FAILURE,
                 self.instance_id,
@@ -1329,7 +1324,7 @@ class LeaderElection:
 
         # Get the KV store object using circuit breaker
         async def get_kv_store():
-            return await self._kv_store_service.get_kv_store(SCHEDULER_LOCK_KV_NAME)
+            return await self._client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
 
         kv = await self._circuit_breaker.call(get_kv_store)
 
@@ -1577,10 +1572,10 @@ class LeaderElection:
         record_event(EventType.LOCK_RELEASE_ATTEMPT, self.instance_id)
 
         try:
-            await self._validate_kv_store_service_with_retry()
+            await self._validate_client_with_retry()
         except NaqConnectionError as e:
             logger.error(
-                "KVStoreService validation failed for releasing lock on instance {}: {}",
+                "NatsClient validation failed for releasing lock on instance {}: {}",
                 self.instance_id,
                 e,
             )
@@ -1661,10 +1656,10 @@ class LeaderElection:
     async def _perform_lock_release(self) -> None:
         """Perform the actual lock release operation."""
         try:
-            await self._validate_kv_store_service_with_retry()
+            await self._validate_client_with_retry()
         except NaqConnectionError as e:
             logger.error(
-                "KVStoreService validation failed for releasing lock on instance {}: {}",
+                "NatsClient validation failed for releasing lock on instance {}: {}",
                 self.instance_id,
                 e,
             )
@@ -1675,7 +1670,7 @@ class LeaderElection:
         logger.info("Instance {} releasing leader lock", self.instance_id)
 
         # Get the KV store object
-        kv = await self._kv_store_service.get_kv_store(SCHEDULER_LOCK_KV_NAME)
+        kv = await self._client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
 
         # Use a timeout to avoid hanging during shutdown
         with anyio.move_on_after(5.0):  # 5 second timeout
@@ -1728,29 +1723,27 @@ class Scheduler:
     def __init__(
         self,
         nats_url: Optional[str] = None,
-        service_manager: Optional[ServiceManager] = None,
+        client: Optional[NatsClient] = None,
         poll_interval: float = 1.0,  # Check for jobs every second
         instance_id: Optional[str] = None,  # For HA leader election
         enable_ha: bool = True,  # Whether to enable HA leader election
-        config: Optional[
-            object
-        ] = None,  # GlobalServiceConfig for backward compatibility
+        config: Optional[object] = None,  # Configuration for backward compatibility
     ) -> None:
         """Initialize the scheduler.
 
         Args:
             nats_url: NATS server URL for connection
-            service_manager: Service manager for accessing NAQ services
+            client: NATS client for accessing NAQ services
             poll_interval: Interval in seconds to check for scheduled jobs
             instance_id: Unique identifier for this scheduler instance
             enable_ha: Whether to enable high availability mode with leader election
-            config: Global service configuration for backward compatibility
+            config: Configuration for backward compatibility
 
         Raises:
-            ValueError: If neither nats_url nor service_manager is provided
+            ValueError: If neither nats_url nor client is provided
         """
-        self._validate_init_params(nats_url, service_manager)
-        self._initialize_connection_params(nats_url, service_manager, config)
+        self._validate_init_params(nats_url, client)
+        self._initialize_connection_params(nats_url, client, config)
 
         self._poll_interval = poll_interval
         self._running = False
@@ -1767,39 +1760,39 @@ class Scheduler:
         setup_logging()  # Set up logging
 
     def _validate_init_params(
-        self, nats_url: Optional[str], service_manager: Optional[ServiceManager]
+        self, nats_url: Optional[str], client: Optional[NatsClient]
     ) -> None:
         """Validate initialization parameters.
 
         Args:
             nats_url: NATS server URL for connection
-            service_manager: Service manager for accessing NAQ services
+            client: NATS client for accessing NAQ services
 
         Raises:
-            ValueError: If neither nats_url nor service_manager is provided
+            ValueError: If neither nats_url nor client is provided
         """
-        if nats_url is None and service_manager is None:
-            raise ValueError("Either nats_url or service_manager must be provided")
+        if nats_url is None and client is None:
+            raise ValueError("Either nats_url or client must be provided")
 
     def _initialize_connection_params(
         self,
         nats_url: Optional[str],
-        service_manager: Optional[ServiceManager],
+        client: Optional[NatsClient],
         config: Optional[object],
     ) -> None:
         """Initialize connection parameters.
 
         Args:
             nats_url: NATS server URL for connection
-            service_manager: Service manager for accessing NAQ services
-            config: Global service configuration for backward compatibility
+            client: NATS client for accessing NAQ services
+            config: Configuration for backward compatibility
         """
         if nats_url is not None:
             self._nats_url = nats_url
-            self._service_manager = None  # Will be created in _connect()
+            self._client = None  # Will be created in _connect()
             self._config = config
         else:
-            self._service_manager = service_manager
+            self._client = client
             self._nats_url = None
             self._config = None
 
@@ -1820,15 +1813,12 @@ class Scheduler:
             instance_id=self._instance_id,
             lock_ttl=SCHEDULER_LOCK_TTL_SECONDS,
             lock_renew_interval=SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS,
-            kv_store_service=None,  # Will be set during _connect()
+            client=None,  # Will be set during _connect()
         )
 
     def _initialize_services(self) -> None:
         """Initialize service references (will be populated during _connect)."""
-        self._connection_service: Optional[ConnectionService] = None
-        self._kv_store_service: Optional[KVStoreService] = None
-        self._event_service: Optional[EventService] = None
-        self._scheduler_service: Optional[SchedulerService] = None
+        self._client: Optional[NatsClient] = None
         self._error_handler = ErrorHandler(logger)
 
     async def _connect(self) -> None:
@@ -1839,7 +1829,7 @@ class Scheduler:
                 if self._nats_url:
                     connect_task = tg.start_soon(self._connect_with_nats_url)
                 else:
-                    connect_task = tg.start_soon(self._connect_with_service_manager)
+                    connect_task = tg.start_soon(self._connect_with_client)
 
                 # Wait for connection to complete
                 await connect_task
@@ -1853,53 +1843,25 @@ class Scheduler:
 
     async def _connect_with_nats_url(self) -> None:
         """Connect using NATS URL."""
-        async with long_lived_service_context(
-            nats_url=self._nats_url,
-            global_config=self._config,
-            logger_name=f"naq.scheduler.{self._instance_id}",
-        ) as service_manager:
-            self._service_manager = service_manager
-            await self._initialize_services(service_manager)
+        self._client = NatsClient(nats_url=self._nats_url)
+        await self._client.connect()
+        await self._initialize_services(self._client)
 
-    async def _connect_with_service_manager(self) -> None:
-        """Connect using provided service manager."""
-        async with long_lived_service_context(
-            self._service_manager,
-            logger_name=f"naq.scheduler.{self._instance_id}",
-        ) as service_manager:
-            await self._initialize_services(service_manager)
+    async def _connect_with_client(self) -> None:
+        """Connect using provided client."""
+        await self._initialize_services(self._client)
 
-    async def _initialize_services(self, service_manager: ServiceManager) -> None:
-        """Initialize services from service manager."""
+    async def _initialize_services(self, client: NatsClient) -> None:
+        """Initialize services from client."""
         try:
-            # Use a task group to initialize services concurrently
-            async with anyio.create_task_group() as tg:
-                # Start service initialization tasks
-                connection_task = tg.start_soon(
-                    lambda: service_manager.get_service("connection", ConnectionService)
-                )
-                kv_store_task = tg.start_soon(
-                    lambda: service_manager.get_service("kv_store", KVStoreService)
-                )
-                event_task = tg.start_soon(
-                    lambda: service_manager.get_service("event", EventService)
-                )
-                scheduler_task = tg.start_soon(
-                    lambda: service_manager.get_service("scheduler", SchedulerService)
-                )
-
-                # Wait for all services to be initialized
-                self._connection_service = await connection_task
-                self._kv_store_service = await kv_store_task
-                self._event_service = await event_task
-                self._scheduler_service = await scheduler_task
-
+            self._client = client
+            
             logger.info(
                 f"Scheduler connected to services and KV store '{SCHEDULED_JOBS_KV_NAME}'."
             )
 
             if self._enable_ha:
-                self._leader_election._kv_store_service = self._kv_store_service
+                self._leader_election._client = self._client
                 await self._leader_election.initialize()
         except Exception as e:
             context = create_error_context("initialize_services")
@@ -2054,14 +2016,14 @@ class Scheduler:
         # Check leadership status once to avoid race conditions
         is_current_leader = self.is_leader
 
-        if is_current_leader and self._scheduler_service:
+        if is_current_leader and self._client:
             logger.debug(
                 "Processing scheduled jobs as leader instance {}", self._instance_id
             )
             try:
                 # Use a timeout to prevent deadlocks
                 with anyio.move_on_after(10.0):  # 10 second timeout
-                    processed, errors = await self._scheduler_service.trigger_due_jobs()
+                    processed, errors = await self._client.trigger_due_jobs()
                     # Log summary only if something happened
                     if processed > 0 or errors > 0:
                         logger.info(
@@ -2187,12 +2149,10 @@ class Scheduler:
         try:
             # Use a task group for concurrent cleanup operations
             async with anyio.create_task_group() as tg:
-                # Clear service references
-                # Services are managed by the ServiceManager, so we don't close them here
-                self._connection_service = None
-                self._kv_store_service = None
-                self._event_service = None
-                self._scheduler_service = None
+                # Close client connection
+                if self._client:
+                    await self._client.close()
+                    self._client = None
 
                 # Ensure shutdown event is set
                 self._shutdown_event.set()
@@ -2243,14 +2203,10 @@ class Scheduler:
     async def __aenter__(self):
         """Enter the async context manager."""
         try:
-            # Initialize the service manager if needed
+            # Initialize the client if needed
             if self._nats_url:
-                # Create service manager from nats_url
-                self._service_manager = await long_lived_service_context(
-                    nats_url=self._nats_url,
-                    global_config=self._config,
-                    logger_name=f"naq.scheduler.{self._instance_id}",
-                ).__aenter__()
+                self._client = NatsClient(nats_url=self._nats_url)
+                await self._client.connect()
             return self
         except Exception as e:
             context = create_error_context("scheduler_context_enter")
@@ -2263,8 +2219,6 @@ class Scheduler:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Exit the async context manager."""
         try:
-            if self._nats_url and self._service_manager:
-                await self._service_manager.__aexit__(exc_type, exc_val, exc_tb)
             await self._close()
         except Exception as e:
             context = create_error_context("scheduler_context_exit")

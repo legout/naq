@@ -1,233 +1,268 @@
-"""Validation utilities for NAQ.
+"""
+Validation utilities for NAQ
 
-This module contains common validation utilities used throughout the NAQ codebase.
+This module provides common validation functions used throughout the NAQ library.
 """
 
 import re
-from typing import Any, Optional, Pattern, Type, Union
+from typing import Any, Type, Union, Tuple, Optional, List, TypeVar
 
-from ..exceptions import ValidationError, TypeConversionError
+from ..exceptions import ValidationError
+
+T = TypeVar('T')
 
 
 def validate_parameter(
     value: Any,
     param_name: str,
-    not_none: bool = False,
+    expected_type: Union[Type, Tuple[Type, ...]],
     min_value: Optional[Union[int, float]] = None,
     max_value: Optional[Union[int, float]] = None,
-    regex_pattern: Optional[Union[str, Pattern[str]]] = None,
-    pattern: Optional[
-        Union[str, Pattern[str]]
-    ] = None,  # Alias for regex_pattern for backward compatibility
-    custom_validator: Optional[callable] = None,
-    error_message: Optional[str] = None,
+    min_length: Optional[int] = None,
+    max_length: Optional[int] = None,
+    pattern: Optional[str] = None,
+    allowed_values: Optional[List[Any]] = None,
+    required: bool = True,
 ) -> None:
-    r"""Validate a parameter against specified criteria.
-
-    This function checks if a parameter meets various validation criteria and raises
-    a ValidationError if any validation fails.
-
+    """
+    Validate a parameter value.
+    
     Args:
         value: The value to validate.
-        param_name: The name of the parameter being validated (used in error messages).
-        not_none: If True, raises ValidationError if value is None.
-        min_value: Minimum allowed value (for numeric types).
-        max_value: Maximum allowed value (for numeric types).
-        regex_pattern: Regular expression pattern that the value must match (for strings).
-            Can be a string pattern or a compiled regex Pattern.
-        custom_validator: Optional custom validation function that takes the value
-            and returns True if valid, False otherwise.
-        error_message: Custom error message to use if validation fails.
-            If not provided, a default message will be generated.
-
+        param_name: Name of the parameter for error messages.
+        expected_type: Expected type(s) for the value.
+        min_value: Minimum value for numeric types.
+        max_value: Maximum value for numeric types.
+        min_length: Minimum length for strings, lists, etc.
+        max_length: Maximum length for strings, lists, etc.
+        pattern: Regular expression pattern for string validation.
+        allowed_values: List of allowed values.
+        required: Whether the value is required (not None).
+        
     Raises:
-        ValidationError: If any validation criterion fails.
-
-    Examples:
-        >>> validate_parameter("test", "param", not_none=True)
-        # Passes validation
-
-        >>> validate_parameter(None, "param", not_none=True)
-        # Raises ValidationError: Parameter 'param' cannot be None
-
-        >>> validate_parameter(5, "number", min_value=0, max_value=10)
-        # Passes validation
-
-        >>> validate_parameter(15, "number", max_value=10)
-        # Raises ValidationError: Parameter 'number' must be less than or equal to 10
-
-        >>> validate_parameter("abc123", "id", regex_pattern=r'^[a-z]+\d+$')
-        # Passes validation
-
-        >>> validate_parameter("123abc", "id", regex_pattern=r'^[a-z]+\d+$')
-        # Raises ValidationError: Parameter 'id' does not match required pattern
+        ValidationError: If validation fails.
     """
-    # Check for None
-    if not_none and value is None:
-        error_msg = error_message or f"Parameter '{param_name}' cannot be None"
-        raise ValidationError(error_msg)
-
-    # If value is None and not_none is False, skip other validations
-    if value is None:
+    # Check if required
+    if required and value is None:
+        raise ValidationError(f"Parameter '{param_name}' is required")
+    
+    # Skip further validation if not required and value is None
+    if not required and value is None:
         return
-
-    # Check min/max values for numeric types
-    if min_value is not None or max_value is not None:
-        if not isinstance(value, (int, float)):
-            error_msg = (
-                error_message
-                or f"Parameter '{param_name}' must be numeric for min/max validation"
-            )
-            raise ValidationError(error_msg)
-
-        if min_value is not None and value < min_value:
-            if min_value == 0:
-                error_msg = error_message or f"{param_name} cannot be negative"
-            else:
-                error_msg = (
-                    error_message
-                    or f"Parameter '{param_name}' must be greater than or equal to {min_value}"
-                )
-            raise ValidationError(error_msg)
-
-        if max_value is not None and value > max_value:
-            error_msg = (
-                error_message
-                or f"Parameter '{param_name}' must be less than or equal to {max_value}"
-            )
-            raise ValidationError(error_msg)
-
-    # Check regex pattern for strings
-    # Use pattern if provided (for backward compatibility), otherwise use regex_pattern
-    actual_pattern = pattern or regex_pattern
-
-    if actual_pattern is not None:
-        if not isinstance(value, str):
-            error_msg = (
-                error_message
-                or f"Parameter '{param_name}' must be a string for regex validation"
-            )
-            raise ValidationError(error_msg)
-
-        if isinstance(actual_pattern, str):
-            compiled_pattern = re.compile(actual_pattern)
-        else:
-            compiled_pattern = actual_pattern
-
-        if not compiled_pattern.match(value):
-            error_msg = (
-                error_message
-                or f"Parameter '{param_name}' does not match required pattern"
-            )
-            raise ValidationError(error_msg)
-
-    # Check custom validator
-    if custom_validator is not None:
-        if not custom_validator(value):
-            error_msg = (
-                error_message or f"Parameter '{param_name}' failed custom validation"
-            )
-            raise ValidationError(error_msg)
-
-
-def ensure_type(
-    value: Any,
-    expected_type: Union[Type, tuple[Type, ...]],
-    param_name: str = "value",
-    convert: bool = True,
-    strict: bool = False,
-) -> Any:
-    """Ensure a value is of the expected type, optionally converting it.
-
-    This function checks if a value matches the expected type(s). If convert is True,
-    it will attempt to convert the value to the expected type. If strict is True,
-    it will raise an error if the value is not already of the expected type.
-
-    Args:
-        value: The value to check and potentially convert.
-        expected_type: The expected type or tuple of allowed types.
-        param_name: The name of the parameter being validated (used in error messages).
-        convert: If True, attempt to convert the value to the expected type.
-            If False, only validate the type without conversion.
-        strict: If True, raise an error if the value is not already of the
-            expected type (no conversion attempted). This parameter is ignored
-            if convert is False.
-
-    Returns:
-        The original value if it matches the expected type, or the converted
-        value if conversion was successful.
-
-    Raises:
-        ValidationError: If the value is not of the expected type and conversion
-            is disabled or fails.
-        TypeConversionError: If type conversion fails when convert is True.
-
-    Examples:
-        >>> ensure_type("5", int, "number")
-        # Returns 5 (converted from string to int)
-
-        >>> ensure_type("5", int, "number", convert=False)
-        # Raises ValidationError: Parameter 'number' must be of type <class 'int'>
-
-        >>> ensure_type(5, int, "number", strict=True)
-        # Returns 5 (already correct type)
-
-        >>> ensure_type("5", int, "number", strict=True)
-        # Raises ValidationError: Parameter 'number' must be of type <class 'int'>
-
-        >>> ensure_type("5", (int, str), "number")
-        # Returns "5" (already one of the allowed types)
-
-        >>> ensure_type(None, int, "number")
-        # Raises ValidationError: Parameter 'number' cannot be None
-    """
-    # Check for None
-    if value is None:
-        # If None is an allowed type, return None
-        if type(None) in (
-            expected_type if isinstance(expected_type, tuple) else (expected_type,)
-        ):
-            return None
-        raise ValidationError(f"Parameter '{param_name}' cannot be None")
-
-    # If already the correct type, return it
-    if isinstance(value, expected_type):
-        return value
-
-    # If strict mode is enabled and convert is True, raise error
-    if strict and convert:
-        raise ValidationError(
-            f"Parameter '{param_name}' must be of type {expected_type}, "
-            f"got {type(value).__name__}"
-        )
-
-    # If convert is False, just validate the type
-    if not convert:
-        raise ValidationError(
-            f"Parameter '{param_name}' must be of type {expected_type}, "
-            f"got {type(value).__name__}"
-        )
-
-    # Attempt conversion
-    try:
-        # Handle tuple of types
+    
+    # Check type
+    if not isinstance(value, expected_type):
         if isinstance(expected_type, tuple):
-            # Try each type in order, return first successful conversion
-            for type_option in expected_type:
-                try:
-                    return type_option(value)
-                except (ValueError, TypeError):
-                    continue
-            # If all conversions failed
-            raise TypeConversionError(
-                f"Failed to convert parameter '{param_name}' from {type(value).__name__} "
-                f"to any of the expected types: {expected_type}"
-            )
+            type_names = [t.__name__ for t in expected_type]
+            expected_str = " or ".join(type_names)
         else:
-            # Single type conversion
-            return expected_type(value)
-    except (ValueError, TypeError) as e:
-        raise TypeConversionError(
-            f"Failed to convert parameter '{param_name}' from {type(value).__name__} "
-            f"to {expected_type}: {str(e)}"
-        ) from e
+            expected_str = expected_type.__name__
+        
+        raise ValidationError(
+            f"Parameter '{param_name}' must be of type {expected_str}, "
+            f"got {type(value).__name__}"
+        )
+    
+    # Check numeric range
+    if isinstance(value, (int, float)):
+        if min_value is not None and value < min_value:
+            raise ValidationError(
+                f"Parameter '{param_name}' must be >= {min_value}, got {value}"
+            )
+        
+        if max_value is not None and value > max_value:
+            raise ValidationError(
+                f"Parameter '{param_name}' must be <= {max_value}, got {value}"
+            )
+    
+    # Check length
+    if hasattr(value, '__len__'):
+        length = len(value)
+        
+        if min_length is not None and length < min_length:
+            raise ValidationError(
+                f"Parameter '{param_name}' must have length >= {min_length}, "
+                f"got {length}"
+            )
+        
+        if max_length is not None and length > max_length:
+            raise ValidationError(
+                f"Parameter '{param_name}' must have length <= {max_length}, "
+                f"got {length}"
+            )
+    
+    # Check pattern for strings
+    if isinstance(value, str) and pattern:
+        if not re.match(pattern, value):
+            raise ValidationError(
+                f"Parameter '{param_name}' must match pattern '{pattern}', "
+                f"got '{value}'"
+            )
+    
+    # Check allowed values
+    if allowed_values is not None and value not in allowed_values:
+        raise ValidationError(
+            f"Parameter '{param_name}' must be one of {allowed_values}, "
+            f"got {value}"
+        )
+
+
+def validate_nats_url(url: str) -> None:
+    """
+    Validate a NATS URL.
+    
+    Args:
+        url: NATS URL to validate.
+        
+    Raises:
+        ValidationError: If URL is invalid.
+    """
+    validate_parameter(url, "url", str, required=True)
+    
+    # Basic NATS URL validation
+    nats_pattern = r'^nats://(?:[^:@]+(?::[^@]+)?@)?[^:]+:\d+$'
+    if not re.match(nats_pattern, url):
+        raise ValidationError(
+            f"Invalid NATS URL: '{url}'. Expected format: nats://[user:password@]host:port"
+        )
+
+
+def validate_subject(subject: str) -> None:
+    """
+    Validate a NATS subject.
+    
+    Args:
+        subject: NATS subject to validate.
+        
+    Raises:
+        ValidationError: If subject is invalid.
+    """
+    validate_parameter(subject, "subject", str, required=True, min_length=1)
+    
+    # Basic subject validation (no spaces, valid characters)
+    if ' ' in subject or '\t' in subject or '\n' in subject or '\r' in subject:
+        raise ValidationError(
+            f"Invalid subject '{subject}'. Subject cannot contain whitespace"
+        )
+
+
+def validate_stream_name(stream_name: str) -> None:
+    """
+    Validate a JetStream stream name.
+    
+    Args:
+        stream_name: Stream name to validate.
+        
+    Raises:
+        ValidationError: If stream name is invalid.
+    """
+    validate_parameter(stream_name, "stream_name", str, required=True, min_length=1)
+    
+    # Stream name validation (alphanumeric, dots, dashes, underscores)
+    if not re.match(r'^[a-zA-Z0-9_.-]+$', stream_name):
+        raise ValidationError(
+            f"Invalid stream name '{stream_name}'. "
+            "Stream names can only contain alphanumeric characters, dots, dashes, and underscores"
+        )
+
+
+def validate_queue_name(queue_name: str) -> None:
+    """
+    Validate a queue name.
+    
+    Args:
+        queue_name: Queue name to validate.
+        
+    Raises:
+        ValidationError: If queue name is invalid.
+    """
+    validate_parameter(queue_name, "queue_name", str, required=True, min_length=1)
+    
+    # Queue name validation (similar to stream name)
+    if not re.match(r'^[a-zA-Z0-9_.-]+$', queue_name):
+        raise ValidationError(
+            f"Invalid queue name '{queue_name}'. "
+            "Queue names can only contain alphanumeric characters, dots, dashes, and underscores"
+        )
+
+
+def validate_job_id(job_id: str) -> None:
+    """
+    Validate a job ID.
+    
+    Args:
+        job_id: Job ID to validate.
+        
+    Raises:
+        ValidationError: If job ID is invalid.
+    """
+    validate_parameter(job_id, "job_id", str, required=True, min_length=1)
+    
+    # Job ID validation (UUID format or similar)
+    uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    if not re.match(uuid_pattern, job_id):
+        raise ValidationError(
+            f"Invalid job ID '{job_id}'. Expected UUID format"
+        )
+
+
+def validate_timeout(timeout: float) -> None:
+    """
+    Validate a timeout value.
+    
+    Args:
+        timeout: Timeout value in seconds.
+        
+    Raises:
+        ValidationError: If timeout is invalid.
+    """
+    validate_parameter(timeout, "timeout", (int, float), min_value=0.1)
+
+
+def validate_concurrency(concurrency: int) -> None:
+    """
+    Validate a concurrency value.
+    
+    Args:
+        concurrency: Concurrency level.
+        
+    Raises:
+        ValidationError: If concurrency is invalid.
+    """
+    validate_parameter(concurrency, "concurrency", int, min_value=1, max_value=1000)
+
+
+def validate_batch_size(batch_size: int) -> None:
+    """
+    Validate a batch size value.
+    
+    Args:
+        batch_size: Batch size.
+        
+    Raises:
+        ValidationError: If batch size is invalid.
+    """
+    validate_parameter(batch_size, "batch_size", int, min_value=1, max_value=10000)
+
+
+def ensure_type(value: Any, expected_type: Type[T], param_name: str = "value") -> T:
+    """
+    Ensure that a value is of the expected type.
+    
+    Args:
+        value: The value to check.
+        expected_type: The expected type.
+        param_name: Name of the parameter for error messages.
+        
+    Returns:
+        The value with the correct type.
+        
+    Raises:
+        ValidationError: If the value is not of the expected type.
+    """
+    if not isinstance(value, expected_type):
+        raise ValidationError(
+            f"Parameter '{param_name}' must be of type {expected_type.__name__}, "
+            f"got {type(value).__name__}"
+        )
+    return value

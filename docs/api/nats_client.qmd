@@ -1,0 +1,325 @@
+---
+title: "NATS Client API"
+---
+
+The `nats_client` module provides a unified client for managing NATS connections, supporting both sync and async operations.
+
+## NatsClient
+
+`NatsClient` is a unified client that provides both synchronous and asynchronous interfaces for NATS operations. It handles connection management, JetStream operations, and KeyValue store access through a single, consistent API.
+
+### Initialization
+
+```python
+from naq.nats_client import NatsClient
+from naq.config import NatsConfig
+
+# Create a client with configuration
+config = NatsConfig(url="nats://localhost:4222")
+client = NatsClient(config)
+```
+
+### Connection Management
+
+The `NatsClient` automatically manages connection lifecycle. For async operations:
+
+```python
+# Connect to NATS
+await client.connect()
+
+# Check if connected
+if client.is_connected:
+    print("Connected to NATS")
+
+# Disconnect
+await client.disconnect()
+```
+
+For sync operations:
+
+```python
+# Connect to NATS
+client.connect_sync()
+
+# Check if connected
+if client.is_connected:
+    print("Connected to NATS")
+
+# Disconnect
+client.disconnect_sync()
+```
+
+### Publishing and Subscribing
+
+#### Async Operations
+
+```python
+# Publish a message
+await client.publish("subject", b"message data")
+
+# Subscribe to a subject
+async def message_handler(msg):
+    print(f"Received: {msg.data}")
+
+await client.subscribe("subject", message_handler)
+
+# Request-Reply pattern
+response = await client.request("service.subject", b"request data")
+print(f"Response: {response.data}")
+```
+
+#### Sync Operations
+
+```python
+# Publish a message
+client.publish_sync("subject", b"message data")
+
+# Subscribe to a subject (with callback)
+def message_handler(msg):
+    print(f"Received: {msg.data}")
+
+client.subscribe_sync("subject", message_handler)
+
+# Request-Reply pattern
+response = client.request_sync("service.subject", b"request data")
+print(f"Response: {response.data}")
+```
+
+### JetStream Operations
+
+#### Async Operations
+
+```python
+# Get JetStream context
+js = await client.get_jetstream()
+
+# Create a stream
+await js.add_stream(name="mystream", subjects=["events.>"])
+
+# Publish to JetStream
+ack = await js.publish("events.user.created", b"user data")
+print(f"Message stored: {ack.stream}, seq: {ack.seq}")
+
+# Create a consumer
+await js.add_consumer("mystream", durable_name="processor")
+
+# Consume messages
+consumer = await js.consumer("mystream", "processor")
+async for msg in consumer.messages:
+    print(f"Processing: {msg.subject} - {msg.data}")
+    await msg.ack()
+```
+
+#### Sync Operations
+
+```python
+# Get JetStream context
+js = client.get_jetstream_sync()
+
+# Create a stream
+js.add_stream(name="mystream", subjects=["events.>"])
+
+# Publish to JetStream
+ack = js.publish("events.user.created", b"user data")
+print(f"Message stored: {ack.stream}, seq: {ack.seq}")
+
+# Create a consumer
+js.add_consumer("mystream", durable_name="processor")
+
+# Consume messages
+consumer = js.consumer("mystream", "processor")
+for msg in consumer.messages:
+    print(f"Processing: {msg.subject} - {msg.data}")
+    msg.ack_sync()
+```
+
+### KeyValue Store Operations
+
+#### Async Operations
+
+```python
+# Get or create a KV store
+kv = await client.get_kv_store("my_bucket")
+
+# Put a value
+await kv.put("key", b"value")
+
+# Get a value
+entry = await kv.get("key")
+if entry:
+    print(f"Value: {entry.value}")
+
+# Delete a key
+await kv.delete("key")
+
+# List all keys
+keys = await kv.keys()
+print(f"Keys: {keys}")
+```
+
+#### Sync Operations
+
+```python
+# Get or create a KV store
+kv = client.get_kv_store_sync("my_bucket")
+
+# Put a value
+kv.put("key", b"value")
+
+# Get a value
+entry = kv.get("key")
+if entry:
+    print(f"Value: {entry.value}")
+
+# Delete a key
+kv.delete("key")
+
+# List all keys
+keys = kv.keys()
+print(f"Keys: {keys}")
+```
+
+### Context Managers
+
+The `NatsClient` provides context managers for simplified resource management:
+
+#### Async Context Manager
+
+```python
+from naq.nats_client import NatsClient
+from naq.config import NatsConfig
+
+config = NatsConfig(url="nats://localhost:4222")
+
+# Using async context manager
+async with NatsClient(config) as client:
+    # Publish a message
+    await client.publish("subject", b"message")
+    
+    # Get JetStream context
+    js = await client.get_jetstream()
+    await js.add_stream(name="test", subjects=["test.>"])
+    
+    # Get KV store
+    kv = await client.get_kv_store("test_bucket")
+    await kv.put("key", b"value")
+# Connection is automatically closed
+```
+
+#### Sync Context Manager
+
+```python
+from naq.nats_client import NatsClient
+from naq.config import NatsConfig
+
+config = NatsConfig(url="nats://localhost:4222")
+
+# Using sync context manager
+with NatsClient(config) as client:
+    # Publish a message
+    client.publish_sync("subject", b"message")
+    
+    # Get JetStream context
+    js = client.get_jetstream_sync()
+    js.add_stream(name="test", subjects=["test.>"])
+    
+    # Get KV store
+    kv = client.get_kv_store_sync("test_bucket")
+    kv.put("key", b"value")
+# Connection is automatically closed
+```
+
+### Configuration
+
+The `NatsClient` is configured using the `NatsConfig` class:
+
+```python
+from naq.config import NatsConfig
+
+# Basic configuration
+config = NatsConfig(
+    url="nats://localhost:4222",
+    max_reconnect_attempts=5,
+    reconnect_time_wait=2,
+    max_payload=1048576
+)
+
+# Configuration with credentials
+config = NatsConfig(
+    url="nats://user:pass@localhost:4222",
+    max_reconnect_attempts=10,
+    reconnect_time_wait=1,
+    max_payload=1048576
+)
+```
+
+### Error Handling
+
+The `NatsClient` provides comprehensive error handling:
+
+```python
+from naq.exceptions import NaqConnectionError, NaqOperationError
+
+try:
+    async with NatsClient(config) as client:
+        await client.publish("subject", b"message")
+except NaqConnectionError as e:
+    print(f"Connection error: {e}")
+except NaqOperationError as e:
+    print(f"Operation error: {e}")
+except Exception as e:
+    print(f"Unexpected error: {e}")
+```
+
+### Best Practices
+
+1. **Use Context Managers**: Always use context managers to ensure proper connection cleanup.
+
+2. **Handle Connection Failures**: Implement retry logic for connection failures.
+
+3. **Use Appropriate API**: Choose sync or async API based on your application's needs.
+
+4. **Configure Timeouts**: Set appropriate timeouts for your use case.
+
+5. **Monitor Connection State**: Check `is_connected` before performing operations.
+
+### Example: Complete Workflow
+
+```python
+import asyncio
+from naq.nats_client import NatsClient
+from naq.config import NatsConfig
+
+async def main():
+    config = NatsConfig(url="nats://localhost:4222")
+    
+    async with NatsClient(config) as client:
+        # Publish a message
+        await client.publish("events.user.created", b"user123")
+        
+        # Get JetStream context
+        js = await client.get_jetstream()
+        
+        # Ensure stream exists
+        try:
+            await js.add_stream(name="events", subjects=["events.>"])
+        except Exception as e:
+            print(f"Stream might already exist: {e}")
+        
+        # Publish to JetStream
+        ack = await js.publish("events.user.created", b"user123")
+        print(f"Message stored at sequence: {ack.seq}")
+        
+        # Get KV store
+        kv = await client.get_kv_store("user_data")
+        
+        # Store user data
+        await kv.put("user:123", b'{"name": "Alice", "role": "admin"}')
+        
+        # Retrieve user data
+        entry = await kv.get("user:123")
+        if entry:
+            print(f"User data: {entry.value}")
+
+if __name__ == "__main__":
+    asyncio.run(main())

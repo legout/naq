@@ -23,7 +23,7 @@ For a faster start, see the [**Quickstart Guide**](quickstart.qmd).
 *   **Flexible Job Control**: Pause, resume, and cancel scheduled jobs on the fly.
 *   **Job Dependencies**: Create complex workflows by defining dependencies between jobs.
 *   **Automatic Retries**: Configurable retry mechanism with linear and exponential backoff for failed jobs.
-*   **Modular Service Architecture**: A highly extensible service layer for fine-grained control over components like connections, storage, and eventing.
+*   **Unified Client Architecture**: A streamlined architecture with a unified `NatsClient` for all NATS operations, providing a simple and consistent API.
 *   **Centralized Configuration**: Manage your setup with a single `naq.yaml` file and environment variable overrides.
 *   **Comprehensive Monitoring**: A powerful CLI for real-time event streaming, historical event querying, and worker monitoring.
 *   **Performance Optimized**: Built-in connection pooling, caching, and performance monitoring for optimal throughput.

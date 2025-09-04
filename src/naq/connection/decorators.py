@@ -9,7 +9,7 @@ import functools
 from typing import Any, Awaitable, Callable, Optional, TypeVar
 
 
-from ..services.config import GlobalServiceConfig
+from ..config import NAQConfig
 from .context_managers import nats_connection, nats_jetstream
 
 # Type variable for the decorated function
@@ -17,7 +17,7 @@ F = TypeVar("F", bound=Callable[..., Awaitable[Any]])
 
 
 def with_nats_connection(
-    config: Optional[GlobalServiceConfig] = None,
+    config: Optional[NAQConfig] = None,
 ) -> Callable[[F], Callable[..., Awaitable[Any]]]:
     """
     Asynchronous decorator that injects a NATS connection into a decorated function.
@@ -46,7 +46,7 @@ def with_nats_connection(
             print(f"Message published to {subject}")
 
         # Using custom configuration
-        config = GlobalServiceConfig(nats_url="nats://custom:4222")
+        config = NAQConfig(nats=NatsConfig(servers=["nats://custom:4222"]))
         @with_nats_connection(config)
         async def publish_with_custom_config(
             nc: NATSClient, subject: str, message: bytes
@@ -80,7 +80,7 @@ def with_nats_connection(
 
 
 def with_jetstream_context(
-    config: Optional[GlobalServiceConfig] = None,
+    config: Optional[NAQConfig] = None,
 ) -> Callable[[F], Callable[..., Awaitable[Any]]]:
     """
     Asynchronous decorator that injects a JetStream context into a decorated function.
@@ -112,7 +112,7 @@ def with_jetstream_context(
             print(f"Stream '{stream_name}' created successfully")
 
         # Using custom configuration
-        config = GlobalServiceConfig(nats_url="nats://custom:4222")
+        config = NAQConfig(nats=NatsConfig(servers=["nats://custom:4222"]))
         @with_jetstream_context(config)
         async def publish_message(
             js: JetStreamContext, subject: str, message: bytes

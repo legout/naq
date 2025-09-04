@@ -17,7 +17,10 @@ import time
 from datetime import datetime
 from typing import List, Dict, Any
 
-from naq import list_workers_sync, SyncClient, setup_logging
+from loguru import logger
+
+from naq import list_workers_sync, NatsClient, setup_logging
+from naq.config import NatsConfig, QueueConfig
 
 # Configure secure JSON serialization
 os.environ.setdefault('NAQ_JOB_SERIALIZER', 'json')
@@ -37,15 +40,15 @@ def long_running_task(task_id: int, duration: int = 10) -> str:
     Returns:
         Task completion message
     """
-    print(f"🔄 Long task {task_id} starting (will run {duration}s)")
+    logger.info(f"🔄 Long task {task_id} starting (will run {duration}s)")
     
     for i in range(duration):
         time.sleep(1)
         if i % 3 == 0:  # Progress update every 3 seconds
-            print(f"  📊 Task {task_id} progress: {i+1}/{duration} seconds")
+            logger.info(f"  📊 Task {task_id} progress: {i+1}/{duration} seconds")
     
     result = f"Long task {task_id} completed after {duration} seconds"
-    print(f"✅ {result}")
+    logger.success(f"✅ {result}")
     
     return result
 
@@ -60,14 +63,14 @@ def quick_task(task_id: int) -> str:
     Returns:
         Task completion message
     """
-    print(f"⚡ Quick task {task_id} executing...")
+    logger.info(f"⚡ Quick task {task_id} executing...")
     time.sleep(1)
     result = f"Quick task {task_id} completed"
-    print(f"✅ {result}")
+    logger.success(f"✅ {result}")
     return result
 
 
-def display_worker_info(workers: List[Dict[str, Any]]):
+def display_worker_info(workers: List[Dict[str, Any]]) -> None:
     """
     Display formatted worker information.
     
@@ -75,12 +78,12 @@ def display_worker_info(workers: List[Dict[str, Any]]):
         workers: List of worker status dictionaries
     """
     if not workers:
-        print("❌ No workers found!")
-        print("💡 Start a worker with: naq worker default")
+        logger.error("❌ No workers found!")
+        logger.info("💡 Start a worker with: naq worker default")
         return
     
-    print(f"👥 Found {len(workers)} active workers:")
-    print("-" * 80)
+    logger.info(f"👥 Found {len(workers)} active workers:")
+    logger.info("-" * 80)
     
     for i, worker in enumerate(workers, 1):
         worker_id = worker.get('worker_id', 'unknown')
@@ -98,81 +101,95 @@ def display_worker_info(workers: List[Dict[str, Any]]):
             'stopping': '🛑'
         }.get(status.lower(), '❓')
         
-        print(f"Worker {i}: {worker_id}")
-        print(f"  Status: {status_emoji} {status.upper()}")
-        print(f"  Queues: {', '.join(queues) if queues else 'none'}")
-        print(f"  Concurrency: {concurrency}")
+        logger.info(f"Worker {i}: {worker_id}")
+        logger.info(f"  Status: {status_emoji} {status.upper()}")
+        logger.info(f"  Queues: {', '.join(queues) if queues else 'none'}")
+        logger.info(f"  Concurrency: {concurrency}")
         
         if current_job:
-            print(f"  Current Job: {current_job}")
+            logger.info(f"  Current Job: {current_job}")
         
         if last_heartbeat:
             try:
                 hb_time = datetime.fromtimestamp(last_heartbeat)
                 time_diff = datetime.now() - hb_time
-                print(f"  Last Heartbeat: {hb_time.strftime('%H:%M:%S')} ({time_diff.seconds}s ago)")
-            except:
-                print(f"  Last Heartbeat: {last_heartbeat}")
+                logger.info(f"  Last Heartbeat: {hb_time.strftime('%H:%M:%S')} ({time_diff.seconds}s ago)")
+            except Exception:
+                logger.info(f"  Last Heartbeat: {last_heartbeat}")
         
         if i < len(workers):
-            print()
+            logger.info("")
 
 
-def monitor_workers_during_jobs():
+def monitor_workers_during_jobs() -> bool:
     """
     Monitor workers while they process jobs.
+    
+    Returns:
+        True if monitoring was successful, False otherwise
     """
-    print("🚀 Worker Monitoring Demo")
-    print("=" * 50)
+    logger.info("🚀 Worker Monitoring Demo")
+    logger.info("=" * 50)
     
     # First, check initial worker status
-    print("📊 Initial worker status:")
+    logger.info("📊 Initial worker status:")
     try:
         workers = list_workers_sync()
         display_worker_info(workers)
     except Exception as e:
-        print(f"❌ Could not fetch worker info: {e}")
-        print("💡 Make sure NATS is running and workers are started")
+        logger.error(f"❌ Could not fetch worker info: {e}")
+        logger.info("💡 Make sure NATS is running and workers are started")
         return False
     
     if not workers:
         return False
     
-    print("\n" + "=" * 50)
-    print("📤 Enqueueing jobs to monitor worker activity...")
+    logger.info("\n" + "=" * 50)
+    logger.info("📤 Enqueueing jobs to monitor worker activity...")
     
     # Enqueue some jobs to see workers in action
-    with SyncClient() as client:
+    # Create configuration
+    nats_config = NatsConfig(
+        servers=["nats://localhost:4222"],
+        connect_timeout=5,
+        max_reconnect_attempts=3
+    )
+    
+    queue_config = QueueConfig(
+        name="default",
+        stream_name="NAQ_JOBS",
+        consumer_name="worker_monitoring_consumer"
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=queue_config) as client:
         jobs = []
         
         # Enqueue long-running tasks
-        print("📤 Enqueueing long-running tasks...")
+        logger.info("📤 Enqueueing long-running tasks...")
         for i in range(3):
             job = client.enqueue(
                 long_running_task,
                 task_id=i + 1,
-                duration=8,
-                queue_name="default"
+                duration=8
             )
             jobs.append(job)
-            print(f"  ✅ Enqueued long task {i + 1} (ID: {job.job_id})")
+            logger.info(f"  ✅ Enqueued long task {i + 1} (ID: {job.job_id})")
         
         # Enqueue quick tasks
-        print("\n📤 Enqueueing quick tasks...")
+        logger.info("\n📤 Enqueueing quick tasks...")
         for i in range(5):
             job = client.enqueue(
                 quick_task,
-                task_id=i + 1,
-                queue_name="default"
+                task_id=i + 1
             )
             jobs.append(job)
-            print(f"  ✅ Enqueued quick task {i + 1} (ID: {job.job_id})")
+            logger.info(f"  ✅ Enqueued quick task {i + 1} (ID: {job.job_id})")
     
-    print(f"\n🎯 Enqueued {len(jobs)} jobs total")
-    print("\n" + "=" * 50)
-    print("📈 Monitoring workers as they process jobs...")
-    print("(Updates every 5 seconds for 30 seconds)")
-    print("-" * 50)
+    logger.info(f"\n🎯 Enqueued {len(jobs)} jobs total")
+    logger.info("\n" + "=" * 50)
+    logger.info("📈 Monitoring workers as they process jobs...")
+    logger.info("(Updates every 5 seconds for 30 seconds)")
+    logger.info("-" * 50)
     
     # Monitor workers for 30 seconds
     for round_num in range(6):  # 6 rounds * 5 seconds = 30 seconds
@@ -180,7 +197,7 @@ def monitor_workers_during_jobs():
         
         try:
             workers = list_workers_sync()
-            print(f"\n📊 Worker Status Update #{round_num + 1}:")
+            logger.info(f"\n📊 Worker Status Update #{round_num + 1}:")
             display_worker_info(workers)
             
             # Show summary stats
@@ -188,65 +205,68 @@ def monitor_workers_during_jobs():
             busy_workers = len([w for w in workers if w.get('status', '').lower() == 'busy'])
             idle_workers = total_workers - busy_workers
             
-            print(f"📈 Summary: {total_workers} total, {busy_workers} busy, {idle_workers} idle")
+            logger.info(f"📈 Summary: {total_workers} total, {busy_workers} busy, {idle_workers} idle")
             
         except Exception as e:
-            print(f"❌ Error monitoring workers: {e}")
+            logger.error(f"❌ Error monitoring workers: {e}")
     
-    print("\n" + "=" * 50)
-    print("🏁 Monitoring completed!")
+    logger.info("\n" + "=" * 50)
+    logger.info("🏁 Monitoring completed!")
     
     return True
 
 
-def main():
+def main() -> int:
     """
     Main monitoring demonstration.
+    
+    Returns:
+        Exit code (0 for success, 1 for error)
     """
     try:
         success = monitor_workers_during_jobs()
         
         if success:
-            print("\n💡 Worker Monitoring Tips:")
-            print("=" * 30)
-            print("• Use 'naq list-workers' to check worker status anytime")
-            print("• Workers send heartbeats every 30 seconds by default")
-            print("• Monitor worker logs for detailed job processing info")
-            print("• Use the dashboard for web-based monitoring: 'naq dashboard'")
-            print("• Scale workers based on queue length and processing time")
+            logger.info("\n💡 Worker Monitoring Tips:")
+            logger.info("=" * 30)
+            logger.info("• Use 'naq list-workers' to check worker status anytime")
+            logger.info("• Workers send heartbeats every 30 seconds by default")
+            logger.info("• Monitor worker logs for detailed job processing info")
+            logger.info("• Use the dashboard for web-based monitoring: 'naq dashboard'")
+            logger.info("• Scale workers based on queue length and processing time")
             
-            print("\n🔧 Worker Management Commands:")
-            print("• Start worker: naq worker default")
-            print("• Multiple queues: naq worker default emails notifications")
-            print("• Custom concurrency: naq worker default --concurrency 5")
-            print("• Custom name: naq worker default --worker-name 'web-1'")
-            print("• Graceful shutdown: Ctrl+C (SIGTERM)")
+            logger.info("\n🔧 Worker Management Commands:")
+            logger.info("• Start worker: naq worker default")
+            logger.info("• Multiple queues: naq worker default emails notifications")
+            logger.info("• Custom concurrency: naq worker default --concurrency 5")
+            logger.info("• Custom name: naq worker default --worker-name 'web-1'")
+            logger.info("• Graceful shutdown: Ctrl+C (SIGTERM)")
             
-            print("\n📊 Production Monitoring:")
-            print("• Set up monitoring dashboards")
-            print("• Alert on worker failures or high queue length")
-            print("• Monitor worker CPU/memory usage")
-            print("• Track job processing times and error rates")
+            logger.info("\n📊 Production Monitoring:")
+            logger.info("• Set up monitoring dashboards")
+            logger.info("• Alert on worker failures or high queue length")
+            logger.info("• Monitor worker CPU/memory usage")
+            logger.info("• Track job processing times and error rates")
         else:
-            print("\n🔧 Setup Instructions:")
-            print("=" * 25)
-            print("1. Start NATS server:")
-            print("   cd docker && docker-compose up -d")
-            print()
-            print("2. Set secure serialization:")
-            print("   export NAQ_JOB_SERIALIZER=json")
-            print()
-            print("3. Start one or more workers (in separate terminals):")
-            print("   naq worker default")
-            print("   naq worker default --worker-name 'worker-2'")
-            print()
-            print("4. Run this monitoring script again:")
-            print("   python worker_monitoring.py")
+            logger.info("\n🔧 Setup Instructions:")
+            logger.info("=" * 25)
+            logger.info("1. Start NATS server:")
+            logger.info("   cd docker && docker-compose up -d")
+            logger.info("")
+            logger.info("2. Set secure serialization:")
+            logger.info("   export NAQ_JOB_SERIALIZER=json")
+            logger.info("")
+            logger.info("3. Start one or more workers (in separate terminals):")
+            logger.info("   naq worker default")
+            logger.info("   naq worker default --worker-name 'worker-2'")
+            logger.info("")
+            logger.info("4. Run this monitoring script again:")
+            logger.info("   python worker_monitoring.py")
         
     except KeyboardInterrupt:
-        print("\n\n🛑 Monitoring stopped by user")
+        logger.info("\n\n🛑 Monitoring stopped by user")
     except Exception as e:
-        print(f"❌ Error: {e}")
+        logger.error(f"❌ Error: {e}")
         return 1
     
     return 0

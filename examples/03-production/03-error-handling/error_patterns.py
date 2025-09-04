@@ -20,23 +20,22 @@ import os
 import time
 import json
 import random
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
-from dataclasses import dataclass
 from contextlib import contextmanager
 
-from naq import SyncClient, setup_logging
+import msgspec
+from loguru import logger
+
+from naq import NatsClient
+from naq.config import NatsConfig, QueueConfig
 
 # Configure secure JSON serialization
 os.environ.setdefault('NAQ_JOB_SERIALIZER', 'json')
 
 # Setup logging with detailed formatting
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logger.remove()
+logger.add(lambda msg: print(msg, end=""), level="INFO", format="{time} | {level} | {message}")
 
 
 # Custom Exception Classes
@@ -95,8 +94,7 @@ class SystemFailureError(CriticalError):
     pass
 
 
-@dataclass
-class ErrorContext:
+class ErrorContext(msgspec.Struct):
     """Structured error context information."""
     job_id: str
     function_name: str
@@ -159,7 +157,7 @@ class StructuredLogger:
     """
     
     def __init__(self, name: str):
-        self.logger = logging.getLogger(name)
+        self.logger = logger
     
     def log_error(self, error: Exception, context: ErrorContext, severity: str = "ERROR"):
         """Log error with structured context."""
@@ -602,19 +600,33 @@ class ProcessingError(Exception):
 
 def demonstrate_retry_patterns():
     """Demonstrate various retry patterns."""
-    print("📍 Retry Patterns Demo")
-    print("-" * 40)
+    logger.info("📍 Retry Patterns Demo")
+    logger.info("-" * 40)
     
-    with SyncClient() as client:
+    # Configure NATS client
+    nats_config = NatsConfig(
+        servers=["nats://localhost:4222"],
+        connect_timeout=5.0,
+        max_reconnect_attempts=3
+    )
+    
+    # Configure error queue
+    queue_config = QueueConfig(
+        name="error_queue",
+        job_timeout=30.0,
+        max_retries=4,
+        retry_delay=2.0
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=queue_config) as client:
         jobs = []
         
         # Selective retry based on error type
-        print("📤 Job 1: Selective retries (retries network errors, not auth errors)")
+        logger.info("📤 Job 1: Selective retries (retries network errors, not auth errors)")
         job1 = client.enqueue(
             robust_api_call_with_circuit_breaker,
             endpoint="/api/users",
             job_id="retry_job_1",
-            queue_name="error_queue",
             max_retries=4,
             retry_delay=2,
             retry_strategy="exponential",
@@ -622,58 +634,86 @@ def demonstrate_retry_patterns():
             ignore_on=(AuthenticationError, ValidationError)
         )
         jobs.append(job1)
-        print(f"  ✅ Enqueued: {job1.job_id}")
+        logger.info(f"  ✅ Enqueued: {job1.job_id}")
         
         # Data validation with no retries
-        print("\n📤 Job 2: Data validation (no retries for validation errors)")
+        logger.info("\n📤 Job 2: Data validation (no retries for validation errors)")
         job2 = client.enqueue(
             process_data_with_validation,
             data={"id": "test_123", "type": "process", "payload": {"key": "value"}},
             job_id="validation_job_2",
-            queue_name="error_queue",
             max_retries=3,
             retry_delay=1,
             retry_on=(SystemFailureError,),
             ignore_on=(ValidationError, DataCorruptionError)
         )
         jobs.append(job2)
-        print(f"  ✅ Enqueued: {job2.job_id}")
+        logger.info(f"  ✅ Enqueued: {job2.job_id}")
         
         return jobs
 
 
 def demonstrate_circuit_breaker_pattern():
     """Demonstrate circuit breaker pattern."""
-    print("\n📍 Circuit Breaker Pattern Demo")
-    print("-" * 40)
+    logger.info("\n📍 Circuit Breaker Pattern Demo")
+    logger.info("-" * 40)
     
-    with SyncClient() as client:
+    # Configure NATS client
+    nats_config = NatsConfig(
+        servers=["nats://localhost:4222"],
+        connect_timeout=5.0,
+        max_reconnect_attempts=3
+    )
+    
+    # Configure error queue
+    queue_config = QueueConfig(
+        name="error_queue",
+        job_timeout=30.0,
+        max_retries=2,
+        retry_delay=1.0
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=queue_config) as client:
         jobs = []
         
         # Multiple API calls that will likely trigger circuit breaker
-        print("📤 Multiple API calls (circuit breaker will activate after failures)")
+        logger.info("📤 Multiple API calls (circuit breaker will activate after failures)")
         
         for i in range(8):
             job = client.enqueue(
                 robust_api_call_with_circuit_breaker,
                 endpoint=f"/api/data/{i+1}",
                 job_id=f"circuit_breaker_job_{i+1}",
-                queue_name="error_queue",
                 max_retries=2,
                 retry_delay=1
             )
             jobs.append(job)
-            print(f"  ✅ API call {i+1}: {job.job_id}")
+            logger.info(f"  ✅ API call {i+1}: {job.job_id}")
         
         return jobs
 
 
 def demonstrate_rollback_pattern():
     """Demonstrate rollback pattern."""
-    print("\n📍 Multi-step Job with Rollback Demo")
-    print("-" * 40)
+    logger.info("\n📍 Multi-step Job with Rollback Demo")
+    logger.info("-" * 40)
     
-    with SyncClient() as client:
+    # Configure NATS client
+    nats_config = NatsConfig(
+        servers=["nats://localhost:4222"],
+        connect_timeout=5.0,
+        max_reconnect_attempts=3
+    )
+    
+    # Configure error queue
+    queue_config = QueueConfig(
+        name="error_queue",
+        job_timeout=30.0,
+        max_retries=2,
+        retry_delay=3.0
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=queue_config) as client:
         jobs = []
         
         # Multi-step jobs with rollback capability
@@ -683,32 +723,46 @@ def demonstrate_rollback_pattern():
             {"id": "multi_003", "type": "export", "payload": {"action": "delete"}}
         ]
         
-        print("📤 Multi-step jobs with rollback capability")
+        logger.info("📤 Multi-step jobs with rollback capability")
         for i, data in enumerate(test_data):
             job = client.enqueue(
                 multi_step_job_with_rollback,
                 data=data,
                 job_id=f"rollback_job_{i+1}",
-                queue_name="error_queue",
                 max_retries=2,
                 retry_delay=3
             )
             jobs.append(job)
-            print(f"  ✅ Multi-step job {i+1}: {job.job_id}")
+            logger.info(f"  ✅ Multi-step job {i+1}: {job.job_id}")
         
         return jobs
 
 
 def demonstrate_graceful_degradation():
     """Demonstrate graceful degradation."""
-    print("\n📍 Graceful Degradation Demo")
-    print("-" * 40)
+    logger.info("\n📍 Graceful Degradation Demo")
+    logger.info("-" * 40)
     
-    with SyncClient() as client:
+    # Configure NATS client
+    nats_config = NatsConfig(
+        servers=["nats://localhost:4222"],
+        connect_timeout=5.0,
+        max_reconnect_attempts=3
+    )
+    
+    # Configure error queue
+    queue_config = QueueConfig(
+        name="error_queue",
+        job_timeout=30.0,
+        max_retries=1,
+        retry_delay=2.0
+    )
+    
+    with NatsClient(nats_config=nats_config, queue_config=queue_config) as client:
         jobs = []
         
         # Jobs that degrade gracefully when services are unavailable
-        print("📤 Jobs with graceful degradation")
+        logger.info("📤 Jobs with graceful degradation")
         
         degradation_data = [
             {"id": "degrade_001", "priority": "high"},
@@ -721,12 +775,11 @@ def demonstrate_graceful_degradation():
                 graceful_degradation_job,
                 data=data,
                 job_id=f"degradation_job_{i+1}",
-                queue_name="error_queue",
                 max_retries=1,  # Limited retries for degradation
                 retry_delay=2
             )
             jobs.append(job)
-            print(f"  ✅ Degradation job {i+1}: {job.job_id}")
+            logger.info(f"  ✅ Degradation job {i+1}: {job.job_id}")
         
         return jobs
 
@@ -735,8 +788,8 @@ def main():
     """
     Main function demonstrating comprehensive error handling patterns.
     """
-    print("🚀 NAQ Comprehensive Error Handling Demo")
-    print("=" * 50)
+    logger.info("🚀 NAQ Comprehensive Error Handling Demo")
+    logger.info("=" * 50)
     
     try:
         # Demonstrate different error handling patterns
@@ -747,46 +800,46 @@ def main():
         
         all_jobs = retry_jobs + circuit_jobs + rollback_jobs + degradation_jobs
         
-        print(f"\n🎉 Enqueued {len(all_jobs)} jobs demonstrating error handling!")
+        logger.info(f"\n🎉 Enqueued {len(all_jobs)} jobs demonstrating error handling!")
         
-        print("\n" + "=" * 50)
-        print("📊 Error Handling Pattern Summary:")
-        print("=" * 50)
-        print(f"Retry patterns: {len(retry_jobs)} jobs")
-        print(f"Circuit breaker: {len(circuit_jobs)} jobs")
-        print(f"Rollback patterns: {len(rollback_jobs)} jobs")
-        print(f"Graceful degradation: {len(degradation_jobs)} jobs")
+        logger.info("\n" + "=" * 50)
+        logger.info("📊 Error Handling Pattern Summary:")
+        logger.info("=" * 50)
+        logger.info(f"Retry patterns: {len(retry_jobs)} jobs")
+        logger.info(f"Circuit breaker: {len(circuit_jobs)} jobs")
+        logger.info(f"Rollback patterns: {len(rollback_jobs)} jobs")
+        logger.info(f"Graceful degradation: {len(degradation_jobs)} jobs")
         
-        print("\n🎯 Error Handling Highlights:")
-        print("   • Selective retries based on error type")
-        print("   • Circuit breaker for external service protection")
-        print("   • Multi-step jobs with rollback capability")
-        print("   • Graceful degradation when services fail")
-        print("   • Comprehensive error logging and monitoring")
+        logger.info("\n🎯 Error Handling Highlights:")
+        logger.info("   • Selective retries based on error type")
+        logger.info("   • Circuit breaker for external service protection")
+        logger.info("   • Multi-step jobs with rollback capability")
+        logger.info("   • Graceful degradation when services fail")
+        logger.info("   • Comprehensive error logging and monitoring")
         
-        print("\n💡 Watch for these patterns in logs:")
-        print("   • Structured error logging with context")
-        print("   • Circuit breaker state changes")
-        print("   • Rollback operations for failed multi-step jobs")
-        print("   • Service degradation messages")
-        print("   • Critical alerts for data corruption")
+        logger.info("\n💡 Watch for these patterns in logs:")
+        logger.info("   • Structured error logging with context")
+        logger.info("   • Circuit breaker state changes")
+        logger.info("   • Rollback operations for failed multi-step jobs")
+        logger.info("   • Service degradation messages")
+        logger.info("   • Critical alerts for data corruption")
         
-        print("\n📋 Production Error Handling Tips:")
-        print("   • Classify errors by retry-ability")
-        print("   • Implement circuit breakers for external services")
-        print("   • Design rollback mechanisms for multi-step operations")
-        print("   • Plan graceful degradation for service outages")
-        print("   • Use structured logging for debugging")
-        print("   • Monitor error rates and patterns")
-        print("   • Set up appropriate alerting for critical errors")
+        logger.info("\n📋 Production Error Handling Tips:")
+        logger.info("   • Classify errors by retry-ability")
+        logger.info("   • Implement circuit breakers for external services")
+        logger.info("   • Design rollback mechanisms for multi-step operations")
+        logger.info("   • Plan graceful degradation for service outages")
+        logger.info("   • Use structured logging for debugging")
+        logger.info("   • Monitor error rates and patterns")
+        logger.info("   • Set up appropriate alerting for critical errors")
         
     except Exception as e:
-        print(f"❌ Error: {e}")
-        print("\n🔧 Troubleshooting:")
-        print("   - Is NATS running? (cd docker && docker-compose up -d)")
-        print("   - Are workers running? (naq worker default error_queue)")
-        print("   - Is NAQ_JOB_SERIALIZER=json set?")
-        print("   - Check worker logs for detailed error information")
+        logger.error(f"❌ Error: {e}")
+        logger.error("\n🔧 Troubleshooting:")
+        logger.error("   - Is NATS running? (cd docker && docker-compose up -d)")
+        logger.error("   - Are workers running? (naq worker default error_queue)")
+        logger.error("   - Is NAQ_JOB_SERIALIZER=json set?")
+        logger.error("   - Check worker logs for detailed error information")
         return 1
     
     return 0

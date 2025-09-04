@@ -11,9 +11,10 @@ import socket
 import time
 from typing import Any, Dict, List, Optional
 
+from ..nats_client import NatsClient
+from ..config import get_config
 from ..exceptions import NaqException
 from ..models.enums import WORKER_STATUS
-from ..services import ConnectionService, EventService, KVStoreService, ServiceManager
 from ..settings import (
     DEFAULT_NATS_URL,
     DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS,
@@ -34,65 +35,48 @@ class WorkerStatusManager:
     active workers.
     """
 
-    def __init__(self, worker, service_manager: Optional[ServiceManager] = None):
+    def __init__(self, worker, nats_client: Optional[NatsClient] = None):
         """Initialize the worker status manager.
 
         Args:
             worker: The worker instance this status manager belongs to.
-            service_manager: Optional ServiceManager for accessing services.
+            nats_client: Optional NatsClient for accessing NATS.
         """
         self.worker = worker
-        self._service_manager = service_manager
+        self._nats_client = nats_client
         self._current_status = WORKER_STATUS.STARTING
-        self._kv_store_service: Optional[KVStoreService] = None
-        self._event_service: Optional[EventService] = None
         self._heartbeat_task = None
         self.logger = StructuredLogger(__name__)
         self.error_handler = ErrorHandler(self.logger)
 
     @timing
     @retry(max_attempts=3, delay=1.0, backoff="exponential")
-    async def _get_kv_store_service(self) -> Optional[KVStoreService]:
-        """Initialize and return the KVStoreService for worker statuses using the service layer."""
-        if self._kv_store_service is None:
+    async def _get_nats_client(self) -> Optional[NatsClient]:
+        """Initialize and return the NatsClient for worker statuses."""
+        if self._nats_client is None:
             try:
-                if self._service_manager:
-                    # Get KVStoreService from ServiceManager
-                    self._kv_store_service = await self._service_manager.get_service(
-                        "kv_store", KVStoreService
-                    )
-                else:
-                    self.logger.error(
-                        "ServiceManager not available, cannot get KVStoreService"
-                    )
-                    return None
+                # Create a new NatsClient if not provided
+                config = get_config()
+                self._nats_client = NatsClient(config)
+                await self._nats_client.connect()
             except Exception as e:
-                self.error_handler.handle_error(e, {"operation": "initialize_kv_store"})
-                self._kv_store_service = None
-        return self._kv_store_service
+                self.error_handler.handle_error(e, {"operation": "initialize_nats_client"})
+                self._nats_client = None
+        return self._nats_client
 
     @timing
     @retry(max_attempts=3, delay=1.0, backoff="exponential")
-    async def _get_event_service(self) -> Optional[EventService]:
-        """Initialize and return the EventService for worker events using the service layer."""
-        if self._event_service is None:
-            try:
-                if self._service_manager:
-                    # Get EventService from ServiceManager
-                    self._event_service = await self._service_manager.get_service(
-                        "events", EventService
-                    )
-                else:
-                    self.logger.error(
-                        "ServiceManager not available, cannot get EventService"
-                    )
-                    return None
-            except Exception as e:
-                self.error_handler.handle_error(
-                    e, {"operation": "initialize_event_service"}
-                )
-                self._event_service = None
-        return self._event_service
+    async def _get_kv_store(self):
+        """Initialize and return the KV store for worker statuses."""
+        nats_client = await self._get_nats_client()
+        if not nats_client:
+            return None
+        
+        try:
+            return await nats_client.get_kv_store(WORKER_KV_NAME)
+        except Exception as e:
+            self.error_handler.handle_error(e, {"operation": "get_kv_store"})
+            return None
 
     @timing
     async def update_status(
@@ -119,8 +103,8 @@ class WorkerStatusManager:
         else:
             self._current_status = status
 
-        kv_store_service = await self._get_kv_store_service()
-        if not kv_store_service:
+        kv_store = await self._get_kv_store()
+        if not kv_store:
             return
 
         payload = {
@@ -134,7 +118,7 @@ class WorkerStatusManager:
             payload["job_id"] = str(job_id)
 
         try:
-            await kv_store_service.put(WORKER_KV_NAME, self.worker.worker_id, payload)
+            await kv_store.put(self.worker.worker_id.encode(), payload)
         except Exception as e:
             self.error_handler.handle_error(
                 e,
@@ -151,61 +135,13 @@ class WorkerStatusManager:
             try:
                 await self.update_status(self._current_status)
 
-                # Log worker_heartbeat event
-                event_service = await self._get_event_service()
-                if event_service:
-                    import os
-                    import socket
-
-                    from ..models.enums import WorkerEventType
-                    from ..models.events import WorkerEvent
-
-                    # Calculate active jobs (concurrency - available slots)
-                    active_jobs = 0
-                    if hasattr(self.worker, "_semaphore"):
-                        active_jobs = (
-                            self.worker._concurrency - self.worker._semaphore._value
-                        )
-
-                    event = WorkerEvent.heartbeat(
-                        worker_id=self.worker.worker_id,
-                        queue_names=self.worker.queue_names,
-                        details={
-                            "hostname": socket.gethostname(),
-                            "pid": os.getpid(),
-                            "concurrency": self.worker._concurrency,
-                            "active_jobs": active_jobs,
-                            "status": self._current_status.value,
-                        },
-                    )
-                    await event_service.log_worker_event(event)
+                # Note: Event logging functionality has been removed as part of service layer removal
+                # This can be re-implemented later if needed using a different approach
 
                 await asyncio.sleep(DEFAULT_WORKER_HEARTBEAT_INTERVAL_SECONDS)
             except Exception as e:
-                # Log worker_error event if heartbeat fails
-                event_service = await self._get_event_service()
-                if event_service:
-                    import os
-                    import socket
-
-                    from ..models.enums import WorkerEventType
-                    from ..models.events import WorkerEvent
-
-                    event = WorkerEvent(
-                        worker_id=self.worker.worker_id,
-                        event_type=WorkerEventType.HEARTBEAT,  # Use HEARTBEAT as base type
-                        queue_names=self.worker.queue_names,
-                        message=f"Heartbeat error: {str(e)}",
-                        details={
-                            "hostname": socket.gethostname(),
-                            "pid": os.getpid(),
-                            "concurrency": self.worker._concurrency,
-                            "error_type": type(e).__name__,
-                            "error_message": str(e),
-                            "status": self._current_status.value,
-                        },
-                    )
-                    await event_service.log_worker_event(event)
+                # Note: Event logging functionality has been removed as part of service layer removal
+                # This can be re-implemented later if needed using a different approach
 
                 # Re-raise the exception to maintain existing error handling
                 raise

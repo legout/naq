@@ -8,6 +8,7 @@ import anyio
 import pytest
 
 from naq.scheduler import LeaderElection, Scheduler
+from naq.nats_client import NatsClient
 from naq.settings import (
     SCHEDULER_LOCK_KV_NAME,
     SCHEDULER_LOCK_KEY,
@@ -17,108 +18,111 @@ from naq.settings import (
 
 
 @pytest.fixture
-def mock_kv_store_service():
-    """Create a mock KVStoreService for testing."""
-    service = AsyncMock()
-    service.get = AsyncMock()
-    service.set = AsyncMock()
-    service.delete = AsyncMock()
-    return service
-
-
-@pytest.fixture
-def mock_scheduler_service():
-    """Create a mock SchedulerService for testing."""
-    service = AsyncMock()
-    service.trigger_due_jobs = AsyncMock(return_value=(0, 0))
-    return service
-
-
-@pytest.fixture
-def mock_service_manager(mock_kv_store_service, mock_scheduler_service):
-    """Create a mock ServiceManager with all services."""
-    from naq.services.base import ServiceManager
-    from naq.services.connection import ConnectionService
-    from naq.services.events import EventService
+def mock_nats_client():
+    """Create a mock NatsClient for testing."""
+    client = AsyncMock(spec=NatsClient)
     
-    manager = AsyncMock(spec=ServiceManager)
-    manager.get_service.side_effect = lambda service_name, service_class: {
-        "connection": AsyncMock(spec=ConnectionService),
-        "kv_store": mock_kv_store_service,
-        "event": AsyncMock(spec=EventService),
-        "scheduler": mock_scheduler_service,
-    }[service_name]
-    return manager
+    # Mock KV store operations
+    mock_kv = AsyncMock()
+    mock_kv.get = AsyncMock()
+    mock_kv.create = AsyncMock()
+    mock_kv.update = AsyncMock()
+    mock_kv.delete = AsyncMock()
+    client.get_kv_store = AsyncMock(return_value=mock_kv)
+    
+    # Mock trigger_due_jobs method
+    client.trigger_due_jobs = AsyncMock(return_value=(0, 0))
+    
+    return client
 
 
 @pytest.mark.asyncio
-async def test_leader_election_integration(mock_kv_store_service):
+async def test_leader_election_integration(mock_nats_client):
     """Test leader election integration with multiple instances."""
     # Create two leader election instances
     instance1 = LeaderElection(
         instance_id=f"instance1-{uuid.uuid4().hex[:8]}",
         lock_ttl=SCHEDULER_LOCK_TTL_SECONDS,
         lock_renew_interval=SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS,
-        kv_store_service=mock_kv_store_service
+        client=mock_nats_client
     )
     
     instance2 = LeaderElection(
         instance_id=f"instance2-{uuid.uuid4().hex[:8]}",
         lock_ttl=SCHEDULER_LOCK_TTL_SECONDS,
         lock_renew_interval=SCHEDULER_LOCK_RENEW_INTERVAL_SECONDS,
-        kv_store_service=mock_kv_store_service
+        client=mock_nats_client
     )
     
     # Initialize both instances
     await instance1.initialize()
     await instance2.initialize()
     
+    # Get mock KV store
+    mock_kv = await mock_nats_client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
+    
     # First instance should become leader
-    mock_kv_store_service.set.return_value = True
-    mock_kv_store_service.get.return_value = {
-        "instance_id": instance1.instance_id,
-        "timestamp": time.time(),
-        "hostname": "host1"
-    }
+    mock_kv.create.return_value = True
+    mock_kv.get.return_value = MagicMock(
+        value=msgspec.msgpack.encode({
+            "instance_id": instance1.instance_id,
+            "timestamp": time.time(),
+            "hostname": "host1",
+            "pid": 12345,
+            "start_time": time.time()
+        })
+    )
     
     result1 = await instance1.try_become_leader()
     assert result1 is True
     assert instance1.is_leader is True
     
     # Second instance should not become leader
-    mock_kv_store_service.get.return_value = {
-        "instance_id": instance1.instance_id,
-        "timestamp": time.time(),
-        "hostname": "host1"
-    }
+    mock_kv.get.return_value = MagicMock(
+        value=msgspec.msgpack.encode({
+            "instance_id": instance1.instance_id,
+            "timestamp": time.time(),
+            "hostname": "host1",
+            "pid": 12345,
+            "start_time": time.time()
+        })
+    )
     
     result2 = await instance2.try_become_leader()
     assert result2 is False
     assert instance2.is_leader is False
     
     # First instance should be able to renew lock
-    mock_kv_store_service.set.return_value = True
-    mock_kv_store_service.get.return_value = {
-        "instance_id": instance1.instance_id,
-        "timestamp": time.time(),
-        "hostname": "host1"
-    }
+    mock_kv.update.return_value = True
+    mock_kv.get.return_value = MagicMock(
+        value=msgspec.msgpack.encode({
+            "instance_id": instance1.instance_id,
+            "timestamp": time.time(),
+            "hostname": "host1",
+            "pid": 12345,
+            "start_time": time.time()
+        })
+    )
     
     renew_result = await instance1._renew_lock()
     assert renew_result is True
     
     # First instance releases lock
-    mock_kv_store_service.get.return_value = None  # Lock no longer exists after release
+    mock_kv.get.return_value = None  # Lock no longer exists after release
     await instance1.release_lock()
     assert instance1.is_leader is False
     
     # Now second instance should become leader
-    mock_kv_store_service.set.return_value = True
-    mock_kv_store_service.get.return_value = {
-        "instance_id": instance2.instance_id,
-        "timestamp": time.time(),
-        "hostname": "host2"
-    }
+    mock_kv.create.return_value = True
+    mock_kv.get.return_value = MagicMock(
+        value=msgspec.msgpack.encode({
+            "instance_id": instance2.instance_id,
+            "timestamp": time.time(),
+            "hostname": "host2",
+            "pid": 12345,
+            "start_time": time.time()
+        })
+    )
     
     result2 = await instance2.try_become_leader()
     assert result2 is True
@@ -126,35 +130,48 @@ async def test_leader_election_integration(mock_kv_store_service):
 
 
 @pytest.mark.asyncio
-async def test_leader_election_lock_expiry(mock_kv_store_service):
+async def test_leader_election_lock_expiry(mock_nats_client):
     """Test leader election with lock expiry."""
+    import msgspec
+    
     instance = LeaderElection(
         instance_id=f"instance-{uuid.uuid4().hex[:8]}",
         lock_ttl=1,  # 1 second TTL for testing
         lock_renew_interval=0.5,  # 0.5 second renew interval
-        kv_store_service=mock_kv_store_service
+        client=mock_nats_client
     )
     
     await instance.initialize()
     
+    # Get mock KV store
+    mock_kv = await mock_nats_client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
+    
     # Instance becomes leader
-    mock_kv_store_service.set.return_value = True
-    mock_kv_store_service.get.return_value = {
-        "instance_id": instance.instance_id,
-        "timestamp": time.time(),
-        "hostname": "host"
-    }
+    mock_kv.create.return_value = True
+    mock_kv.get.return_value = MagicMock(
+        value=msgspec.msgpack.encode({
+            "instance_id": instance.instance_id,
+            "timestamp": time.time(),
+            "hostname": "host",
+            "pid": 12345,
+            "start_time": time.time()
+        })
+    )
     
     result = await instance.try_become_leader()
     assert result is True
     assert instance.is_leader is True
     
     # Lock expires
-    mock_kv_store_service.get.return_value = {
-        "instance_id": instance.instance_id,
-        "timestamp": time.time() - 2,  # 2 seconds ago (expired)
-        "hostname": "host"
-    }
+    mock_kv.get.return_value = MagicMock(
+        value=msgspec.msgpack.encode({
+            "instance_id": instance.instance_id,
+            "timestamp": time.time() - 2,  # 2 seconds ago (expired)
+            "hostname": "host",
+            "pid": 12345,
+            "start_time": time.time() - 2
+        })
+    )
     
     # Check lock health
     health = await instance.check_leader_lock_health()
@@ -167,18 +184,20 @@ async def test_leader_election_lock_expiry(mock_kv_store_service):
 
 
 @pytest.mark.asyncio
-async def test_scheduler_integration_with_ha(mock_service_manager, mock_kv_store_service, mock_scheduler_service):
+async def test_scheduler_integration_with_ha(mock_nats_client):
     """Test scheduler integration with high availability."""
+    import msgspec
+    
     # Create two scheduler instances
     scheduler1 = Scheduler(
-        service_manager=mock_service_manager,
+        client=mock_nats_client,
         poll_interval=0.1,
         instance_id=f"scheduler1-{uuid.uuid4().hex[:8]}",
         enable_ha=True
     )
     
     scheduler2 = Scheduler(
-        service_manager=mock_service_manager,
+        client=mock_nats_client,
         poll_interval=0.1,
         instance_id=f"scheduler2-{uuid.uuid4().hex[:8]}",
         enable_ha=True
@@ -188,73 +207,88 @@ async def test_scheduler_integration_with_ha(mock_service_manager, mock_kv_store
     await scheduler1._connect()
     await scheduler2._connect()
     
+    # Get mock KV store
+    mock_kv = await mock_nats_client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
+    
     # First scheduler becomes leader
-    mock_kv_store_service.set.return_value = True
-    mock_kv_store_service.get.return_value = {
-        "instance_id": scheduler1._instance_id,
-        "timestamp": time.time(),
-        "hostname": "host1"
-    }
+    mock_kv.create.return_value = True
+    mock_kv.get.return_value = MagicMock(
+        value=msgspec.msgpack.encode({
+            "instance_id": scheduler1._instance_id,
+            "timestamp": time.time(),
+            "hostname": "host1",
+            "pid": 12345,
+            "start_time": time.time()
+        })
+    )
     
     # Handle leadership transition for first scheduler
     await scheduler1._handle_leadership_transition()
     assert scheduler1.is_leader is True
     
     # Second scheduler should not become leader
-    mock_kv_store_service.get.return_value = {
-        "instance_id": scheduler1._instance_id,
-        "timestamp": time.time(),
-        "hostname": "host1"
-    }
+    mock_kv.get.return_value = MagicMock(
+        value=msgspec.msgpack.encode({
+            "instance_id": scheduler1._instance_id,
+            "timestamp": time.time(),
+            "hostname": "host1",
+            "pid": 12345,
+            "start_time": time.time()
+        })
+    )
     
     await scheduler2._handle_leadership_transition()
     assert scheduler2.is_leader is False
     
     # First scheduler processes jobs
-    mock_scheduler_service.trigger_due_jobs.return_value = (5, 0)
+    mock_nats_client.trigger_due_jobs.return_value = (5, 0)
     await scheduler1._process_scheduled_jobs()
-    mock_scheduler_service.trigger_due_jobs.assert_called_once()
+    mock_nats_client.trigger_due_jobs.assert_called_once()
     
     # Second scheduler does not process jobs
-    mock_scheduler_service.trigger_due_jobs.reset_mock()
+    mock_nats_client.trigger_due_jobs.reset_mock()
     await scheduler2._process_scheduled_jobs()
-    mock_scheduler_service.trigger_due_jobs.assert_not_called()
+    mock_nats_client.trigger_due_jobs.assert_not_called()
     
     # First scheduler releases leadership
-    mock_kv_store_service.get.return_value = None
+    mock_kv.get.return_value = None
     await scheduler1._leader_election.release_lock()
     assert scheduler1.is_leader is False
     
     # Second scheduler becomes leader
-    mock_kv_store_service.set.return_value = True
-    mock_kv_store_service.get.return_value = {
-        "instance_id": scheduler2._instance_id,
-        "timestamp": time.time(),
-        "hostname": "host2"
-    }
+    mock_kv.create.return_value = True
+    mock_kv.get.return_value = MagicMock(
+        value=msgspec.msgpack.encode({
+            "instance_id": scheduler2._instance_id,
+            "timestamp": time.time(),
+            "hostname": "host2",
+            "pid": 12345,
+            "start_time": time.time()
+        })
+    )
     
     await scheduler2._handle_leadership_transition()
     assert scheduler2.is_leader is True
     
     # Second scheduler now processes jobs
-    mock_scheduler_service.trigger_due_jobs.reset_mock()
+    mock_nats_client.trigger_due_jobs.reset_mock()
     await scheduler2._process_scheduled_jobs()
-    mock_scheduler_service.trigger_due_jobs.assert_called_once()
+    mock_nats_client.trigger_due_jobs.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_scheduler_integration_without_ha(mock_service_manager, mock_scheduler_service):
+async def test_scheduler_integration_without_ha(mock_nats_client):
     """Test scheduler integration without high availability."""
     # Create two scheduler instances with HA disabled
     scheduler1 = Scheduler(
-        service_manager=mock_service_manager,
+        client=mock_nats_client,
         poll_interval=0.1,
         instance_id=f"scheduler1-{uuid.uuid4().hex[:8]}",
         enable_ha=False
     )
     
     scheduler2 = Scheduler(
-        service_manager=mock_service_manager,
+        client=mock_nats_client,
         poll_interval=0.1,
         instance_id=f"scheduler2-{uuid.uuid4().hex[:8]}",
         enable_ha=False
@@ -269,21 +303,23 @@ async def test_scheduler_integration_without_ha(mock_service_manager, mock_sched
     assert scheduler2.is_leader is True
     
     # Both schedulers process jobs
-    mock_scheduler_service.trigger_due_jobs.return_value = (5, 0)
+    mock_nats_client.trigger_due_jobs.return_value = (5, 0)
     
     await scheduler1._process_scheduled_jobs()
-    mock_scheduler_service.trigger_due_jobs.assert_called_once()
+    mock_nats_client.trigger_due_jobs.assert_called_once()
     
-    mock_scheduler_service.trigger_due_jobs.reset_mock()
+    mock_nats_client.trigger_due_jobs.reset_mock()
     await scheduler2._process_scheduled_jobs()
-    mock_scheduler_service.trigger_due_jobs.assert_called_once()
+    mock_nats_client.trigger_due_jobs.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_scheduler_run_cycle(mock_service_manager, mock_kv_store_service, mock_scheduler_service):
+async def test_scheduler_run_cycle(mock_nats_client):
     """Test a single scheduler run cycle."""
+    import msgspec
+    
     scheduler = Scheduler(
-        service_manager=mock_service_manager,
+        client=mock_nats_client,
         poll_interval=0.1,
         instance_id=f"scheduler-{uuid.uuid4().hex[:8]}",
         enable_ha=True
@@ -292,13 +328,20 @@ async def test_scheduler_run_cycle(mock_service_manager, mock_kv_store_service, 
     # Connect scheduler
     await scheduler._connect()
     
+    # Get mock KV store
+    mock_kv = await mock_nats_client.get_kv_store(SCHEDULER_LOCK_KV_NAME)
+    
     # Set up mocks for leadership
-    mock_kv_store_service.set.return_value = True
-    mock_kv_store_service.get.return_value = {
-        "instance_id": scheduler._instance_id,
-        "timestamp": time.time(),
-        "hostname": "host"
-    }
+    mock_kv.create.return_value = True
+    mock_kv.get.return_value = MagicMock(
+        value=msgspec.msgpack.encode({
+            "instance_id": scheduler._instance_id,
+            "timestamp": time.time(),
+            "hostname": "host",
+            "pid": 12345,
+            "start_time": time.time()
+        })
+    )
     
     # Mock the renewal task to not actually run
     with patch.object(scheduler._leader_election, 'start_renewal_task') as mock_start_renewal:
@@ -310,9 +353,9 @@ async def test_scheduler_run_cycle(mock_service_manager, mock_kv_store_service, 
         assert scheduler.is_leader is True
         
         # Process scheduled jobs
-        mock_scheduler_service.trigger_due_jobs.return_value = (3, 1)
+        mock_nats_client.trigger_due_jobs.return_value = (3, 1)
         await scheduler._process_scheduled_jobs()
-        mock_scheduler_service.trigger_due_jobs.assert_called_once()
+        mock_nats_client.trigger_due_jobs.assert_called_once()
         
         # Wait for next cycle (should return True to continue)
         cycle_start = time.time()
